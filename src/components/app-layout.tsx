@@ -34,8 +34,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     router.push('/signin');
   }
 
-  // Do not render layout for signin page
-  if (pathname === '/signin') {
+  // Do not render layout for signin/signup pages
+  if (pathname === '/signin' || pathname === '/signup') {
     return <>{children}</>;
   }
 
@@ -50,7 +50,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild>
