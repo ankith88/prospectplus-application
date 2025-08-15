@@ -90,32 +90,33 @@ export default function ArchivedLeadsPage() {
                 <TableRow>
                   <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
                 </TableRow>
-              ) : archivedLeads.map((lead) => (
-                <TableRow key={lead.id} onClick={() => router.push(`/leads/${lead.id}`)} className="cursor-pointer">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
-                        <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{lead.companyName}</span>
+              ) : archivedLeads.length > 0 ? (
+                archivedLeads.map((lead) => (
+                  <TableRow key={lead.id} onClick={() => router.push(`/leads/${lead.id}`)} className="cursor-pointer">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
+                          <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{lead.companyName}</span>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <LeadStatusBadge status={lead.status} />
-                  </TableCell>
-                  <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                  <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
-                  <TableCell>
-                    {lead.industryCategory}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {archivedLeads.length === 0 && !loading && (
+                    </TableCell>
+                    <TableCell>
+                      <LeadStatusBadge status={lead.status} />
+                    </TableCell>
+                    <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                    <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
+                    <TableCell>
+                      {lead.industryCategory}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
                 <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                         No archived leads found.
                     </TableCell>
                 </TableRow>
