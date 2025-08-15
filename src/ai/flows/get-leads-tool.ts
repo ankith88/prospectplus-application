@@ -1,10 +1,10 @@
 'use server'
 /**
- * @fileOverview A Genkit tool for fetching leads from NetSuite.
+ * @fileOverview A Genkit tool for fetching leads from Firebase.
  */
 
 import { ai } from '@/ai/genkit'
-import { getLeadsFromNetSuite } from '@/services/netsuite'
+import { getLeadsFromFirebase } from '@/services/firebase'
 import { z } from 'genkit'
 
 const LeadSchema = z.object({
@@ -29,11 +29,11 @@ const LeadSchema = z.object({
 export const getLeadsTool = ai.defineTool(
   {
     name: 'getLeads',
-    description: 'Returns a list of leads from the CRM system (NetSuite).',
+    description: 'Returns a list of leads from the CRM system (Firebase).',
     inputSchema: z.object({}),
     outputSchema: z.array(LeadSchema),
   },
   async () => {
-    return await getLeadsFromNetSuite();
+    return await getLeadsFromFirebase();
   }
 );
