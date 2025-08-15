@@ -433,26 +433,31 @@ export default function LeadsPage() {
             </Table>
           </div>
           <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Rows per page</span>
-              <Select
-                value={`${leadsPerPage}`}
-                onValueChange={(value) => {
-                  setLeadsPerPage(Number(value));
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-[70px]">
-                  <SelectValue placeholder={leadsPerPage} />
-                </SelectTrigger>
-                <SelectContent>
-                  {[100, 250, 500, 1000].map((size) => (
-                    <SelectItem key={size} value={`${size}`}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                    {filteredLeads.length} Lead(s)
+                </span>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Rows per page</span>
+                    <Select
+                        value={`${leadsPerPage}`}
+                        onValueChange={(value) => {
+                        setLeadsPerPage(Number(value));
+                        setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="w-[70px]">
+                        <SelectValue placeholder={leadsPerPage} />
+                        </SelectTrigger>
+                        <SelectContent>
+                        {[100, 250, 500, 1000].map((size) => (
+                            <SelectItem key={size} value={`${size}`}>
+                            {size}
+                            </SelectItem>
+                        ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">
