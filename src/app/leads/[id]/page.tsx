@@ -43,6 +43,11 @@ export default async function LeadProfilePage({
     generateTalkingPoints({ leadProfile: lead.profile }),
   ])
 
+  const fullAddress = lead.address
+    ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
+    : 'No address available';
+
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -162,6 +167,18 @@ export default async function LeadProfilePage({
             <CardContent className="flex flex-col items-center text-center gap-4">
               <ScoreIndicator score={scoringResult.score} size="lg" />
               <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-muted-foreground" />
+                Address
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{fullAddress}</p>
             </CardContent>
           </Card>
 
