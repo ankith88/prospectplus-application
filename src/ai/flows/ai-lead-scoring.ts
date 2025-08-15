@@ -41,10 +41,10 @@ const aiLeadScoringPrompt = ai.definePrompt({
   Provide a reason for the assigned score, highlighting the key factors that influenced your assessment.
 
   Lead Profile:
-  {{leadProfile}}
+  {{{leadProfile}}}
 
-  Score (0-100):
-  Reason:`,
+  Your response must be in the format specified by the output schema.
+  Provide a 'score' (number) and a 'reason' (string).`,
 });
 
 const aiLeadScoringFlow = ai.defineFlow(
