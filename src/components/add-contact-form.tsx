@@ -159,4 +159,3 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
     </Form>
   )
 }
-

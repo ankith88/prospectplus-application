@@ -13,7 +13,7 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
         const activityLog = {
             ...activity,
-            date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+            date: new Date().toISOString(),
             duration: activity.duration || 'N/A'
         };
         const docRef = await addDoc(activityRef, activityLog);

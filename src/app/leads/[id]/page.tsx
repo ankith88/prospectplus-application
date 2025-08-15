@@ -140,7 +140,7 @@ export default function LeadProfilePage({
       setLead(updatedLead);
        addActivity({
           type: 'Update',
-          date: new Date().toISOString().split('T')[0],
+          date: new Date().toISOString(),
           notes: `New contact added: ${newContactWithId.name}`,
        });
     }
@@ -152,7 +152,7 @@ export default function LeadProfilePage({
       setLead({ ...lead, contacts: updatedContacts });
        addActivity({
           type: 'Update',
-          date: new Date().toISOString().split('T')[0],
+          date: new Date().toISOString(),
           notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
        });
     }
@@ -175,7 +175,7 @@ export default function LeadProfilePage({
         if (changes.length > 0) {
            addActivity({
               type: 'Update',
-              date: new Date().toISOString().split('T')[0],
+              date: new Date().toISOString(),
               notes: `Lead details updated: ${changes.join(' ')}`,
            });
         }
@@ -191,7 +191,7 @@ export default function LeadProfilePage({
       setLead(prev => prev ? { ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) } : null);
       addActivity({
         type: 'Update',
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString(),
         notes: `Contact ${contact.name} deleted.`,
       });
       toast({ title: "Success", description: "Contact deleted successfully." });
@@ -211,7 +211,7 @@ export default function LeadProfilePage({
         await logActivity(lead.id, { type: 'Call', notes: 'Initiated call with AirCall.' });
         addActivity({
             type: 'Call',
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toISOString(),
             notes: 'Initiated call with AirCall.',
         });
         window.location.href = `aircall:number:${callNumber}`;

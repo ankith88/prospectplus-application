@@ -121,12 +121,12 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       const newActivity = {
         id: `activity-${Date.now()}`,
         type: 'Call' as const,
-        date: new Date().toLocaleDateString(),
+        date: new Date().toISOString(),
         notes: `Outcome: ${values.outcome}. Notes: ${values.notes}`,
       };
 
       updatedLead.status = newStatus;
-      updatedLead.activity = [...updatedLead.activity, newActivity];
+      updatedLead.activity = [newActivity, ...updatedLead.activity];
 
       // 3. Handle contact creation for interested leads
       if (values.outcome === 'interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
