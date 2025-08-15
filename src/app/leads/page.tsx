@@ -215,14 +215,9 @@ export default function LeadsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleAssign(lead.id, user!.displayName)}>
-                              Assign to Me
+                            <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
+                              Unassign
                             </DropdownMenuItem>
-                             {lead.salesRepAssigned && (
-                              <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
-                                Unassign
-                              </DropdownMenuItem>
-                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                      </TableCell>
