@@ -9,6 +9,7 @@ import {
   Lightbulb,
   Mail,
   Phone,
+  PlusCircle,
   Sparkles,
   User,
   Users,
@@ -78,34 +79,44 @@ export default async function LeadProfilePage({
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-muted-foreground" />
                 Contacts
               </CardTitle>
+              <Button variant="outline" size="sm">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Contact
+              </Button>
             </CardHeader>
             <CardContent className="divide-y divide-border">
-              {lead.contacts.map((contact) => (
-                <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                    <User className="w-5 h-5 text-muted-foreground" />
-                    <span>{contact.name}</span>
+              {lead.contacts.length > 0 ? (
+                lead.contacts.map((contact) => (
+                  <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                      <User className="w-5 h-5 text-muted-foreground" />
+                      <span>{contact.name}</span>
+                    </div>
+                    <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
+                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                      <Mail className="w-5 h-5 text-muted-foreground" />
+                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                        {contact.email}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                      <Phone className="w-5 h-5 text-muted-foreground" />
+                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
+                        {contact.phone}
+                      </a>
+                    </div>
                   </div>
-                   <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
-                  <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                    <Mail className="w-5 h-5 text-muted-foreground" />
-                    <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
-                      {contact.email}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                    <Phone className="w-5 h-5 text-muted-foreground" />
-                    <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
-                      {contact.phone}
-                    </a>
-                  </div>
+                ))
+              ) : (
+                <div className="py-4 text-center text-muted-foreground">
+                  No contacts found.
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
           <Card>

@@ -58,8 +58,10 @@ export default async function LeadsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[280px]">Company</TableHead>
-                <TableHead>Primary Contact</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Franchisee</TableHead>
+                <TableHead>Sales Rep</TableHead>
+                <TableHead>Industry</TableHead>
                 <TableHead className="text-right">AI Score</TableHead>
               </TableRow>
             </TableHeader>
@@ -78,17 +80,15 @@ export default async function LeadsPage() {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    {lead.contacts[0] ? (
-                      <div className="flex flex-col">
-                        <span className="font-medium">{lead.contacts[0].name}</span>
-                        <span className="text-sm text-muted-foreground">{lead.contacts[0].title}</span>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">No contacts</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
                     <LeadStatusBadge status={lead.status} />
+                  </TableCell>
+                  <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                  <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{lead.industryCategory}</span>
+                      <span className="text-sm text-muted-foreground">{lead.industrySubCategory}</span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <ScoreIndicator score={lead.score} />
