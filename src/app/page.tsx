@@ -47,9 +47,7 @@ function formatAddress(address: Address | undefined) {
     const parts = [street, city, state, zip, country].filter(Boolean)
     if (parts.length === 0) return 'N/A'
     
-    let formattedAddress = parts.join(', ');
-
-    return formattedAddress.trim().replace(/,$/g, '').trim()
+    return parts.join(', ');
 }
 
 export default async function LeadsPage() {
