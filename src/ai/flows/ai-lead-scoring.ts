@@ -79,11 +79,11 @@ const aiLeadScoringFlow = ai.defineFlow(
   async (input) => {
     const response = await aiLeadScoringPrompt(input);
 
-    const output = response.output();
+    const output = response.output;
     if (!output) {
       throw new Error("AI failed to generate a score.");
     }
-    const responseHistory = response.history();
+    const responseHistory = response.history;
     const toolRequestEvent = responseHistory.find(
       (event) => event.message.role === 'tool' && event.message.content[0].toolRequest
     );
