@@ -24,7 +24,7 @@ const AiLeadScoringInputSchema = z.object({
   websiteUrl: z.string().optional().describe("The company's website URL."),
   activity: z.array(z.object({
     id: z.string(),
-    type: z.enum(['Call', 'Email', 'Meeting']),
+    type: z.enum(['Call', 'Email', 'Meeting', 'Update']),
     date: z.string(),
     duration: z.string().optional(),
     notes: z.string(),

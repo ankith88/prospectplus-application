@@ -1,3 +1,4 @@
+
 'use server'
 /**
  * @fileOverview A Genkit tool for fetching leads from Firebase.
@@ -32,7 +33,7 @@ const LeadSchema = z.object({
     profile: z.string(),
     activity: z.array(z.object({
         id: z.string(),
-        type: z.enum(['Call', 'Email', 'Meeting']),
+        type: z.enum(['Call', 'Email', 'Meeting', 'Update']),
         date: z.string(),
         duration: z.string().optional(),
         notes: z.string(),

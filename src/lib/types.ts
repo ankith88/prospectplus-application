@@ -1,3 +1,4 @@
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -8,7 +9,7 @@ export type LeadStatus =
 
 export interface Activity {
   id: string
-  type: 'Call' | 'Email' | 'Meeting'
+  type: 'Call' | 'Email' | 'Meeting' | 'Update'
   date: string
   duration?: string // e.g., "5m 32s"
   notes: string
