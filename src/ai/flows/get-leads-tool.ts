@@ -43,8 +43,10 @@ const LeadSchema = z.object({
     websiteUrl: z.string().optional(),
     industryCategory: z.string().optional(),
     industrySubCategory: z.string().optional(),
-    salesRepAssigned: z.string().optional(),
+    salesRepAssigned: z.string().nullable().optional(),
     campaign: z.string().optional(),
+    customerServiceEmail: z.string().optional(),
+    customerPhone: z.string().optional(),
 });
 
 export const getLeadsTool = ai.defineTool(
