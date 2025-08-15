@@ -14,6 +14,7 @@ import {z} from 'genkit';
 import { getLeadsTool } from './get-leads-tool';
 import { prospectWebsiteTool } from './prospect-website-tool';
 import type { Contact } from '@/lib/types';
+import {ToolRequestPart,ToolResponsePart,toolRequest,toolResponse,history} from 'genkit/ai';
 
 const AiLeadScoringInputSchema = z.object({
   leadId: z.string().describe('The ID of the lead.'),
@@ -76,34 +77,37 @@ const aiLeadScoringFlow = ai.defineFlow(
     outputSchema: AiLeadScoringOutputSchema,
   },
   async (input) => {
-    const response = await aiLeadScoringPrompt(input, {
-      config: {
-        // @ts-ignore - experimentalToolChoice is not in the type definition
-        experimentalToolChoice: true,
-      },
-    });
+    const response = await aiLeadScoringPrompt(input);
 
     const output = response.output();
     if (!output) {
       throw new Error("AI failed to generate a score.");
     }
-    const history = response.history();
-    // Check if the prospectWebsiteTool was called by the model
-    const toolRequest = history.find(
-      (event: any) =>
-        event.type === 'toolRequest' &&
-        event.request.toolName === 'prospectWebsite'
+    const responseHistory = response.history();
+    const toolRequestEvent = responseHistory.find(
+      (event) => event.message.role === 'tool' && event.message.content[0].toolRequest
     );
-    
-    if (toolRequest) {
-      const toolOutput = history.find(
-        (event: any) =>
-          event.type === 'toolResponse' &&
-          event.response.toolRequestId === toolRequest.request.id
-      )?.response.output as any;
 
-      if (toolOutput?.contacts) {
-         output.prospectedContacts = toolOutput.contacts || [];
+    if (toolRequestEvent) {
+      const toolRequestContent = toolRequestEvent.message.content[0] as ToolRequestPart;
+      const toolRequestId = toolRequestContent.toolRequest.id;
+      
+      const toolResponseEvent = responseHistory.find(
+        (event) => {
+          if (event.message.role === 'tool' && event.message.content[0].toolResponse) {
+            const toolResponseContent = event.message.content[0] as ToolResponsePart;
+            return toolResponseContent.toolResponse.id === toolRequestId;
+          }
+          return false;
+        }
+      );
+
+      if (toolResponseEvent) {
+        const toolResponseContent = toolResponseEvent.message.content[0] as ToolResponsePart;
+        const toolOutput = toolResponseContent.toolResponse.output as any;
+        if (toolOutput?.contacts) {
+           output.prospectedContacts = toolOutput.contacts || [];
+        }
       }
     }
     
