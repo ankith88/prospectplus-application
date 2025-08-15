@@ -25,9 +25,7 @@ export default function RootLayout({
       <body className="font-body antialiased" suppressHydrationWarning>
         <AuthProvider>
           <SidebarProvider>
-            <AppLayout>
-              {children}
-            </AppLayout>
+            <AppLayout>{children}</AppLayout>
           </SidebarProvider>
           <Toaster />
         </AuthProvider>
