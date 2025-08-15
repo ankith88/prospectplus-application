@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from 'next/link'
@@ -26,12 +27,14 @@ import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import type { Lead } from '@/lib/types'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type LeadWithScore = Lead & { score: number };
 
 export default function LeadsPage() {
   const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     async function getLeadsWithScores() {
@@ -40,7 +43,7 @@ export default function LeadsPage() {
         const leads = await getLeadsTool({});
         const leadsWithScoresPromises = leads.map(async (lead) => {
           try {
-            const { score } = await aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl });
+            const { score } = await aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl });
             return { ...lead, score: score ?? 85 };
           } catch (error) {
             console.error(`Failed to score lead ${lead.id}:`, error);
@@ -87,9 +90,9 @@ export default function LeadsPage() {
                   <TableCell colSpan={7} className="text-center">Loading leads...</TableCell>
                 </TableRow>
               ) : leadsWithScores.map((lead) => (
-                <TableRow key={lead.id}>
+                <TableRow key={lead.id} onClick={() => router.push(`/leads/${lead.id}`)} className="cursor-pointer">
                   <TableCell>
-                    <Link href={`/leads/${lead.id}`} className="flex items-center gap-3 group">
+                    <div className="flex items-center gap-3 group">
                       <Avatar>
                         <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
                         <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
@@ -97,7 +100,7 @@ export default function LeadsPage() {
                       <div className="flex flex-col">
                         <span className="font-medium group-hover:underline">{lead.companyName}</span>
                       </div>
-                    </Link>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <LeadStatusBadge status={lead.status} />
