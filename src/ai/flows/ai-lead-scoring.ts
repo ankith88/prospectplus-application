@@ -76,8 +76,7 @@ const aiLeadScoringFlow = ai.defineFlow(
     outputSchema: AiLeadScoringOutputSchema,
   },
   async (input) => {
-    const response = await aiLeadScoringPrompt.generate({
-      input,
+    const response = await aiLeadScoringPrompt(input, {
       config: {
         // @ts-ignore - experimentalToolChoice is not in the type definition
         experimentalToolChoice: true,
@@ -88,17 +87,17 @@ const aiLeadScoringFlow = ai.defineFlow(
     if (!output) {
       throw new Error("AI failed to generate a score.");
     }
-
+    const history = response.history();
     // Check if the prospectWebsiteTool was called by the model
-    const toolRequest = response.history().find(
-      (event) =>
+    const toolRequest = history.find(
+      (event: any) =>
         event.type === 'toolRequest' &&
         event.request.toolName === 'prospectWebsite'
     );
     
     if (toolRequest) {
-      const toolOutput = response.history().find(
-        (event) =>
+      const toolOutput = history.find(
+        (event: any) =>
           event.type === 'toolResponse' &&
           event.response.toolRequestId === toolRequest.request.id
       )?.response.output as any;
