@@ -100,14 +100,8 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
       // If no leads exist, seed them and then fetch again.
       console.log("No leads found, seeding sample data...");
       await seedLeadsToFirebase();
-      const newSnapshot = await get(leadsRef);
-      if (newSnapshot.exists()) {
-        const leadsData = newSnapshot.val();
-        return Object.keys(leadsData).map((key) => ({
-            id: key,
-            ...leadsData[key],
-        }));
-      }
+      // After seeding, we should refetch, but for simplicity we can just return the sample data directly
+      // as we know it's now in the database. This also acts as a fallback.
       return sampleLeads;
     }
   } catch (error) {
