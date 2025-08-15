@@ -11,6 +11,8 @@ import {
   CheckCircle,
   Edit,
   Globe,
+  Hash,
+  Key,
   Lightbulb,
   Link as LinkIcon,
   LogOut,
@@ -305,6 +307,20 @@ export default function LeadProfilePage({
              <CardContent className="space-y-4">
                <div className="grid grid-cols-2 gap-4 text-sm">
                  <div className="flex items-start gap-3">
+                   <Key className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">Customer ID</p>
+                     <p className="font-medium">{lead.entityId ?? 'N/A'}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-start gap-3">
+                   <Hash className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">NetSuite Internal ID</p>
+                     <p className="font-medium">{lead.id ?? 'N/A'}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-start gap-3">
                    <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
                    <div>
                      <p className="text-muted-foreground">Franchisee</p>
@@ -581,3 +597,5 @@ export default function LeadProfilePage({
     </div>
   )
 }
+
+    
