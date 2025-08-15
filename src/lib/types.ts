@@ -38,5 +38,5 @@ export interface Lead {
   profile: string // This will be the text used for AI prompts
   activity: Activity[]
   contacts: Contact[]
-  address?: Address
+  address: Address
 }

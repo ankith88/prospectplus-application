@@ -37,7 +37,7 @@ const LeadSchema = z.object({
         notes: z.string(),
     })),
     contacts: z.array(ContactSchema),
-    address: AddressSchema.optional(),
+    address: AddressSchema,
 });
 
 export const getLeadsTool = ai.defineTool(
