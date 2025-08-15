@@ -24,6 +24,7 @@ import {
 import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
+import { useEffect } from "react"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -39,6 +40,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
+
+  useEffect(() => {
+    if (user && !isAuthPage) {
+      document.body.classList.add('logged-in');
+    } else {
+      document.body.classList.remove('logged-in');
+    }
+  }, [user, isAuthPage]);
   
   if (isAuthPage) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;

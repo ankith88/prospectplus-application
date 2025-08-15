@@ -42,6 +42,7 @@ body {
     --sidebar-border: 220 13% 85%;
     --sidebar-ring: 196 84% 26%;
   }
+
   .dark {
     --background: 224 71.4% 4.1%;
     --foreground: 0 0% 98%;
@@ -75,6 +76,11 @@ body {
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 196 78% 58%;
+  }
+
+  body.logged-in {
+    --background: 124 20% 84%; /* #cfe0ce */
+    --card: 0 0% 100%; /* white */
   }
 }
 
