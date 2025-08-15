@@ -193,6 +193,12 @@ export default function LeadsPage() {
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
 
+  const getMapLink = (address: Lead['address']) => {
+    if (!address) return '#';
+    const addressString = formatAddress(address);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressString)}`;
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -302,7 +308,16 @@ export default function LeadsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{formatAddress(lead.address)}</TableCell>
+                    <TableCell>
+                       <a
+                          href={getMapLink(lead.address)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                        >
+                          {formatAddress(lead.address)}
+                        </a>
+                    </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
                     </TableCell>
@@ -398,7 +413,16 @@ export default function LeadsPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{formatAddress(lead.address)}</TableCell>
+                        <TableCell>
+                           <a
+                              href={getMapLink(lead.address)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline"
+                            >
+                              {formatAddress(lead.address)}
+                            </a>
+                        </TableCell>
                         <TableCell>
                           <LeadStatusBadge status={lead.status} />
                         </TableCell>
@@ -497,5 +521,3 @@ export default function LeadsPage() {
     </div>
   )
 }
-
-    

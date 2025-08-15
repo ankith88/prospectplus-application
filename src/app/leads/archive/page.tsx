@@ -61,6 +61,12 @@ export default function ArchivedLeadsPage() {
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
 
+  const getMapLink = (address: Lead['address']) => {
+    if (!address) return '#';
+    const addressString = formatAddress(address);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressString)}`;
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -98,9 +104,9 @@ export default function ArchivedLeadsPage() {
                 </TableRow>
               ) : archivedLeads.length > 0 ? (
                 archivedLeads.map((lead) => (
-                  <TableRow key={lead.id} onClick={() => router.push(`/leads/${lead.id}`)} className="cursor-pointer">
+                  <TableRow key={lead.id}>
                     <TableCell>
-                      <div className="flex items-center gap-3">
+                      <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
                         <Avatar>
                           <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
                           <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
@@ -110,7 +116,16 @@ export default function ArchivedLeadsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{formatAddress(lead.address)}</TableCell>
+                    <TableCell>
+                       <a
+                          href={getMapLink(lead.address)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                        >
+                          {formatAddress(lead.address)}
+                        </a>
+                    </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
                     </TableCell>
@@ -135,5 +150,3 @@ export default function ArchivedLeadsPage() {
     </div>
   )
 }
-
-    
