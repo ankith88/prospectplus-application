@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -28,7 +27,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
-  const { openMobile, setOpenMobile } = useSidebar()
+  const { openMobile, setOpenMobile, state } = useSidebar()
   const isActive = (path: string) => pathname === path || (path.startsWith('/leads') && pathname.startsWith('/leads'));
 
   const handleSignOut = async () => {
@@ -55,7 +54,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar collapsible="icon">
         <SidebarHeader className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" asChild>
+             <Button variant="ghost" size="icon" asChild>
                 <Link href="/leads">
                     <Briefcase className="w-6 h-6 text-primary" />
                 </Link>
@@ -64,6 +63,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               MailPlus CRM
             </h1>
           </div>
+          {/* This trigger is now only for closing on desktop when expanded */}
           <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
         </SidebarHeader>
         <SidebarContent>
@@ -101,9 +101,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
-            <div className="md:hidden">
-              <SidebarTrigger variant="outline" onClick={() => setOpenMobile(!openMobile)} />
-            </div>
+            <SidebarTrigger />
             <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
               {/* Future header content can go here */}
             </div>
