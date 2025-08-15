@@ -33,7 +33,7 @@ body {
     --chart-4: 262 82% 57%;
     --chart-5: 0 84% 60%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 117 21% 84%;
     --sidebar-foreground: 224 71.4% 4.1%;
     --sidebar-primary: 196 84% 26%;
     --sidebar-primary-foreground: 0 0% 98%;
@@ -67,8 +67,8 @@ body {
     --chart-3: 196 78% 58%;
     --chart-4: 262 82% 67%;
     --chart-5: 0 72% 51%;
-    --sidebar-background: 222 47.4% 9%;
-    --sidebar-foreground: 0 0% 98%;
+    --sidebar-background: 117 21% 84%;
+    --sidebar-foreground: 224 71.4% 4.1%;
     --sidebar-primary: 196 78% 58%;
     --sidebar-primary-foreground: 196 84% 26%;
     --sidebar-accent: 217.2 32.6% 17.5%;
