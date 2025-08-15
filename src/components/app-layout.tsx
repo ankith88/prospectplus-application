@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
-  SidebarProvider,
   Sidebar,
   SidebarHeader,
   SidebarContent,
@@ -20,15 +19,16 @@ import {
   SidebarFooter,
   SidebarTrigger,
   SidebarInset,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useSidebar } from "./ui/sidebar"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
+  const { openMobile, setOpenMobile } = useSidebar()
   const isActive = (path: string) => pathname === path || (path.startsWith('/leads') && pathname.startsWith('/leads'));
 
   const handleSignOut = async () => {
@@ -50,22 +50,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
 
-  const Header = () => {
-    const { openMobile, setOpenMobile } = useSidebar();
-    return (
-      <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
-          <div className="md:hidden">
-            <SidebarTrigger variant="outline" onClick={() => setOpenMobile(!openMobile)} />
-          </div>
-          <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
-            {/* Future header content can go here */}
-          </div>
-      </header>
-    )
-  }
-
   return (
-    <SidebarProvider>
+    <>
       <Sidebar collapsible="icon">
         <SidebarHeader className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -114,11 +100,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <Header />
+        <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
+            <div className="md:hidden">
+              <SidebarTrigger variant="outline" onClick={() => setOpenMobile(!openMobile)} />
+            </div>
+            <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
+              {/* Future header content can go here */}
+            </div>
+        </header>
         <div className="p-4 sm:p-6 lg:p-8">
             {children}
         </div>
       </SidebarInset>
-    </SidebarProvider>
+    </>
   )
 }

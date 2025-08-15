@@ -3,6 +3,7 @@ import './globals.css'
 import { AppLayout } from '@/components/app-layout'
 import { Toaster } from '@/components/ui/toaster'
 import { AuthProvider } from '@/hooks/use-auth'
+import { SidebarProvider } from '@/components/ui/sidebar'
 
 export const metadata: Metadata = {
   title: 'MailPlus Outbound Leads CRM',
@@ -23,9 +24,11 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased" suppressHydrationWarning>
         <AuthProvider>
-          <AppLayout>
-            {children}
-          </AppLayout>
+          <SidebarProvider>
+            <AppLayout>
+              {children}
+            </AppLayout>
+          </SidebarProvider>
           <Toaster />
         </AuthProvider>
       </body>
