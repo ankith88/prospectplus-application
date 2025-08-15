@@ -22,6 +22,21 @@ import {
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useSidebar } from "./ui/sidebar"
+
+function MobileHeader() {
+    const { openMobile, setOpenMobile } = useSidebar();
+    return (
+        <header className="flex h-14 items-center justify-between gap-4 border-b bg-background px-4 lg:h-[60px] lg:px-6 md:hidden">
+            <Link href="/" className="flex items-center gap-2 font-semibold">
+                <Briefcase className="h-6 w-6 text-primary" />
+                <span className="">MailPlus CRM</span>
+            </Link>
+            <SidebarTrigger onClick={() => setOpenMobile(!openMobile)} />
+        </header>
+    )
+}
+
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -98,6 +113,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
+        <MobileHeader />
         <div className="p-4 sm:p-6 lg:p-8">
             {children}
         </div>
