@@ -39,14 +39,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
-
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div>Loading...</div>
-      </div>
-    );
-  }
   
   if (isAuthPage) {
     return <>{children}</>;
@@ -112,7 +104,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {/* Future header content can go here */}
           </div>
         </header>
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="p-4 sm:p-6 lg:p-8">
+          {loading ? (
+             <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+                <p>Loading...</p>
+             </div>
+          ) : (
+            children
+          )}
+        </div>
       </SidebarInset>
     </>
   )
