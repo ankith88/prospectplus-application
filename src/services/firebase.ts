@@ -80,7 +80,7 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           industryCategory: data.industryCategory,
           industrySubCategory: data.industrySubCategory,
           salesRepAssigned: data.salesRepAssigned,
-          campaign: data.campaign,
+          campaign: data.customerSource,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
         };
