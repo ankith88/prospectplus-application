@@ -63,6 +63,34 @@ const sampleLeads: Lead[] = [
       salesRepAssigned: 'Jane Smith',
       campaign: 'CRM Overhaul 2023'
     },
+    {
+      id: 'lead-3',
+      entityId: 'ent-54321',
+      companyName: 'Synergy Inc',
+      status: 'Qualified',
+      avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=SI',
+      profile: 'Synergy Inc. is a well-established player in the renewable energy sector. They have shown interest in our products at a recent trade show and are looking for a scalable solution.',
+      activity: [
+        { id: 'act-3-1', type: 'Meeting', date: '2023-11-01', notes: 'Met with the CTO at the Green Energy Summit. Strong interest in a pilot program.' },
+        { id: 'act-3-2', type: 'Email', date: '2023-11-02', notes: 'Sent follow-up email with pilot program details and pricing.' },
+      ],
+      contacts: [
+        { id: 'contact-3-1', name: 'David Chen', title: 'Chief Technology Officer', email: 'david.c@synergy.com', phone: '+1-415-555-0199' },
+      ],
+      address: {
+        street: '789 Energy Way',
+        city: 'San Francisco',
+        state: 'CA',
+        zip: '94103',
+        country: 'USA'
+      },
+      franchisee: 'Bay Area Office',
+      websiteUrl: 'https://synergyinc.com',
+      industryCategory: 'Energy',
+      industrySubCategory: 'Renewables',
+      salesRepAssigned: 'John Doe',
+      campaign: 'Green Energy Summit Outreach'
+    }
   ];
 
 // A function to seed initial data into the Firebase Realtime Database.
