@@ -6,7 +6,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity } from '@/lib/types';
-import { collection, getDocs, addDoc, doc, updateDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
@@ -133,4 +133,27 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     }
 }
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity };
+async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
+  try {
+    const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
+    await updateDoc(contactRef, contactData);
+    console.log(`Contact ${contactId} updated for lead ${leadId}`);
+  } catch (error) {
+    console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
+    throw new Error('Failed to update contact in Firebase');
+  }
+}
+
+async function deleteContactFromLead(leadId: string, contactId: string): Promise<void> {
+  try {
+    const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
+    await deleteDoc(contactRef);
+    console.log(`Contact ${contactId} deleted from lead ${leadId}`);
+  } catch (error) {
+    console.error(`Failed to delete contact ${contactId} from lead ${leadId}:`, error);
+    throw new Error('Failed to delete contact from Firebase');
+  }
+}
+
+
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead };

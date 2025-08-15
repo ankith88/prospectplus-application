@@ -9,29 +9,50 @@ import {
   Building2,
   Calendar,
   CheckCircle,
+  Edit,
   Globe,
   Lightbulb,
   Link as LinkIcon,
   LogOut,
   Mail,
+  MoreVertical,
   Phone,
   PlusCircle,
   Sparkles,
   Tag,
+  Trash2,
   User,
   Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Lead } from '@/lib/types'
+import type { Lead, Contact } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { generateTalkingPoints, TalkingPointSuggestionsOutput } from '@/ai/flows/talking-point-suggestions'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
+import { deleteContactFromLead, updateContactInLead } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -41,7 +62,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { AddContactForm } from '@/components/add-contact-form'
+import { EditContactForm } from '@/components/edit-contact-form'
 import { LogCallDialog } from '@/components/log-call-dialog'
+import { useToast } from '@/hooks/use-toast'
 
 
 export default function LeadProfilePage({
@@ -54,7 +77,10 @@ export default function LeadProfilePage({
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     async function fetchData() {
@@ -95,6 +121,26 @@ export default function LeadProfilePage({
         contacts: [...lead.contacts, newContactWithId],
       };
       setLead(updatedLead);
+    }
+  };
+
+  const handleContactUpdated = (updatedContact: Contact) => {
+    if (lead) {
+      const updatedContacts = lead.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
+      setLead({ ...lead, contacts: updatedContacts });
+    }
+     setIsEditDialogOpen(false);
+  };
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!lead) return;
+    try {
+      await deleteContactFromLead(lead.id, contactId);
+      setLead(prev => prev ? { ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) } : null);
+      toast({ title: "Success", description: "Contact deleted successfully." });
+    } catch (error) {
+      console.error("Failed to delete contact:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete contact." });
     }
   };
 
@@ -268,7 +314,44 @@ export default function LeadProfilePage({
             <CardContent className="divide-y divide-border">
               {lead.contacts.length > 0 ? (
                 lead.contacts.map((contact) => (
-                  <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
+                     <div className="absolute top-4 right-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                  <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                  <span className="text-red-500">Delete</span>
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the contact {contact.name}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteContact(contact.id)} className="bg-destructive hover:bg-destructive/90">
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     <div className="flex items-center gap-3 font-medium sm:col-span-1">
                       <User className="w-5 h-5 text-muted-foreground" />
                       <span>{contact.name}</span>
@@ -313,6 +396,25 @@ export default function LeadProfilePage({
               }
             </CardContent>
           </Card>
+
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+             <DialogContent>
+               <DialogHeader>
+                 <DialogTitle>Edit Contact</DialogTitle>
+                 <DialogDescription>
+                   Update the details for the contact.
+                 </DialogDescription>
+               </DialogHeader>
+               {selectedContact && (
+                <EditContactForm
+                  leadId={lead.id}
+                  contact={selectedContact}
+                  onContactUpdated={handleContactUpdated}
+                />
+               )}
+             </DialogContent>
+          </Dialog>
+
           <Card>
             <CardHeader>
               <CardTitle>Activity History</CardTitle>
