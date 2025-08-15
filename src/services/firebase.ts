@@ -5,7 +5,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity } from '@/lib/types';
 import { collection, getDocs, addDoc, doc, updateDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 
@@ -41,6 +41,13 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           ...contactDoc.data()
         } as Contact));
 
+        const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
+        const activitySnapshot = await getSubCollectionDocs(activityRef);
+        const activity: Activity[] = activitySnapshot.docs.map(activityDoc => ({
+          id: activityDoc.id,
+          ...activityDoc.data()
+        } as Activity));
+
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data.customerEntityId || docSnapshot.id,
@@ -48,7 +55,7 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
-          activity: data.activity || [],
+          activity: activity || [],
           contacts: contacts,
           address: address,
           franchisee: data.franchisee,
@@ -95,5 +102,35 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
   }
 }
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep };
+async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, {
+            customerStatus: status,
+        });
+        console.log(`Lead ${leadId} status updated to ${status}`);
+    } catch (error) {
+        console.error(`Failed to update lead status for ${leadId}:`, error);
+        throw new Error('Failed to update lead status in Firebase');
+    }
+}
 
+async function logCallActivity(leadId: string, callData: { notes: string; outcome: string; reason?: string }): Promise<string> {
+    try {
+        const activityRef = collection(firestore, 'leads', leadId, 'activity');
+        const activity = {
+            type: 'Call',
+            date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+            notes: `Outcome: ${callData.outcome}${callData.reason ? ` (${callData.reason})` : ''}. Notes: ${callData.notes}`,
+            duration: 'N/A'
+        };
+        const docRef = await addDoc(activityRef, activity);
+        console.log(`Call activity logged with ID: ${docRef.id} for lead ${leadId}`);
+        return docRef.id;
+    } catch (error) {
+        console.error(`Failed to log call activity for lead ${leadId}:`, error);
+        throw new Error('Failed to log call activity in Firebase');
+    }
+}
+
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity };

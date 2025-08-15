@@ -12,6 +12,7 @@ import {
   Globe,
   Lightbulb,
   Link as LinkIcon,
+  LogOut,
   Mail,
   Phone,
   PlusCircle,
@@ -40,6 +41,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { AddContactForm } from '@/components/add-contact-form'
+import { LogCallDialog } from '@/components/log-call-dialog'
 
 
 export default function LeadProfilePage({
@@ -96,6 +98,10 @@ export default function LeadProfilePage({
     }
   };
 
+  const handleCallLogged = (updatedLead: Lead) => {
+    setLead(updatedLead);
+  }
+
   if (loading || !lead || !scoringResult || !talkingPointsResult) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -150,6 +156,12 @@ export default function LeadProfilePage({
               No Phone Available
             </Button>
           )}
+          <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
+            <Button variant="secondary">
+                <LogOut className="mr-2 h-4 w-4" />
+                Log a Call
+            </Button>
+          </LogCallDialog>
         </div>
       </header>
 
