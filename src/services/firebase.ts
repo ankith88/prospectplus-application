@@ -17,13 +17,13 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
         const data = doc.data();
         
         let address: Address | undefined;
-        if (data.street && data.city && data.state && data.zip && data.country) {
+        if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
-            street: data.street,
-            city: data.city,
-            state: data.state,
-            zip: data.zip,
-            country: data.country
+            street: data.street || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            country: data.country || ''
           };
         }
 
