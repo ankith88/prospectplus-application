@@ -84,29 +84,32 @@ const aiLeadScoringFlow = ai.defineFlow(
       throw new Error("AI failed to generate a score.");
     }
     const responseHistory = response.history;
-    const toolRequestEvent = responseHistory.find(
-      (event) => event.message.role === 'tool' && event.message.content[0].toolRequest
-    );
 
-    if (toolRequestEvent) {
-      const toolRequestContent = toolRequestEvent.message.content[0] as ToolRequestPart;
-      const toolRequestId = toolRequestContent.toolRequest.id;
-      
-      const toolResponseEvent = responseHistory.find(
-        (event) => {
-          if (event.message.role === 'tool' && event.message.content[0].toolResponse) {
-            const toolResponseContent = event.message.content[0] as ToolResponsePart;
-            return toolResponseContent.toolResponse.id === toolRequestId;
-          }
-          return false;
-        }
+    if (responseHistory && Array.isArray(responseHistory)) {
+      const toolRequestEvent = responseHistory.find(
+        (event) => event.message.role === 'tool' && event.message.content[0].toolRequest
       );
 
-      if (toolResponseEvent) {
-        const toolResponseContent = toolResponseEvent.message.content[0] as ToolResponsePart;
-        const toolOutput = toolResponseContent.toolResponse.output as any;
-        if (toolOutput?.contacts) {
-           output.prospectedContacts = toolOutput.contacts || [];
+      if (toolRequestEvent) {
+        const toolRequestContent = toolRequestEvent.message.content[0] as ToolRequestPart;
+        const toolRequestId = toolRequestContent.toolRequest.id;
+        
+        const toolResponseEvent = responseHistory.find(
+          (event) => {
+            if (event.message.role === 'tool' && event.message.content[0].toolResponse) {
+              const toolResponseContent = event.message.content[0] as ToolResponsePart;
+              return toolResponseContent.toolResponse.id === toolRequestId;
+            }
+            return false;
+          }
+        );
+
+        if (toolResponseEvent) {
+          const toolResponseContent = toolResponseEvent.message.content[0] as ToolResponsePart;
+          const toolOutput = toolResponseContent.toolResponse.output as any;
+          if (toolOutput?.contacts) {
+             output.prospectedContacts = toolOutput.contacts || [];
+          }
         }
       }
     }
