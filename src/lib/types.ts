@@ -32,6 +32,7 @@ export interface Address {
 
 export interface Lead {
   id: string
+  entityId: string
   companyName: string
   status: LeadStatus
   avatarUrl: string

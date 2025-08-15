@@ -25,6 +25,7 @@ const AddressSchema = z.object({
 
 const LeadSchema = z.object({
     id: z.string(),
+    entityId: z.string(),
     companyName: z.string(),
     status: z.enum(['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won']),
     avatarUrl: z.string(),

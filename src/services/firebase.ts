@@ -8,6 +8,7 @@ import { ref, get, set } from 'firebase/database';
 const sampleLeads: Lead[] = [
     {
       id: 'lead-1',
+      entityId: 'ent-12345',
       companyName: 'Innovate Corp',
       status: 'New',
       avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=IC',
@@ -35,6 +36,7 @@ const sampleLeads: Lead[] = [
     },
     {
       id: 'lead-2',
+      entityId: 'ent-67890',
       companyName: 'Quantum Solutions',
       status: 'Contacted',
       avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=QS',
@@ -98,15 +100,15 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
       // If no leads exist, seed them and then fetch again.
       console.log("No leads found, seeding sample data...");
       await seedLeadsToFirebase();
-      const seededSnapshot = await get(leadsRef);
-      if (seededSnapshot.exists()) {
-        const leadsData = seededSnapshot.val();
+      const newSnapshot = await get(leadsRef);
+      if (newSnapshot.exists()) {
+        const leadsData = newSnapshot.val();
         return Object.keys(leadsData).map((key) => ({
             id: key,
             ...leadsData[key],
         }));
       }
-      return [];
+      return sampleLeads;
     }
   } catch (error) {
     console.error("Firebase fetch failed, falling back to local data:", error);
