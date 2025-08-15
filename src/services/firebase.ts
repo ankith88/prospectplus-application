@@ -155,5 +155,16 @@ async function deleteContactFromLead(leadId: string, contactId: string): Promise
   }
 }
 
+async function updateLeadDetails(leadId: string, leadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone'>>): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, leadData);
+        console.log(`Lead ${leadId} details updated.`);
+    } catch (error) {
+        console.error(`Failed to update lead details for ${leadId}:`, error);
+        throw new Error('Failed to update lead details in Firebase');
+    }
+}
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead };
+
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails };

@@ -29,7 +29,7 @@ import type { Lead, Contact } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { generateTalkingPoints, TalkingPointSuggestionsOutput } from '@/ai/flows/talking-point-suggestions'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
-import { deleteContactFromLead, updateContactInLead } from '@/services/firebase'
+import { deleteContactFromLead } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -65,6 +65,7 @@ import { AddContactForm } from '@/components/add-contact-form'
 import { EditContactForm } from '@/components/edit-contact-form'
 import { LogCallDialog } from '@/components/log-call-dialog'
 import { useToast } from '@/hooks/use-toast'
+import { EditLeadForm } from '@/components/edit-lead-form'
 
 
 export default function LeadProfilePage({
@@ -79,6 +80,7 @@ export default function LeadProfilePage({
   const [loading, setLoading] = useState(true);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -131,6 +133,13 @@ export default function LeadProfilePage({
     }
      setIsEditDialogOpen(false);
   };
+
+  const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
+    if (lead) {
+      setLead({ ...lead, ...updatedLeadData });
+    }
+    setIsEditLeadDialogOpen(false);
+  }
 
   const handleDeleteContact = async (contactId: string) => {
     if (!lead) return;
@@ -214,11 +223,25 @@ export default function LeadProfilePage({
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader>
+             <CardHeader className="flex flex-row items-center justify-between">
                <CardTitle className="flex items-center gap-2">
                  <Building className="w-5 h-5 text-muted-foreground" />
                  Company Details
                </CardTitle>
+                <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
+                  <DialogTrigger asChild>
+                     <Button variant="outline" size="sm">
+                       <Edit className="mr-2 h-4 w-4" />
+                       Edit
+                     </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit Lead Details</DialogTitle>
+                    </DialogHeader>
+                    <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
+                  </DialogContent>
+                </Dialog>
              </CardHeader>
              <CardContent className="space-y-4">
                <div className="grid grid-cols-2 gap-4 text-sm">
