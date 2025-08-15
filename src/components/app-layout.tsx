@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -69,7 +70,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarHeader className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild>
-                <Link href="/">
+                <Link href="/leads">
                     <Briefcase className="w-6 h-6 text-primary" />
                 </Link>
             </Button>
@@ -84,10 +85,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
-                isActive={isActive("/") || pathname.startsWith('/leads')}
+                isActive={isActive("/leads") || pathname.startsWith('/leads')}
                 tooltip="Leads"
               >
-                <Link href="/">
+                <Link href="/leads">
                   <Briefcase />
                   <span>Outbound Leads</span>
                 </Link>
