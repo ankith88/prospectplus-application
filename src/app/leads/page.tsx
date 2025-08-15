@@ -114,7 +114,11 @@ export default function LeadsPage() {
 
 
   if (loading || authLoading) {
-    return <div className="text-center p-8">Loading...</div>;
+    return (
+      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
   }
 
   return (
