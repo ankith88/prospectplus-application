@@ -1,7 +1,9 @@
+
 "use client"
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import Image from "next/image"
 import {
   Avatar,
   AvatarFallback,
@@ -50,17 +52,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar collapsible="icon">
-        <SidebarHeader className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-             <Button variant="ghost" size="icon" asChild>
-                <Link href="/leads">
-                    <Briefcase className="w-6 h-6 text-primary" />
-                </Link>
-            </Button>
-            <h1 className="text-lg font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-              MailPlus CRM
-            </h1>
-          </div>
+        <SidebarHeader className="flex items-center justify-center p-4">
+          <Link href="/leads" className="flex items-center gap-2">
+            <Image 
+                src="https://placehold.co/140x40.png" 
+                width={140} 
+                height={40} 
+                alt="MailPlus CRM Logo" 
+                className="group-data-[collapsible=icon]:hidden"
+                data-ai-hint="logo"
+            />
+             <Briefcase className="w-6 h-6 text-primary hidden group-data-[collapsible=icon]:block" />
+          </Link>
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
