@@ -22,6 +22,14 @@ export interface Contact {
   phone: string
 }
 
+export interface Address {
+  street: string
+  city: string
+  state: string
+  zip: string
+  country: string
+}
+
 export interface Lead {
   id: string
   companyName: string
@@ -30,4 +38,5 @@ export interface Lead {
   profile: string // This will be the text used for AI prompts
   activity: Activity[]
   contacts: Contact[]
+  address?: Address
 }

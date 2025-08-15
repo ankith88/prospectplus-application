@@ -3,7 +3,7 @@
  */
 import { database } from '@/lib/firebase';
 import type { Lead } from '@/lib/types';
-import { ref, get } from 'firebase/database';
+import { ref, get, set } from 'firebase/database';
 
 const sampleLeads: Lead[] = [
     {
@@ -18,7 +18,14 @@ const sampleLeads: Lead[] = [
       contacts: [
         { id: 'contact-1-1', name: 'Alex Johnson', title: 'Marketing Director', email: 'alex.j@innovate.com', phone: '+1-202-555-0176' },
         { id: 'contact-1-2', name: 'Jane Smith', title: 'Marketing Manager', email: 'jane.s@innovate.com', phone: '+1-202-555-0177' },
-      ]
+      ],
+      address: {
+        street: '123 Innovation Drive',
+        city: 'Palo Alto',
+        state: 'CA',
+        zip: '94304',
+        country: 'USA'
+      }
     },
     {
       id: 'lead-2',
@@ -32,7 +39,14 @@ const sampleLeads: Lead[] = [
       ],
       contacts: [
           { id: 'contact-2-1', name: 'Samantha Rodriguez', title: 'VP of Sales', email: 's.rodriguez@quantum.co', phone: '+1-310-555-0188' },
-      ]
+      ],
+      address: {
+        street: '456 Quantum Plaza',
+        city: 'Los Angeles',
+        state: 'CA',
+        zip: '90001',
+        country: 'USA'
+      }
     },
   ];
 
@@ -49,7 +63,7 @@ export async function seedLeadsToFirebase() {
 
   // Use set to overwrite any existing data at the 'leads' path.
   // Be careful with this in production.
-  await ref(database, 'leads').set(leadsToSet);
+  await set(leadsRef, leadsToSet);
   console.log('Sample leads have been seeded to Firebase.');
 }
 
@@ -84,6 +98,7 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
     }
   } catch (error) {
     console.error("Firebase fetch failed, falling back to local data:", error);
+    // Fallback to sample data if Firebase is not available
     return sampleLeads;
   }
 }

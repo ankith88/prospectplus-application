@@ -15,6 +15,14 @@ const ContactSchema = z.object({
   phone: z.string(),
 });
 
+const AddressSchema = z.object({
+    street: z.string(),
+    city: z.string(),
+    state: z.string(),
+    zip: z.string(),
+    country: z.string(),
+});
+
 const LeadSchema = z.object({
     id: z.string(),
     companyName: z.string(),
@@ -29,6 +37,7 @@ const LeadSchema = z.object({
         notes: z.string(),
     })),
     contacts: z.array(ContactSchema),
+    address: AddressSchema.optional(),
 });
 
 export const getLeadsTool = ai.defineTool(
