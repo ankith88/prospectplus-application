@@ -18,25 +18,26 @@ import { useToast } from "@/hooks/use-toast"
 import { Briefcase } from 'lucide-react';
 import Link from 'next/link';
 
-export default function SignInPage() {
+export default function SignUpPage() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signUp } = useAuth();
   const { toast } = useToast();
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signUp(email, password, name);
       router.push('/');
     } catch (error: any) {
-      console.error("Sign in failed:", error);
+      console.error("Sign up failed:", error);
       toast({
         variant: "destructive",
-        title: "Sign in Failed",
+        title: "Sign up Failed",
         description: error.message,
       })
     } finally {
@@ -51,11 +52,22 @@ export default function SignInPage() {
             <div className="inline-block mx-auto p-2 rounded-lg bg-primary/10">
               <Briefcase className="w-8 h-8 text-primary" />
             </div>
-            <CardTitle className="text-2xl mt-4">MailPlus CRM</CardTitle>
-            <CardDescription>Enter your email below to sign in to your account.</CardDescription>
+            <CardTitle className="text-2xl mt-4">Create an Account</CardTitle>
+            <CardDescription>Enter your details to create your account.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -78,13 +90,12 @@ export default function SignInPage() {
               />
             </div>
              <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
-           <div>Don't have an account? <Link href="/signup" className="text-primary hover:underline">Sign Up</Link></div>
-           <div>By signing in, you agree to our terms of service.</div>
+            <div>Already have an account? <Link href="/signin" className="text-primary hover:underline">Sign In</Link></div>
         </CardFooter>
       </Card>
     </div>

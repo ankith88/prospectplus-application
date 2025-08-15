@@ -12,7 +12,9 @@ import {
     onAuthStateChanged,
     User,
     signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
     signOut as firebaseSignOut,
+    updateProfile,
 } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
@@ -22,14 +24,16 @@ const auth = getAuth(app);
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    signIn: typeof signInWithEmailAndPassword;
+    signIn: (email: string, pass: string) => Promise<any>;
+    signUp: (email: string, pass: string, name: string) => Promise<any>;
     signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
-    signIn: signInWithEmailAndPassword,
+    signIn: async () => {},
+    signUp: async () => {},
     signOut: async () => {},
 });
 
@@ -50,6 +54,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => unsubscribe();
     }, [router]);
 
+    const signIn = (email: string, pass: string) => {
+        return signInWithEmailAndPassword(auth, email, pass);
+    }
+
+    const signUp = async (email: string, pass: string, name: string) => {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        if (userCredential.user) {
+          await updateProfile(userCredential.user, { displayName: name });
+          // Manually update the user state because onAuthStateChanged might be slow
+          setUser({ ...userCredential.user, displayName: name });
+        }
+        return userCredential;
+    };
+
     const signOut = async () => {
         await firebaseSignOut(auth);
         setUser(null);
@@ -58,7 +76,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const value = {
         user,
         loading,
-        signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
+        signIn,
+        signUp,
         signOut,
     };
 
