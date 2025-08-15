@@ -1,23 +1,46 @@
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
-import { database } from '@/lib/firebase';
-import type { Lead } from '@/lib/types';
-import { ref, get } from 'firebase/database';
+import { firestore } from '@/lib/firebase';
+import type { Lead, LeadStatus } from '@/lib/types';
+import { collection, getDocs } from 'firebase/firestore';
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
   try {
     console.log("Fetching leads from Firebase...");
-    const leadsRef = ref(database, 'leads');
-    const snapshot = await get(leadsRef);
+    const leadsRef = collection(firestore, 'leads');
+    const snapshot = await getDocs(leadsRef);
 
-    if (snapshot.exists()) {
-      const leadsData = snapshot.val();
-      const leadsArray: Lead[] = Object.keys(leadsData).map((key) => ({
-        id: key,
-        ...leadsData[key],
-      }));
+    if (!snapshot.empty) {
+      const leadsArray: Lead[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        // Transform the data from Firestore to match the Lead type
+        const transformedLead: Lead = {
+          id: doc.id,
+          entityId: data.customerEntityId || doc.id,
+          companyName: data.companyName || 'Unknown Company',
+          status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
+          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
+          profile: data.profile || `Lead for ${data.companyName || 'Unknown Company'}.`,
+          activity: data.activity || [],
+          contacts: data.contacts || [],
+          address: data.address || {
+            street: 'Not available',
+            city: 'Not available',
+            state: 'N/A',
+            zip: 'N/A',
+            country: 'Unknown'
+          },
+          franchisee: data.franchisee,
+          websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
+          industryCategory: data.industryCategory,
+          industrySubCategory: data.industrySubCategory,
+          salesRepAssigned: data.salesRepAssigned,
+          campaign: data.campaign,
+        };
+        return transformedLead;
+      });
       return leadsArray;
     } else {
       console.log("No leads found in Firebase.");
