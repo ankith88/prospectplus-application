@@ -69,11 +69,10 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 
 
 export default function LeadProfilePage({
-  params,
+  params: { id },
 }: {
   params: { id: string }
 }) {
-  const { id } = params;
   const [lead, setLead] = useState<Lead | null>(null);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
@@ -507,3 +506,5 @@ export default function LeadProfilePage({
     </div>
   )
 }
+
+    
