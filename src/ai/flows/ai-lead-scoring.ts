@@ -11,6 +11,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getLeadsTool } from './get-leads-tool';
+import { prospectWebsiteTool } from './prospect-website-tool';
 
 const AiLeadScoringInputSchema = z.object({
   leadProfile: z
@@ -36,14 +37,14 @@ const aiLeadScoringPrompt = ai.definePrompt({
   name: 'aiLeadScoringPrompt',
   input: {schema: AiLeadScoringInputSchema},
   output: {schema: AiLeadScoringOutputSchema},
-  tools: [getLeadsTool],
+  tools: [getLeadsTool, prospectWebsiteTool],
   prompt: `You are an AI assistant designed to score sales leads for a parcel delivery service.
 
   Analyze the following lead profile and website to determine how likely they are to send parcels.
   
   - Give a higher score (75-100) to companies whose business model likely involves shipping parcels (e.g., e-commerce, retail, logistics, manufacturing).
   - Give a lower score to companies that are less likely to ship parcels (e.g., digital services, consulting).
-  - Use the information in the lead profile and website to make your determination.
+  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information about social media presence and contacts.
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
