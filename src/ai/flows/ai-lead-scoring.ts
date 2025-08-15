@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { getLeadsTool } from './get-leads-tool';
 
 const AiLeadScoringInputSchema = z.object({
   leadProfile: z
@@ -34,9 +35,12 @@ const aiLeadScoringPrompt = ai.definePrompt({
   name: 'aiLeadScoringPrompt',
   input: {schema: AiLeadScoringInputSchema},
   output: {schema: AiLeadScoringOutputSchema},
+  tools: [getLeadsTool],
   prompt: `You are an AI assistant designed to score sales leads based on their profile data.
 
   Analyze the following lead profile and assign a score between 0 and 100, where higher scores indicate a higher potential value lead.
+
+  If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
   Provide a reason for the assigned score, highlighting the key factors that influenced your assessment.
 

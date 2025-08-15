@@ -18,15 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { LEADS } from '@/lib/data'
+import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
 import type { Lead } from '@/lib/types'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 
-export default async function LeadsPage() {
+async function getLeadsWithScores() {
+  const leads = await getLeadsTool({});
   const leadsWithScores = await Promise.all(
-    LEADS.map(async (lead) => {
+    leads.map(async (lead) => {
       try {
         const { score } = await aiLeadScoring({ leadProfile: lead.profile })
         return { ...lead, score }
@@ -36,7 +37,12 @@ export default async function LeadsPage() {
         return { ...lead, score: 0 }
       }
     })
-  )
+  );
+  return leadsWithScores;
+}
+
+export default async function LeadsPage() {
+  const leadsWithScores = await getLeadsWithScores();
 
   return (
     <div className="flex flex-col gap-6">
