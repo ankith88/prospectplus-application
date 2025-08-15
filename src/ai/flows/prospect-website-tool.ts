@@ -21,8 +21,9 @@ const ContactSchema = z.object({
 });
 
 const ProspectWebsiteOutputSchema = z.object({
-  socialLinks: SocialLinksSchema.optional(),
-  contacts: z.array(ContactSchema).optional(),
+  socialLinks: SocialLinksSchema.optional().describe("Social media links found on the website."),
+  contacts: z.array(ContactSchema).optional().describe("Contacts found on the website."),
+  siteAnalysis: z.string().optional().describe("A brief analysis of the website content for shipping-related keywords."),
 });
 
 const ProspectWebsiteInputSchema = z.object({
@@ -33,7 +34,7 @@ const ProspectWebsiteInputSchema = z.object({
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links and contact information. This tool does not actually crawl the website, but simulates the result of such an operation for demonstration purposes.',
+    description: 'Analyzes a website to extract social media links, contact information, and relevant keywords. This tool does not actually crawl the website, but simulates the result of such an operation for demonstration purposes.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
@@ -76,6 +77,7 @@ export const prospectWebsiteTool = ai.defineTool(
           twitter: 'https://x.com/123buynow',
         },
         contacts: foundContacts,
+        siteAnalysis: "The website mentions 'e-commerce store', 'shipping options', and 'returns policy', indicating they ship physical goods.",
       };
     }
     
@@ -83,6 +85,7 @@ export const prospectWebsiteTool = ai.defineTool(
     return {
       socialLinks: {},
       contacts: [],
+      siteAnalysis: "No specific shipping-related keywords found on the website.",
     };
   }
 );

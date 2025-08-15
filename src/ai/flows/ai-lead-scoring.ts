@@ -27,7 +27,7 @@ const AiLeadScoringOutputSchema = z.object({
   score: z.number().describe('A numerical score (0-100) representing the lead quality, with higher scores indicating higher potential value.'),
   reason: z
     .string()
-    .describe('Explanation of why the lead received the given score, highlighting key factors from their profile.'),
+    .describe('Explanation of why the lead received the given score, highlighting key factors from their profile and website analysis.'),
   prospectedContacts: z.array(z.object({
     name: z.string().optional(),
     title: z.string().optional(),
@@ -51,7 +51,8 @@ const aiLeadScoringPrompt = ai.definePrompt({
   
   - Give a higher score (75-100) to companies whose business model likely involves shipping parcels (e.g., e-commerce, retail, logistics, manufacturing).
   - Give a lower score to companies that are less likely to ship parcels (e.g., digital services, consulting).
-  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information about social media presence and contacts.
+  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information about social media presence, contacts, and site content.
+  - Increase the score if the website analysis finds shipping-related keywords or if key contact roles like 'Logistics Manager' or 'Head of Operations' are found.
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
@@ -74,12 +75,26 @@ const aiLeadScoringFlow = ai.defineFlow(
     outputSchema: AiLeadScoringOutputSchema,
   },
   async (input) => {
-    const { output } = await aiLeadScoringPrompt(input);
+    const { output, history } = await aiLeadScoringPrompt(input);
     const result = output!;
 
-    if (input.websiteUrl) {
-      const prospectResult = await prospectWebsiteTool({ leadId: input.leadId, websiteUrl: input.websiteUrl });
-      result.prospectedContacts = prospectResult?.contacts || [];
+    // Check if the prospectWebsiteTool was called by the model
+    const toolRequest = history.find(
+      (event) =>
+        event.type === 'toolRequest' &&
+        event.request.toolName === 'prospectWebsite'
+    );
+    
+    if (toolRequest) {
+      const toolOutput = history.find(
+        (event) =>
+          event.type === 'toolResponse' &&
+          event.response.toolRequestId === toolRequest.request.id
+      )?.response.output as any;
+
+      if (toolOutput?.contacts) {
+         result.prospectedContacts = toolOutput.contacts || [];
+      }
     }
     
     return result;
