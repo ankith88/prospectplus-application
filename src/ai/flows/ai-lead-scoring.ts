@@ -12,8 +12,10 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getLeadsTool } from './get-leads-tool';
 import { prospectWebsiteTool } from './prospect-website-tool';
+import type { Contact } from '@/lib/types';
 
 const AiLeadScoringInputSchema = z.object({
+  leadId: z.string().describe('The ID of the lead.'),
   leadProfile: z
     .string()
     .describe('Detailed information about the lead, including company, job title, industry, and past interactions.'),
@@ -26,6 +28,11 @@ const AiLeadScoringOutputSchema = z.object({
   reason: z
     .string()
     .describe('Explanation of why the lead received the given score, highlighting key factors from their profile.'),
+  prospectedContacts: z.array(z.object({
+    name: z.string().optional(),
+    title: z.string().optional(),
+    email: z.string().optional(),
+  })).optional().describe('Contacts found by prospecting the website.'),
 });
 export type AiLeadScoringOutput = z.infer<typeof AiLeadScoringOutputSchema>;
 
@@ -66,8 +73,15 @@ const aiLeadScoringFlow = ai.defineFlow(
     inputSchema: AiLeadScoringInputSchema,
     outputSchema: AiLeadScoringOutputSchema,
   },
-  async input => {
-    const {output} = await aiLeadScoringPrompt(input);
-    return output!;
+  async (input) => {
+    const { output } = await aiLeadScoringPrompt(input);
+    const result = output!;
+
+    if (input.websiteUrl) {
+      const prospectResult = await prospectWebsiteTool({ leadId: input.leadId, websiteUrl: input.websiteUrl });
+      result.prospectedContacts = prospectResult?.contacts || [];
+    }
+    
+    return result;
   }
 );

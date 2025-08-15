@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
+import { Badge } from '@/components/ui/badge'
 
 export default async function LeadProfilePage({
   params,
@@ -40,7 +41,7 @@ export default async function LeadProfilePage({
   }
 
   const [scoringResult, talkingPointsResult] = await Promise.all([
-    aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl }),
+    aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl }),
     generateTalkingPoints({ leadProfile: lead.profile }),
   ])
 
@@ -180,7 +181,29 @@ export default async function LeadProfilePage({
                 ))
               ) : (
                 <div className="py-4 text-center text-muted-foreground">
-                  No contacts found.
+                  No existing contacts found.
+                </div>
+              )}
+              {scoringResult.prospectedContacts && scoringResult.prospectedContacts.length > 0 ? (
+                scoringResult.prospectedContacts.map((contact, index) => (
+                  <div key={index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                      <User className="w-5 h-5 text-muted-foreground" />
+                      <span>{contact.name}</span>
+                      <Badge variant="outline">Found on website</Badge>
+                    </div>
+                    <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
+                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                      <Mail className="w-5 h-5 text-muted-foreground" />
+                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                        {contact.email}
+                      </a>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-4 text-center text-muted-foreground">
+                  No new contacts found from website.
                 </div>
               )}
             </CardContent>
@@ -254,5 +277,3 @@ export default async function LeadProfilePage({
     </div>
   )
 }
-
-    

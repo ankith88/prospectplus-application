@@ -2,8 +2,8 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address } from '@/lib/types';
-import { collection, getDocs } from 'firebase/firestore';
+import type { Lead, LeadStatus, Address, Contact } from '@/lib/types';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
@@ -58,4 +58,16 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
   }
 }
 
-export { getLeadsFromFirebase };
+async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): Promise<string> {
+  try {
+    const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
+    const docRef = await addDoc(contactsRef, contact);
+    console.log(`Contact added with ID: ${docRef.id} to lead ${leadId}`);
+    return docRef.id;
+  } catch (error) {
+    console.error(`Failed to add contact to lead ${leadId}:`, error);
+    throw new Error('Failed to add contact to Firebase');
+  }
+}
+
+export { getLeadsFromFirebase, addContactToLead };
