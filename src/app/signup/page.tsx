@@ -46,7 +46,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
             <div className="inline-block mx-auto p-2 rounded-lg bg-primary/10">
@@ -94,7 +94,7 @@ export default function SignUpPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
+        <CardFooter className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
             <div>Already have an account? <Link href="/signin" className="text-primary hover:underline">Sign In</Link></div>
         </CardFooter>
       </Card>

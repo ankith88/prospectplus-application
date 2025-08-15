@@ -45,7 +45,7 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
             <div className="inline-block mx-auto p-2 rounded-lg bg-primary/10">
@@ -82,7 +82,7 @@ export default function SignInPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
+        <CardFooter className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
            <div>Don't have an account? <Link href="/signup" className="text-primary hover:underline">Sign Up</Link></div>
            <div>By signing in, you agree to our terms of service.</div>
         </CardFooter>
