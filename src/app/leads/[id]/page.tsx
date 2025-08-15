@@ -43,7 +43,7 @@ import { AddContactForm } from '@/components/add-contact-form'
 
 
 export default function LeadProfilePage({
-  params,
+  params: { id },
 }: {
   params: { id: string }
 }) {
@@ -58,7 +58,7 @@ export default function LeadProfilePage({
       try {
         setLoading(true);
         const leads = await getLeadsTool({});
-        const currentLead = leads.find((l) => l.id === params.id)
+        const currentLead = leads.find((l) => l.id === id)
 
         if (!currentLead) {
           notFound()
@@ -80,7 +80,7 @@ export default function LeadProfilePage({
       }
     }
     fetchData();
-  }, [params.id]);
+  }, [id, notFound]);
   
   const handleContactAdded = (newContact: any) => {
     if (lead) {
@@ -356,3 +356,5 @@ export default function LeadProfilePage({
     </div>
   )
 }
+
+    
