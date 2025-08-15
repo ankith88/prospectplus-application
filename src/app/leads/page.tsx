@@ -47,6 +47,8 @@ export default function LeadsPage() {
     franchisee: 'all',
     industryCategory: 'all'
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [leadsPerPage, setLeadsPerPage] = useState(100);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -142,6 +144,14 @@ export default function LeadsPage() {
     });
   }, [leads, filters]);
 
+  const paginatedLeads = useMemo(() => {
+    const startIndex = (currentPage - 1) * leadsPerPage;
+    const endIndex = startIndex + leadsPerPage;
+    return filteredLeads.slice(startIndex, endIndex);
+  }, [filteredLeads, currentPage, leadsPerPage]);
+
+  const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
+
   const uniqueFranchisees = useMemo(() => [...new Set(leads.map(l => l.franchisee).filter(Boolean))], [leads]);
   const uniqueIndustries = useMemo(() => [...new Set(leads.map(l => l.industryCategory).filter(Boolean))], [leads]);
   const uniqueStatuses = useMemo(() => [...new Set(leads.map(l => l.status).filter(Boolean))], [leads]) as LeadStatus[];
@@ -156,7 +166,7 @@ export default function LeadsPage() {
   
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked) {
-      setSelectedLeads(filteredLeads.map(l => l.id));
+      setSelectedLeads(paginatedLeads.map(l => l.id));
     } else {
       setSelectedLeads([]);
     }
@@ -334,94 +344,144 @@ export default function LeadsPage() {
             )}
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                    <Checkbox
-                        checked={filteredLeads.length > 0 && selectedLeads.length === filteredLeads.length}
-                        onCheckedChange={handleSelectAll}
-                        aria-label="Select all"
-                    />
-                </TableHead>
-                <TableHead className="w-[280px]">Company</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Franchisee</TableHead>
-                <TableHead>Sales Rep</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Industry Sub-Category</TableHead>
-                <TableHead className="w-[50px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                  <TableHead className="w-8">
+                      <Checkbox
+                          checked={paginatedLeads.length > 0 && selectedLeads.length === paginatedLeads.length}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all"
+                      />
+                  </TableHead>
+                  <TableHead className="w-[280px]">Company</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Franchisee</TableHead>
+                  <TableHead>Sales Rep</TableHead>
+                  <TableHead>Industry</TableHead>
+                  <TableHead>Industry Sub-Category</TableHead>
+                  <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
-              ) : filteredLeads.length > 0 ? (
-                filteredLeads.map((lead) => (
-                    <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
-                      <TableCell>
-                          <Checkbox
-                              checked={selectedLeads.includes(lead.id)}
-                              onCheckedChange={(checked) => handleSelectLead(lead.id, checked)}
-                              aria-label={`Select lead ${lead.companyName}`}
-                          />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                          <Avatar>
-                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="font-medium group-hover:underline">{lead.companyName}</span>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                  </TableRow>
+                ) : paginatedLeads.length > 0 ? (
+                  paginatedLeads.map((lead) => (
+                      <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
+                        <TableCell>
+                            <Checkbox
+                                checked={selectedLeads.includes(lead.id)}
+                                onCheckedChange={(checked) => handleSelectLead(lead.id, checked)}
+                                aria-label={`Select lead ${lead.companyName}`}
+                            />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                            <Avatar>
+                              <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+                              <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="font-medium group-hover:underline">{lead.companyName}</span>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <LeadStatusBadge status={lead.status} />
-                      </TableCell>
-                      <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                      <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
-                      <TableCell>
-                        {lead.industryCategory}
-                      </TableCell>
-                      <TableCell>
-                        {lead.industrySubCategory}
-                      </TableCell>
-                       <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => handleAssign(lead.id, user!.displayName)}>
-                                Assign to Me
-                              </DropdownMenuItem>
-                               {lead.salesRepAssigned && (
-                                <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
-                                  Unassign
+                        </TableCell>
+                        <TableCell>
+                          <LeadStatusBadge status={lead.status} />
+                        </TableCell>
+                        <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                        <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
+                        <TableCell>
+                          {lead.industryCategory}
+                        </TableCell>
+                        <TableCell>
+                          {lead.industrySubCategory}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleAssign(lead.id, user!.displayName)}>
+                                  Assign to Me
                                 </DropdownMenuItem>
-                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                       </TableCell>
-                    </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                        No leads found matching your filters.
-                    </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                                {lead.salesRepAssigned && (
+                                  <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
+                                    Unassign
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                          No leads found matching your filters.
+                      </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page</span>
+              <Select
+                value={`${leadsPerPage}`}
+                onValueChange={(value) => {
+                  setLeadsPerPage(Number(value));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[70px]">
+                  <SelectValue placeholder={leadsPerPage} />
+                </SelectTrigger>
+                <SelectContent>
+                  {[100, 250, 500, 1000].map((size) => (
+                    <SelectItem key={size} value={`${size}`}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
   )
 }
+
+    
