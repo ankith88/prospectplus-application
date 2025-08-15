@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut } from "lucide-react"
+import { Briefcase, LogOut, Archive } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -26,9 +26,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, signOut } = useAuth()
-  const { state, isMobile } = useSidebar()
-  const isActive = (path: string) =>
-    pathname === path || (path.startsWith("/leads") && pathname.startsWith("/leads"))
+  const { isMobile } = useSidebar()
+  const isActive = (path: string) => pathname === path
 
   const handleSignOut = async () => {
     await signOut()
@@ -49,7 +48,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 
-  // Prevents hydration errors by not rendering the sidebar on the server if the state depends on a client-side hook.
   if (isMobile === null) {
     return (
         <div className="flex h-screen items-center justify-center">
@@ -88,6 +86,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link href="/leads">
                   <Briefcase />
                   <span>Outbound Leads</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
+                <Link href="/leads/archive">
+                  <Archive />
+                  <span>Archived Leads</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

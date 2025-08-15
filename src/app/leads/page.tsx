@@ -65,8 +65,10 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const leads = await getLeadsTool({});
-        const leadsWithScoresPromises = leads.map(async (lead) => {
+        const allLeads = await getLeadsTool({});
+        const activeLeads = allLeads.filter(lead => lead.status !== 'Lost' && lead.status !== 'Qualified');
+        
+        const leadsWithScoresPromises = activeLeads.map(async (lead) => {
           try {
             const { score } = await aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl, activity: lead.activity });
             return { ...lead, score: score ?? 0 };
