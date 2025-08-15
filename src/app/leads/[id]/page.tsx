@@ -2,15 +2,18 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft,
+  Building,
   Building2,
   Calendar,
   CheckCircle,
-  Clock,
+  Globe,
   Lightbulb,
+  Link as LinkIcon,
   Mail,
   Phone,
   PlusCircle,
   Sparkles,
+  Tag,
   User,
   Users,
 } from 'lucide-react'
@@ -19,12 +22,10 @@ import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
 import { generateTalkingPoints } from '@/ai/flows/talking-point-suggestions'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
-import { Separator } from '@/components/ui/separator'
 
 export default async function LeadProfilePage({
   params,
@@ -83,6 +84,66 @@ export default async function LeadProfilePage({
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
+          <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Building className="w-5 h-5 text-muted-foreground" />
+                 Company Details
+               </CardTitle>
+             </CardHeader>
+             <CardContent className="space-y-4">
+               <div className="grid grid-cols-2 gap-4 text-sm">
+                 <div className="flex items-start gap-3">
+                   <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">Franchisee</p>
+                     <p className="font-medium">{lead.franchisee ?? 'N/A'}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-start gap-3">
+                   <Globe className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">Website</p>
+                     {lead.websiteUrl ? (
+                        <a href={lead.websiteUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
+                            {lead.websiteUrl}
+                            <LinkIcon className="w-3 h-3" />
+                        </a>
+                     ) : (
+                        <p className="font-medium">N/A</p>
+                     )}
+                   </div>
+                 </div>
+                 <div className="flex items-start gap-3">
+                    <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">Industry</p>
+                     <p className="font-medium">{lead.industryCategory ?? 'N/A'}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-start gap-3">
+                   <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <div>
+                     <p className="text-muted-foreground">Sub-Industry</p>
+                     <p className="font-medium">{lead.industrySubCategory || 'N/A'}</p>
+                   </div>
+                 </div>
+               </div>
+             </CardContent>
+           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-muted-foreground" />
+                Address
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{fullAddress}</p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -173,18 +234,6 @@ export default async function LeadProfilePage({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-muted-foreground" />
-                Address
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{fullAddress}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
                 <Lightbulb className="w-5 h-5 text-primary" />
                 AI Talking Points
               </CardTitle>
@@ -205,3 +254,5 @@ export default async function LeadProfilePage({
     </div>
   )
 }
+
+    
