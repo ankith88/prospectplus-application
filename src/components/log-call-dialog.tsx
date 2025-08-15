@@ -114,7 +114,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       if (values.outcome === 'interested') {
         newStatus = 'Qualified';
       } else {
-        newStatus = 'Unqualified';
+        newStatus = 'Lost';
       }
       await updateLeadStatus(lead.id, newStatus);
       
