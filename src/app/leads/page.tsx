@@ -93,6 +93,11 @@ export default function LeadsPage() {
     }
   };
 
+  const myLeads = useMemo(() => {
+    if (!user) return [];
+    return leadsWithScores.filter(lead => lead.salesRepAssigned === user.displayName);
+  }, [leadsWithScores, user]);
+
   const filteredLeads = useMemo(() => {
     return leadsWithScores.filter(lead => {
       const companyNameMatch = lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase());
@@ -157,6 +162,77 @@ export default function LeadsPage() {
           </Select>
         </CardContent>
        </Card>
+      {myLeads.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>My Leads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[280px]">Company</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Franchisee</TableHead>
+                  <TableHead>Industry</TableHead>
+                  <TableHead>Industry Sub-Category</TableHead>
+                  <TableHead className="text-right">AI Score</TableHead>
+                  <TableHead className="w-[50px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {myLeads.map((lead) => (
+                  <TableRow key={lead.id} >
+                    <TableCell>
+                      <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                        <Avatar>
+                          <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+                          <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-medium group-hover:underline">{lead.companyName}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <LeadStatusBadge status={lead.status} />
+                    </TableCell>
+                    <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                    <TableCell>
+                      {lead.industryCategory}
+                    </TableCell>
+                    <TableCell>
+                      {lead.industrySubCategory}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ScoreIndicator score={lead.score} />
+                    </TableCell>
+                     <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleAssign(lead.id, user!.displayName)}>
+                              Assign to Me
+                            </DropdownMenuItem>
+                             {lead.salesRepAssigned && (
+                              <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
+                                Unassign
+                              </DropdownMenuItem>
+                             )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                     </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>All Leads</CardTitle>
@@ -235,5 +311,3 @@ export default function LeadsPage() {
     </div>
   )
 }
-
-    
