@@ -54,7 +54,7 @@ export default function SignUpPage() {
               <Briefcase className="w-8 h-8 text-primary" />
             </div>
             <CardTitle className="text-2xl mt-4">Create an Account</CardTitle>
-            <CardDescription>Enter your details to create your account.</CardDescription>
+            <CardDescription className="text-center">Enter your details to create your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp} className="space-y-4">

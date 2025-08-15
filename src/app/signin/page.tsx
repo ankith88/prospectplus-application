@@ -53,7 +53,7 @@ export default function SignInPage() {
               <Briefcase className="w-8 h-8 text-primary" />
             </div>
             <CardTitle className="text-2xl mt-4">MailPlus CRM</CardTitle>
-            <CardDescription>Enter your email below to sign in to your account.</CardDescription>
+            <CardDescription className="text-center">Enter your email below to sign in to your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignIn} className="space-y-4">
