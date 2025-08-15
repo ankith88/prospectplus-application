@@ -68,14 +68,14 @@ import { EditContactForm } from '@/components/edit-contact-form'
 import { LogCallDialog } from '@/components/log-call-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
+import { Loader } from '@/components/ui/loader'
 
 
 export default function LeadProfilePage({
-  params,
+  params: { id },
 }: {
   params: { id: string }
 }) {
-  const { id } = params;
   const [lead, setLead] = useState<Lead | null>(null);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
@@ -221,7 +221,7 @@ export default function LeadProfilePage({
   if (loading || !lead || !scoringResult || !talkingPointsResult) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <p>Loading lead details...</p>
+        <Loader />
       </div>
     );
   }

@@ -25,6 +25,7 @@ import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
+import { Loader } from "./ui/loader"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -116,7 +117,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="p-4 sm:p-6 lg:p-8">
           {loading ? (
              <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-                <p>Loading...</p>
+                <Loader />
              </div>
           ) : (
             children

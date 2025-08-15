@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal } from 'lucide-react'
+import { Loader } from '@/components/ui/loader'
 
 type LeadWithScore = Lead & { score: number };
 
@@ -116,7 +117,7 @@ export default function LeadsPage() {
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <p>Loading...</p>
+        <Loader />
       </div>
     )
   }
@@ -253,7 +254,7 @@ export default function LeadsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">Loading leads...</TableCell>
+                  <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                 </TableRow>
               ) : filteredLeads.map((lead) => (
                 <TableRow key={lead.id} >
