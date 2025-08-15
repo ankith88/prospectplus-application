@@ -21,7 +21,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Settings } from "lucide-react"
+import { Briefcase, LogOut } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -98,9 +98,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-            <Button variant="ghost" size="icon">
-              <Settings className="size-4" />
-            </Button>
             <Button variant="ghost" size="icon" onClick={handleSignOut}>
               <LogOut className="size-4" />
             </Button>
