@@ -30,16 +30,27 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import type { Lead } from '@/lib/types'
-import { logCallActivity, updateLeadStatus } from '@/services/firebase'
+import { logCallActivity, updateLeadStatus, addContactToLead } from '@/services/firebase'
 
 const formSchema = z.object({
   notes: z.string().min(1, 'Call notes are required.'),
   outcome: z.enum(['interested', 'not-interested']),
   notInterestedReason: z.string().optional(),
   contactName: z.string().optional(),
-  contactEmail: z.string().optional(),
+  contactEmail: z.string().optional().refine(email => !email || z.string().email().safeParse(email).success, {
+    message: "Invalid email address",
+  }),
   contactPhone: z.string().optional(),
-})
+  contactTitle: z.string().optional(),
+}).refine(data => {
+    if (data.outcome === 'interested') {
+        return data.contactName && data.contactEmail && data.contactPhone && data.contactTitle
+    }
+    return true;
+}, {
+    message: "Contact details are required when the lead is interested.",
+    path: ["contactName"], // You can associate the error with a specific field
+});
 
 interface LogCallDialogProps {
   lead: Lead
@@ -55,6 +66,10 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
     defaultValues: {
       notes: '',
       outcome: 'interested',
+      contactName: '',
+      contactEmail: '',
+      contactPhone: '',
+      contactTitle: '',
     },
   })
 
@@ -77,11 +92,16 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
         return;
     }
 
-    window.open(calendlyUrl, '_blank');
+    const { contactName, contactEmail, contactPhone } = form.getValues();
+    const urlWithParams = `${calendlyUrl}&name=${encodeURIComponent(contactName || '')}&email=${encodeURIComponent(contactEmail || '')}`;
+    
+    window.open(urlWithParams, '_blank');
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      let updatedLead = { ...lead };
+
       // 1. Log the call activity
       await logCallActivity(lead.id, {
         notes: values.notes,
@@ -105,25 +125,28 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
         notes: `Outcome: ${values.outcome}. Notes: ${values.notes}`,
       };
 
-      const updatedLead = {
-          ...lead,
-          status: newStatus,
-          activity: [...lead.activity, newActivity],
-      };
+      updatedLead.status = newStatus;
+      updatedLead.activity = [...updatedLead.activity, newActivity];
+
+      // 3. Handle contact creation for interested leads
+      if (values.outcome === 'interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
+        const newContactData = {
+            name: values.contactName,
+            email: values.contactEmail,
+            phone: values.contactPhone,
+            title: values.contactTitle,
+        };
+        const newContactId = await addContactToLead(lead.id, newContactData);
+        const newContact = { ...newContactData, id: newContactId };
+        updatedLead.contacts = [...updatedLead.contacts, newContact];
+      }
 
       onCallLogged(updatedLead);
-
 
       toast({
         title: 'Success',
         description: 'Call has been logged successfully.',
       })
-
-      // 3. Handle appointment setting for interested leads
-      if (values.outcome === 'interested') {
-        // The form for interested leads now just has a button to redirect
-        // Contact details are already in the system or can be added separately
-      }
       
       setIsOpen(false)
       form.reset()
@@ -223,7 +246,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
             {outcome === 'interested' && (
               <div className="space-y-4 rounded-md border p-4">
                   <DialogDescription>
-                    The lead is interested. You can now book a follow-up meeting in their calendar.
+                    The lead is interested. Capture their details and book a follow-up meeting.
                   </DialogDescription>
                    <FormField
                     control={form.control}
@@ -238,6 +261,19 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="contactTitle"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Title</FormLabel>
+                        <FormControl>
+                            <Input placeholder="Head of Logistics" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
                    <FormField
                     control={form.control}
                     name="contactEmail"
