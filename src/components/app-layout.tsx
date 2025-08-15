@@ -18,7 +18,6 @@ import {
   SidebarFooter,
   SidebarTrigger,
   SidebarInset,
-  useSidebar,
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
@@ -27,7 +26,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
-  const { openMobile, setOpenMobile, state } = useSidebar()
   const isActive = (path: string) => pathname === path || (path.startsWith('/leads') && pathname.startsWith('/leads'));
 
   const handleSignOut = async () => {
@@ -63,8 +61,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               MailPlus CRM
             </h1>
           </div>
-          {/* This trigger is now only for closing on desktop when expanded */}
-          <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
