@@ -170,6 +170,7 @@ export default function LeadsPage() {
                 <TableHead>Franchisee</TableHead>
                 <TableHead>Sales Rep</TableHead>
                 <TableHead>Industry</TableHead>
+                <TableHead>Industry Sub-Category</TableHead>
                 <TableHead className="text-right">AI Score</TableHead>
                 <TableHead className="w-[50px] text-right">Actions</TableHead>
               </TableRow>
@@ -177,7 +178,7 @@ export default function LeadsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">Loading leads...</TableCell>
+                  <TableCell colSpan={8} className="text-center">Loading leads...</TableCell>
                 </TableRow>
               ) : filteredLeads.map((lead) => (
                 <TableRow key={lead.id} >
@@ -198,10 +199,10 @@ export default function LeadsPage() {
                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                   <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{lead.industryCategory}</span>
-                      <span className="text-sm text-muted-foreground">{lead.industrySubCategory}</span>
-                    </div>
+                    {lead.industryCategory}
+                  </TableCell>
+                  <TableCell>
+                    {lead.industrySubCategory}
                   </TableCell>
                   <TableCell className="text-right">
                     <ScoreIndicator score={lead.score} />
@@ -234,3 +235,5 @@ export default function LeadsPage() {
     </div>
   )
 }
+
+    
