@@ -21,7 +21,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Settings, PanelLeft } from "lucide-react"
+import { Briefcase, LogOut, Settings } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 
@@ -55,12 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
           <div className="md:hidden">
-            <SidebarTrigger onClick={() => setOpenMobile(!openMobile)} asChild>
-                <Button size="icon" variant="outline">
-                    <PanelLeft />
-                    <span className="sr-only">Toggle Menu</span>
-                </Button>
-            </SidebarTrigger>
+            <SidebarTrigger variant="outline" onClick={() => setOpenMobile(!openMobile)} />
           </div>
           <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
             {/* Future header content can go here */}
