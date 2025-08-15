@@ -1,4 +1,7 @@
-import { notFound } from 'next/navigation'
+
+'use client'
+
+import { notFound, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -17,9 +20,10 @@ import {
   User,
   Users,
 } from 'lucide-react'
-
-import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
-import { generateTalkingPoints } from '@/ai/flows/talking-point-suggestions'
+import { useEffect, useState } from 'react'
+import type { Lead } from '@/lib/types'
+import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
+import { generateTalkingPoints, TalkingPointSuggestionsOutput } from '@/ai/flows/talking-point-suggestions'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -27,34 +31,86 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { AddContactForm } from '@/components/add-contact-form'
 
-export default async function LeadProfilePage({
+
+export default function LeadProfilePage({
   params,
 }: {
   params: { id: string }
 }) {
-  const leads = await getLeadsTool({});
-  const lead = leads.find((l) => l.id === params.id)
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
+  const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  if (!lead) {
-    notFound()
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const leads = await getLeadsTool({});
+        const currentLead = leads.find((l) => l.id === params.id)
+
+        if (!currentLead) {
+          notFound()
+          return;
+        }
+        setLead(currentLead);
+
+        const [scoring, talkingPoints] = await Promise.all([
+          aiLeadScoring({ leadId: currentLead.id, leadProfile: currentLead.profile, websiteUrl: currentLead.websiteUrl }),
+          generateTalkingPoints({ leadProfile: currentLead.profile }),
+        ])
+        setScoringResult(scoring);
+        setTalkingPointsResult(talkingPoints);
+      } catch (error) {
+        console.error("Failed to fetch lead data:", error);
+        // Optionally, handle error state in UI
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [params.id]);
+  
+  const handleContactAdded = (newContact: any) => {
+    if (lead) {
+      const newContactWithId = { ...newContact, id: Date.now().toString() };
+      const updatedLead = {
+        ...lead,
+        contacts: [...lead.contacts, newContactWithId],
+      };
+      setLead(updatedLead);
+    }
+  };
+
+  if (loading || !lead || !scoringResult || !talkingPointsResult) {
+    return (
+      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+        <p>Loading lead details...</p>
+      </div>
+    );
   }
-
-  const [scoringResult, talkingPointsResult] = await Promise.all([
-    aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl }),
-    generateTalkingPoints({ leadProfile: lead.profile }),
-  ])
 
   const fullAddress = lead.address
     ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
-  
+
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild>
-          <Link href="/">
+          <Link href="/leads">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to All Leads
           </Link>
@@ -165,10 +221,23 @@ export default async function LeadProfilePage({
                 <Users className="w-5 h-5 text-muted-foreground" />
                 Contacts
               </CardTitle>
-              <Button variant="outline" size="sm">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Contact
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Contact
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Contact</DialogTitle>
+                    <DialogDescription>
+                      Enter the details for the new contact.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent className="divide-y divide-border">
               {lead.contacts.length > 0 ? (
@@ -198,9 +267,9 @@ export default async function LeadProfilePage({
                   No existing contacts found.
                 </div>
               )}
-              {scoringResult.prospectedContacts && scoringResult.prospectedContacts.length > 0 ? (
+              {scoringResult.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
                 scoringResult.prospectedContacts.map((contact, index) => (
-                  <div key={index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="flex items-center gap-3 font-medium sm:col-span-1">
                       <User className="w-5 h-5 text-muted-foreground" />
                       <span>{contact.name}</span>
@@ -215,11 +284,7 @@ export default async function LeadProfilePage({
                     </div>
                   </div>
                 ))
-              ) : (
-                <div className="py-4 text-center text-muted-foreground">
-                  No new contacts found from website.
-                </div>
-              )}
+              }
             </CardContent>
           </Card>
           <Card>
@@ -242,7 +307,7 @@ export default async function LeadProfilePage({
                     </div>
                     <div className="flex-1 pb-4">
                       <div className="flex items-center justify-between">
-                        <p className="font-medium">{item.type} {item.type === 'Call' && `(${item.duration})`}</p>
+                        <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
                         <p className="text-sm text-muted-foreground">{item.date}</p>
                       </div>
                       <p className="text-sm text-muted-foreground">{item.notes}</p>

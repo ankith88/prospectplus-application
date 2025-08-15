@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -5,7 +6,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact } from '@/lib/types';
-import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
@@ -14,9 +15,13 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
     const leadsRef = collection(firestore, 'leads');
     const snapshot = await getDocs(leadsRef);
 
-    if (!snapshot.empty) {
-      const leadsArray: Lead[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
+    if (snapshot.empty) {
+      console.log("No leads found in Firebase.");
+      return [];
+    }
+    
+    const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (docSnapshot) => {
+        const data = docSnapshot.data();
         
         let address: Address | undefined;
         if (data.street || data.city || data.state || data.zip || data.country) {
@@ -29,16 +34,22 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           };
         }
 
-        // Transform the data from Firestore to match the Lead type
+        const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
+        const contactsSnapshot = await getSubCollectionDocs(contactsRef);
+        const contacts: Contact[] = contactsSnapshot.docs.map(contactDoc => ({
+          id: contactDoc.id,
+          ...contactDoc.data()
+        } as Contact));
+
         const transformedLead: Lead = {
-          id: doc.id,
-          entityId: data.customerEntityId || doc.id,
+          id: docSnapshot.id,
+          entityId: data.customerEntityId || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
           status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           activity: data.activity || [],
-          contacts: data.contacts || [],
+          contacts: contacts,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -50,12 +61,9 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           customerPhone: data.customerPhone,
         };
         return transformedLead;
-      });
+      }));
       return leadsArray;
-    } else {
-      console.log("No leads found in Firebase.");
-      return [];
-    }
+
   } catch (error) {
     console.error("Firebase fetch failed:", error);
     return [];
@@ -88,3 +96,4 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
 }
 
 export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep };
+
