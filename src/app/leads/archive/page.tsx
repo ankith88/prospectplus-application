@@ -27,10 +27,12 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
+import { MapModal } from '@/components/map-modal'
 
 export default function ArchivedLeadsPage() {
   const [archivedLeads, setArchivedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
@@ -61,12 +63,6 @@ export default function ArchivedLeadsPage() {
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
 
-  const getMapLink = (address: Lead['address']) => {
-    if (!address) return '#';
-    const addressString = formatAddress(address);
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressString)}`;
-  };
-
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -76,6 +72,7 @@ export default function ArchivedLeadsPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Archived Leads</h1>
@@ -103,7 +100,9 @@ export default function ArchivedLeadsPage() {
                   <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                 </TableRow>
               ) : archivedLeads.length > 0 ? (
-                archivedLeads.map((lead) => (
+                archivedLeads.map((lead) => {
+                  const addressString = formatAddress(lead.address);
+                  return (
                   <TableRow key={lead.id}>
                     <TableCell>
                       <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
@@ -117,14 +116,13 @@ export default function ArchivedLeadsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                       <a
-                          href={getMapLink(lead.address)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline"
+                       <button
+                          onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                          className="hover:underline disabled:no-underline disabled:cursor-text"
+                          disabled={addressString === 'N/A'}
                         >
-                          {formatAddress(lead.address)}
-                        </a>
+                          {addressString}
+                        </button>
                     </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
@@ -135,7 +133,8 @@ export default function ArchivedLeadsPage() {
                       {lead.industryCategory}
                     </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               ) : (
                 <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
@@ -148,5 +147,11 @@ export default function ArchivedLeadsPage() {
         </CardContent>
       </Card>
     </div>
+    <MapModal
+        isOpen={!!selectedAddress}
+        onClose={() => setSelectedAddress(null)}
+        address={selectedAddress || ''}
+      />
+    </>
   )
 }

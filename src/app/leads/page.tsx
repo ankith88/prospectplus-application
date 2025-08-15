@@ -35,12 +35,14 @@ import { MoreHorizontal, UserPlus, UserX } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
+import { MapModal } from '@/components/map-modal'
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -193,12 +195,6 @@ export default function LeadsPage() {
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
 
-  const getMapLink = (address: Lead['address']) => {
-    if (!address) return '#';
-    const addressString = formatAddress(address);
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressString)}`;
-  };
-
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -208,6 +204,7 @@ export default function LeadsPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Outbound Leads</h1>
@@ -288,7 +285,9 @@ export default function LeadsPage() {
                     <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                  </TableRow>
               ) : myLeads.length > 0 ? (
-                myLeads.map((lead) => (
+                myLeads.map((lead) => {
+                  const addressString = formatAddress(lead.address);
+                  return (
                   <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
                     <TableCell>
                       <Checkbox
@@ -309,14 +308,13 @@ export default function LeadsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                       <a
-                          href={getMapLink(lead.address)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline"
+                       <button
+                          onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                          className="hover:underline disabled:no-underline disabled:cursor-text text-left"
+                          disabled={addressString === 'N/A'}
                         >
-                          {formatAddress(lead.address)}
-                        </a>
+                          {addressString}
+                        </button>
                     </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
@@ -343,7 +341,8 @@ export default function LeadsPage() {
                         </DropdownMenu>
                      </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               ) : (
                 <TableRow>
                     <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
@@ -393,7 +392,9 @@ export default function LeadsPage() {
                     <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
-                  paginatedLeads.map((lead) => (
+                  paginatedLeads.map((lead) => {
+                    const addressString = formatAddress(lead.address);
+                    return (
                       <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
                         <TableCell>
                             <Checkbox
@@ -414,14 +415,13 @@ export default function LeadsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                           <a
-                              href={getMapLink(lead.address)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:underline"
+                           <button
+                              onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                              className="hover:underline disabled:no-underline disabled:cursor-text text-left"
+                              disabled={addressString === 'N/A'}
                             >
-                              {formatAddress(lead.address)}
-                            </a>
+                              {addressString}
+                            </button>
                         </TableCell>
                         <TableCell>
                           <LeadStatusBadge status={lead.status} />
@@ -454,7 +454,8 @@ export default function LeadsPage() {
                             </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                  ))
+                    )
+                  })
                 ) : (
                   <TableRow>
                       <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
@@ -519,5 +520,11 @@ export default function LeadsPage() {
         </CardContent>
       </Card>
     </div>
+     <MapModal
+        isOpen={!!selectedAddress}
+        onClose={() => setSelectedAddress(null)}
+        address={selectedAddress || ''}
+      />
+    </>
   )
 }
