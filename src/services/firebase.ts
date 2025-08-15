@@ -8,32 +8,31 @@ import { ref, get } from 'firebase/database';
 const sampleLeads: Lead[] = [
     {
       id: 'lead-1',
-      name: 'Alex Johnson',
-      title: 'Marketing Director',
-      company: 'Innovate Corp',
-      email: 'alex.j@innovate.com',
-      phone: '+1-202-555-0176',
+      companyName: 'Innovate Corp',
       status: 'New',
-      avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=AJ',
-      profile: 'Alex is the Marketing Director at Innovate Corp, a fast-growing tech startup specializing in AI-driven analytics. They recently secured Series B funding. Alex has shown interest in marketing automation tools and has downloaded a whitepaper on lead generation.',
+      avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=IC',
+      profile: 'Innovate Corp is a fast-growing tech startup specializing in AI-driven analytics. They recently secured Series B funding and are looking to expand their marketing efforts.',
       activity: [
-        { id: 'act-1-1', type: 'Email', date: '2023-10-26', notes: 'Initial outreach email sent.' },
+        { id: 'act-1-1', type: 'Email', date: '2023-10-26', notes: 'Initial outreach email sent to the marketing department.' },
       ],
+      contacts: [
+        { id: 'contact-1-1', name: 'Alex Johnson', title: 'Marketing Director', email: 'alex.j@innovate.com', phone: '+1-202-555-0176' },
+        { id: 'contact-1-2', name: 'Jane Smith', title: 'Marketing Manager', email: 'jane.s@innovate.com', phone: '+1-202-555-0177' },
+      ]
     },
     {
       id: 'lead-2',
-      name: 'Samantha Rodriguez',
-      title: 'VP of Sales',
-      company: 'Quantum Solutions',
-      email: 's.rodriguez@quantum.co',
-      phone: '+1-310-555-0188',
+      companyName: 'Quantum Solutions',
       status: 'Contacted',
-      avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=SR',
-      profile: 'Samantha is the VP of Sales at Quantum Solutions, a large enterprise in the logistics sector. The company is looking to overhaul its CRM system. Samantha has 15 years of experience in sales leadership and is focused on improving team efficiency.',
+      avatarUrl: 'https://placehold.co/100x100/E2E8F0/475569.png?text=QS',
+      profile: 'Quantum Solutions is a large enterprise in the logistics sector. The company is looking to overhaul its CRM system to improve team efficiency and data integration.',
       activity: [
-        { id: 'act-2-1', type: 'Call', duration: '15m 20s', date: '2023-10-25', notes: 'Introductory call. Discussed current CRM pain points. Follow-up scheduled.' },
-        { id: 'act-2-2', type: 'Email', date: '2023-10-22', notes: 'Initial contact.' },
+        { id: 'act-2-1', type: 'Call', duration: '15m 20s', date: '2023-10-25', notes: 'Introductory call with Samantha. Discussed current CRM pain points. Follow-up scheduled.' },
+        { id: 'act-2-2', type: 'Email', date: '2023-10-22', notes: 'Initial contact with the sales department.' },
       ],
+      contacts: [
+          { id: 'contact-2-1', name: 'Samantha Rodriguez', title: 'VP of Sales', email: 's.rodriguez@quantum.co', phone: '+1-310-555-0188' },
+      ]
     },
   ];
 

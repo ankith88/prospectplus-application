@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
-import type { Lead } from '@/lib/types'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 
@@ -58,8 +57,8 @@ export default async function LeadsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[280px]">Name</TableHead>
-                <TableHead>Company</TableHead>
+                <TableHead className="w-[280px]">Company</TableHead>
+                <TableHead>Primary Contact</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">AI Score</TableHead>
               </TableRow>
@@ -70,16 +69,24 @@ export default async function LeadsPage() {
                   <TableCell>
                     <Link href={`/leads/${lead.id}`} className="flex items-center gap-3 group">
                       <Avatar>
-                        <AvatarImage src={lead.avatarUrl} alt={lead.name} data-ai-hint="person portrait" />
-                        <AvatarFallback>{lead.name.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+                        <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
-                        <span className="font-medium group-hover:underline">{lead.name}</span>
-                        <span className="text-sm text-muted-foreground">{lead.title}</span>
+                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
                       </div>
                     </Link>
                   </TableCell>
-                  <TableCell>{lead.company}</TableCell>
+                  <TableCell>
+                    {lead.contacts[0] ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium">{lead.contacts[0].name}</span>
+                        <span className="text-sm text-muted-foreground">{lead.contacts[0].title}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">No contacts</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <LeadStatusBadge status={lead.status} />
                   </TableCell>

@@ -11,6 +11,7 @@ import {
   Phone,
   Sparkles,
   User,
+  Users,
 } from 'lucide-react'
 
 import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
@@ -55,25 +56,21 @@ export default async function LeadProfilePage({
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
-            <AvatarImage src={lead.avatarUrl} alt={lead.name} data-ai-hint="person portrait" />
-            <AvatarFallback>{lead.name.charAt(0)}</AvatarFallback>
+            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-3xl font-bold">{lead.name}</h1>
+            <h1 className="text-3xl font-bold">{lead.companyName}</h1>
             <p className="text-muted-foreground">
-              {lead.title} at {lead.company}
+              {lead.contacts.length} {lead.contacts.length === 1 ? 'Contact' : 'Contacts'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <LeadStatusBadge status={lead.status} />
-          <Button variant="outline">
-            <Mail className="mr-2 h-4 w-4" />
-            Email
-          </Button>
           <Button>
             <Phone className="mr-2 h-4 w-4" />
-            Call Lead
+            Log a Call
           </Button>
         </div>
       </header>
@@ -82,29 +79,33 @@ export default async function LeadProfilePage({
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Contact Information</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-muted-foreground" />
+                Contacts
+              </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-muted-foreground" />
-                <span>{lead.name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-muted-foreground" />
-                <span>{lead.company}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-muted-foreground" />
-                <a href={`mailto:${lead.email}`} className="text-primary hover:underline">
-                  {lead.email}
-                </a>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-muted-foreground" />
-                <a href={`tel:${lead.phone}`} className="text-primary hover:underline">
-                  {lead.phone}
-                </a>
-              </div>
+            <CardContent className="divide-y divide-border">
+              {lead.contacts.map((contact) => (
+                <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                    <User className="w-5 h-5 text-muted-foreground" />
+                    <span>{contact.name}</span>
+                  </div>
+                   <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
+                  <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                    <Mail className="w-5 h-5 text-muted-foreground" />
+                    <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                      {contact.email}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                    <Phone className="w-5 h-5 text-muted-foreground" />
+                    <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
+                      {contact.phone}
+                    </a>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
           <Card>

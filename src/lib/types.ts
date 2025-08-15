@@ -14,15 +14,20 @@ export interface Activity {
   notes: string
 }
 
-export interface Lead {
+export interface Contact {
   id: string
   name: string
   title: string
-  company: string
   email: string
   phone: string
+}
+
+export interface Lead {
+  id: string
+  companyName: string
   status: LeadStatus
   avatarUrl: string
   profile: string // This will be the text used for AI prompts
   activity: Activity[]
+  contacts: Contact[]
 }

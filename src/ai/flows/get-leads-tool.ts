@@ -7,13 +7,17 @@ import { ai } from '@/ai/genkit'
 import { getLeadsFromFirebase } from '@/services/firebase'
 import { z } from 'genkit'
 
+const ContactSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  title: z.string(),
+  email: z.string(),
+  phone: z.string(),
+});
+
 const LeadSchema = z.object({
     id: z.string(),
-    name: z.string(),
-    title: z.string(),
-    company: z.string(),
-    email: z.string(),
-    phone: z.string(),
+    companyName: z.string(),
     status: z.enum(['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won']),
     avatarUrl: z.string(),
     profile: z.string(),
@@ -24,6 +28,7 @@ const LeadSchema = z.object({
         duration: z.string().optional(),
         notes: z.string(),
     })),
+    contacts: z.array(ContactSchema),
 });
 
 export const getLeadsTool = ai.defineTool(
