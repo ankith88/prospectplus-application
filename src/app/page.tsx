@@ -41,15 +41,6 @@ async function getLeadsWithScores() {
   return leadsWithScores;
 }
 
-function formatAddress(address: Address | undefined) {
-    if (!address) return 'N/A'
-    const { street, city, state, zip, country } = address
-    const parts = [street, city, state, zip, country].filter(Boolean)
-    if (parts.length === 0) return 'N/A'
-    
-    return parts.join(', ');
-}
-
 export default async function LeadsPage() {
   const leadsWithScores = await getLeadsWithScores();
 
@@ -93,7 +84,9 @@ export default async function LeadsPage() {
                   <TableCell>
                     <LeadStatusBadge status={lead.status} />
                   </TableCell>
-                  <TableCell>{formatAddress(lead.address)}</TableCell>
+                  <TableCell>
+                    {lead.address ? `${lead.address.street || ''}, ${lead.address.city || ''}, ${lead.address.state || ''} ${lead.address.zip || ''}`.replace(/ ,/g,',').replace(/^,|,$/g,'').trim() || 'N/A'}
+                  </TableCell>
                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                   <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
                   <TableCell>
