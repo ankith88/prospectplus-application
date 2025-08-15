@@ -95,7 +95,7 @@ export default function SignUpPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+        <CardFooter className="flex flex-col items-center text-center gap-2 text-sm text-muted-foreground">
             <div>Already have an account? <Link href="/signin" className="text-primary hover:underline">Sign In</Link></div>
         </CardFooter>
       </Card>
