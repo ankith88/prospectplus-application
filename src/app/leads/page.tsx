@@ -33,14 +33,17 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, UserPlus } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useToast } from '@/hooks/use-toast'
 
 type LeadWithScore = Lead & { score: number };
 
 export default function LeadsPage() {
   const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -49,6 +52,7 @@ export default function LeadsPage() {
   });
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     async function getLeadsWithScores() {
@@ -94,6 +98,28 @@ export default function LeadsPage() {
     }
   };
 
+  const handleBulkAssign = async () => {
+    if (!user?.displayName) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to assign leads." });
+      return;
+    }
+    try {
+      const promises = selectedLeads.map(leadId => updateLeadSalesRep(leadId, user.displayName!));
+      await Promise.all(promises);
+
+      setLeadsWithScores(prevLeads =>
+        prevLeads.map(lead =>
+          selectedLeads.includes(lead.id) ? { ...lead, salesRepAssigned: user.displayName! } : lead
+        )
+      );
+      toast({ title: "Success", description: `${selectedLeads.length} lead(s) assigned to you.` });
+      setSelectedLeads([]);
+    } catch (error) {
+      console.error("Failed to bulk assign leads:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to assign leads." });
+    }
+  }
+
   const myLeads = useMemo(() => {
     if (!user) return [];
     return leadsWithScores.filter(lead => lead.salesRepAssigned === user.displayName);
@@ -113,6 +139,21 @@ export default function LeadsPage() {
   const uniqueIndustries = useMemo(() => [...new Set(leadsWithScores.map(l => l.industryCategory).filter(Boolean))], [leadsWithScores]);
   const uniqueStatuses = useMemo(() => [...new Set(leadsWithScores.map(l => l.status).filter(Boolean))], [leadsWithScores]) as LeadStatus[];
 
+  const handleSelectLead = (leadId: string, checked: boolean | 'indeterminate') => {
+    if (checked) {
+      setSelectedLeads(prev => [...prev, leadId]);
+    } else {
+      setSelectedLeads(prev => prev.filter(id => id !== leadId));
+    }
+  }
+  
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked) {
+      setSelectedLeads(filteredLeads.map(l => l.id));
+    } else {
+      setSelectedLeads([]);
+    }
+  }
 
   if (loading || authLoading) {
     return (
@@ -234,13 +275,26 @@ export default function LeadsPage() {
         </Card>
       )}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>All Leads</CardTitle>
+            {selectedLeads.length > 0 && (
+                <Button onClick={handleBulkAssign}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign {selectedLeads.length} Lead(s) to Me
+                </Button>
+            )}
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                    <Checkbox
+                        checked={filteredLeads.length > 0 && selectedLeads.length === filteredLeads.length}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all"
+                    />
+                </TableHead>
                 <TableHead className="w-[280px]">Company</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Franchisee</TableHead>
@@ -254,10 +308,17 @@ export default function LeadsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                  <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                 </TableRow>
               ) : filteredLeads.map((lead) => (
-                <TableRow key={lead.id} >
+                <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
+                  <TableCell>
+                      <Checkbox
+                          checked={selectedLeads.includes(lead.id)}
+                          onCheckedChange={(checked) => handleSelectLead(lead.id, checked)}
+                          aria-label={`Select lead ${lead.companyName}`}
+                      />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
                       <Avatar>
@@ -311,3 +372,5 @@ export default function LeadsPage() {
     </div>
   )
 }
+
+    
