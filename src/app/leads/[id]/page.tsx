@@ -81,11 +81,13 @@ export default function LeadProfilePage({
       }
     }
     fetchData();
-  }, [id, notFound]);
+  }, [id]);
   
   const handleContactAdded = (newContact: any) => {
     if (lead) {
-      const newContactWithId = { ...newContact, id: Date.now().toString() };
+      // Create a more robust temporary unique ID for the key
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      const newContactWithId = { ...newContact, id: tempId, name: `${newContact.firstName} ${newContact.lastName}` };
       const updatedLead = {
         ...lead,
         contacts: [...lead.contacts, newContactWithId],
