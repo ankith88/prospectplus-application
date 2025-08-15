@@ -105,6 +105,7 @@ export default function LeadProfilePage({
     ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
+  const primaryContact = lead.contacts.length > 0 ? lead.contacts[0] : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -132,10 +133,19 @@ export default function LeadProfilePage({
         </div>
         <div className="flex items-center gap-2">
           <LeadStatusBadge status={lead.status} />
-          <Button>
-            <Phone className="mr-2 h-4 w-4" />
-            Log a Call
-          </Button>
+          {primaryContact ? (
+            <Button asChild>
+                <a href={`aircall:number:${primaryContact.phone}`} target="_blank" rel="noopener noreferrer">
+                    <Phone className="mr-2 h-4 w-4" />
+                    Call with AirCall
+                </a>
+            </Button>
+          ) : (
+            <Button disabled>
+              <Phone className="mr-2 h-4 w-4" />
+              Add Contact to Call
+            </Button>
+          )}
         </div>
       </header>
 
