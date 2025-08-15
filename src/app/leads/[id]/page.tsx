@@ -200,7 +200,7 @@ export default function LeadProfilePage({
           <LeadStatusBadge status={lead.status} />
           {callNumber ? (
             <Button asChild>
-                <a href={`aircall:number:${callNumber}`} target="_blank" rel="noopener noreferrer">
+                <a href={`aircall:number:${callNumber}`} rel="noopener noreferrer">
                     <Phone className="mr-2 h-4 w-4" />
                     Call with AirCall
                 </a>
