@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Briefcase } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function SignUpPage() {
@@ -47,12 +47,16 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background p-4">
+    <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="flex flex-col items-center">
-            <div className="inline-block mx-auto p-2 rounded-lg bg-primary/10">
-              <Briefcase className="w-8 h-8 text-primary" />
-            </div>
+        <CardHeader className="flex flex-col items-center text-center">
+            <Image
+              src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
+              width={140}
+              height={40}
+              alt="MailPlus CRM Logo"
+              data-ai-hint="logo"
+            />
             <CardTitle className="text-2xl mt-4">Create an Account</CardTitle>
             <CardDescription className="text-center">Enter your details to create your account.</CardDescription>
         </CardHeader>
