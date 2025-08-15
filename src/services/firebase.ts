@@ -44,6 +44,8 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           industrySubCategory: data.industrySubCategory,
           salesRepAssigned: data.salesRepAssigned,
           campaign: data.campaign,
+          customerServiceEmail: data.customerServiceEmail,
+          customerPhone: data.customerPhone,
         };
         return transformedLead;
       });

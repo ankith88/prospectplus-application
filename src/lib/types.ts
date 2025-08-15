@@ -46,4 +46,6 @@ export interface Lead {
   industrySubCategory?: string
   salesRepAssigned?: string
   campaign?: string
+  customerServiceEmail?: string
+  customerPhone?: string
 }

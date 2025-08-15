@@ -49,8 +49,6 @@ export default async function LeadProfilePage({
     ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
   
-  const primaryContact = lead.contacts?.[0];
-
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,14 +133,14 @@ export default async function LeadProfilePage({
                     <Mail className="w-4 h-4 mt-1 text-muted-foreground" />
                     <div>
                       <p className="text-muted-foreground">Email</p>
-                      <p className="font-medium">{primaryContact?.email ?? 'N/A'}</p>
+                      <p className="font-medium">{lead.customerServiceEmail ?? 'N/A'}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Phone className="w-4 h-4 mt-1 text-muted-foreground" />
                     <div>
                       <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">{primaryContact?.phone ?? 'N/A'}</p>
+                      <p className="font-medium">{lead.customerPhone ?? 'N/A'}</p>
                     </div>
                   </div>
                </div>
