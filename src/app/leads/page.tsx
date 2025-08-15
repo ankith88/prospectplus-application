@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserPlus } from 'lucide-react'
+import { MoreHorizontal, UserPlus, UserX } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -44,6 +44,7 @@ export default function LeadsPage() {
   const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -120,6 +121,24 @@ export default function LeadsPage() {
     }
   }
 
+  const handleBulkUnassign = async () => {
+    try {
+      const promises = selectedMyLeads.map(leadId => updateLeadSalesRep(leadId, null));
+      await Promise.all(promises);
+      
+      setLeadsWithScores(prevLeads =>
+        prevLeads.map(lead =>
+          selectedMyLeads.includes(lead.id) ? { ...lead, salesRepAssigned: undefined } : lead
+        )
+      );
+      toast({ title: "Success", description: `${selectedMyLeads.length} lead(s) unassigned.` });
+      setSelectedMyLeads([]);
+    } catch (error) {
+      console.error("Failed to bulk unassign leads:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
+    }
+  };
+
   const myLeads = useMemo(() => {
     if (!user) return [];
     return leadsWithScores.filter(lead => lead.salesRepAssigned === user.displayName);
@@ -154,6 +173,22 @@ export default function LeadsPage() {
       setSelectedLeads([]);
     }
   }
+
+  const handleSelectMyLead = (leadId: string, checked: boolean | 'indeterminate') => {
+    if (checked) {
+      setSelectedMyLeads(prev => [...prev, leadId]);
+    } else {
+      setSelectedMyLeads(prev => prev.filter(id => id !== leadId));
+    }
+  };
+
+  const handleSelectAllMyLeads = (checked: boolean | 'indeterminate') => {
+    if (checked) {
+      setSelectedMyLeads(myLeads.map(l => l.id));
+    } else {
+      setSelectedMyLeads([]);
+    }
+  };
 
   if (loading || authLoading) {
     return (
@@ -210,13 +245,26 @@ export default function LeadsPage() {
        </Card>
       {myLeads.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>My Leads</CardTitle>
+            {selectedMyLeads.length > 0 && (
+                <Button onClick={handleBulkUnassign} variant="outline">
+                <UserX className="mr-2 h-4 w-4" />
+                Unassign {selectedMyLeads.length} Lead(s)
+                </Button>
+            )}
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
+                   <TableHead className="w-8">
+                     <Checkbox
+                       checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
+                       onCheckedChange={handleSelectAllMyLeads}
+                       aria-label="Select all my leads"
+                     />
+                   </TableHead>
                   <TableHead className="w-[280px]">Company</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
@@ -228,7 +276,14 @@ export default function LeadsPage() {
               </TableHeader>
               <TableBody>
                 {myLeads.map((lead) => (
-                  <TableRow key={lead.id} >
+                  <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                    <TableCell>
+                      <Checkbox
+                          checked={selectedMyLeads.includes(lead.id)}
+                          onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)}
+                          aria-label={`Select lead ${lead.companyName}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
                         <Avatar>
@@ -372,5 +427,3 @@ export default function LeadsPage() {
     </div>
   )
 }
-
-    
