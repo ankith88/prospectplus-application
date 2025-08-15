@@ -86,7 +86,7 @@ export default function LeadProfilePage({
   const handleContactAdded = (newContact: any) => {
     if (lead) {
       // Create a more robust temporary unique ID for the key
-      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const newContactWithId = { ...newContact, id: tempId, name: `${newContact.firstName} ${newContact.lastName}` };
       const updatedLead = {
         ...lead,
