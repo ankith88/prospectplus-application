@@ -43,10 +43,11 @@ import { AddContactForm } from '@/components/add-contact-form'
 
 
 export default function LeadProfilePage({
-  params: { id },
+  params,
 }: {
   params: { id: string }
 }) {
+  const { id } = params;
   const [lead, setLead] = useState<Lead | null>(null);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
@@ -106,6 +107,7 @@ export default function LeadProfilePage({
     : 'No address available';
 
   const primaryContact = lead.contacts.length > 0 ? lead.contacts[0] : null;
+  const callNumber = primaryContact?.phone || lead.customerPhone;
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,9 +135,9 @@ export default function LeadProfilePage({
         </div>
         <div className="flex items-center gap-2">
           <LeadStatusBadge status={lead.status} />
-          {primaryContact ? (
+          {callNumber ? (
             <Button asChild>
-                <a href={`aircall:number:${primaryContact.phone}`} target="_blank" rel="noopener noreferrer">
+                <a href={`aircall:number:${callNumber}`} target="_blank" rel="noopener noreferrer">
                     <Phone className="mr-2 h-4 w-4" />
                     Call with AirCall
                 </a>
@@ -143,7 +145,7 @@ export default function LeadProfilePage({
           ) : (
             <Button disabled>
               <Phone className="mr-2 h-4 w-4" />
-              Add Contact to Call
+              No Phone Available
             </Button>
           )}
         </div>
