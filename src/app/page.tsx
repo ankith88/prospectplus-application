@@ -41,19 +41,15 @@ async function getLeadsWithScores() {
   return leadsWithScores;
 }
 
-function formatAddress(address: Address) {
+function formatAddress(address: Address | undefined) {
     if (!address) return 'N/A'
     const { street, city, state, zip, country } = address
     const parts = [street, city, state, zip, country].filter(Boolean)
     if (parts.length === 0) return 'N/A'
     
-    let formattedAddress = street || ''
-    if (city) formattedAddress += `, ${city}`
-    if (state) formattedAddress += `, ${state}`
-    if (zip) formattedAddress += ` ${zip}`
-    if (country) formattedAddress += `, ${country}`
+    let formattedAddress = parts.join(', ');
 
-    return formattedAddress.trim().replace(/^,|,$/g, '').trim()
+    return formattedAddress.trim().replace(/,$/g, '').trim()
 }
 
 export default async function LeadsPage() {
