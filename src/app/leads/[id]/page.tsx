@@ -9,6 +9,7 @@ import {
   Building2,
   Calendar,
   CheckCircle,
+  Clipboard,
   Edit,
   Globe,
   Hash,
@@ -220,6 +221,15 @@ export default function LeadProfilePage({
     }
   };
 
+  const handleCopy = (text: string | null | undefined, fieldName: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toast({
+        title: "Copied to clipboard",
+        description: `${fieldName} copied successfully.`,
+    });
+  };
+
   if (loading || !lead || !scoringResult || !talkingPointsResult) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -310,14 +320,28 @@ export default function LeadProfilePage({
                    <Key className="w-4 h-4 mt-1 text-muted-foreground" />
                    <div>
                      <p className="text-muted-foreground">Customer ID</p>
-                     <p className="font-medium">{lead.entityId ?? 'N/A'}</p>
+                     <div className="flex items-center gap-1">
+                        <p className="font-medium">{lead.entityId ?? 'N/A'}</p>
+                        {lead.entityId && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
+                                <Clipboard className="w-3 h-3" />
+                            </Button>
+                        )}
+                     </div>
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
                    <Hash className="w-4 h-4 mt-1 text-muted-foreground" />
                    <div>
                      <p className="text-muted-foreground">NetSuite Internal ID</p>
-                     <p className="font-medium">{lead.id ?? 'N/A'}</p>
+                     <div className="flex items-center gap-1">
+                        <p className="font-medium">{lead.id ?? 'N/A'}</p>
+                        {lead.id && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.id, 'NetSuite Internal ID')}>
+                                <Clipboard className="w-3 h-3" />
+                            </Button>
+                        )}
+                     </div>
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
@@ -359,14 +383,28 @@ export default function LeadProfilePage({
                     <Mail className="w-4 h-4 mt-1 text-muted-foreground" />
                     <div>
                       <p className="text-muted-foreground">Email</p>
-                      <p className="font-medium">{lead.customerServiceEmail ?? 'N/A'}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="font-medium">{lead.customerServiceEmail ?? 'N/A'}</p>
+                        {lead.customerServiceEmail && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerServiceEmail, 'Email')}>
+                                <Clipboard className="w-3 h-3" />
+                            </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Phone className="w-4 h-4 mt-1 text-muted-foreground" />
                     <div>
                       <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">{lead.customerPhone ?? 'N/A'}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="font-medium">{lead.customerPhone ?? 'N/A'}</p>
+                        {lead.customerPhone && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
+                                <Clipboard className="w-3 h-3" />
+                            </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -597,5 +635,3 @@ export default function LeadProfilePage({
     </div>
   )
 }
-
-    
