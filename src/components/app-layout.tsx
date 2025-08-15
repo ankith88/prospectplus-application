@@ -38,13 +38,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     router.push("/signin")
   }
 
-  // Do not render layout for signin/signup pages
-  if (pathname === "/signin" || pathname === "/signup") {
-    return <>{children}</>
-  }
-
-  // Do not render layout if auth is loading or user is not signed in
-  if (loading || !user) {
+  // Do not render layout if auth is loading and user is not signed in on protected routes
+  if (loading && !user && pathname !== '/signin' && pathname !== '/signup') {
     return (
       <div className="flex h-screen items-center justify-center">
         <div>Loading...</div>
@@ -52,66 +47,73 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
 
+  const isAuthPage = pathname === '/signin' || pathname === '/signup';
+
+
   return (
     <>
-      <Sidebar collapsible="icon">
-        <SidebarHeader className="flex items-center justify-center p-4">
-          <Link href="/leads" className="flex items-center gap-2">
-            <Image
-              src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={140}
-              height={40}
-              alt="MailPlus CRM Logo"
-              className="group-data-[collapsible=icon]:hidden"
-              data-ai-hint="logo"
-            />
-            <Briefcase className="w-6 h-6 text-primary hidden group-data-[collapsible=icon]:block" />
-          </Link>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/leads")} tooltip="Leads">
-                <Link href="/leads">
-                  <Briefcase />
-                  <span>Outbound Leads</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarContent>
-        <SidebarFooter>
-          <div className="flex items-center gap-3 w-full">
-            <Avatar className="size-8">
-              <AvatarImage
-                src={user.photoURL || `https://placehold.co/100x100.png`}
-                alt={user.displayName || "User"}
-                data-ai-hint="person avatar"
+      {!isAuthPage && (
+        <Sidebar collapsible="icon">
+          <SidebarHeader className="flex items-center justify-center p-4">
+            <Link href="/leads" className="flex items-center gap-2">
+              <Image
+                src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
+                width={140}
+                height={40}
+                alt="MailPlus CRM Logo"
+                className="group-data-[collapsible=icon]:hidden"
+                data-ai-hint="logo"
               />
-              <AvatarFallback>{user.displayName ? user.displayName.charAt(0) : "U"}</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-              <span className="font-medium text-sm truncate">{user.displayName}</span>
-              <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+              <Briefcase className="w-6 h-6 text-primary hidden group-data-[collapsible=icon]:block" />
+            </Link>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/leads")} tooltip="Leads">
+                  <Link href="/leads">
+                    <Briefcase />
+                    <span>Outbound Leads</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarContent>
+          <SidebarFooter>
+            <div className="flex items-center gap-3 w-full">
+              <Avatar className="size-8">
+                <AvatarImage
+                  src={user?.photoURL || `https://placehold.co/100x100.png`}
+                  alt={user?.displayName || "User"}
+                  data-ai-hint="person avatar"
+                />
+                <AvatarFallback>{user?.displayName ? user.displayName.charAt(0) : "U"}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
+                <span className="font-medium text-sm truncate">{user?.displayName}</span>
+                <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-            <Button variant="ghost" size="icon">
-              <Settings className="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
-              <LogOut className="size-4" />
-            </Button>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
+            <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
+              <Button variant="ghost" size="icon">
+                <Settings className="size-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleSignOut}>
+                <LogOut className="size-4" />
+              </Button>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+      )}
       <SidebarInset>
-        <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
-          <SidebarTrigger />
-          <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
-            {/* Future header content can go here */}
-          </div>
-        </header>
+        {!isAuthPage && (
+           <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
+            <SidebarTrigger />
+            <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
+              {/* Future header content can go here */}
+            </div>
+          </header>
+        )}
         <div className="p-4 sm:p-6 lg:p-8">{children}</div>
       </SidebarInset>
     </>
