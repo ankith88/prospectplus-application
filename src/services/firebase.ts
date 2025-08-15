@@ -8,6 +8,23 @@ import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity } from '@/lib/types';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
+async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
+    try {
+        const activityRef = collection(firestore, 'leads', leadId, 'activity');
+        const activityLog = {
+            ...activity,
+            date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+            duration: activity.duration || 'N/A'
+        };
+        const docRef = await addDoc(activityRef, activityLog);
+        console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
+        return docRef.id;
+    } catch (error) {
+        console.error(`Failed to log activity for lead ${leadId}:`, error);
+        throw new Error('Failed to log activity in Firebase');
+    }
+}
+
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
   try {
@@ -46,7 +63,7 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
         const activity: Activity[] = activitySnapshot.docs.map(activityDoc => ({
           id: activityDoc.id,
           ...activityDoc.data()
-        } as Activity));
+        } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
@@ -81,6 +98,7 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
   try {
     const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
     const docRef = await addDoc(contactsRef, contact);
+    await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
     console.log(`Contact added with ID: ${docRef.id} to lead ${leadId}`);
     return docRef.id;
   } catch (error) {
@@ -95,6 +113,8 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
     await updateDoc(leadRef, {
       salesRepAssigned: salesRep,
     });
+    const notes = salesRep ? `Lead assigned to ${salesRep}` : `Lead unassigned`;
+    await logActivity(leadId, { type: 'Update', notes });
     console.log(`Lead ${leadId} assigned to ${salesRep}`);
   } catch (error) {
     console.error(`Failed to assign lead ${leadId}:`, error);
@@ -108,6 +128,7 @@ async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<voi
         await updateDoc(leadRef, {
             customerStatus: status,
         });
+        await logActivity(leadId, { type: 'Update', notes: `Status changed to ${status}` });
         console.log(`Lead ${leadId} status updated to ${status}`);
     } catch (error) {
         console.error(`Failed to update lead status for ${leadId}:`, error);
@@ -116,27 +137,15 @@ async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<voi
 }
 
 async function logCallActivity(leadId: string, callData: { notes: string; outcome: string; reason?: string }): Promise<string> {
-    try {
-        const activityRef = collection(firestore, 'leads', leadId, 'activity');
-        const activity = {
-            type: 'Call',
-            date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-            notes: `Outcome: ${callData.outcome}${callData.reason ? ` (${callData.reason})` : ''}. Notes: ${callData.notes}`,
-            duration: 'N/A'
-        };
-        const docRef = await addDoc(activityRef, activity);
-        console.log(`Call activity logged with ID: ${docRef.id} for lead ${leadId}`);
-        return docRef.id;
-    } catch (error) {
-        console.error(`Failed to log call activity for lead ${leadId}:`, error);
-        throw new Error('Failed to log call activity in Firebase');
-    }
+    const notes = `Outcome: ${callData.outcome}${callData.reason ? ` (${callData.reason})` : ''}. Notes: ${callData.notes}`;
+    return await logActivity(leadId, { type: 'Call', notes });
 }
 
 async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await updateDoc(contactRef, contactData);
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.` });
     console.log(`Contact ${contactId} updated for lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
@@ -144,10 +153,11 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
   }
 }
 
-async function deleteContactFromLead(leadId: string, contactId: string): Promise<void> {
+async function deleteContactFromLead(leadId: string, contactId: string, contactName: string): Promise<void> {
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await deleteDoc(contactRef);
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
     console.log(`Contact ${contactId} deleted from lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to delete contact ${contactId} from lead ${leadId}:`, error);
@@ -155,10 +165,26 @@ async function deleteContactFromLead(leadId: string, contactId: string): Promise
   }
 }
 
-async function updateLeadDetails(leadId: string, leadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone'>>): Promise<void> {
+async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone'>>): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, leadData);
+        await updateDoc(leadRef, newLeadData);
+
+        const changes: string[] = [];
+        if (newLeadData.companyName && newLeadData.companyName !== oldLead.companyName) {
+            changes.push(`Company name changed from "${oldLead.companyName}" to "${newLeadData.companyName}".`);
+        }
+        if (newLeadData.customerServiceEmail && newLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
+            changes.push(`Email changed from "${oldLead.customerServiceEmail || 'N/A'}" to "${newLeadData.customerServiceEmail}".`);
+        }
+        if (newLeadData.customerPhone && newLeadData.customerPhone !== oldLead.customerPhone) {
+            changes.push(`Phone changed from "${oldLead.customerPhone || 'N/A'}" to "${newLeadData.customerPhone}".`);
+        }
+
+        if (changes.length > 0) {
+            await logActivity(leadId, { type: 'Update', notes: changes.join(' ') });
+        }
+        
         console.log(`Lead ${leadId} details updated.`);
     } catch (error) {
         console.error(`Failed to update lead details for ${leadId}:`, error);
@@ -167,4 +193,4 @@ async function updateLeadDetails(leadId: string, leadData: Partial<Pick<Lead, 'c
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity };

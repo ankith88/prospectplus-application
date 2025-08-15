@@ -23,13 +23,14 @@ import {
   Trash2,
   User,
   Users,
+  MessageSquare,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import type { Lead, Contact } from '@/lib/types'
+import { useEffect, useState, use } from 'react'
+import type { Lead, Contact, Activity } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { generateTalkingPoints, TalkingPointSuggestionsOutput } from '@/ai/flows/talking-point-suggestions'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
-import { deleteContactFromLead } from '@/services/firebase'
+import { deleteContactFromLead, logActivity } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,10 +70,11 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 
 
 export default function LeadProfilePage({
-  params: { id },
+  params,
 }: {
   params: { id: string }
 }) {
+  const { id } = params;
   const [lead, setLead] = useState<Lead | null>(null);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
@@ -111,10 +113,20 @@ export default function LeadProfilePage({
     }
     fetchData();
   }, [id]);
+
+  const addActivity = (newActivity: Omit<Activity, 'id'>) => {
+    if (lead) {
+        const activityWithId: Activity = {
+            ...newActivity,
+            id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        };
+        const updatedActivities = [activityWithId, ...lead.activity];
+        setLead({ ...lead, activity: updatedActivities });
+    }
+  };
   
   const handleContactAdded = (newContact: any) => {
     if (lead) {
-      // Create a more robust temporary unique ID for the key
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const newContactWithId = { ...newContact, id: tempId, name: `${newContact.firstName} ${newContact.lastName}` };
       const updatedLead = {
@@ -122,29 +134,62 @@ export default function LeadProfilePage({
         contacts: [...lead.contacts, newContactWithId],
       };
       setLead(updatedLead);
+       addActivity({
+          type: 'Update',
+          date: new Date().toISOString().split('T')[0],
+          notes: `New contact added: ${newContactWithId.name}`,
+       });
     }
   };
 
-  const handleContactUpdated = (updatedContact: Contact) => {
+  const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
     if (lead) {
       const updatedContacts = lead.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
       setLead({ ...lead, contacts: updatedContacts });
+       addActivity({
+          type: 'Update',
+          date: new Date().toISOString().split('T')[0],
+          notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
+       });
     }
      setIsEditDialogOpen(false);
   };
 
-  const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
+  const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
     if (lead) {
+        const changes: string[] = [];
+        if (updatedLeadData.companyName && updatedLeadData.companyName !== oldLead.companyName) {
+            changes.push(`Company name to "${updatedLeadData.companyName}".`);
+        }
+        if (updatedLeadData.customerServiceEmail && updatedLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
+            changes.push(`Email to "${updatedLeadData.customerServiceEmail}".`);
+        }
+        if (updatedLeadData.customerPhone && updatedLeadData.customerPhone !== oldLead.customerPhone) {
+            changes.push(`Phone to "${updatedLeadData.customerPhone}".`);
+        }
+
+        if (changes.length > 0) {
+           addActivity({
+              type: 'Update',
+              date: new Date().toISOString().split('T')[0],
+              notes: `Lead details updated: ${changes.join(' ')}`,
+           });
+        }
       setLead({ ...lead, ...updatedLeadData });
     }
     setIsEditLeadDialogOpen(false);
   }
 
-  const handleDeleteContact = async (contactId: string) => {
+  const handleDeleteContact = async (contact: Contact) => {
     if (!lead) return;
     try {
-      await deleteContactFromLead(lead.id, contactId);
-      setLead(prev => prev ? { ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) } : null);
+      await deleteContactFromLead(lead.id, contact.id, contact.name);
+      setLead(prev => prev ? { ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) } : null);
+      addActivity({
+        type: 'Update',
+        date: new Date().toISOString().split('T')[0],
+        notes: `Contact ${contact.name} deleted.`,
+      });
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -155,6 +200,22 @@ export default function LeadProfilePage({
   const handleCallLogged = (updatedLead: Lead) => {
     setLead(updatedLead);
   }
+
+  const handleAirCallClick = async () => {
+    if (!lead || !callNumber) return;
+    try {
+        await logActivity(lead.id, { type: 'Call', notes: 'Initiated call with AirCall.' });
+        addActivity({
+            type: 'Call',
+            date: new Date().toISOString().split('T')[0],
+            notes: 'Initiated call with AirCall.',
+        });
+        window.location.href = `aircall:number:${callNumber}`;
+    } catch (error) {
+        console.error("Failed to log AirCall activity:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to log AirCall click." });
+    }
+  };
 
   if (loading || !lead || !scoringResult || !talkingPointsResult) {
     return (
@@ -198,11 +259,9 @@ export default function LeadProfilePage({
         <div className="flex items-center gap-2">
           <LeadStatusBadge status={lead.status} />
           {callNumber ? (
-            <Button asChild>
-                <a href={`aircall:number:${callNumber}`} rel="noopener noreferrer">
-                    <Phone className="mr-2 h-4 w-4" />
-                    Call with AirCall
-                </a>
+            <Button onClick={handleAirCallClick}>
+                <Phone className="mr-2 h-4 w-4" />
+                Call with AirCall
             </Button>
           ) : (
             <Button disabled>
@@ -238,7 +297,7 @@ export default function LeadProfilePage({
                     <DialogHeader>
                       <DialogTitle>Edit Lead Details</DialogTitle>
                     </DialogHeader>
-                    <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
+                    <EditLeadForm lead={lead} onLeadUpdated={(updatedData) => handleLeadUpdated(updatedData, lead)} />
                   </DialogContent>
                 </Dialog>
              </CardHeader>
@@ -365,7 +424,7 @@ export default function LeadProfilePage({
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteContact(contact.id)} className="bg-destructive hover:bg-destructive/90">
+                                  <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
                                     Delete
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -431,7 +490,7 @@ export default function LeadProfilePage({
                 <EditContactForm
                   leadId={lead.id}
                   contact={selectedContact}
-                  onContactUpdated={handleContactUpdated}
+                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
                 />
                )}
              </DialogContent>
@@ -450,6 +509,7 @@ export default function LeadProfilePage({
                         {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
                         {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
                         {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                        {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                       </div>
                       {index < lead.activity.length - 1 && (
                         <div className="w-px h-full bg-border"></div>
@@ -458,7 +518,7 @@ export default function LeadProfilePage({
                     <div className="flex-1 pb-4">
                       <div className="flex items-center justify-between">
                         <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                        <p className="text-sm text-muted-foreground">{item.date}</p>
+                        <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleDateString()}</p>
                       </div>
                       <p className="text-sm text-muted-foreground">{item.notes}</p>
                     </div>
@@ -506,5 +566,3 @@ export default function LeadProfilePage({
     </div>
   )
 }
-
-    

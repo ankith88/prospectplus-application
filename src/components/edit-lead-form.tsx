@@ -43,7 +43,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await updateLeadDetails(lead.id, values);
+      await updateLeadDetails(lead.id, lead, values);
       toast({
         title: "Success",
         description: "Lead details updated successfully.",
