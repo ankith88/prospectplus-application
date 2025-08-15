@@ -68,7 +68,7 @@ export default function LeadProfilePage({
         setLead(currentLead);
 
         const [scoring, talkingPoints] = await Promise.all([
-          aiLeadScoring({ leadId: currentLead.id, leadProfile: currentLead.profile, websiteUrl: currentLead.websiteUrl }),
+          aiLeadScoring({ leadId: currentLead.id, leadProfile: currentLead.profile, websiteUrl: currentLead.websiteUrl, activity: currentLead.activity }),
           generateTalkingPoints({ leadProfile: currentLead.profile }),
         ])
         setScoringResult(scoring);

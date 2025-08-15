@@ -62,7 +62,7 @@ export default function LeadsPage() {
         const leads = await getLeadsTool({});
         const leadsWithScoresPromises = leads.map(async (lead) => {
           try {
-            const { score } = await aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl });
+            const { score } = await aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl, activity: lead.activity });
             return { ...lead, score: score ?? 0 };
           } catch (error) {
             console.error(`Failed to score lead ${lead.id}:`, error);

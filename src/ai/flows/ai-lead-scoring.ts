@@ -22,6 +22,13 @@ const AiLeadScoringInputSchema = z.object({
     .string()
     .describe('Detailed information about the lead, including company, job title, industry, and past interactions.'),
   websiteUrl: z.string().optional().describe("The company's website URL."),
+  activity: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['Call', 'Email', 'Meeting']),
+    date: z.string(),
+    duration: z.string().optional(),
+    notes: z.string(),
+  })).optional().describe('The activity history of the lead.'),
 });
 export type AiLeadScoringInput = z.infer<typeof AiLeadScoringInputSchema>;
 
@@ -49,12 +56,14 @@ const aiLeadScoringPrompt = ai.definePrompt({
   tools: [getLeadsTool, prospectWebsiteTool],
   prompt: `You are an AI assistant designed to score sales leads for a parcel delivery service.
 
-  Analyze the following lead profile and website to determine how likely they are to send parcels.
+  Analyze the following lead profile, activity history, and website to determine how likely they are to send parcels.
   
   - Give a higher score (75-100) to companies whose business model likely involves shipping parcels (e.g., e-commerce, retail, logistics, manufacturing).
   - Give a lower score to companies that are less likely to ship parcels (e.g., digital services, consulting).
   - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information about social media presence, contacts, and site content.
-  - Increase the score if the website analysis finds shipping-related keywords or if key contact roles like 'Logistics Manager' or 'Head of Operations' are found.
+  - Increase the score if the website analysis finds shipping-related keywords (e.g., "delivery partners", "request a quote", "shipping policy") or if key contact roles like 'Logistics Manager' or 'Head of Operations' are found.
+  - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
+  - Decrease the score if the website mentions keywords like "digital downloads", "software as a service", or "consulting", as they are less likely to ship physical goods.
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
@@ -65,6 +74,12 @@ const aiLeadScoringPrompt = ai.definePrompt({
 
   Website:
   {{{websiteUrl}}}
+  
+  Activity History:
+  {{#each activity}}
+  - {{this.type}} on {{this.date}}: {{this.notes}}
+  {{/each}}
+
 
   Your response must be in the format specified by the output schema.
   Provide a 'score' (number) and a 'reason' (string).`,
