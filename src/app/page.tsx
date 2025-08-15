@@ -1,3 +1,5 @@
+"use client"
+
 import Link from 'next/link'
 import {
   Avatar,
@@ -22,27 +24,39 @@ import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
-import type { Address } from '@/lib/types'
+import type { Lead } from '@/lib/types'
+import { useEffect, useState } from 'react'
 
-async function getLeadsWithScores() {
-  const leads = await getLeadsTool({});
-  const leadsWithScores = await Promise.all(
-    leads.map(async (lead) => {
+type LeadWithScore = Lead & { score: number };
+
+export default function LeadsPage() {
+  const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function getLeadsWithScores() {
       try {
-        const { score } = await aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl })
-        return { ...lead, score }
+        setLoading(true);
+        const leads = await getLeadsTool({});
+        const leadsWithScoresPromises = leads.map(async (lead) => {
+          try {
+            const { score } = await aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl });
+            return { ...lead, score: score ?? 85 };
+          } catch (error) {
+            console.error(`Failed to score lead ${lead.id}:`, error);
+            return { ...lead, score: 0 };
+          }
+        });
+        const resolvedLeads = await Promise.all(leadsWithScoresPromises);
+        setLeadsWithScores(resolvedLeads);
       } catch (error) {
-        console.error(`Failed to score lead ${lead.id}:`, error)
-        // Assign a default/error score
-        return { ...lead, score: 0 }
+        console.error("Failed to fetch leads:", error);
+      } finally {
+        setLoading(false);
       }
-    })
-  );
-  return leadsWithScores;
-}
-
-export default async function LeadsPage() {
-  const leadsWithScores = await getLeadsWithScores();
+    }
+    getLeadsWithScores();
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,8 +82,12 @@ export default async function LeadsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {leadsWithScores.map((lead) => (
-                <TableRow key={lead.id} className="cursor-pointer">
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center">Loading leads...</TableCell>
+                </TableRow>
+              ) : leadsWithScores.map((lead) => (
+                <TableRow key={lead.id}>
                   <TableCell>
                     <Link href={`/leads/${lead.id}`} className="flex items-center gap-3 group">
                       <Avatar>
@@ -85,7 +103,7 @@ export default async function LeadsPage() {
                     <LeadStatusBadge status={lead.status} />
                   </TableCell>
                   <TableCell>
-                    {lead.address ? `${lead.address.street || ''}, ${lead.address.city || ''}, ${lead.address.state || ''} ${lead.address.zip || ''}`.replace(/ ,/g,',').replace(/^,|,$/g,'').trim() || 'N/A'}
+                    {lead.address ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip].filter(Boolean).join(', ') : 'N/A'}
                   </TableCell>
                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                   <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
