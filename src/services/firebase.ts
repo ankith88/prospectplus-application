@@ -5,12 +5,9 @@ import { database } from '@/lib/firebase';
 import type { Lead } from '@/lib/types';
 import { ref, get } from 'firebase/database';
 
-// A function to seed initial data into the Firebase Realtime Database.
-// This is useful for development and testing.
-export async function seedLeadsToFirebase() {
-  const leadsRef = ref(database, 'leads');
-  const sampleLeads: Omit<Lead, 'id'>[] = [
+const sampleLeads: Lead[] = [
     {
+      id: 'lead-1',
       name: 'Alex Johnson',
       title: 'Marketing Director',
       company: 'Innovate Corp',
@@ -24,6 +21,7 @@ export async function seedLeadsToFirebase() {
       ],
     },
     {
+      id: 'lead-2',
       name: 'Samantha Rodriguez',
       title: 'VP of Sales',
       company: 'Quantum Solutions',
@@ -39,11 +37,15 @@ export async function seedLeadsToFirebase() {
     },
   ];
 
-  // In a real app, you would likely use `push` to generate unique IDs.
-  // For this example, we'll use a simple structure.
+// A function to seed initial data into the Firebase Realtime Database.
+// This is useful for development and testing.
+export async function seedLeadsToFirebase() {
+  const leadsRef = ref(database, 'leads');
+  
   const leadsToSet: { [key: string]: Omit<Lead, 'id'> } = {};
-  sampleLeads.forEach((lead, index) => {
-    leadsToSet[`lead-${index + 1}`] = lead;
+  sampleLeads.forEach((lead) => {
+    const { id, ...leadData } = lead;
+    leadsToSet[id] = leadData;
   });
 
   // Use set to overwrite any existing data at the 'leads' path.
@@ -54,23 +56,36 @@ export async function seedLeadsToFirebase() {
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
-  console.log("Fetching leads from Firebase...");
-  const leadsRef = ref(database, 'leads');
-  const snapshot = await get(leadsRef);
+  try {
+    console.log("Fetching leads from Firebase...");
+    const leadsRef = ref(database, 'leads');
+    const snapshot = await get(leadsRef);
 
-  if (snapshot.exists()) {
-    const leadsData = snapshot.val();
-    // Convert the object of leads into an array
-    const leadsArray = Object.keys(leadsData).map((key) => ({
-      id: key,
-      ...leadsData[key],
-    }));
-    return leadsArray;
-  } else {
-    // If no leads exist, seed them and then fetch again.
-    console.log("No leads found, seeding sample data...");
-    await seedLeadsToFirebase();
-    return await getLeadsFromFirebase();
+    if (snapshot.exists()) {
+      const leadsData = snapshot.val();
+      // Convert the object of leads into an array
+      const leadsArray = Object.keys(leadsData).map((key) => ({
+        id: key,
+        ...leadsData[key],
+      }));
+      return leadsArray;
+    } else {
+      // If no leads exist, seed them and then fetch again.
+      console.log("No leads found, seeding sample data...");
+      await seedLeadsToFirebase();
+      const seededSnapshot = await get(leadsRef);
+      if (seededSnapshot.exists()) {
+        const leadsData = seededSnapshot.val();
+        return Object.keys(leadsData).map((key) => ({
+            id: key,
+            ...leadsData[key],
+        }));
+      }
+      return [];
+    }
+  } catch (error) {
+    console.error("Firebase fetch failed, falling back to local data:", error);
+    return sampleLeads;
   }
 }
 
