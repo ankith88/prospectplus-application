@@ -62,7 +62,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               className="group-data-[collapsible=icon]:hidden"
               data-ai-hint="logo"
             />
-            <Briefcase className="w-6 h-6 text-primary hidden group-data-[collapsible=icon]:block" />
+            <Image
+              src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
+              width={32}
+              height={32}
+              alt="MailPlus CRM Logo"
+              className="hidden group-data-[collapsible=icon]:block"
+              data-ai-hint="logo icon"
+            />
           </Link>
         </SidebarHeader>
         <SidebarContent>
