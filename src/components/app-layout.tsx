@@ -41,9 +41,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
   
   if (isAuthPage) {
-    return <>{children}</>;
+    return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
-
+  
   return (
     <>
       <Sidebar collapsible="icon">
