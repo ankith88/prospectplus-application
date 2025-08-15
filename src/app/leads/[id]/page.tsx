@@ -24,6 +24,7 @@ import {
   User,
   Users,
   MessageSquare,
+  Briefcase,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity } from '@/lib/types'
@@ -350,6 +351,20 @@ export default function LeadProfilePage({
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <p className="font-medium">{lead.customerPhone ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <User className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Sales Rep Assigned</p>
+                      <p className="font-medium">{lead.salesRepAssigned ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Briefcase className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Lead Source</p>
+                      <p className="font-medium">{lead.campaign ?? 'N/A'}</p>
                     </div>
                   </div>
                </div>
