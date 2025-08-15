@@ -4,11 +4,6 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -84,14 +79,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarContent>
         <SidebarFooter>
           <div className="flex items-center gap-3 w-full">
-            <Avatar className="size-8">
-              <AvatarImage
-                src={user?.photoURL || `https://placehold.co/100x100.png`}
-                alt={user?.displayName || "User"}
-                data-ai-hint="person avatar"
-              />
-              <AvatarFallback>{user?.displayName ? user.displayName.charAt(0) : "U"}</AvatarFallback>
-            </Avatar>
             <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
               <span className="font-medium text-sm truncate">{user?.displayName}</span>
               <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
