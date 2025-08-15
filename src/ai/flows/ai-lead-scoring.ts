@@ -13,10 +13,10 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getLeadsTool } from './get-leads-tool';
 import { prospectWebsiteTool } from './prospect-website-tool';
-import type { Contact } from '@/lib/types';
+import type { Lead } from '@/lib/types';
 import {ToolRequestPart,ToolResponsePart,toolRequest,toolResponse,history} from 'genkit/ai';
 
-const AiLeadScoringInputSchema = z.object({
+const LeadToScoreSchema = z.object({
   leadId: z.string().describe('The ID of the lead.'),
   leadProfile: z
     .string()
@@ -30,9 +30,13 @@ const AiLeadScoringInputSchema = z.object({
     notes: z.string(),
   })).optional().describe('The activity history of the lead.'),
 });
+
+const AiLeadScoringInputSchema = z.array(LeadToScoreSchema);
 export type AiLeadScoringInput = z.infer<typeof AiLeadScoringInputSchema>;
 
-const AiLeadScoringOutputSchema = z.object({
+
+const ScoredLeadSchema = z.object({
+  leadId: z.string().describe("The ID of the lead that was scored."),
   score: z.number().describe('A numerical score (0-100) representing the lead quality, with higher scores indicating higher potential value.'),
   reason: z
     .string()
@@ -43,18 +47,30 @@ const AiLeadScoringOutputSchema = z.object({
     email: z.string().optional(),
   })).optional().describe('Contacts found by prospecting the website.'),
 });
+
+const AiLeadScoringOutputSchema = z.object({
+    scoredLeads: z.array(ScoredLeadSchema)
+});
 export type AiLeadScoringOutput = z.infer<typeof AiLeadScoringOutputSchema>;
 
 export async function aiLeadScoring(input: AiLeadScoringInput): Promise<AiLeadScoringOutput> {
-  return aiLeadScoringFlow(input);
+  if (input.length === 0) {
+    return { scoredLeads: [] };
+  }
+  // If there's only one lead, wrap it in the expected batch format for the flow.
+  if (input.length === 1) {
+    const result = await aiSingleLeadScoringFlow(input[0]);
+    return { scoredLeads: [result] };
+  }
+  return aiLeadScoringFlow({leads: input});
 }
 
-const aiLeadScoringPrompt = ai.definePrompt({
-  name: 'aiLeadScoringPrompt',
-  input: {schema: AiLeadScoringInputSchema},
-  output: {schema: AiLeadScoringOutputSchema},
-  tools: [getLeadsTool, prospectWebsiteTool],
-  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
+const aiSingleLeadScoringPrompt = ai.definePrompt({
+  name: 'aiSingleLeadScoringPrompt',
+  input: {schema: LeadToScoreSchema},
+  output: {schema: ScoredLeadSchema},
+  tools: [prospectWebsiteTool],
+  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a sales lead for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
   Analyze the following lead profile, activity history, and website to determine how likely they are to need this specific service.
   
@@ -64,39 +80,35 @@ const aiLeadScoringPrompt = ai.definePrompt({
   - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
   - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
-  If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
-
   Provide a reason for the assigned score, highlighting the key factors that influenced your assessment.
 
-  Lead Profile:
-  {{{leadProfile}}}
+  Your response must be in the format specified by the output schema.
+  You MUST provide a leadId, a 'score' (number) and a 'reason' (string).
 
-  Website:
-  {{{websiteUrl}}}
-  
+  Lead ID: {{{leadId}}}
+  Lead Profile: {{{leadProfile}}}
+  Website: {{{websiteUrl}}}
   Activity History:
   {{#each activity}}
   - {{this.type}} on {{this.date}}: {{this.notes}}
   {{/each}}
-
-
-  Your response must be in the format specified by the output schema.
-  Provide a 'score' (number) and a 'reason' (string).`,
+  `,
 });
 
-const aiLeadScoringFlow = ai.defineFlow(
+const aiSingleLeadScoringFlow = ai.defineFlow(
   {
-    name: 'aiLeadScoringFlow',
-    inputSchema: AiLeadScoringInputSchema,
-    outputSchema: AiLeadScoringOutputSchema,
+    name: 'aiSingleLeadScoringFlow',
+    inputSchema: LeadToScoreSchema,
+    outputSchema: ScoredLeadSchema,
   },
   async (input) => {
-    const response = await aiLeadScoringPrompt(input);
-
+    const response = await aiSingleLeadScoringPrompt(input);
     const output = response.output;
     if (!output) {
       throw new Error("AI failed to generate a score.");
     }
+    output.leadId = input.leadId; // Ensure leadId is in the final output.
+    
     const responseHistory = response.history;
 
     if (responseHistory && Array.isArray(responseHistory)) {
@@ -126,6 +138,65 @@ const aiLeadScoringFlow = ai.defineFlow(
           }
         }
       }
+    }
+    
+    return output;
+  }
+);
+
+
+const BatchScoringSchema = z.object({
+  leads: z.array(LeadToScoreSchema),
+});
+
+const aiLeadScoringPrompt = ai.definePrompt({
+  name: 'aiLeadScoringPrompt',
+  input: {schema: BatchScoringSchema},
+  output: {schema: AiLeadScoringOutputSchema},
+  tools: [getLeadsTool, prospectWebsiteTool],
+  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a batch of sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
+
+  For each lead in the provided list, analyze their profile, activity history, and website to determine how likely they are to need this specific service.
+  
+  - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
+  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information.
+  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
+  - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
+  - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
+
+  If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
+
+  Provide a reason for the assigned score for each lead, highlighting the key factors that influenced your assessment.
+
+  Your response must be in the format specified by the output schema, containing a list of scored leads. For each lead, you MUST provide a leadId, a 'score' (number), and a 'reason' (string).
+  
+  Leads to score:
+  {{#each leads}}
+  ---
+  Lead ID: {{{this.leadId}}}
+  Lead Profile: {{{this.leadProfile}}}
+  Website: {{{this.websiteUrl}}}
+  Activity History:
+  {{#each this.activity}}
+  - {{this.type}} on {{this.date}}: {{this.notes}}
+  {{/each}}
+  ---
+  {{/each}}
+  `,
+});
+
+const aiLeadScoringFlow = ai.defineFlow(
+  {
+    name: 'aiLeadScoringFlow',
+    inputSchema: BatchScoringSchema,
+    outputSchema: AiLeadScoringOutputSchema,
+  },
+  async (input) => {
+    const response = await aiLeadScoringPrompt(input);
+
+    const output = response.output;
+    if (!output) {
+      throw new Error("AI failed to generate scores.");
     }
     
     return output;

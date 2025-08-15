@@ -38,7 +38,7 @@ import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 
-type LeadWithScore = Lead & { score: number };
+type LeadWithScore = Lead & { score?: number; reason?: string };
 
 export default function LeadsPage() {
   const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
@@ -68,25 +68,37 @@ export default function LeadsPage() {
         const allLeads = await getLeadsTool({});
         const activeLeads = allLeads.filter(lead => lead.status !== 'Lost' && lead.status !== 'Qualified');
         
-        const leadsWithScoresPromises = activeLeads.map(async (lead) => {
-          try {
-            const { score } = await aiLeadScoring({ leadId: lead.id, leadProfile: lead.profile, websiteUrl: lead.websiteUrl, activity: lead.activity });
-            return { ...lead, score: score ?? 0 };
-          } catch (error) {
-            console.error(`Failed to score lead ${lead.id}:`, error);
-            return { ...lead, score: 0 };
-          }
-        });
-        const resolvedLeads = await Promise.all(leadsWithScoresPromises);
-        setLeadsWithScores(resolvedLeads);
+        // Set leads first for a faster initial render
+        setLeadsWithScores(activeLeads);
+
+        const leadsToScore = activeLeads.map(lead => ({
+          leadId: lead.id,
+          leadProfile: lead.profile,
+          websiteUrl: lead.websiteUrl,
+          activity: lead.activity,
+        }));
+
+        if (leadsToScore.length > 0) {
+            const scoringResult = await aiLeadScoring(leadsToScore);
+            const scoresMap = new Map(scoringResult.scoredLeads.map(l => [l.leadId, { score: l.score, reason: l.reason }]));
+
+            setLeadsWithScores(prevLeads =>
+                prevLeads.map(lead => {
+                    const scoreInfo = scoresMap.get(lead.id);
+                    return scoreInfo ? { ...lead, score: scoreInfo.score, reason: scoreInfo.reason } : lead;
+                })
+            );
+        }
+
       } catch (error) {
-        console.error("Failed to fetch leads:", error);
+        console.error("Failed to fetch and score leads:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch lead scores." });
       } finally {
         setLoading(false);
       }
     }
     getLeadsWithScores();
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, toast]);
 
   const handleAssign = async (leadId: string, salesRep: string | null) => {
     try {
@@ -308,7 +320,7 @@ export default function LeadsPage() {
                       {lead.industrySubCategory}
                     </TableCell>
                     <TableCell className="text-right">
-                      <ScoreIndicator score={lead.score} />
+                      {lead.score !== undefined ? <ScoreIndicator score={lead.score} /> : <Loader />}
                     </TableCell>
                      <TableCell className="text-right">
                         <DropdownMenu>
@@ -363,7 +375,7 @@ export default function LeadsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {loading && leadsWithScores.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                 </TableRow>
@@ -399,7 +411,7 @@ export default function LeadsPage() {
                     {lead.industrySubCategory}
                   </TableCell>
                   <TableCell className="text-right">
-                    <ScoreIndicator score={lead.score} />
+                    {lead.score !== undefined ? <ScoreIndicator score={lead.score} /> : <Loader />}
                   </TableCell>
                    <TableCell className="text-right">
                       <DropdownMenu>

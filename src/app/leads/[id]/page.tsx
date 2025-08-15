@@ -80,7 +80,7 @@ export default function LeadProfilePage({
   params: { id: string }
 }) {
   const [lead, setLead] = useState<Lead | null>(null);
-  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput | null>(null);
+  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -102,11 +102,21 @@ export default function LeadProfilePage({
         }
         setLead(currentLead);
 
+        const leadToScore = {
+            leadId: currentLead.id,
+            leadProfile: currentLead.profile,
+            websiteUrl: currentLead.websiteUrl,
+            activity: currentLead.activity
+        };
+
         const [scoring, talkingPoints] = await Promise.all([
-          aiLeadScoring({ leadId: currentLead.id, leadProfile: currentLead.profile, websiteUrl: currentLead.websiteUrl, activity: currentLead.activity }),
+          aiLeadScoring([leadToScore]),
           generateTalkingPoints({ leadProfile: currentLead.profile }),
         ])
-        setScoringResult(scoring);
+        
+        if (scoring.scoredLeads.length > 0) {
+            setScoringResult(scoring.scoredLeads[0]);
+        }
         setTalkingPointsResult(talkingPoints);
       } catch (error) {
         console.error("Failed to fetch lead data:", error);
