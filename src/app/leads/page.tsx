@@ -187,6 +187,11 @@ export default function LeadsPage() {
       setSelectedMyLeads([]);
     }
   };
+  
+  const formatAddress = (address: Lead['address']) => {
+    if (!address) return 'N/A';
+    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
+  }
 
   if (loading || authLoading) {
     return (
@@ -263,6 +268,7 @@ export default function LeadsPage() {
                    />
                  </TableHead>
                 <TableHead className="w-[280px]">Company</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Franchisee</TableHead>
                 <TableHead>Industry</TableHead>
@@ -273,7 +279,7 @@ export default function LeadsPage() {
             <TableBody>
               {loading ? (
                  <TableRow>
-                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                  </TableRow>
               ) : myLeads.length > 0 ? (
                 myLeads.map((lead) => (
@@ -296,6 +302,7 @@ export default function LeadsPage() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>{formatAddress(lead.address)}</TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
                     </TableCell>
@@ -324,7 +331,7 @@ export default function LeadsPage() {
                 ))
               ) : (
                 <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                         You have not been assigned any leads.
                     </TableCell>
                 </TableRow>
@@ -356,6 +363,7 @@ export default function LeadsPage() {
                       />
                   </TableHead>
                   <TableHead className="w-[280px]">Company</TableHead>
+                  <TableHead>Address</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Sales Rep</TableHead>
@@ -367,7 +375,7 @@ export default function LeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
                   paginatedLeads.map((lead) => (
@@ -390,6 +398,7 @@ export default function LeadsPage() {
                             </div>
                           </div>
                         </TableCell>
+                        <TableCell>{formatAddress(lead.address)}</TableCell>
                         <TableCell>
                           <LeadStatusBadge status={lead.status} />
                         </TableCell>
@@ -424,7 +433,7 @@ export default function LeadsPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                           No leads found matching your filters.
                       </TableCell>
                   </TableRow>

@@ -56,6 +56,11 @@ export default function ArchivedLeadsPage() {
     getArchivedLeads();
   }, [user, authLoading, router]);
 
+  const formatAddress = (address: Lead['address']) => {
+    if (!address) return 'N/A';
+    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -79,6 +84,7 @@ export default function ArchivedLeadsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[280px]">Company</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Franchisee</TableHead>
                 <TableHead>Sales Rep</TableHead>
@@ -88,7 +94,7 @@ export default function ArchivedLeadsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
+                  <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                 </TableRow>
               ) : archivedLeads.length > 0 ? (
                 archivedLeads.map((lead) => (
@@ -104,6 +110,7 @@ export default function ArchivedLeadsPage() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>{formatAddress(lead.address)}</TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
                     </TableCell>
@@ -116,7 +123,7 @@ export default function ArchivedLeadsPage() {
                 ))
               ) : (
                 <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                         No archived leads found.
                     </TableCell>
                 </TableRow>
@@ -128,3 +135,5 @@ export default function ArchivedLeadsPage() {
     </div>
   )
 }
+
+    
