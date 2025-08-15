@@ -26,7 +26,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, signOut } = useAuth()
-  const { state } = useSidebar()
+  const { state, isMobile } = useSidebar()
   const isActive = (path: string) =>
     pathname === path || (path.startsWith("/leads") && pathname.startsWith("/leads"))
 
@@ -48,6 +48,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (isAuthPage) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
+
+  // Prevents hydration errors by not rendering the sidebar on the server if the state depends on a client-side hook.
+  if (isMobile === null) {
+    return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader />
+        </div>
+    )
+  }
   
   return (
     <>
@@ -64,8 +73,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             />
             <Image
               src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={32}
-              height={32}
+              width={40}
+              height={40}
               alt="MailPlus CRM Logo"
               className="hidden group-data-[collapsible=icon]:block"
               data-ai-hint="logo icon"
