@@ -54,16 +54,15 @@ const aiLeadScoringPrompt = ai.definePrompt({
   input: {schema: AiLeadScoringInputSchema},
   output: {schema: AiLeadScoringOutputSchema},
   tools: [getLeadsTool, prospectWebsiteTool],
-  prompt: `You are an AI assistant designed to score sales leads for a parcel delivery service.
+  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
-  Analyze the following lead profile, activity history, and website to determine how likely they are to send parcels.
+  Analyze the following lead profile, activity history, and website to determine how likely they are to need this specific service.
   
-  - Give a higher score (75-100) to companies whose business model likely involves shipping parcels (e.g., e-commerce, retail, logistics, manufacturing).
-  - Give a lower score to companies that are less likely to ship parcels (e.g., digital services, consulting).
-  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information about social media presence, contacts, and site content.
-  - Increase the score if the website analysis finds shipping-related keywords (e.g., "delivery partners", "request a quote", "shipping policy") or if key contact roles like 'Logistics Manager' or 'Head of Operations' are found.
+  - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
+  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information.
+  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
   - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
-  - Decrease the score if the website mentions keywords like "digital downloads", "software as a service", or "consulting", as they are less likely to ship physical goods.
+  - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
