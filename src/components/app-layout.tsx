@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Avatar,
   AvatarFallback,
@@ -21,10 +21,32 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Settings } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter();
+  const { user, loading, signOut } = useAuth();
   const isActive = (path: string) => pathname === path
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/signin');
+  }
+
+  // Do not render layout for signin page
+  if (pathname === '/signin') {
+    return <>{children}</>;
+  }
+
+  // Do not render layout if auth is loading or user is not signed in
+  if (loading || !user) {
+    return (
+        <div className="flex h-screen items-center justify-center">
+            <div>Loading...</div>
+        </div>
+    )
+  }
 
   return (
     <SidebarProvider>
@@ -61,17 +83,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarFooter>
             <div className="flex items-center gap-3 w-full">
                 <Avatar className="size-8">
-                    <AvatarImage src="https://placehold.co/100x100.png" alt="User" data-ai-hint="person avatar" />
-                    <AvatarFallback>JD</AvatarFallback>
+                    <AvatarImage src={user.photoURL || `https://placehold.co/100x100.png`} alt={user.displayName || 'User'} data-ai-hint="person avatar" />
+                    <AvatarFallback>{user.displayName ? user.displayName.charAt(0) : 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-                    <span className="font-medium text-sm truncate">Jane Doe</span>
-                    <span className="text-xs text-muted-foreground truncate">jane.doe@mailplus.com</span>
+                    <span className="font-medium text-sm truncate">{user.displayName}</span>
+                    <span className="text-xs text-muted-foreground truncate">{user.email}</span>
                 </div>
             </div>
              <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
                  <Button variant="ghost" size="icon"><Settings className="size-4"/></Button>
-                 <Button variant="ghost" size="icon"><LogOut className="size-4"/></Button>
+                 <Button variant="ghost" size="icon" onClick={handleSignOut}><LogOut className="size-4"/></Button>
              </div>
         </SidebarFooter>
       </Sidebar>

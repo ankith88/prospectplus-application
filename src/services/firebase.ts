@@ -3,7 +3,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact } from '@/lib/types';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 
 
 async function getLeadsFromFirebase(): Promise<Lead[]> {
@@ -70,4 +70,17 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
   }
 }
 
-export { getLeadsFromFirebase, addContactToLead };
+async function updateLeadSalesRep(leadId: string, salesRep: string | null): Promise<void> {
+  try {
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, {
+      salesRepAssigned: salesRep,
+    });
+    console.log(`Lead ${leadId} assigned to ${salesRep}`);
+  } catch (error) {
+    console.error(`Failed to assign lead ${leadId}:`, error);
+    throw new Error('Failed to update lead in Firebase');
+  }
+}
+
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep };
