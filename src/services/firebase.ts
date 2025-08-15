@@ -1,3 +1,5 @@
+'use server';
+
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
