@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from 'react';
@@ -48,7 +49,7 @@ export default function SignUpPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
+        <CardHeader className="flex flex-col items-center">
             <div className="inline-block mx-auto p-2 rounded-lg bg-primary/10">
               <Briefcase className="w-8 h-8 text-primary" />
             </div>
