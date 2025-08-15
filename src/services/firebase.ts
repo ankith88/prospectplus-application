@@ -5,6 +5,7 @@ import { database } from '@/lib/firebase';
 import type { Lead } from '@/lib/types';
 import { ref, get, set } from 'firebase/database';
 
+// This is the source of truth for sample data.
 const sampleLeads: Lead[] = [
     {
       id: 'lead-1',
@@ -81,7 +82,6 @@ export async function seedLeadsToFirebase() {
   console.log('Sample leads have been seeded to Firebase.');
 }
 
-
 async function getLeadsFromFirebase(): Promise<Lead[]> {
   try {
     console.log("Fetching leads from Firebase...");
@@ -90,23 +90,29 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
 
     if (snapshot.exists()) {
       const leadsData = snapshot.val();
-      // Convert the object of leads into an array
-      const leadsArray = Object.keys(leadsData).map((key) => ({
+      const leadsArray: Lead[] = Object.keys(leadsData).map((key) => ({
         id: key,
         ...leadsData[key],
       }));
-      return leadsArray;
+
+      // Simple validation to check if critical fields exist
+      const isDataValid = leadsArray.every(lead => lead.entityId && lead.companyName);
+      
+      if(isDataValid) {
+        return leadsArray;
+      } else {
+        console.log("Firebase data is incomplete, falling back to local sample data and reseeding.");
+        await seedLeadsToFirebase(); // Reseed with correct data
+        return sampleLeads; // Return the valid local data
+      }
+
     } else {
-      // If no leads exist, seed them and then fetch again.
       console.log("No leads found, seeding sample data...");
       await seedLeadsToFirebase();
-      // After seeding, we should refetch, but for simplicity we can just return the sample data directly
-      // as we know it's now in the database. This also acts as a fallback.
       return sampleLeads;
     }
   } catch (error) {
     console.error("Firebase fetch failed, falling back to local data:", error);
-    // Fallback to sample data if Firebase is not available
     return sampleLeads;
   }
 }
