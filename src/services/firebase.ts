@@ -22,7 +22,7 @@ async function getLeadsFromFirebase(): Promise<Lead[]> {
           companyName: data.companyName || 'Unknown Company',
           status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: data.profile || `Lead for ${data.companyName || 'Unknown Company'}.`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           activity: data.activity || [],
           contacts: data.contacts || [],
           address: data.address || {

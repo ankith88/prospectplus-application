@@ -29,7 +29,7 @@ async function getLeadsWithScores() {
   const leadsWithScores = await Promise.all(
     leads.map(async (lead) => {
       try {
-        const { score } = await aiLeadScoring({ leadProfile: lead.profile })
+        const { score } = await aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl })
         return { ...lead, score }
       } catch (error) {
         console.error(`Failed to score lead ${lead.id}:`, error)

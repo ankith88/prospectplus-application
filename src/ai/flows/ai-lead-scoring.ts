@@ -16,6 +16,7 @@ const AiLeadScoringInputSchema = z.object({
   leadProfile: z
     .string()
     .describe('Detailed information about the lead, including company, job title, industry, and past interactions.'),
+  websiteUrl: z.string().optional().describe("The company's website URL."),
 });
 export type AiLeadScoringInput = z.infer<typeof AiLeadScoringInputSchema>;
 
@@ -36,9 +37,13 @@ const aiLeadScoringPrompt = ai.definePrompt({
   input: {schema: AiLeadScoringInputSchema},
   output: {schema: AiLeadScoringOutputSchema},
   tools: [getLeadsTool],
-  prompt: `You are an AI assistant designed to score sales leads based on their profile data.
+  prompt: `You are an AI assistant designed to score sales leads for a parcel delivery service.
 
-  Analyze the following lead profile and assign a score between 0 and 100, where higher scores indicate a higher potential value lead.
+  Analyze the following lead profile and website to determine how likely they are to send parcels.
+  
+  - Give a higher score (75-100) to companies whose business model likely involves shipping parcels (e.g., e-commerce, retail, logistics, manufacturing).
+  - Give a lower score to companies that are less likely to ship parcels (e.g., digital services, consulting).
+  - Use the information in the lead profile and website to make your determination.
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
@@ -46,6 +51,9 @@ const aiLeadScoringPrompt = ai.definePrompt({
 
   Lead Profile:
   {{{leadProfile}}}
+
+  Website:
+  {{{websiteUrl}}}
 
   Your response must be in the format specified by the output schema.
   Provide a 'score' (number) and a 'reason' (string).`,

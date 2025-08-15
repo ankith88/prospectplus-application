@@ -39,7 +39,7 @@ export default async function LeadProfilePage({
   }
 
   const [scoringResult, talkingPointsResult] = await Promise.all([
-    aiLeadScoring({ leadProfile: lead.profile }),
+    aiLeadScoring({ leadProfile: lead.profile, websiteUrl: lead.websiteUrl }),
     generateTalkingPoints({ leadProfile: lead.profile }),
   ])
 
