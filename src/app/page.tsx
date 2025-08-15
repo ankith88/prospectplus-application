@@ -22,6 +22,7 @@ import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
+import type { Address } from '@/lib/types'
 
 async function getLeadsWithScores() {
   const leads = await getLeadsTool({});
@@ -38,6 +39,21 @@ async function getLeadsWithScores() {
     })
   );
   return leadsWithScores;
+}
+
+function formatAddress(address: Address) {
+    if (!address) return 'N/A'
+    const { street, city, state, zip, country } = address
+    const parts = [street, city, state, zip, country].filter(Boolean)
+    if (parts.length === 0) return 'N/A'
+    
+    let formattedAddress = street || ''
+    if (city) formattedAddress += `, ${city}`
+    if (state) formattedAddress += `, ${state}`
+    if (zip) formattedAddress += ` ${zip}`
+    if (country) formattedAddress += `, ${country}`
+
+    return formattedAddress.trim().replace(/^,|,$/g, '').trim()
 }
 
 export default async function LeadsPage() {
@@ -59,6 +75,7 @@ export default async function LeadsPage() {
               <TableRow>
                 <TableHead className="w-[280px]">Company</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>Franchisee</TableHead>
                 <TableHead>Sales Rep</TableHead>
                 <TableHead>Industry</TableHead>
@@ -82,6 +99,7 @@ export default async function LeadsPage() {
                   <TableCell>
                     <LeadStatusBadge status={lead.status} />
                   </TableCell>
+                  <TableCell>{formatAddress(lead.address)}</TableCell>
                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                   <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
                   <TableCell>
