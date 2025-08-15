@@ -21,9 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
-import { aiLeadScoring } from '@/ai/flows/ai-lead-scoring'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import { ScoreIndicator } from '@/components/score-indicator'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -38,10 +36,8 @@ import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 
-type LeadWithScore = Lead & { score?: number; reason?: string };
-
 export default function LeadsPage() {
-  const [leadsWithScores, setLeadsWithScores] = useState<LeadWithScore[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
@@ -56,7 +52,7 @@ export default function LeadsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    async function getLeadsWithScores() {
+    async function getLeads() {
       if (!user && !authLoading) {
         router.push('/signin');
         return;
@@ -67,43 +63,21 @@ export default function LeadsPage() {
         setLoading(true);
         const allLeads = await getLeadsTool({});
         const activeLeads = allLeads.filter(lead => lead.status !== 'Lost' && lead.status !== 'Qualified');
-        
-        // Set leads first for a faster initial render
-        setLeadsWithScores(activeLeads);
-
-        const leadsToScore = activeLeads.map(lead => ({
-          leadId: lead.id,
-          leadProfile: lead.profile,
-          websiteUrl: lead.websiteUrl,
-          activity: lead.activity,
-        }));
-
-        if (leadsToScore.length > 0) {
-            const scoringResult = await aiLeadScoring(leadsToScore);
-            const scoresMap = new Map(scoringResult.scoredLeads.map(l => [l.leadId, { score: l.score, reason: l.reason }]));
-
-            setLeadsWithScores(prevLeads =>
-                prevLeads.map(lead => {
-                    const scoreInfo = scoresMap.get(lead.id);
-                    return scoreInfo ? { ...lead, score: scoreInfo.score, reason: scoreInfo.reason } : lead;
-                })
-            );
-        }
-
+        setLeads(activeLeads);
       } catch (error) {
-        console.error("Failed to fetch and score leads:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch lead scores." });
+        console.error("Failed to fetch leads:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch leads." });
       } finally {
         setLoading(false);
       }
     }
-    getLeadsWithScores();
+    getLeads();
   }, [user, authLoading, router, toast]);
 
   const handleAssign = async (leadId: string, salesRep: string | null) => {
     try {
       await updateLeadSalesRep(leadId, salesRep);
-      setLeadsWithScores(prevLeads =>
+      setLeads(prevLeads =>
         prevLeads.map(lead =>
           lead.id === leadId ? { ...lead, salesRepAssigned: salesRep || undefined } : lead
         )
@@ -122,7 +96,7 @@ export default function LeadsPage() {
       const promises = selectedLeads.map(leadId => updateLeadSalesRep(leadId, user.displayName!));
       await Promise.all(promises);
 
-      setLeadsWithScores(prevLeads =>
+      setLeads(prevLeads =>
         prevLeads.map(lead =>
           selectedLeads.includes(lead.id) ? { ...lead, salesRepAssigned: user.displayName! } : lead
         )
@@ -140,7 +114,7 @@ export default function LeadsPage() {
       const promises = selectedMyLeads.map(leadId => updateLeadSalesRep(leadId, null));
       await Promise.all(promises);
       
-      setLeadsWithScores(prevLeads =>
+      setLeads(prevLeads =>
         prevLeads.map(lead =>
           selectedMyLeads.includes(lead.id) ? { ...lead, salesRepAssigned: undefined } : lead
         )
@@ -155,22 +129,22 @@ export default function LeadsPage() {
 
   const myLeads = useMemo(() => {
     if (!user) return [];
-    return leadsWithScores.filter(lead => lead.salesRepAssigned === user.displayName);
-  }, [leadsWithScores, user]);
+    return leads.filter(lead => lead.salesRepAssigned === user.displayName);
+  }, [leads, user]);
 
   const filteredLeads = useMemo(() => {
-    return leadsWithScores.filter(lead => {
+    return leads.filter(lead => {
       const companyNameMatch = lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase());
       const statusMatch = filters.status === 'all' || lead.status === filters.status;
       const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
       const industryMatch = filters.industryCategory === 'all' || lead.industryCategory === filters.industryCategory;
       return companyNameMatch && statusMatch && franchiseeMatch && industryMatch;
     });
-  }, [leadsWithScores, filters]);
+  }, [leads, filters]);
 
-  const uniqueFranchisees = useMemo(() => [...new Set(leadsWithScores.map(l => l.franchisee).filter(Boolean))], [leadsWithScores]);
-  const uniqueIndustries = useMemo(() => [...new Set(leadsWithScores.map(l => l.industryCategory).filter(Boolean))], [leadsWithScores]);
-  const uniqueStatuses = useMemo(() => [...new Set(leadsWithScores.map(l => l.status).filter(Boolean))], [leadsWithScores]) as LeadStatus[];
+  const uniqueFranchisees = useMemo(() => [...new Set(leads.map(l => l.franchisee).filter(Boolean))], [leads]);
+  const uniqueIndustries = useMemo(() => [...new Set(leads.map(l => l.industryCategory).filter(Boolean))], [leads]);
+  const uniqueStatuses = useMemo(() => [...new Set(leads.map(l => l.status).filter(Boolean))], [leads]) as LeadStatus[];
 
   const handleSelectLead = (leadId: string, checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -284,7 +258,6 @@ export default function LeadsPage() {
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Industry</TableHead>
                   <TableHead>Industry Sub-Category</TableHead>
-                  <TableHead className="text-right">AI Score</TableHead>
                   <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -318,9 +291,6 @@ export default function LeadsPage() {
                     </TableCell>
                     <TableCell>
                       {lead.industrySubCategory}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {lead.score !== undefined ? <ScoreIndicator score={lead.score} /> : <Loader />}
                     </TableCell>
                      <TableCell className="text-right">
                         <DropdownMenu>
@@ -370,14 +340,13 @@ export default function LeadsPage() {
                 <TableHead>Sales Rep</TableHead>
                 <TableHead>Industry</TableHead>
                 <TableHead>Industry Sub-Category</TableHead>
-                <TableHead className="text-right">AI Score</TableHead>
                 <TableHead className="w-[50px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && leadsWithScores.length === 0 ? (
+              {loading && leads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                  <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                 </TableRow>
               ) : filteredLeads.map((lead) => (
                 <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
@@ -410,9 +379,6 @@ export default function LeadsPage() {
                   <TableCell>
                     {lead.industrySubCategory}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {lead.score !== undefined ? <ScoreIndicator score={lead.score} /> : <Loader />}
-                  </TableCell>
                    <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -441,3 +407,5 @@ export default function LeadsPage() {
     </div>
   )
 }
+
+    

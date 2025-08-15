@@ -83,6 +83,7 @@ export default function LeadProfilePage({
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
@@ -102,21 +103,7 @@ export default function LeadProfilePage({
         }
         setLead(currentLead);
 
-        const leadToScore = {
-            leadId: currentLead.id,
-            leadProfile: currentLead.profile,
-            websiteUrl: currentLead.websiteUrl,
-            activity: currentLead.activity
-        };
-
-        const [scoring, talkingPoints] = await Promise.all([
-          aiLeadScoring([leadToScore]),
-          generateTalkingPoints({ leadProfile: currentLead.profile }),
-        ])
-        
-        if (scoring.scoredLeads.length > 0) {
-            setScoringResult(scoring.scoredLeads[0]);
-        }
+        const talkingPoints = await generateTalkingPoints({ leadProfile: currentLead.profile });
         setTalkingPointsResult(talkingPoints);
       } catch (error) {
         console.error("Failed to fetch lead data:", error);
@@ -127,6 +114,28 @@ export default function LeadProfilePage({
     }
     fetchData();
   }, [id]);
+
+  const handleCalculateScore = async () => {
+    if (!lead) return;
+    try {
+        setScoringLoading(true);
+        const leadToScore = {
+            leadId: lead.id,
+            leadProfile: lead.profile,
+            websiteUrl: lead.websiteUrl,
+            activity: lead.activity
+        };
+        const scoring = await aiLeadScoring([leadToScore]);
+        if (scoring.scoredLeads.length > 0) {
+            setScoringResult(scoring.scoredLeads[0]);
+        }
+    } catch (error) {
+        console.error("Failed to calculate score:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to calculate AI score." });
+    } finally {
+        setScoringLoading(false);
+    }
+  }
 
   const addActivity = (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
@@ -240,7 +249,7 @@ export default function LeadProfilePage({
     });
   };
 
-  if (loading || !lead || !scoringResult || !talkingPointsResult) {
+  if (loading || !lead || !talkingPointsResult) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -536,7 +545,7 @@ export default function LeadProfilePage({
                   No existing contacts found.
                 </div>
               )}
-              {scoringResult.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
+              {scoringResult?.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
                 scoringResult.prospectedContacts.map((contact, index) => (
                   <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="flex items-center gap-3 font-medium sm:col-span-1">
@@ -617,8 +626,22 @@ export default function LeadProfilePage({
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center text-center gap-4">
-              <ScoreIndicator score={scoringResult.score} size="lg" />
-              <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
+              {scoringLoading ? (
+                <Loader />
+              ) : scoringResult ? (
+                <>
+                  <ScoreIndicator score={scoringResult.score} size="lg" />
+                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
+                    <p className="text-sm text-muted-foreground">Click the button to generate an AI-powered score and analysis for this lead.</p>
+                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Calculate AI Score
+                    </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -645,3 +668,5 @@ export default function LeadProfilePage({
     </div>
   )
 }
+
+    
