@@ -25,7 +25,13 @@ const sampleLeads: Lead[] = [
         state: 'CA',
         zip: '94304',
         country: 'USA'
-      }
+      },
+      franchisee: 'Main Branch',
+      websiteUrl: 'https://innovatecorp.com',
+      industryCategory: 'Technology',
+      industrySubCategory: 'AI Analytics',
+      salesRepAssigned: 'John Doe',
+      campaign: 'Q4 Tech Growth'
     },
     {
       id: 'lead-2',
@@ -46,7 +52,13 @@ const sampleLeads: Lead[] = [
         state: 'CA',
         zip: '90001',
         country: 'USA'
-      }
+      },
+      franchisee: 'West Coast HQ',
+      websiteUrl: 'https://quantumsolutions.com',
+      industryCategory: 'Logistics',
+      industrySubCategory: 'Enterprise Software',
+      salesRepAssigned: 'Jane Smith',
+      campaign: 'CRM Overhaul 2023'
     },
   ];
 

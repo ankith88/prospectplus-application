@@ -38,6 +38,12 @@ const LeadSchema = z.object({
     })),
     contacts: z.array(ContactSchema),
     address: AddressSchema,
+    franchisee: z.string().optional(),
+    websiteUrl: z.string().optional(),
+    industryCategory: z.string().optional(),
+    industrySubCategory: z.string().optional(),
+    salesRepAssigned: z.string().optional(),
+    campaign: z.string().optional(),
 });
 
 export const getLeadsTool = ai.defineTool(

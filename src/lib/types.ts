@@ -39,4 +39,10 @@ export interface Lead {
   activity: Activity[]
   contacts: Contact[]
   address: Address
+  franchisee?: string
+  websiteUrl?: string
+  industryCategory?: string
+  industrySubCategory?: string
+  salesRepAssigned?: string
+  campaign?: string
 }
