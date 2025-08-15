@@ -48,6 +48,8 @@ export default async function LeadProfilePage({
   const fullAddress = lead.address
     ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
+  
+  const primaryContact = lead.contacts?.[0];
 
 
   return (
@@ -129,6 +131,20 @@ export default async function LeadProfilePage({
                      <p className="font-medium">{lead.industrySubCategory || 'N/A'}</p>
                    </div>
                  </div>
+                  <div className="flex items-start gap-3">
+                    <Mail className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Email</p>
+                      <p className="font-medium">{primaryContact?.email ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Phone className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-muted-foreground">Phone</p>
+                      <p className="font-medium">{primaryContact?.phone ?? 'N/A'}</p>
+                    </div>
+                  </div>
                </div>
              </CardContent>
            </Card>
