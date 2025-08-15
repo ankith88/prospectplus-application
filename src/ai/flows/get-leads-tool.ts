@@ -38,7 +38,7 @@ const LeadSchema = z.object({
         notes: z.string(),
     })),
     contacts: z.array(ContactSchema),
-    address: AddressSchema,
+    address: AddressSchema.optional(),
     franchisee: z.string().optional(),
     websiteUrl: z.string().optional(),
     industryCategory: z.string().optional(),
