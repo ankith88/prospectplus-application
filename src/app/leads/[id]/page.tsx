@@ -32,7 +32,7 @@ import {
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
-import { generateTalkingPoints, TalkingPointSuggestionsOutput } from '@/ai/flows/talking-point-suggestions'
+import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { deleteContactFromLead, logActivity } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -72,6 +72,7 @@ import { LogCallDialog } from '@/components/log-call-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
+import { Textarea } from '@/components/ui/textarea'
 
 
 export default function LeadProfilePage({
@@ -81,7 +82,9 @@ export default function LeadProfilePage({
 }) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
-  const [talkingPointsResult, setTalkingPointsResult] = useState<TalkingPointSuggestionsOutput | null>(null);
+  const [userScript, setUserScript] = useState('');
+  const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
+  const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -103,8 +106,6 @@ export default function LeadProfilePage({
         }
         setLead(currentLead);
 
-        const talkingPoints = await generateTalkingPoints({ leadProfile: currentLead.profile });
-        setTalkingPointsResult(talkingPoints);
       } catch (error) {
         console.error("Failed to fetch lead data:", error);
         // Optionally, handle error state in UI
@@ -136,6 +137,24 @@ export default function LeadProfilePage({
         setScoringLoading(false);
     }
   }
+
+  const handleImproveScript = async () => {
+    if (!lead || !userScript) return;
+    try {
+        setIsImprovingScript(true);
+        setImprovedScript(null);
+        const result = await improveScript({
+            leadProfile: lead.profile,
+            userScript: userScript,
+        });
+        setImprovedScript(result);
+    } catch (error) {
+        console.error("Failed to improve script:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to improve script." });
+    } finally {
+        setIsImprovingScript(false);
+    }
+  };
 
   const addActivity = (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
@@ -249,7 +268,7 @@ export default function LeadProfilePage({
     });
   };
 
-  if (loading || !lead || !talkingPointsResult) {
+  if (loading || !lead) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -649,18 +668,26 @@ export default function LeadProfilePage({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lightbulb className="w-5 h-5 text-primary" />
-                AI Talking Points
+                AI Script Enhancer
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {talkingPointsResult.talkingPoints.map((point, index) => (
-                  <li key={index} className="flex gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-500 mt-1" />
-                    <span className="flex-1 text-sm">{point}</span>
-                  </li>
-                ))}
-              </ul>
+            <CardContent className="space-y-4">
+                <Textarea
+                    placeholder="Paste your sales script here..."
+                    value={userScript}
+                    onChange={(e) => setUserScript(e.target.value)}
+                    rows={6}
+                    className="w-full"
+                />
+                <Button onClick={handleImproveScript} disabled={isImprovingScript || !userScript} className="w-full">
+                    {isImprovingScript ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>Improve Script</span></>}
+                </Button>
+                {improvedScript && (
+                    <div className="p-4 border-t mt-4">
+                        <h4 className="font-semibold mb-2">Suggested Improvement:</h4>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{improvedScript.improvedScript}</p>
+                    </div>
+                )}
             </CardContent>
           </Card>
         </div>
@@ -668,3 +695,5 @@ export default function LeadProfilePage({
     </div>
   )
 }
+
+    

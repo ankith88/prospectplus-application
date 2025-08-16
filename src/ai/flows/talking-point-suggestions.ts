@@ -1,11 +1,8 @@
+
 'use server';
 
 /**
- * @fileOverview A flow for generating talking points based on a lead's profile.
- *
- * - generateTalkingPoints - A function that generates talking points for a lead.
- * - TalkingPointSuggestionsInput - The input type for the generateTalkingPoints function.
- * - TalkingPointSuggestionsOutput - The return type for the generateTalkingPoints function.
+ * @fileOverview This file is now deprecated. The functionality has been replaced by improve-script.ts.
  */
 
 import {ai} from '@/ai/genkit';
@@ -62,3 +59,5 @@ const talkingPointSuggestionsFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
