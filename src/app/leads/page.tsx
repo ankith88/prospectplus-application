@@ -315,32 +315,32 @@ export default function LeadsPage() {
                    />
                  </TableHead>
                 <TableHead className="w-[280px]">
-                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group">
                         Company
                         {getSortIndicator('companyName')}
                     </Button>
                 </TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('status')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="group">
                         Status
                         {getSortIndicator('status')}
                     </Button>
                 </TableHead>
                 <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group">
                         Franchisee
                         {getSortIndicator('franchisee')}
                     </Button>
                 </TableHead>
                 <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group">
                         Industry
                         {getSortIndicator('industryCategory')}
                     </Button>
                 </TableHead>
                 <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group">
                         Industry Sub-Category
                         {getSortIndicator('industrySubCategory')}
                     </Button>
@@ -450,38 +450,38 @@ export default function LeadsPage() {
                       />
                   </TableHead>
                   <TableHead className="w-[280px]">
-                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group">
                         Company
                         {getSortIndicator('companyName')}
                     </Button>
                   </TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('status')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="group">
                         Status
                         {getSortIndicator('status')}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group">
                         Franchisee
                         {getSortIndicator('franchisee')}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group">
                         Sales Rep
                         {getSortIndicator('salesRepAssigned')}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group">
                         Industry
                         {getSortIndicator('industryCategory')}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="px-0 group">
+                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group">
                         Industry Sub-Category
                         {getSortIndicator('industrySubCategory')}
                     </Button>
