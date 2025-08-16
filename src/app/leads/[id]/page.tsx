@@ -29,6 +29,7 @@ import {
   MessageSquare,
   Briefcase,
   MapPin,
+  Info,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity } from '@/lib/types'
@@ -668,7 +669,12 @@ export default function LeadProfilePage({
                 </>
               ) : (
                 <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
-                    <p className="text-sm text-muted-foreground">Click the button to generate an AI-powered score and analysis for this lead.</p>
+                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
+                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
+                        <div>
+                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
+                        </div>
+                    </div>
                     <Button onClick={handleCalculateScore} disabled={scoringLoading}>
                         <Sparkles className="mr-2 h-4 w-4" />
                         Calculate AI Score
@@ -715,3 +721,5 @@ export default function LeadProfilePage({
     </>
   )
 }
+
+    
