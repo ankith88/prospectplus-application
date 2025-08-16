@@ -65,7 +65,7 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const allLeads = await getLeadsTool({});
+        const allLeads = await getLeadsTool({ summary: true });
         const activeLeads = allLeads.filter(lead => lead.status !== 'Lost' && lead.status !== 'Qualified');
         setLeads(activeLeads);
       } catch (error) {

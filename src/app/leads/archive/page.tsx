@@ -46,7 +46,7 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        const allLeads = await getLeadsTool({});
+        const allLeads = await getLeadsTool({ summary: true });
         const filteredLeads = allLeads.filter(lead => lead.status === 'Lost' || lead.status === 'Qualified');
         setArchivedLeads(filteredLeads);
       } catch (error) {

@@ -37,8 +37,8 @@ const LeadSchema = z.object({
         date: z.string(),
         duration: z.string().optional(),
         notes: z.string(),
-    })),
-    contacts: z.array(ContactSchema),
+    })).optional(),
+    contacts: z.array(ContactSchema).optional(),
     address: AddressSchema.optional(),
     franchisee: z.string().optional(),
     websiteUrl: z.string().optional(),
@@ -56,10 +56,11 @@ export const getLeadsTool = ai.defineTool(
     description: 'Returns a list of leads from the CRM system (Firebase). Can fetch all leads or a single lead by ID.',
     inputSchema: z.object({
       leadId: z.string().optional().describe('The ID of a specific lead to fetch.'),
+      summary: z.boolean().optional().describe('If true, returns a summary of leads without detailed sub-collections like contacts and activities.'),
     }),
     outputSchema: z.array(LeadSchema),
   },
-  async ({ leadId }) => {
-    return await getLeadsFromFirebase(leadId);
+  async ({ leadId, summary }) => {
+    return await getLeadsFromFirebase({ leadId, summary });
   }
 );

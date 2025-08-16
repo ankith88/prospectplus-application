@@ -38,8 +38,9 @@ export interface Lead {
   status: LeadStatus
   avatarUrl: string
   profile: string // This will be the text used for AI prompts
-  activity: Activity[]
-  contacts: Contact[]
+  activity?: Activity[]
+  contacts?: Contact[]
+  contactCount?: number
   address?: Address
   franchisee?: string
   websiteUrl?: string

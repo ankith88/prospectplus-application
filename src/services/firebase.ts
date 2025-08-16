@@ -72,6 +72,7 @@ async function getLeadFromFirebase(leadId: string): Promise<Lead | null> {
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           activity: activity || [],
           contacts: contacts,
+          contactCount: contacts.length,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -91,13 +92,15 @@ async function getLeadFromFirebase(leadId: string): Promise<Lead | null> {
 }
 
 
-async function getLeadsFromFirebase(leadId?: string): Promise<Lead[]> {
+async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean }): Promise<Lead[]> {
+  const { leadId, summary = false } = options || {};
+  
   if (leadId) {
       const lead = await getLeadFromFirebase(leadId);
       return lead ? [lead] : [];
   }
   try {
-    console.log("Fetching leads from Firebase...");
+    console.log(`Fetching leads from Firebase (summary: ${summary})...`);
     const leadsRef = collection(firestore, 'leads');
     const snapshot = await getDocs(leadsRef);
 
@@ -120,20 +123,6 @@ async function getLeadsFromFirebase(leadId?: string): Promise<Lead[]> {
           };
         }
 
-        const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
-        const contactsSnapshot = await getSubCollectionDocs(contactsRef);
-        const contacts: Contact[] = contactsSnapshot.docs.map(contactDoc => ({
-          id: contactDoc.id,
-          ...contactDoc.data()
-        } as Contact));
-
-        const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
-        const activitySnapshot = await getSubCollectionDocs(activityRef);
-        const activity: Activity[] = activitySnapshot.docs.map(activityDoc => ({
-          id: activityDoc.id,
-          ...activityDoc.data()
-        } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data.customerEntityId || docSnapshot.id,
@@ -141,8 +130,6 @@ async function getLeadsFromFirebase(leadId?: string): Promise<Lead[]> {
           status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
-          activity: activity || [],
-          contacts: contacts,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -152,7 +139,26 @@ async function getLeadsFromFirebase(leadId?: string): Promise<Lead[]> {
           campaign: data.customerSource,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          contactCount: data.contactCount || 0,
         };
+        
+        if (!summary) {
+            const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
+            const contactsSnapshot = await getSubCollectionDocs(contactsRef);
+            transformedLead.contacts = contactsSnapshot.docs.map(contactDoc => ({
+              id: contactDoc.id,
+              ...contactDoc.data()
+            } as Contact));
+            transformedLead.contactCount = transformedLead.contacts.length;
+
+            const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
+            const activitySnapshot = await getSubCollectionDocs(activityRef);
+            transformedLead.activity = activitySnapshot.docs.map(activityDoc => ({
+              id: activityDoc.id,
+              ...activityDoc.data()
+            } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }
+
         return transformedLead;
       }));
       return leadsArray;
@@ -168,6 +174,13 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
     const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
     const docRef = await addDoc(contactsRef, contact);
     await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
+    
+    // Update contact count
+    const leadRef = doc(firestore, 'leads', leadId);
+    const leadDoc = await getDoc(leadRef);
+    const currentCount = leadDoc.data()?.contactCount || 0;
+    await updateDoc(leadRef, { contactCount: currentCount + 1 });
+    
     console.log(`Contact added with ID: ${docRef.id} to lead ${leadId}`);
     return docRef.id;
   } catch (error) {
@@ -227,6 +240,13 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await deleteDoc(contactRef);
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
+
+    // Update contact count
+    const leadRef = doc(firestore, 'leads', leadId);
+    const leadDoc = await getDoc(leadRef);
+    const currentCount = leadDoc.data()?.contactCount || 0;
+    await updateDoc(leadRef, { contactCount: Math.max(0, currentCount - 1) });
+    
     console.log(`Contact ${contactId} deleted from lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to delete contact ${contactId} from lead ${leadId}:`, error);

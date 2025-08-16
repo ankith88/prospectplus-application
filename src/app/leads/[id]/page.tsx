@@ -124,7 +124,7 @@ export default function LeadProfilePage({
             leadId: lead.id,
             leadProfile: lead.profile,
             websiteUrl: lead.websiteUrl,
-            activity: lead.activity
+            activity: lead.activity || []
         };
         const scoring = await aiLeadScoring([leadToScore]);
         if (scoring.scoredLeads.length > 0) {
@@ -162,7 +162,7 @@ export default function LeadProfilePage({
             ...newActivity,
             id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         };
-        const updatedActivities = [activityWithId, ...lead.activity];
+        const updatedActivities = [activityWithId, ...(lead.activity || [])];
         setLead({ ...lead, activity: updatedActivities });
     }
   };
@@ -173,7 +173,7 @@ export default function LeadProfilePage({
       const newContactWithId = { ...newContact, id: tempId, name: `${newContact.firstName} ${newContact.lastName}` };
       const updatedLead = {
         ...lead,
-        contacts: [...lead.contacts, newContactWithId],
+        contacts: [...(lead.contacts || []), newContactWithId],
       };
       setLead(updatedLead);
        addActivity({
@@ -185,7 +185,7 @@ export default function LeadProfilePage({
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
-    if (lead) {
+    if (lead && lead.contacts) {
       const updatedContacts = lead.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
       setLead({ ...lead, contacts: updatedContacts });
        addActivity({
@@ -226,7 +226,7 @@ export default function LeadProfilePage({
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setLead(prev => prev ? { ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) } : null);
+      setLead(prev => prev ? { ...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id) } : null);
       addActivity({
         type: 'Update',
         date: new Date().toISOString(),
@@ -280,7 +280,7 @@ export default function LeadProfilePage({
     ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = lead.contacts.length > 0 ? lead.contacts[0] : null;
+  const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
   const callNumber = primaryContact?.phone || lead.customerPhone;
 
   return (
@@ -303,7 +303,7 @@ export default function LeadProfilePage({
           <div>
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
             <p className="text-muted-foreground">
-              {lead.contacts.length} {lead.contacts.length === 1 ? 'Contact' : 'Contacts'}
+              {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}
             </p>
           </div>
         </div>
@@ -500,7 +500,7 @@ export default function LeadProfilePage({
               </Dialog>
             </CardHeader>
             <CardContent className="divide-y divide-border">
-              {lead.contacts.length > 0 ? (
+              {lead.contacts && lead.contacts.length > 0 ? (
                 lead.contacts.map((contact) => (
                   <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
                      <div className="absolute top-4 right-4">
@@ -609,7 +609,7 @@ export default function LeadProfilePage({
             </CardHeader>
             <CardContent>
               <ul className="space-y-4">
-                {lead.activity.map((item, index) => (
+                {lead.activity && lead.activity.map((item, index) => (
                   <li key={item.id} className="flex gap-4">
                     <div className="flex flex-col items-center">
                       <div className="bg-secondary rounded-full p-2">
@@ -618,7 +618,7 @@ export default function LeadProfilePage({
                         {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
                         {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                       </div>
-                      {index < lead.activity.length - 1 && (
+                      {lead.activity && index < lead.activity.length - 1 && (
                         <div className="w-px h-full bg-border"></div>
                       )}
                     </div>
@@ -695,5 +695,3 @@ export default function LeadProfilePage({
     </div>
   )
 }
-
-    

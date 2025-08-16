@@ -126,7 +126,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       };
 
       updatedLead.status = newStatus;
-      updatedLead.activity = [newActivity, ...updatedLead.activity];
+      updatedLead.activity = [newActivity, ...(updatedLead.activity || [])];
 
       // 3. Handle contact creation for interested leads
       if (values.outcome === 'interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
@@ -138,7 +138,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
         };
         const newContactId = await addContactToLead(lead.id, newContactData);
         const newContact = { ...newContactData, id: newContactId };
-        updatedLead.contacts = [...updatedLead.contacts, newContact];
+        updatedLead.contacts = [...(updatedLead.contacts || []), newContact];
       }
 
       onCallLogged(updatedLead);
