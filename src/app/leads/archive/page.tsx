@@ -28,12 +28,16 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin } from 'lucide-react'
+import { MapPin, ArrowUpDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory';
 
 export default function ArchivedLeadsPage() {
   const [archivedLeads, setArchivedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
@@ -58,6 +62,39 @@ export default function ArchivedLeadsPage() {
     }
     getArchivedLeads();
   }, [user, authLoading, router]);
+
+  const sortedLeads = useMemo(() => {
+    let sortableItems = [...archivedLeads];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = a[sortConfig.key] || '';
+        const bValue = b[sortConfig.key] || '';
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [archivedLeads, sortConfig]);
+
+  const requestSort = (key: SortableLeadKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: SortableLeadKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
 
   const formatAddress = (address: Lead['address']) => {
     if (!address) return 'N/A';
@@ -87,12 +124,37 @@ export default function ArchivedLeadsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[280px]">Company</TableHead>
+                <TableHead className="w-[280px]">
+                  <Button variant="ghost" onClick={() => requestSort('companyName')} className="px-0">
+                    Company
+                    {getSortIndicator('companyName')}
+                  </Button>
+                </TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Franchisee</TableHead>
-                <TableHead>Sales Rep</TableHead>
-                <TableHead>Industry</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('status')} className="px-0">
+                    Status
+                    {getSortIndicator('status')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('franchisee')} className="px-0">
+                    Franchisee
+                    {getSortIndicator('franchisee')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="px-0">
+                    Sales Rep
+                    {getSortIndicator('salesRepAssigned')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="px-0">
+                    Industry
+                    {getSortIndicator('industryCategory')}
+                  </Button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -100,8 +162,8 @@ export default function ArchivedLeadsPage() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                 </TableRow>
-              ) : archivedLeads.length > 0 ? (
-                archivedLeads.map((lead) => {
+              ) : sortedLeads.length > 0 ? (
+                sortedLeads.map((lead) => {
                   const addressString = formatAddress(lead.address);
                   return (
                   <TableRow key={lead.id}>
@@ -160,5 +222,3 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
-
-    

@@ -31,11 +31,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserPlus, UserX, MapPin } from 'lucide-react'
+import { MoreHorizontal, UserPlus, UserX, MapPin, ArrowUpDown } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
+
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory' | 'industrySubCategory';
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -43,6 +45,7 @@ export default function LeadsPage() {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -77,6 +80,47 @@ export default function LeadsPage() {
     }
     getLeads();
   }, [user, authLoading, router, toast]);
+
+  const requestSort = (key: SortableLeadKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: SortableLeadKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
+
+  const sortedLeads = useMemo(() => {
+    let sortableItems = [...leads];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = a[sortConfig.key] || '';
+        const bValue = b[sortConfig.key] || '';
+        
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.localeCompare(bValue, undefined, { numeric: true });
+          if (comparison !== 0) {
+            return sortConfig.direction === 'ascending' ? comparison : -comparison;
+          }
+        } else {
+            if (aValue < bValue) {
+              return sortConfig.direction === 'ascending' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+              return sortConfig.direction === 'ascending' ? 1 : -1;
+            }
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [leads, sortConfig]);
 
   const handleAssign = async (leadId: string, salesRep: string | null) => {
     try {
@@ -133,18 +177,18 @@ export default function LeadsPage() {
 
   const myLeads = useMemo(() => {
     if (!user) return [];
-    return leads.filter(lead => lead.salesRepAssigned === user.displayName);
-  }, [leads, user]);
+    return sortedLeads.filter(lead => lead.salesRepAssigned === user.displayName);
+  }, [sortedLeads, user]);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
+    return sortedLeads.filter(lead => {
       const companyNameMatch = lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase());
       const statusMatch = filters.status === 'all' || lead.status === filters.status;
       const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
       const industryMatch = filters.industryCategory === 'all' || lead.industryCategory === filters.industryCategory;
       return companyNameMatch && statusMatch && franchiseeMatch && industryMatch;
     });
-  }, [leads, filters]);
+  }, [sortedLeads, filters]);
 
   const paginatedLeads = useMemo(() => {
     const startIndex = (currentPage - 1) * leadsPerPage;
@@ -270,12 +314,37 @@ export default function LeadsPage() {
                      aria-label="Select all my leads"
                    />
                  </TableHead>
-                <TableHead className="w-[280px]">Company</TableHead>
+                <TableHead className="w-[280px]">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="px-0 group">
+                        Company
+                        {getSortIndicator('companyName')}
+                    </Button>
+                </TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Franchisee</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Industry Sub-Category</TableHead>
+                <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="px-0 group">
+                        Status
+                        {getSortIndicator('status')}
+                    </Button>
+                </TableHead>
+                <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="px-0 group">
+                        Franchisee
+                        {getSortIndicator('franchisee')}
+                    </Button>
+                </TableHead>
+                <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="px-0 group">
+                        Industry
+                        {getSortIndicator('industryCategory')}
+                    </Button>
+                </TableHead>
+                <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="px-0 group">
+                        Industry Sub-Category
+                        {getSortIndicator('industrySubCategory')}
+                    </Button>
+                </TableHead>
                 <TableHead className="w-[50px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -380,13 +449,43 @@ export default function LeadsPage() {
                           aria-label="Select all"
                       />
                   </TableHead>
-                  <TableHead className="w-[280px]">Company</TableHead>
+                  <TableHead className="w-[280px]">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="px-0 group">
+                        Company
+                        {getSortIndicator('companyName')}
+                    </Button>
+                  </TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead>Sales Rep</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead>Industry Sub-Category</TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="px-0 group">
+                        Status
+                        {getSortIndicator('status')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="px-0 group">
+                        Franchisee
+                        {getSortIndicator('franchisee')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="px-0 group">
+                        Sales Rep
+                        {getSortIndicator('salesRepAssigned')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="px-0 group">
+                        Industry
+                        {getSortIndicator('industryCategory')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="px-0 group">
+                        Industry Sub-Category
+                        {getSortIndicator('industrySubCategory')}
+                    </Button>
+                  </TableHead>
                   <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -536,5 +635,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
