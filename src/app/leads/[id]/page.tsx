@@ -367,7 +367,7 @@ export default function LeadProfilePage({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {callNumber ? (
             <Button onClick={handleAirCallClick}>
                 <Phone className="mr-2 h-4 w-4" />
@@ -391,12 +391,12 @@ export default function LeadProfilePage({
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader className="flex flex-row items-center justify-between">
+             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                <CardTitle className="flex items-center gap-2">
                  <Building className="w-5 h-5 text-muted-foreground" />
                  Company Details
                </CardTitle>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
                         {isProspecting ? <Loader /> : <><Search className="mr-2 h-4 w-4" /><span>Prospect Website</span></>}
                     </Button>
@@ -417,13 +417,13 @@ export default function LeadProfilePage({
                 </div>
              </CardHeader>
              <CardContent className="space-y-4">
-               <div className="grid grid-cols-2 gap-4 text-sm">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                  <div className="flex items-start gap-3">
-                   <Key className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <Key className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Customer ID</p>
                      <div className="flex items-center gap-1">
-                        <p className="font-medium">{lead.entityId ?? 'N/A'}</p>
+                        <p className="font-medium break-all">{lead.entityId ?? 'N/A'}</p>
                         {lead.entityId && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
                                 <Clipboard className="w-3 h-3" />
@@ -433,11 +433,11 @@ export default function LeadProfilePage({
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
-                   <Hash className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <Hash className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">NetSuite Internal ID</p>
                      <div className="flex items-center gap-1">
-                        <p className="font-medium">{lead.id ?? 'N/A'}</p>
+                        <p className="font-medium break-all">{lead.id ?? 'N/A'}</p>
                         {lead.id && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.id, 'NetSuite Internal ID')}>
                                 <Clipboard className="w-3 h-3" />
@@ -447,20 +447,20 @@ export default function LeadProfilePage({
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
-                   <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Franchisee</p>
                      <p className="font-medium">{lead.franchisee ?? 'N/A'}</p>
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
-                   <Globe className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <Globe className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Website</p>
                      {lead.websiteUrl ? (
-                        <a href={lead.websiteUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
-                            {lead.websiteUrl}
-                            <LinkIcon className="w-3 h-3" />
+                        <a href={lead.websiteUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1 break-all">
+                            <span>{lead.websiteUrl}</span>
+                            <LinkIcon className="w-3 h-3 shrink-0" />
                         </a>
                      ) : (
                         <p className="font-medium">N/A</p>
@@ -468,25 +468,25 @@ export default function LeadProfilePage({
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
-                    <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Industry</p>
                      <p className="font-medium">{lead.industryCategory ?? 'N/A'}</p>
                    </div>
                  </div>
                  <div className="flex items-start gap-3">
-                   <Tag className="w-4 h-4 mt-1 text-muted-foreground" />
+                   <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Sub-Industry</p>
                      <p className="font-medium">{lead.industrySubCategory || 'N/A'}</p>
                    </div>
                  </div>
                   <div className="flex items-start gap-3">
-                    <Mail className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <Mail className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Email</p>
                       <div className="flex items-center gap-1">
-                        <p className="font-medium">{lead.customerServiceEmail ?? 'N/A'}</p>
+                        <p className="font-medium break-all">{lead.customerServiceEmail ?? 'N/A'}</p>
                         {lead.customerServiceEmail && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerServiceEmail, 'Email')}>
                                 <Clipboard className="w-3 h-3" />
@@ -496,11 +496,11 @@ export default function LeadProfilePage({
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Phone className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <Phone className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <div className="flex items-center gap-1">
-                        <p className="font-medium">{lead.customerPhone ?? 'N/A'}</p>
+                        <p className="font-medium break-all">{lead.customerPhone ?? 'N/A'}</p>
                         {lead.customerPhone && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
@@ -510,14 +510,14 @@ export default function LeadProfilePage({
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <User className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <User className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Sales Rep Assigned</p>
                       <p className="font-medium">{lead.salesRepAssigned ?? 'N/A'}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Briefcase className="w-4 h-4 mt-1 text-muted-foreground" />
+                    <Briefcase className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Lead Source</p>
                       <p className="font-medium">{lead.campaign ?? 'N/A'}</p>
@@ -539,7 +539,7 @@ export default function LeadProfilePage({
                 <button
                     onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
                     disabled={fullAddress === 'No address available'}
-                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                     title="View on map"
                 >
                     <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
@@ -550,7 +550,7 @@ export default function LeadProfilePage({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-muted-foreground" />
                 Contacts
@@ -615,19 +615,19 @@ export default function LeadProfilePage({
                         </DropdownMenu>
                       </div>
                     <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                      <User className="w-5 h-5 text-muted-foreground" />
-                      <span>{contact.name}</span>
+                      <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <span className="break-all">{contact.name}</span>
                     </div>
-                    <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
+                    <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
                     <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Mail className="w-5 h-5 text-muted-foreground" />
-                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                      <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
                         {contact.email}
                       </a>
                     </div>
                     <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Phone className="w-5 h-5 text-muted-foreground" />
-                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline">
+                      <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline break-all">
                         {contact.phone}
                       </a>
                     </div>
@@ -642,14 +642,14 @@ export default function LeadProfilePage({
                 scoringResult.prospectedContacts.map((contact, index) => (
                   <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                      <User className="w-5 h-5 text-muted-foreground" />
-                      <span>{contact.name}</span>
+                      <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <span className="break-all">{contact.name}</span>
                       <Badge variant="outline">Found on website</Badge>
                     </div>
-                    <p className="text-muted-foreground sm:col-span-2">{contact.title}</p>
+                    <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
                     <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Mail className="w-5 h-5 text-muted-foreground" />
-                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                      <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
                         {contact.email}
                       </a>
                     </div>

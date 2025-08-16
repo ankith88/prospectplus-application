@@ -45,7 +45,8 @@ export default function LeadsPage() {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'companyName', direction: 'ascending' });
+  const [myLeadsSortConfig, setMyLeadsSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'companyName', direction: 'ascending' });
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -69,7 +70,12 @@ export default function LeadsPage() {
       try {
         setLoading(true);
         const allLeads = await getLeadsTool({ summary: true });
-        const activeLeads = allLeads.filter(lead => lead.status !== 'Lost' && lead.status !== 'Qualified');
+        const activeLeads = allLeads.filter(lead => 
+            lead.status !== 'Lost' && 
+            lead.status !== 'Qualified' &&
+            lead.status !== 'Won' &&
+            lead.status !== 'Unqualified'
+        );
         setLeads(activeLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
@@ -88,40 +94,22 @@ export default function LeadsPage() {
     }
     setSortConfig({ key, direction });
   };
-
-  const getSortIndicator = (key: SortableLeadKeys) => {
-    if (!sortConfig || sortConfig.key !== key) {
+  
+  const getSortIndicator = (key: SortableLeadKeys, currentSortConfig: typeof sortConfig) => {
+    if (!currentSortConfig || currentSortConfig.key !== key) {
       return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
     }
-    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+    return currentSortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
-  const sortedLeads = useMemo(() => {
-    let sortableItems = [...leads];
-    if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key] || '';
-        const bValue = b[sortConfig.key] || '';
-        
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
-          const comparison = aValue.localeCompare(bValue, undefined, { numeric: true });
-          if (comparison !== 0) {
-            return sortConfig.direction === 'ascending' ? comparison : -comparison;
-          }
-        } else {
-            if (aValue < bValue) {
-              return sortConfig.direction === 'ascending' ? -1 : 1;
-            }
-            if (aValue > bValue) {
-              return sortConfig.direction === 'ascending' ? 1 : -1;
-            }
-        }
-        return 0;
-      });
+  const requestMyLeadsSort = (key: SortableLeadKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (myLeadsSortConfig && myLeadsSortConfig.key === key && myLeadsSortConfig.direction === 'ascending') {
+      direction = 'descending';
     }
-    return sortableItems;
-  }, [leads, sortConfig]);
-
+    setMyLeadsSortConfig({ key, direction });
+  };
+  
   const handleAssign = async (leadId: string, salesRep: string | null) => {
     try {
       await updateLeadSalesRep(leadId, salesRep);
@@ -175,20 +163,53 @@ export default function LeadsPage() {
     }
   };
 
+  const allLeadsRaw = useMemo(() => leads, [leads]);
+
   const myLeads = useMemo(() => {
     if (!user) return [];
-    return sortedLeads.filter(lead => lead.salesRepAssigned === user.displayName);
-  }, [sortedLeads, user]);
+    let myLeadsList = allLeadsRaw.filter(lead => lead.salesRepAssigned === user.displayName);
+
+    if (myLeadsSortConfig !== null) {
+      myLeadsList.sort((a, b) => {
+        const aValue = a[myLeadsSortConfig.key] || '';
+        const bValue = b[myLeadsSortConfig.key] || '';
+        if (aValue < bValue) {
+          return myLeadsSortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return myLeadsSortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return myLeadsList;
+  }, [allLeadsRaw, user, myLeadsSortConfig]);
+
 
   const filteredLeads = useMemo(() => {
-    return sortedLeads.filter(lead => {
+    let sortedItems = [...allLeadsRaw];
+    if (sortConfig !== null) {
+      sortedItems.sort((a, b) => {
+        const aValue = a[sortConfig.key] || '';
+        const bValue = b[sortConfig.key] || '';
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return sortedItems.filter(lead => {
       const companyNameMatch = lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase());
       const statusMatch = filters.status === 'all' || lead.status === filters.status;
       const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
       const industryMatch = filters.industryCategory === 'all' || lead.industryCategory === filters.industryCategory;
       return companyNameMatch && statusMatch && franchiseeMatch && industryMatch;
     });
-  }, [sortedLeads, filters]);
+  }, [allLeadsRaw, sortConfig, filters]);
 
   const paginatedLeads = useMemo(() => {
     const startIndex = (currentPage - 1) * leadsPerPage;
@@ -198,9 +219,9 @@ export default function LeadsPage() {
 
   const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
 
-  const uniqueFranchisees = useMemo(() => [...new Set(leads.map(l => l.franchisee).filter(Boolean))], [leads]);
-  const uniqueIndustries = useMemo(() => [...new Set(leads.map(l => l.industryCategory).filter(Boolean))], [leads]);
-  const uniqueStatuses = useMemo(() => [...new Set(leads.map(l => l.status).filter(Boolean))], [leads]) as LeadStatus[];
+  const uniqueFranchisees = useMemo(() => [...new Set(allLeadsRaw.map(l => l.franchisee).filter(Boolean))], [allLeadsRaw]);
+  const uniqueIndustries = useMemo(() => [...new Set(allLeadsRaw.map(l => l.industryCategory).filter(Boolean))], [allLeadsRaw]);
+  const uniqueStatuses = useMemo(() => [...new Set(allLeadsRaw.map(l => l.status).filter(Boolean))], [allLeadsRaw]) as LeadStatus[];
 
   const handleSelectLead = (leadId: string, checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -304,127 +325,129 @@ export default function LeadsPage() {
           )}
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                 <TableHead className="w-8">
-                   <Checkbox
-                     checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
-                     onCheckedChange={handleSelectAllMyLeads}
-                     aria-label="Select all my leads"
-                   />
-                 </TableHead>
-                <TableHead className="w-[280px]">
-                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group">
-                        Company
-                        {getSortIndicator('companyName')}
-                    </Button>
-                </TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('status')} className="group">
-                        Status
-                        {getSortIndicator('status')}
-                    </Button>
-                </TableHead>
-                <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group">
-                        Franchisee
-                        {getSortIndicator('franchisee')}
-                    </Button>
-                </TableHead>
-                <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group">
-                        Industry
-                        {getSortIndicator('industryCategory')}
-                    </Button>
-                </TableHead>
-                <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group">
-                        Industry Sub-Category
-                        {getSortIndicator('industrySubCategory')}
-                    </Button>
-                </TableHead>
-                <TableHead className="w-[50px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                 <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
-                 </TableRow>
-              ) : myLeads.length > 0 ? (
-                myLeads.map((lead) => {
-                  const addressString = formatAddress(lead.address);
-                  return (
-                  <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
-                    <TableCell>
-                      <Checkbox
-                          checked={selectedMyLeads.includes(lead.id)}
-                          onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)}
-                          aria-label={`Select lead ${lead.companyName}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                        <Avatar>
-                          <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-                          <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                          <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                          disabled={addressString === 'N/A'}
-                          className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="View on map"
-                        >
-                          <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                        </button>
-                        <span>{addressString}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <LeadStatusBadge status={lead.status} />
-                    </TableCell>
-                    <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                    <TableCell>
-                      {lead.industryCategory}
-                    </TableCell>
-                    <TableCell>
-                      {lead.industrySubCategory}
-                    </TableCell>
-                     <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
-                              Unassign
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                     </TableCell>
-                  </TableRow>
-                  )
-                })
-              ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                        You have not been assigned any leads.
-                    </TableCell>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
+                      onCheckedChange={handleSelectAllMyLeads}
+                      aria-label="Select all my leads"
+                    />
+                  </TableHead>
+                  <TableHead className="w-[280px]">
+                      <Button variant="ghost" onClick={() => requestMyLeadsSort('companyName')} className="group -ml-4">
+                          Company
+                          {getSortIndicator('companyName', myLeadsSortConfig)}
+                      </Button>
+                  </TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead>
+                      <Button variant="ghost" onClick={() => requestMyLeadsSort('status')} className="group -ml-4">
+                          Status
+                          {getSortIndicator('status', myLeadsSortConfig)}
+                      </Button>
+                  </TableHead>
+                  <TableHead>
+                      <Button variant="ghost" onClick={() => requestMyLeadsSort('franchisee')} className="group -ml-4">
+                          Franchisee
+                          {getSortIndicator('franchisee', myLeadsSortConfig)}
+                      </Button>
+                  </TableHead>
+                  <TableHead>
+                      <Button variant="ghost" onClick={() => requestMyLeadsSort('industryCategory')} className="group -ml-4">
+                          Industry
+                          {getSortIndicator('industryCategory', myLeadsSortConfig)}
+                      </Button>
+                  </TableHead>
+                  <TableHead>
+                      <Button variant="ghost" onClick={() => requestMyLeadsSort('industrySubCategory')} className="group -ml-4">
+                          Sub-Industry
+                          {getSortIndicator('industrySubCategory', myLeadsSortConfig)}
+                      </Button>
+                  </TableHead>
+                  <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                  </TableRow>
+                ) : myLeads.length > 0 ? (
+                  myLeads.map((lead) => {
+                    const addressString = formatAddress(lead.address);
+                    return (
+                    <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                      <TableCell>
+                        <Checkbox
+                            checked={selectedMyLeads.includes(lead.id)}
+                            onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)}
+                            aria-label={`Select lead ${lead.companyName}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                          <Avatar>
+                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="font-medium group-hover:underline">{lead.companyName}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                            disabled={addressString === 'N/A'}
+                            className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="View on map"
+                          >
+                            <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                          </button>
+                          <span>{addressString}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <LeadStatusBadge status={lead.status} />
+                      </TableCell>
+                      <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                      <TableCell>
+                        {lead.industryCategory}
+                      </TableCell>
+                      <TableCell>
+                        {lead.industrySubCategory}
+                      </TableCell>
+                      <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
+                                Unassign
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                          You have not been assigned any leads.
+                      </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -450,40 +473,40 @@ export default function LeadsPage() {
                       />
                   </TableHead>
                   <TableHead className="w-[280px]">
-                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
                         Company
-                        {getSortIndicator('companyName')}
+                        {getSortIndicator('companyName', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('status')} className="group">
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">
                         Status
-                        {getSortIndicator('status')}
+                        {getSortIndicator('status', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group">
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
                         Franchisee
-                        {getSortIndicator('franchisee')}
+                        {getSortIndicator('franchisee', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group">
+                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group -ml-4">
                         Sales Rep
-                        {getSortIndicator('salesRepAssigned')}
+                        {getSortIndicator('salesRepAssigned', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group">
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">
                         Industry
-                        {getSortIndicator('industryCategory')}
+                        {getSortIndicator('industryCategory', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group">
-                        Industry Sub-Category
-                        {getSortIndicator('industrySubCategory')}
+                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group -ml-4">
+                        Sub-Industry
+                        {getSortIndicator('industrySubCategory', sortConfig)}
                     </Button>
                   </TableHead>
                   <TableHead className="w-[50px] text-right">Actions</TableHead>
@@ -573,7 +596,7 @@ export default function LeadsPage() {
               </TableBody>
             </Table>
           </div>
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
             <div className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground">
                     {filteredLeads.length} Lead(s)

@@ -46,7 +46,7 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background p-4">
+    <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex flex-col items-center text-center">
             <Image

@@ -52,7 +52,12 @@ export default function ArchivedLeadsPage() {
       try {
         setLoading(true);
         const allLeads = await getLeadsTool({ summary: true });
-        const filteredLeads = allLeads.filter(lead => lead.status === 'Lost' || lead.status === 'Qualified');
+        const filteredLeads = allLeads.filter(lead => 
+            lead.status === 'Lost' || 
+            lead.status === 'Qualified' || 
+            lead.status === 'Won' || 
+            lead.status === 'Unqualified'
+        );
         setArchivedLeads(filteredLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
@@ -121,96 +126,98 @@ export default function ArchivedLeadsPage() {
           <CardTitle>Processed Leads</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[280px]">
-                  <Button variant="ghost" onClick={() => requestSort('companyName')} className="group">
-                    Company
-                    {getSortIndicator('companyName')}
-                  </Button>
-                </TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('status')} className="group">
-                    Status
-                    {getSortIndicator('status')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group">
-                    Franchisee
-                    {getSortIndicator('franchisee')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group">
-                    Sales Rep
-                    {getSortIndicator('salesRepAssigned')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group">
-                    Industry
-                    {getSortIndicator('industryCategory')}
-                  </Button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
+                  <TableHead className="w-[280px]">
+                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
+                      Company
+                      {getSortIndicator('companyName')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">
+                      Status
+                      {getSortIndicator('status')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
+                      Franchisee
+                      {getSortIndicator('franchisee')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group -ml-4">
+                      Sales Rep
+                      {getSortIndicator('salesRepAssigned')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">
+                      Industry
+                      {getSortIndicator('industryCategory')}
+                    </Button>
+                  </TableHead>
                 </TableRow>
-              ) : sortedLeads.length > 0 ? (
-                sortedLeads.map((lead) => {
-                  const addressString = formatAddress(lead.address);
-                  return (
-                  <TableRow key={lead.id}>
-                    <TableCell>
-                      <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
-                        <Avatar>
-                          <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
-                          <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{lead.companyName}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                          disabled={addressString === 'N/A'}
-                          className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="View on map"
-                        >
-                          <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                        </button>
-                        <span>{addressString}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <LeadStatusBadge status={lead.status} />
-                    </TableCell>
-                    <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                    <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
-                    <TableCell>
-                      {lead.industryCategory}
-                    </TableCell>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                  )
-                })
-              ) : (
-                <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                        No archived leads found.
-                    </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : sortedLeads.length > 0 ? (
+                  sortedLeads.map((lead) => {
+                    const addressString = formatAddress(lead.address);
+                    return (
+                    <TableRow key={lead.id}>
+                      <TableCell>
+                        <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
+                          <Avatar>
+                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
+                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{lead.companyName}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                            disabled={addressString === 'N/A'}
+                            className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="View on map"
+                          >
+                            <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                          </button>
+                          <span>{addressString}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <LeadStatusBadge status={lead.status} />
+                      </TableCell>
+                      <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                      <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
+                      <TableCell>
+                        {lead.industryCategory}
+                      </TableCell>
+                    </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                          No archived leads found.
+                      </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
