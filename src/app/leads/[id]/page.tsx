@@ -94,8 +94,8 @@ export default function LeadProfilePage({
     async function fetchData() {
       try {
         setLoading(true);
-        const leads = await getLeadsTool({});
-        const currentLead = leads.find((l) => l.id === id)
+        const leads = await getLeadsTool({ leadId: id });
+        const currentLead = leads[0];
 
         if (!currentLead) {
           notFound()
@@ -668,5 +668,3 @@ export default function LeadProfilePage({
     </div>
   )
 }
-
-    

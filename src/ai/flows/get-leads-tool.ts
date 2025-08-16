@@ -53,11 +53,13 @@ const LeadSchema = z.object({
 export const getLeadsTool = ai.defineTool(
   {
     name: 'getLeads',
-    description: 'Returns a list of leads from the CRM system (Firebase).',
-    inputSchema: z.object({}),
+    description: 'Returns a list of leads from the CRM system (Firebase). Can fetch all leads or a single lead by ID.',
+    inputSchema: z.object({
+      leadId: z.string().optional().describe('The ID of a specific lead to fetch.'),
+    }),
     outputSchema: z.array(LeadSchema),
   },
-  async () => {
-    return await getLeadsFromFirebase();
+  async ({ leadId }) => {
+    return await getLeadsFromFirebase(leadId);
   }
 );

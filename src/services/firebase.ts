@@ -6,7 +6,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity } from '@/lib/types';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
     try {
@@ -25,8 +25,77 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
     }
 }
 
+async function getLeadFromFirebase(leadId: string): Promise<Lead | null> {
+    try {
+        console.log(`Fetching lead ${leadId} from Firebase...`);
+        const leadRef = doc(firestore, 'leads', leadId);
+        const docSnapshot = await getDoc(leadRef);
 
-async function getLeadsFromFirebase(): Promise<Lead[]> {
+        if (!docSnapshot.exists()) {
+            console.log(`No lead found with ID: ${leadId}`);
+            return null;
+        }
+
+        const data = docSnapshot.data();
+        
+        let address: Address | undefined;
+        if (data.street || data.city || data.state || data.zip || data.country) {
+          address = {
+            street: data.street || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            country: data.country || ''
+          };
+        }
+
+        const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
+        const contactsSnapshot = await getSubCollectionDocs(contactsRef);
+        const contacts: Contact[] = contactsSnapshot.docs.map(contactDoc => ({
+          id: contactDoc.id,
+          ...contactDoc.data()
+        } as Contact));
+
+        const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
+        const activitySnapshot = await getSubCollectionDocs(activityRef);
+        const activity: Activity[] = activitySnapshot.docs.map(activityDoc => ({
+          id: activityDoc.id,
+          ...activityDoc.data()
+        } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const transformedLead: Lead = {
+          id: docSnapshot.id,
+          entityId: data.customerEntityId || docSnapshot.id,
+          companyName: data.companyName || 'Unknown Company',
+          status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
+          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
+          activity: activity || [],
+          contacts: contacts,
+          address: address,
+          franchisee: data.franchisee,
+          websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
+          industryCategory: data.industryCategory,
+          industrySubCategory: data.industrySubCategory,
+          salesRepAssigned: data.salesRepAssigned,
+          campaign: data.customerSource,
+          customerServiceEmail: data.customerServiceEmail,
+          customerPhone: data.customerPhone,
+        };
+        return transformedLead;
+
+    } catch (error) {
+        console.error(`Firebase fetch failed for lead ${leadId}:`, error);
+        return null;
+    }
+}
+
+
+async function getLeadsFromFirebase(leadId?: string): Promise<Lead[]> {
+  if (leadId) {
+      const lead = await getLeadFromFirebase(leadId);
+      return lead ? [lead] : [];
+  }
   try {
     console.log("Fetching leads from Firebase...");
     const leadsRef = collection(firestore, 'leads');
