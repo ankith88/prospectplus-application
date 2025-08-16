@@ -28,6 +28,7 @@ import {
   Users,
   MessageSquare,
   Briefcase,
+  MapPin,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity } from '@/lib/types'
@@ -73,6 +74,7 @@ import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { Textarea } from '@/components/ui/textarea'
+import { MapModal } from '@/components/map-modal'
 
 
 export default function LeadProfilePage({
@@ -90,6 +92,7 @@ export default function LeadProfilePage({
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -284,6 +287,7 @@ export default function LeadProfilePage({
   const callNumber = primaryContact?.phone || lead.customerPhone;
 
   return (
+    <>
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild>
@@ -471,7 +475,17 @@ export default function LeadProfilePage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">{fullAddress}</p>
+              <div className="flex items-center gap-2">
+                <button
+                    onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
+                    disabled={fullAddress === 'No address available'}
+                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="View on map"
+                >
+                    <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                </button>
+                <p className="text-sm text-muted-foreground">{fullAddress}</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -693,5 +707,11 @@ export default function LeadProfilePage({
         </div>
       </main>
     </div>
+    <MapModal
+        isOpen={!!selectedAddress}
+        onClose={() => setSelectedAddress(null)}
+        address={selectedAddress || ''}
+      />
+    </>
   )
 }
