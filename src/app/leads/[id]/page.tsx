@@ -16,7 +16,7 @@ import {
   Key,
   Lightbulb,
   Link as LinkIcon,
-  LogOut,
+  MessageSquare,
   Mail,
   MoreVertical,
   Phone,
@@ -26,7 +26,7 @@ import {
   Trash2,
   User,
   Users,
-  MessageSquare,
+  ClipboardEdit,
   Briefcase,
   MapPin,
   Info,
@@ -327,8 +327,8 @@ export default function LeadProfilePage({
           )}
           <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
             <Button variant="secondary">
-                <LogOut className="mr-2 h-4 w-4" />
-                Log a Call
+                <ClipboardEdit className="mr-2 h-4 w-4" />
+                Log an Activity
             </Button>
           </LogCallDialog>
         </div>
@@ -721,5 +721,3 @@ export default function LeadProfilePage({
     </>
   )
 }
-
-    
