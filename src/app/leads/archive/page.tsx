@@ -118,7 +118,7 @@ export default function ArchivedLeadsPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Archived Leads</h1>
-        <p className="text-muted-foreground">View your qualified and lost leads.</p>
+        <p className="text-muted-foreground">View your qualified, won, and lost leads.</p>
       </header>
       <Card>
         <CardHeader>

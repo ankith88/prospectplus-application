@@ -66,6 +66,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
     defaultValues: {
       notes: '',
       outcome: 'interested',
+      notInterestedReason: '',
       contactName: '',
       contactEmail: '',
       contactPhone: '',
@@ -75,7 +76,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
   const outcome = form.watch('outcome')
 
-  const handleSetAppointment = () => {
+  const handleSetAppointment = async () => {
     const salesRep = lead.salesRepAssigned;
     let calendlyUrl = '';
 
@@ -92,10 +93,37 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
         return;
     }
 
-    const { contactName, contactEmail, contactPhone } = form.getValues();
+    const { contactName, contactEmail } = form.getValues();
+    if (!contactName || !contactEmail) {
+        toast({
+            variant: "destructive",
+            title: "Missing Information",
+            description: "Contact name and email are required to set an appointment.",
+        });
+        return;
+    }
+    
     const urlWithParams = `${calendlyUrl}&name=${encodeURIComponent(contactName || '')}&email=${encodeURIComponent(contactEmail || '')}`;
     
     window.open(urlWithParams, '_blank');
+
+    // Also update the lead status to Qualified
+     try {
+        await updateLeadStatus(lead.id, 'Qualified');
+        const updatedLead = { ...lead, status: 'Qualified' as const };
+        onCallLogged(updatedLead);
+        toast({
+            title: 'Status Updated',
+            description: 'Lead status changed to Qualified.',
+        });
+     } catch (error) {
+        console.error('Failed to update lead status:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to update lead status. Please try again.',
+        });
+     }
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -112,11 +140,11 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       // 2. Update lead status
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        newStatus = 'Qualified';
+        // Status update is now handled by handleSetAppointment
       } else {
-        newStatus = 'Lost';
+        newStatus = 'Unqualified';
+        await updateLeadStatus(lead.id, newStatus);
       }
-      await updateLeadStatus(lead.id, newStatus);
       
       const newActivity = {
         id: `activity-${Date.now()}`,
@@ -136,9 +164,12 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
             phone: values.contactPhone,
             title: values.contactTitle,
         };
-        const newContactId = await addContactToLead(lead.id, newContactData);
-        const newContact = { ...newContactData, id: newContactId };
-        updatedLead.contacts = [...(updatedLead.contacts || []), newContact];
+        const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
+        if (!existingContact) {
+            const newContactId = await addContactToLead(lead.id, newContactData);
+            const newContact = { ...newContactData, id: newContactId };
+            updatedLead.contacts = [...(updatedLead.contacts || []), newContact];
+        }
       }
 
       onCallLogged(updatedLead);
@@ -227,7 +258,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a reason" />
-                        </SelectTrigger>
+                        </Trigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="already-has-provider">Already has a provider</SelectItem>
