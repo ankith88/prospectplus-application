@@ -147,8 +147,8 @@ export default function LeadProfilePage({
 
   const handleProspectWebsite = async () => {
     if (!lead || !lead.websiteUrl) {
-      toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
-      return;
+        toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
+        return;
     }
     try {
         setIsProspecting(true);
@@ -158,20 +158,33 @@ export default function LeadProfilePage({
         });
 
         if (result.contacts && result.contacts.length > 0) {
+            let newContactsAdded = 0;
             setLead(prev => {
                 if (!prev) return null;
-                const newContacts = result.contacts!.filter(
-                    (newContact: any) => !(prev.contacts || []).some(existing => existing.email === newContact.email)
+                const existingEmails = new Set((prev.contacts || []).map(c => c.email));
+                const uniqueNewContacts = result.contacts!.filter(
+                    (newContact: any) => newContact.email && !existingEmails.has(newContact.email)
                 );
-                return { ...prev, contacts: [...(prev.contacts || []), ...newContacts] };
+                
+                newContactsAdded = uniqueNewContacts.length;
+
+                return { ...prev, contacts: [...(prev.contacts || []), ...uniqueNewContacts] };
             });
+
+            // The scoring result should probably reflect all found contacts, not just new ones
             setScoringResult(prev => ({
                 ...prev!,
                 prospectedContacts: result.contacts || [],
             }));
-            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and added.` });
+            
+            if (newContactsAdded > 0) {
+                toast({ title: "Success", description: `${newContactsAdded} new contact(s) found and added.` });
+            } else {
+                toast({ title: "No New Contacts", description: "Prospecting found contacts that are already in your list." });
+            }
+
         } else {
-            toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
+            toast({ title: "No Contacts Found", description: "No contacts were found on the website." });
         }
     } catch (error) {
         console.error("Failed to prospect website:", error);
