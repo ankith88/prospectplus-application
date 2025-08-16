@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserPlus, UserX } from 'lucide-react'
+import { MoreHorizontal, UserPlus, UserX, MapPin } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -308,13 +308,17 @@ export default function LeadsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                       <button
+                      <div className="flex items-center gap-2">
+                        <button
                           onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                          className="hover:underline disabled:no-underline disabled:cursor-text text-left"
                           disabled={addressString === 'N/A'}
+                          className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="View on map"
                         >
-                          {addressString}
+                          <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
                         </button>
+                        <span>{addressString}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
@@ -415,13 +419,17 @@ export default function LeadsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                           <button
+                          <div className="flex items-center gap-2">
+                            <button
                               onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                              className="hover:underline disabled:no-underline disabled:cursor-text text-left"
                               disabled={addressString === 'N/A'}
+                              className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="View on map"
                             >
-                              {addressString}
+                              <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
                             </button>
+                            <span>{addressString}</span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <LeadStatusBadge status={lead.status} />
@@ -528,3 +536,5 @@ export default function LeadsPage() {
     </>
   )
 }
+
+    

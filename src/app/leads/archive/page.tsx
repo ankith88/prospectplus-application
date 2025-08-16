@@ -28,6 +28,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
+import { MapPin } from 'lucide-react'
 
 export default function ArchivedLeadsPage() {
   const [archivedLeads, setArchivedLeads] = useState<Lead[]>([]);
@@ -116,13 +117,17 @@ export default function ArchivedLeadsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                       <button
+                      <div className="flex items-center gap-2">
+                        <button
                           onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                          className="hover:underline disabled:no-underline disabled:cursor-text"
                           disabled={addressString === 'N/A'}
+                          className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="View on map"
                         >
-                          {addressString}
+                          <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
                         </button>
+                        <span>{addressString}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <LeadStatusBadge status={lead.status} />
@@ -155,3 +160,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    
