@@ -307,13 +307,15 @@ export default function LeadProfilePage({
           </Avatar>
           <div>
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
-            <p className="text-muted-foreground">
-              {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <LeadStatusBadge status={lead.status} />
+              <p className="text-muted-foreground">
+                &bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <LeadStatusBadge status={lead.status} />
           {callNumber ? (
             <Button onClick={handleAirCallClick}>
                 <Phone className="mr-2 h-4 w-4" />
@@ -721,3 +723,5 @@ export default function LeadProfilePage({
     </>
   )
 }
+
+    
