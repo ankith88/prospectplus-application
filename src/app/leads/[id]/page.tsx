@@ -30,12 +30,14 @@ import {
   Briefcase,
   MapPin,
   Info,
+  Search,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { deleteContactFromLead, logActivity } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -88,6 +90,7 @@ export default function LeadProfilePage({
   const [userScript, setUserScript] = useState('');
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
+  const [isProspecting, setIsProspecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -141,6 +144,42 @@ export default function LeadProfilePage({
         setScoringLoading(false);
     }
   }
+
+  const handleProspectWebsite = async () => {
+    if (!lead || !lead.websiteUrl) {
+      toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
+      return;
+    }
+    try {
+        setIsProspecting(true);
+        const result = await prospectWebsiteTool({
+            leadId: lead.id,
+            websiteUrl: lead.websiteUrl,
+        });
+
+        if (result.contacts && result.contacts.length > 0) {
+            setLead(prev => {
+                if (!prev) return null;
+                const newContacts = result.contacts!.filter(
+                    (newContact: any) => !(prev.contacts || []).some(existing => existing.email === newContact.email)
+                );
+                return { ...prev, contacts: [...(prev.contacts || []), ...newContacts] };
+            });
+            setScoringResult(prev => ({
+                ...prev!,
+                prospectedContacts: result.contacts || [],
+            }));
+            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and added.` });
+        } else {
+            toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
+        }
+    } catch (error) {
+        console.error("Failed to prospect website:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
+    } finally {
+        setIsProspecting(false);
+    }
+  };
 
   const handleImproveScript = async () => {
     if (!lead || !userScript) return;
@@ -344,20 +383,25 @@ export default function LeadProfilePage({
                  <Building className="w-5 h-5 text-muted-foreground" />
                  Company Details
                </CardTitle>
-                <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
-                  <DialogTrigger asChild>
-                     <Button variant="outline" size="sm">
-                       <Edit className="mr-2 h-4 w-4" />
-                       Edit
-                     </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Edit Lead Details</DialogTitle>
-                    </DialogHeader>
-                    <EditLeadForm lead={lead} onLeadUpdated={(updatedData) => handleLeadUpdated(updatedData, lead)} />
-                  </DialogContent>
-                </Dialog>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
+                        {isProspecting ? <Loader /> : <><Search className="mr-2 h-4 w-4" /><span>Prospect Website</span></>}
+                    </Button>
+                    <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
+                      <DialogTrigger asChild>
+                         <Button variant="outline" size="sm">
+                           <Edit className="mr-2 h-4 w-4" />
+                           Edit
+                         </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Edit Lead Details</DialogTitle>
+                        </DialogHeader>
+                        <EditLeadForm lead={lead} onLeadUpdated={(updatedData) => handleLeadUpdated(updatedData, lead)} />
+                      </DialogContent>
+                    </Dialog>
+                </div>
              </CardHeader>
              <CardContent className="space-y-4">
                <div className="grid grid-cols-2 gap-4 text-sm">
@@ -723,5 +767,3 @@ export default function LeadProfilePage({
     </>
   )
 }
-
-    
