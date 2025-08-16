@@ -55,8 +55,7 @@ export default function ArchivedLeadsPage() {
         const filteredLeads = allLeads.filter(lead => 
             lead.status === 'Lost' || 
             lead.status === 'Qualified' || 
-            lead.status === 'Won' || 
-            lead.status === 'Unqualified'
+            lead.status === 'Won'
         );
         setArchivedLeads(filteredLeads);
       } catch (error) {

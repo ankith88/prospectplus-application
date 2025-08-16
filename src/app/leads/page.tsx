@@ -73,8 +73,7 @@ export default function LeadsPage() {
         const activeLeads = allLeads.filter(lead => 
             lead.status !== 'Lost' && 
             lead.status !== 'Qualified' &&
-            lead.status !== 'Won' &&
-            lead.status !== 'Unqualified'
+            lead.status !== 'Won'
         );
         setLeads(activeLeads);
       } catch (error) {
@@ -658,5 +657,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
