@@ -107,8 +107,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full justify-start">
               <LogOut className="size-4" />
+              <span>Log Out</span>
             </Button>
           </div>
         </SidebarFooter>
