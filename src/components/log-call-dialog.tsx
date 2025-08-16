@@ -49,7 +49,7 @@ const formSchema = z.object({
     return true;
 }, {
     message: "Contact details are required when the lead is interested.",
-    path: ["contactName"], // You can associate the error with a specific field
+    path: ["contactName"],
 });
 
 interface LogCallDialogProps {
@@ -107,7 +107,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
     
     window.open(urlWithParams, '_blank');
 
-    // Also update the lead status to Qualified
      try {
         await updateLeadStatus(lead.id, 'Qualified');
         const updatedLead = { ...lead, status: 'Qualified' as const };
@@ -130,14 +129,12 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
     try {
       let updatedLead = { ...lead };
 
-      // 1. Log the call activity
       await logCallActivity(lead.id, {
         notes: values.notes,
         outcome: values.outcome,
         reason: values.notInterestedReason,
       });
 
-      // 2. Update lead status
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
         // Status update is now handled by handleSetAppointment
@@ -156,7 +153,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       updatedLead.status = newStatus;
       updatedLead.activity = [newActivity, ...(updatedLead.activity || [])];
 
-      // 3. Handle contact creation for interested leads
       if (values.outcome === 'interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
         const newContactData = {
             name: values.contactName,
@@ -258,7 +254,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a reason" />
-                        </Trigger>
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="already-has-provider">Already has a provider</SelectItem>
