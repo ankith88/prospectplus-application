@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast'
 import type { Lead } from '@/lib/types'
 import { logCallActivity, updateLeadStatus, addContactToLead } from '@/services/firebase'
+import { AppointmentScheduler } from './appointment-scheduler'
 
 const formSchema = z.object({
   notes: z.string().min(1, 'Call notes are required.'),
@@ -60,6 +61,7 @@ interface LogCallDialogProps {
 
 export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [isSchedulerOpen, setIsSchedulerOpen] = useState(false)
   const { toast } = useToast()
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -75,39 +77,10 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
   })
 
   const outcome = form.watch('outcome')
+  const { contactName, contactEmail } = form.getValues();
 
-  const handleSetAppointment = async () => {
-    const salesRep = lead.salesRepAssigned;
-    let calendlyUrl = '';
-
-    if (salesRep === 'Luke Forbes') {
-      calendlyUrl = 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke?month=2025-08';
-    } else if (salesRep === 'Leonie Feata') {
-      calendlyUrl = 'https://calendly.com/leonie-feata-mailplus/mailplus-intro-call-leonie?month=2025-08';
-    } else {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Cannot set appointment. No recognized sales rep assigned.",
-        })
-        return;
-    }
-
-    const { contactName, contactEmail } = form.getValues();
-    if (!contactName || !contactEmail) {
-        toast({
-            variant: "destructive",
-            title: "Missing Information",
-            description: "Contact name and email are required to set an appointment.",
-        });
-        return;
-    }
-    
-    const urlWithParams = `${calendlyUrl}&name=${encodeURIComponent(contactName || '')}&email=${encodeURIComponent(contactEmail || '')}`;
-    
-    window.open(urlWithParams, '_blank');
-
-     try {
+  const handleAppointmentBooked = async () => {
+    try {
         await updateLeadStatus(lead.id, 'Qualified');
         const updatedLead = { ...lead, status: 'Qualified' as const };
         onCallLogged(updatedLead);
@@ -115,6 +88,8 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
             title: 'Status Updated',
             description: 'Lead status changed to Qualified.',
         });
+        setIsSchedulerOpen(false); // Close scheduler
+        setIsOpen(false); // Close main dialog
      } catch (error) {
         console.error('Failed to update lead status:', error);
         toast({
@@ -123,7 +98,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
             description: 'Failed to update lead status. Please try again.',
         });
      }
-  };
+  }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -137,7 +112,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        // Status update is now handled by handleSetAppointment
+        // Status is updated after appointment is booked
       } else {
         newStatus = 'Unqualified';
         await updateLeadStatus(lead.id, newStatus);
@@ -175,8 +150,10 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
         description: 'Call has been logged successfully.',
       })
       
-      setIsOpen(false)
-      form.reset()
+      if (values.outcome === 'not-interested') {
+        setIsOpen(false)
+        form.reset()
+      }
     } catch (error) {
       console.error('Failed to log call:', error)
       toast({
@@ -188,162 +165,172 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Log Call Outcome</DialogTitle>
-          <DialogDescription>
-            Record the details of your call with {lead.companyName}.
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Call Notes</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Enter notes from the call..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="outcome"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel>Outcome</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex space-x-4"
-                    >
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="interested" />
-                        </FormControl>
-                        <FormLabel className="font-normal">Interested</FormLabel>
-                      </FormItem>
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="not-interested" />
-                        </FormControl>
-                        <FormLabel className="font-normal">Not Interested</FormLabel>
-                      </FormItem>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {outcome === 'not-interested' && (
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>{children}</DialogTrigger>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Log Call Outcome</DialogTitle>
+            <DialogDescription>
+              Record the details of your call with {lead.companyName}.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <FormField
                 control={form.control}
-                name="notInterestedReason"
+                name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reason</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a reason" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="already-has-provider">Already has a provider</SelectItem>
-                        <SelectItem value="not-a-good-fit">Not a good fit for service</SelectItem>
-                        <SelectItem value="no-response">No response / Voicemail</SelectItem>
-                        <SelectItem value="bad-timing">Bad timing</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Call Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Enter notes from the call..." {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
-
-            {outcome === 'interested' && (
-              <div className="space-y-4 rounded-md border p-4">
-                  <DialogDescription>
-                    The lead is interested. Capture their details and book a follow-up meeting.
-                  </DialogDescription>
-                   <FormField
-                    control={form.control}
-                    name="contactName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Person Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Jane Doe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contactTitle"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Head of Logistics" {...field} />
-                        </FormControl>
-                        <FormMessage />
+              <FormField
+                control={form.control}
+                name="outcome"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Outcome</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex space-x-4"
+                      >
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="interested" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Interested</FormLabel>
                         </FormItem>
-                    )}
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="not-interested" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Not Interested</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {outcome === 'not-interested' && (
+                <FormField
+                  control={form.control}
+                  name="notInterestedReason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a reason" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="already-has-provider">Already has a provider</SelectItem>
+                          <SelectItem value="not-a-good-fit">Not a good fit for service</SelectItem>
+                          <SelectItem value="no-response">No response / Voicemail</SelectItem>
+                          <SelectItem value="bad-timing">Bad timing</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {outcome === 'interested' && (
+                <div className="space-y-4 rounded-md border p-4">
+                    <DialogDescription>
+                      The lead is interested. Capture their details and book a follow-up meeting.
+                    </DialogDescription>
+                    <FormField
+                      control={form.control}
+                      name="contactName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Contact Person Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Jane Doe" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                   <FormField
-                    control={form.control}
-                    name="contactEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input placeholder="jane.d@example.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField
-                    control={form.control}
-                    name="contactPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input placeholder="123-456-7890" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                <Button type="button" onClick={handleSetAppointment} className="w-full">
-                  Set Appointment
-                </Button>
-              </div>
-            )}
-            
-            <DialogFooter>
-                <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Logging...' : 'Log Call'}
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                    <FormField
+                      control={form.control}
+                      name="contactTitle"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                              <Input placeholder="Head of Logistics" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
+                    <FormField
+                      control={form.control}
+                      name="contactEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input placeholder="jane.d@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="contactPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl>
+                            <Input placeholder="123-456-7890" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  <Button type="button" onClick={() => setIsSchedulerOpen(true)} className="w-full" disabled={!contactName || !contactEmail}>
+                    Set Appointment
+                  </Button>
+                </div>
+              )}
+              
+              <DialogFooter>
+                  <DialogClose asChild>
+                      <Button type="button" variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? 'Logging...' : 'Log Call'}
+                  </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      <AppointmentScheduler 
+        isOpen={isSchedulerOpen}
+        onOpenChange={setIsSchedulerOpen}
+        lead={lead}
+        contactName={contactName}
+        contactEmail={contactEmail}
+        onAppointmentBooked={handleAppointmentBooked}
+      />
+    </>
   )
 }
