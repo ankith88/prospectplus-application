@@ -37,7 +37,7 @@ import type { Lead, Contact, Activity } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -77,6 +77,7 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -85,7 +86,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -93,6 +94,21 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  
+  useEffect(() => {
+    if (!initialLead) return;
+    setLoading(true);
+
+    Promise.all([
+      getLeadSubCollection<Contact>(initialLead.id, 'contacts'),
+      getLeadSubCollection<Activity>(initialLead.id, 'activity')
+    ]).then(([contacts, activity]) => {
+      setLead(prev => prev ? { ...prev, contacts, activity } : null);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [initialLead]);
+
 
   const handleCalculateScore = async () => {
     if (!lead) return;
@@ -294,7 +310,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     });
   };
 
-  if (loading || !lead) {
+  if (!lead) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -331,9 +347,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
             <div className="flex items-center gap-2 mt-1">
               <LeadStatusBadge status={lead.status} />
-              <p className="text-muted-foreground">
-                &bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}
-              </p>
+               {loading ? <Skeleton className="h-4 w-20" /> : <p className="text-muted-foreground">&bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>}
             </div>
           </div>
         </div>
@@ -544,7 +558,12 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               </Dialog>
             </CardHeader>
             <CardContent className="divide-y divide-border">
-              {lead.contacts && lead.contacts.length > 0 ? (
+              {loading ? (
+                 <div className="py-4 space-y-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                 </div>
+              ) : lead.contacts && lead.contacts.length > 0 ? (
                 lead.contacts.map((contact) => (
                   <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
                      <div className="absolute top-4 right-4">
@@ -652,6 +671,13 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               <CardTitle>Activity History</CardTitle>
             </CardHeader>
             <CardContent>
+             {loading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : (
               <ul className="space-y-4">
                 {lead.activity && lead.activity.map((item, index) => (
                   <li key={item.id} className="flex gap-4">
@@ -676,6 +702,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                   </li>
                 ))}
               </ul>
+              )}
             </CardContent>
           </Card>
         </div>

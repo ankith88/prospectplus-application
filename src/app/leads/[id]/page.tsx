@@ -3,7 +3,6 @@
 import { notFound } from 'next/navigation'
 import { getLeadFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
-import { Loader } from '@/components/ui/loader'
 import type { Lead } from '@/lib/types'
 
 export default async function LeadProfilePage({
@@ -11,7 +10,7 @@ export default async function LeadProfilePage({
 }: {
   params: { id: string }
 }) {
-  const lead: Lead | null = await getLeadFromFirebase(id);
+  const lead: Lead | null = await getLeadFromFirebase(id, false);
 
   if (!lead) {
     notFound();
