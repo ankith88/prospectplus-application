@@ -31,7 +31,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast'
 import type { Lead } from '@/lib/types'
 import { logCallActivity, updateLeadStatus, addContactToLead } from '@/services/firebase'
-import { AppointmentScheduler } from './appointment-scheduler'
 
 const formSchema = z.object({
   notes: z.string().min(1, 'Call notes are required.'),
@@ -61,7 +60,6 @@ interface LogCallDialogProps {
 
 export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [isSchedulerOpen, setIsSchedulerOpen] = useState(false)
   const { toast } = useToast()
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -79,16 +77,37 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
   const outcome = form.watch('outcome')
   const { contactName, contactEmail } = form.getValues();
 
-  const handleAppointmentBooked = async () => {
+  // Mock Calendly links for sales reps
+  const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
+    'Leonie Feata': 'https://calendly.com/leonie-feata-mock/meeting',
+    'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
+    'Default': 'https://calendly.com/mailplus-default/meeting',
+  };
+
+  const handleSetAppointment = async () => {
+    const values = form.getValues();
+    if (!values.contactName || !values.contactEmail) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Contact name and email are required to book an appointment.' });
+        return;
+    }
+    
     try {
         await updateLeadStatus(lead.id, 'Qualified');
         const updatedLead = { ...lead, status: 'Qualified' as const };
+        
         onCallLogged(updatedLead);
+        
         toast({
             title: 'Status Updated',
             description: 'Lead status changed to Qualified.',
         });
-        setIsSchedulerOpen(false); // Close scheduler
+
+        const salesRep = lead.salesRepAssigned || 'Default';
+        const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
+        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName)}&email=${encodeURIComponent(values.contactEmail)}`;
+
+        window.open(prefilledUrl, '_blank');
+        
         setIsOpen(false); // Close main dialog
      } catch (error) {
         console.error('Failed to update lead status:', error);
@@ -112,7 +131,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        // Status is updated after appointment is booked
+        // The status is now updated when the appointment is successfully set
       } else {
         newStatus = 'Unqualified';
         await updateLeadStatus(lead.id, newStatus);
@@ -305,7 +324,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                         </FormItem>
                       )}
                     />
-                  <Button type="button" onClick={() => setIsSchedulerOpen(true)} className="w-full" disabled={!contactName || !contactEmail}>
+                  <Button type="button" onClick={handleSetAppointment} className="w-full" disabled={!contactName || !contactEmail}>
                     Set Appointment
                   </Button>
                 </div>
@@ -323,14 +342,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
           </Form>
         </DialogContent>
       </Dialog>
-      <AppointmentScheduler 
-        isOpen={isSchedulerOpen}
-        onOpenChange={setIsSchedulerOpen}
-        lead={lead}
-        contactName={contactName}
-        contactEmail={contactEmail}
-        onAppointmentBooked={handleAppointmentBooked}
-      />
     </>
   )
 }
