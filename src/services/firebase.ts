@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -143,20 +144,24 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         };
         
         if (!summary) {
-            const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
-            const contactsSnapshot = await getSubCollectionDocs(contactsRef);
-            transformedLead.contacts = contactsSnapshot.docs.map(contactDoc => ({
-              id: contactDoc.id,
-              ...contactDoc.data()
-            } as Contact));
-            transformedLead.contactCount = transformedLead.contacts.length;
+            try {
+                const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
+                const contactsSnapshot = await getSubCollectionDocs(contactsRef);
+                transformedLead.contacts = contactsSnapshot.docs.map(contactDoc => ({
+                  id: contactDoc.id,
+                  ...contactDoc.data()
+                } as Contact));
+                transformedLead.contactCount = transformedLead.contacts.length;
 
-            const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
-            const activitySnapshot = await getSubCollectionDocs(activityRef);
-            transformedLead.activity = activitySnapshot.docs.map(activityDoc => ({
-              id: activityDoc.id,
-              ...activityDoc.data()
-            } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
+                const activitySnapshot = await getSubCollectionDocs(activityRef);
+                transformedLead.activity = activitySnapshot.docs.map(activityDoc => ({
+                  id: activityDoc.id,
+                  ...activityDoc.data()
+                } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            } catch (e) {
+                console.log(e);
+            }
         }
 
         return transformedLead;
@@ -282,4 +287,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase };
