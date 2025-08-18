@@ -389,7 +389,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                 <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                         <Phone className="mr-2 h-4 w-4" />
-                        Log a Call
+                        Log Call Outcome
                     </DropdownMenuItem>
                 </LogCallDialog>
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
@@ -563,7 +563,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               </div>
             </CardContent>
           </Card>
-
+          
           <Card>
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
