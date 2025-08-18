@@ -341,7 +341,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     : 'No address available';
 
   const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-  const callNumber = primaryContact?.phone || lead.customerPhone;
 
   return (
     <>
@@ -370,17 +369,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {callNumber ? (
-            <Button onClick={() => handleAirCallClick(callNumber, primaryContact?.name)}>
-                <Phone className="mr-2 h-4 w-4" />
-                Call with AirCall
-            </Button>
-          ) : (
-            <Button disabled>
-              <Phone className="mr-2 h-4 w-4" />
-              No Phone Available
-            </Button>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary">
@@ -850,3 +838,5 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     </>
   )
 }
+
+    
