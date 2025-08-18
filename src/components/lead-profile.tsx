@@ -564,33 +564,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             </CardContent>
           </Card>
 
-           <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <BookText className="w-5 h-5 text-muted-foreground" />
-                    Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                  {loading ? (
-                    <div className="py-4 space-y-4">
-                      <Skeleton className="h-12 w-full" />
-                    </div>
-                  ) : notes.length > 0 ? (
-                    notes.map(note => (
-                      <div key={note.id} className="text-sm border-l-2 pl-4">
-                        <p className="whitespace-pre-wrap">{note.content}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {new Date(note.date).toLocaleString()} by {note.author}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
-                  )}
-              </CardContent>
-            </Card>
-
           <Card>
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
@@ -703,6 +676,33 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                   </div>
                 ))
               }
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <BookText className="w-5 h-5 text-muted-foreground" />
+                  Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {loading ? (
+                  <div className="py-4 space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : notes.length > 0 ? (
+                  notes.map(note => (
+                    <div key={note.id} className="text-sm border-l-2 pl-4">
+                      <p className="whitespace-pre-wrap">{note.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(note.date).toLocaleString()} by {note.author}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
+                )}
             </CardContent>
           </Card>
 
