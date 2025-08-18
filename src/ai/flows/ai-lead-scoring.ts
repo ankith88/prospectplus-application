@@ -72,26 +72,20 @@ const aiSingleLeadScoringPrompt = ai.definePrompt({
   tools: [prospectWebsiteTool],
   prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a sales lead for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
-  Analyze the following lead profile, activity history, and website to determine how likely they are to need this specific service.
+  Analyze the lead's website to determine how likely they are to need this specific service.
   
   - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
-  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information.
+  - Use the prospectWebsite tool to gather information from the website to make your determination.
   - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
-  - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
   - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
-  Provide a reason for the assigned score, highlighting the key factors that influenced your assessment.
+  Provide a reason for the assigned score, highlighting the key factors that influenced your assessment. Your reasoning should be based ONLY on the website analysis.
 
   Your response must be in the format specified by the output schema.
   You MUST provide a leadId, a 'score' (number) and a 'reason' (string).
 
   Lead ID: {{{leadId}}}
-  Lead Profile: {{{leadProfile}}}
   Website: {{{websiteUrl}}}
-  Activity History:
-  {{#each activity}}
-  - {{this.type}} on {{this.date}}: {{this.notes}}
-  {{/each}}
   `,
 });
 
@@ -156,17 +150,16 @@ const aiLeadScoringPrompt = ai.definePrompt({
   tools: [getLeadsTool, prospectWebsiteTool],
   prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a batch of sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
-  For each lead in the provided list, analyze their profile, activity history, and website to determine how likely they are to need this specific service.
+  For each lead in the provided list, analyze their website to determine how likely they are to need this specific service.
   
   - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
-  - Use the information in the lead profile and from the website to make your determination. If a website is provided, use the prospectWebsite tool to gather additional information.
+  - Use the prospectWebsite tool to gather additional information from the website.
   - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
-  - Increase the score if the lead has recent, positive activity history (e.g., recent meetings, positive call notes).
   - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
 
-  Provide a reason for the assigned score for each lead, highlighting the key factors that influenced your assessment.
+  Provide a reason for the assigned score for each lead, highlighting the key factors that influenced your assessment. Your reasoning should be based ONLY on the website analysis.
 
   Your response must be in the format specified by the output schema, containing a list of scored leads. For each lead, you MUST provide a leadId, a 'score' (number), and a 'reason' (string).
   
@@ -174,12 +167,7 @@ const aiLeadScoringPrompt = ai.definePrompt({
   {{#each leads}}
   ---
   Lead ID: {{{this.leadId}}}
-  Lead Profile: {{{this.leadProfile}}}
   Website: {{{this.websiteUrl}}}
-  Activity History:
-  {{#each this.activity}}
-  - {{this.type}} on {{this.date}}: {{this.notes}}
-  {{/each}}
   ---
   {{/each}}
   `,
