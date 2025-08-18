@@ -300,16 +300,19 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     setLead(updatedLead);
   }
 
-  const handleAirCallClick = async () => {
-    if (!lead || !callNumber) return;
+  const handleAirCallClick = async (phoneNumber: string, contactName?: string) => {
+    if (!lead || !phoneNumber) return;
     try {
-        await logActivity(lead.id, { type: 'Call', notes: 'Initiated call with AirCall.' });
+        const note = contactName 
+            ? `Initiated call with ${contactName} via AirCall.`
+            : 'Initiated call via AirCall.';
+        await logActivity(lead.id, { type: 'Call', notes: note });
         addActivity({
             type: 'Call',
             date: new Date().toISOString(),
-            notes: 'Initiated call with AirCall.',
+            notes: note,
         });
-        window.location.href = `aircall:number:${callNumber}`;
+        window.location.href = `aircall:number:${phoneNumber}`;
     } catch (error) {
         console.error("Failed to log AirCall activity:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to log AirCall click." });
@@ -368,7 +371,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {callNumber ? (
-            <Button onClick={handleAirCallClick}>
+            <Button onClick={() => handleAirCallClick(callNumber, primaryContact?.name)}>
                 <Phone className="mr-2 h-4 w-4" />
                 Call with AirCall
             </Button>
@@ -515,7 +518,16 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <div className="flex items-center gap-1">
-                        <p className="font-medium break-all">{lead.customerPhone ?? 'N/A'}</p>
+                        {lead.customerPhone ? (
+                          <a
+                            onClick={(e) => { e.preventDefault(); handleAirCallClick(lead.customerPhone!); }}
+                            className="font-medium text-primary hover:underline cursor-pointer break-all"
+                          >
+                            {lead.customerPhone}
+                          </a>
+                        ) : (
+                          <p className="font-medium">N/A</p>
+                        )}
                         {lead.customerPhone && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
@@ -647,9 +659,12 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                     </div>
                     <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
                       <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline break-all">
-                        {contact.phone}
-                      </a>
+                       <a
+                          onClick={(e) => { e.preventDefault(); handleAirCallClick(contact.phone, contact.name); }}
+                          className="text-primary hover:underline cursor-pointer break-all"
+                        >
+                          {contact.phone}
+                        </a>
                     </div>
                   </div>
                 ))
