@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { Calendar as CalendarIcon, Clock, User, Mail, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import type { Lead } from '@/lib/types'
 import { logActivity } from '@/services/firebase'
 import { cn } from '@/lib/utils'
 import { Loader } from './ui/loader'
+import { getAvailability } from '@/ai/flows/get-availability-tool'
 
 interface AppointmentSchedulerProps {
   isOpen: boolean
@@ -27,13 +28,6 @@ interface AppointmentSchedulerProps {
   contactEmail: string
   onAppointmentBooked: () => void
 }
-
-// Mock availability for different sales reps
-const MOCKED_AVAILABILITY: { [key: string]: string[] } = {
-  'Leonie Feata': ['09:00', '09:30', '10:00', '10:30', '14:00', '14:30'],
-  'Luke Forbes': ['11:00', '11:30', '12:00', '15:00', '15:30', '16:00'],
-  'Default': ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'],
-};
 
 export function AppointmentScheduler({
   isOpen,
@@ -47,10 +41,40 @@ export function AppointmentScheduler({
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [step, setStep] = useState<'schedule' | 'confirm' | 'booked'>('schedule')
   const [isLoading, setIsLoading] = useState(false)
+  const [isFetchingAvailability, setIsFetchingAvailability] = useState(false)
+  const [timeSlots, setTimeSlots] = useState<string[]>([])
   const { toast } = useToast()
 
   const salesRep = lead.salesRepAssigned || 'Default'
-  const timeSlots = MOCKED_AVAILABILITY[salesRep] || MOCKED_AVAILABILITY['Default']
+  
+  const fetchAvailability = useCallback(async (selectedDate: Date) => {
+    if (!salesRep) return
+    setIsFetchingAvailability(true)
+    try {
+        const result = await getAvailability({ 
+            salesRepName: salesRep, 
+            date: selectedDate.toISOString() 
+        });
+        setTimeSlots(result.timeSlots);
+    } catch (error) {
+        console.error("Failed to fetch availability:", error)
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Could not fetch available time slots.",
+        })
+        setTimeSlots([]);
+    } finally {
+        setIsFetchingAvailability(false)
+    }
+  }, [salesRep, toast]);
+
+  useEffect(() => {
+    if (date) {
+        fetchAvailability(date)
+    }
+  }, [date, fetchAvailability]);
+
 
   const handleDateSelect = (selectedDate: Date | undefined) => {
     setDate(selectedDate)
@@ -128,18 +152,26 @@ export function AppointmentScheduler({
           <h3 className="text-lg font-medium mb-2">
             Select a Time
           </h3>
-          {date ? (
-            <div className="grid grid-cols-3 gap-2">
-              {timeSlots.map((time) => (
-                <Button
-                  key={time}
-                  variant="outline"
-                  onClick={() => handleTimeSelect(time)}
-                >
-                  {time}
-                </Button>
-              ))}
-            </div>
+          {isFetchingAvailability ? (
+             <div className="h-full flex items-center justify-center">
+                <Loader />
+             </div>
+          ) : date ? (
+             timeSlots.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                {timeSlots.map((time) => (
+                    <Button
+                    key={time}
+                    variant="outline"
+                    onClick={() => handleTimeSelect(time)}
+                    >
+                    {time}
+                    </Button>
+                ))}
+                </div>
+             ) : (
+                <p className="text-sm text-muted-foreground">No available slots on this day.</p>
+             )
           ) : (
             <p className="text-sm text-muted-foreground">Please select a date first.</p>
           )}
@@ -201,7 +233,7 @@ export function AppointmentScheduler({
   )
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => { e.preventDefault(); }}>
         {step === 'schedule' && renderScheduler()}
         {step === 'confirm' && renderConfirmation()}
