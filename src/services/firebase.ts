@@ -6,8 +6,8 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity } from '@/lib/types';
-import { collection, getDocs as getFirestoreDocs, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
+import { collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
     try {
@@ -104,7 +104,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   try {
     console.log(`Fetching leads from Firebase (summary: ${summary})...`);
     const leadsRef = collection(firestore, 'leads');
-    const snapshot = await getFirestoreDocs(leadsRef);
+    const snapshot = await getSubCollectionDocs(leadsRef);
 
     if (snapshot.empty) {
       console.log("No leads found in Firebase.");
@@ -175,7 +175,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
-async function getLeadSubCollection<T extends Contact | Activity>(leadId: string, collectionName: 'contacts' | 'activity'): Promise<T[]> {
+async function getLeadSubCollection<T extends Contact | Activity | Note>(leadId: string, collectionName: 'contacts' | 'activity' | 'notes'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
     const snapshot = await getSubCollectionDocs(ref);
@@ -184,8 +184,8 @@ async function getLeadSubCollection<T extends Contact | Activity>(leadId: string
       ...doc.data()
     } as T));
 
-    if (collectionName === 'activity') {
-      (items as Activity[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (collectionName === 'activity' || collectionName === 'notes') {
+      (items as (Activity[] | Note[])).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     
     return items;
@@ -249,6 +249,29 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<Note> {
+    try {
+        const notesRef = collection(firestore, 'leads', leadId, 'notes');
+        const newNote = {
+            ...noteData,
+            date: new Date().toISOString()
+        };
+        const docRef = await addDoc(notesRef, newNote);
+        
+        await logActivity(leadId, { 
+            type: 'Update', 
+            notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
+        });
+
+        console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
+        return { ...newNote, id: docRef.id };
+    } catch (error) {
+        console.error(`Failed to log note for lead ${leadId}:`, error);
+        throw new Error('Failed to log note in Firebase');
+    }
+}
+
+
 async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
@@ -308,4 +331,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection };

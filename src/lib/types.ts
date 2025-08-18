@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -13,6 +14,13 @@ export interface Activity {
   date: string
   duration?: string // e.g., "5m 32s"
   notes: string
+}
+
+export interface Note {
+    id: string;
+    date: string;
+    author: string;
+    content: string;
 }
 
 export interface Contact {

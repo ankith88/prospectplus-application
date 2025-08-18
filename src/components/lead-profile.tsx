@@ -31,9 +31,11 @@ import {
   MapPin,
   Info,
   Search,
+  BookText,
+  FileText,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
-import type { Lead, Contact, Activity } from '@/lib/types'
+import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -72,6 +74,7 @@ import {
 import { AddContactForm } from '@/components/add-contact-form'
 import { EditContactForm } from '@/components/edit-contact-form'
 import { LogCallDialog } from '@/components/log-call-dialog'
+import { LogNoteDialog } from '@/components/log-note-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
@@ -81,6 +84,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [userScript, setUserScript] = useState('');
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
@@ -101,9 +105,11 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
 
     Promise.all([
       getLeadSubCollection<Contact>(initialLead.id, 'contacts'),
-      getLeadSubCollection<Activity>(initialLead.id, 'activity')
-    ]).then(([contacts, activity]) => {
+      getLeadSubCollection<Activity>(initialLead.id, 'activity'),
+      getLeadSubCollection<Note>(initialLead.id, 'notes'),
+    ]).then(([contacts, activity, notes]) => {
       setLead(prev => prev ? { ...prev, contacts, activity } : null);
+      setNotes(notes);
     }).finally(() => {
       setLoading(false);
     });
@@ -208,6 +214,15 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         setLead({ ...lead, activity: updatedActivities });
     }
   };
+
+  const handleNoteLogged = (newNote: Note) => {
+    setNotes(prev => [newNote, ...prev]);
+    addActivity({
+        type: 'Update',
+        date: newNote.date,
+        notes: `Note added: ${newNote.content.substring(0, 50)}...`
+    })
+  }
   
   const handleContactAdded = (newContact: any) => {
     if (lead) {
@@ -363,12 +378,28 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               No Phone Available
             </Button>
           )}
-          <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
-            <Button variant="secondary">
-                <ClipboardEdit className="mr-2 h-4 w-4" />
-                Log an Activity
-            </Button>
-          </LogCallDialog>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary">
+                  <ClipboardEdit className="mr-2 h-4 w-4" />
+                  Log an Activity
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <Phone className="mr-2 h-4 w-4" />
+                        Log a Call
+                    </DropdownMenuItem>
+                </LogCallDialog>
+                 <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Log a Note
+                    </DropdownMenuItem>
+                </LogNoteDialog>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -532,6 +563,33 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               </div>
             </CardContent>
           </Card>
+
+           <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <BookText className="w-5 h-5 text-muted-foreground" />
+                    Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  {loading ? (
+                    <div className="py-4 space-y-4">
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : notes.length > 0 ? (
+                    notes.map(note => (
+                      <div key={note.id} className="text-sm border-l-2 pl-4">
+                        <p className="whitespace-pre-wrap">{note.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(note.date).toLocaleString()} by {note.author}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
+                  )}
+              </CardContent>
+            </Card>
 
           <Card>
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
