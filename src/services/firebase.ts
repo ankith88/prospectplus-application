@@ -230,6 +230,20 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
   }
 }
 
+async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void> {
+  try {
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, {
+      avatarUrl: avatarUrl,
+    });
+    await logActivity(leadId, { type: 'Update', notes: `Lead avatar updated.` });
+    console.log(`Lead ${leadId} avatar updated.`);
+  } catch (error) {
+    console.error(`Failed to update avatar for lead ${leadId}:`, error);
+    throw new Error('Failed to update lead avatar in Firebase');
+  }
+}
+
 async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
@@ -331,4 +345,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };

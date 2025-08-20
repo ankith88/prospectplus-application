@@ -4,7 +4,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { addContactToLead } from '@/services/firebase';
+import { addContactToLead, updateLeadAvatar } from '@/services/firebase';
 import { z } from 'genkit';
 
 const SocialLinksSchema = z.object({
@@ -21,6 +21,7 @@ const ContactSchema = z.object({
 });
 
 const ProspectWebsiteOutputSchema = z.object({
+  logoUrl: z.string().optional().describe("The URL of the company's logo found on the website."),
   socialLinks: SocialLinksSchema.optional().describe("Social media links found on the website."),
   contacts: z.array(ContactSchema).optional().describe("Contacts found on the website."),
   siteAnalysis: z.string().optional().describe("A brief analysis of the website content for shipping-related keywords."),
@@ -57,6 +58,7 @@ export const prospectWebsiteTool = ai.defineTool(
           email: 'jane.s@123buynow.com.au',
         },
       ];
+      const logoUrl = 'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png';
 
       // Save contacts to Firebase
       for (const contact of foundContacts) {
@@ -70,8 +72,12 @@ export const prospectWebsiteTool = ai.defineTool(
           });
         }
       }
+      
+      // Update avatar in Firebase
+      await updateLeadAvatar(leadId, logoUrl);
 
       return {
+        logoUrl,
         socialLinks: {
           linkedIn: 'https://linkedin.com/company/123-buy-now',
           twitter: 'https://x.com/123buynow',
@@ -83,6 +89,7 @@ export const prospectWebsiteTool = ai.defineTool(
     
     // Return empty objects if no specific match
     return {
+      logoUrl: undefined,
       socialLinks: {},
       contacts: [],
       siteAnalysis: "No specific shipping-related keywords found on the website.",

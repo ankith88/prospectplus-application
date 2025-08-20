@@ -149,6 +149,11 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             leadId: lead.id,
             websiteUrl: lead.websiteUrl,
         });
+        
+        if (result.logoUrl) {
+          setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
+          toast({ title: "Logo Found!", description: "Company logo has been updated." });
+        }
 
         if (result.contacts && result.contacts.length > 0) {
             let newContactsAdded = 0;
@@ -681,7 +686,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
               }
             </CardContent>
           </Card>
-
+          
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -838,5 +843,3 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     </>
   )
 }
-
-    
