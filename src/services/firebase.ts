@@ -25,6 +25,15 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
     }
 }
 
+function safeGetStatus(status: any): LeadStatus {
+    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
+    if (validStatuses.includes(status)) {
+        return status;
+    }
+    return 'New';
+}
+
+
 async function getLeadFromFirebase(leadId: string, includeSubCollections = true): Promise<Lead | null> {
     try {
         console.log(`Fetching lead ${leadId} from Firebase...`);
@@ -53,7 +62,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           id: docSnapshot.id,
           entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
-          status: (data.customerStatus || 'New') as LeadStatus,
+          status: safeGetStatus(data.customerStatus),
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           address: address,
@@ -116,7 +125,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           id: docSnapshot.id,
           entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
-          status: (data.customerStatus || 'New') as LeadStatus,
+          status: safeGetStatus(data.customerStatus),
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
           profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           address: address,
@@ -244,7 +253,7 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         const notesRef = collection(firestore, 'leads', leadId, 'notes');
         const newNote = {
             ...noteData,
-            date: new Date().toISOString()
+            date: new new Date().toISOString()
         };
         const docRef = await addDoc(notesRef, newNote);
         
