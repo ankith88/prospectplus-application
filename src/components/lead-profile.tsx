@@ -220,6 +220,8 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         };
         const updatedActivities = [activityWithId, ...(lead.activity || [])];
         setLead({ ...lead, activity: updatedActivities });
+        // Also log to firebase
+        logActivity(lead.id, newActivity);
     }
   };
 
