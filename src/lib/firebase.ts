@@ -6,13 +6,12 @@ import { getFirestore, Firestore } from "firebase/firestore";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
-    measurementId: "YOUR_MEASUREMENT_ID"
+    projectId: "mailplus-outbound-leads-crm",
+    appId: "1:683616418101:web:a4cdcb614f438df146747c",
+    storageBucket: "mailplus-outbound-leads-crm.firebasestorage.app",
+    apiKey: "AIzaSyBjmbHw0qCZeyZLnTC3k7mpd4-wYscNXBc",
+    authDomain: "mailplus-outbound-leads-crm.firebaseapp.com",
+    messagingSenderId: "683616418101",
 };
 
 let app: FirebaseApp;
