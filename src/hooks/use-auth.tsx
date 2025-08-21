@@ -57,21 +57,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const unsubscribe = onAuthStateChanged(authInstance, (user) => {
                 setUser(user);
                 setLoading(false);
-                if (!user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
-                    router.push('/signin');
-                }
             });
 
             return () => unsubscribe();
         } else {
             setLoading(false);
             console.error("Firebase app not initialized. Auth functionality will not work.");
-            // If on a protected route, redirect to signin
-            if (window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
-                router.push('/signin');
-            }
         }
-    }, [router]);
+    }, []);
+
+    useEffect(() => {
+        if (!loading && !user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
+            router.push('/signin');
+        }
+    }, [user, loading, router]);
+
 
     const signIn = (email: string, pass: string) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
