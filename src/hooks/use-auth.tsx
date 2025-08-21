@@ -18,9 +18,9 @@ import {
     updateProfile,
     Auth,
 } from 'firebase/auth';
-import { app } from '@/lib/firebase';
+import { app, firestore } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-import { createUserInFirestore } from '@/services/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface UserDetails {
     firstName: string;
@@ -85,19 +85,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         const createdUser = userCredential.user;
-
         const displayName = `${details.firstName} ${details.lastName}`;
 
-        // Update profile and create firestore entry in parallel
-        await Promise.all([
-            updateProfile(createdUser, { displayName }),
-            createUserInFirestore(createdUser.uid, {
+        try {
+            // Update profile and create firestore entry
+            await updateProfile(createdUser, { displayName });
+            
+            const userDocRef = doc(firestore, "users", createdUser.uid);
+            await setDoc(userDocRef, {
                 email,
                 firstName: details.firstName,
                 lastName: details.lastName,
                 phoneNumber: details.phoneNumber,
-            })
-        ]);
+            });
+             console.log(`User document created in Firestore for UID: ${createdUser.uid}`);
+
+        } catch (error) {
+            console.error('Error creating user profile or document:', error);
+            // Optionally, you might want to delete the user from Auth if the DB write fails
+            // await createdUser.delete();
+            throw new Error('Failed to save user details.');
+        }
+
 
         // Manually update the user object to reflect the new display name immediately
         const updatedUser = { ...createdUser, displayName } as User;
