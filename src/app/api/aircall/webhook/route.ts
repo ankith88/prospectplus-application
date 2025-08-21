@@ -75,15 +75,15 @@ export async function POST(request: NextRequest) {
   const signature = headersList.get('X-Aircall-Signature');
   const rawBody = await request.text();
 
-  if (!signature) {
-    console.warn('Received webhook without signature.');
-    return new NextResponse('Signature missing', { status: 401 });
-  }
-
-  // AirCall's test webhook sends a different signature format
+  // AirCall's test webhook sends a different signature format, handle it first.
   if (rawBody.includes('"event": "ping"')) {
      console.log('Received ping from AirCall. Responding with 200 OK.');
      return new NextResponse('OK', { status: 200 });
+  }
+
+  if (!signature) {
+    console.warn('Received webhook without signature.');
+    return new NextResponse('Signature missing', { status: 401 });
   }
 
   // Bypassing signature verification if a specific header is present (for testing)
