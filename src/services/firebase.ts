@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -346,8 +345,7 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 
 async function createUserInFirestore(uid: string, userData: { email: string; firstName: string; lastName: string; phoneNumber: string; }) {
     try {
-        const userRef = doc(firestore, 'users', uid);
-        await setDoc(userRef, userData);
+        await setDoc(doc(firestore, "users", uid), userData);
         console.log(`User document created in Firestore for UID: ${uid}`);
     } catch (error) {
         console.error('Error creating user document in Firestore:', error);
@@ -357,3 +355,5 @@ async function createUserInFirestore(uid: string, userData: { email: string; fir
 
 
 export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, createUserInFirestore };
+
+    
