@@ -29,7 +29,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadSalesRep } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserPlus, UserX, MapPin } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -38,9 +38,7 @@ import { MapModal } from '@/components/map-modal'
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [myLeads, setMyLeads] = useState<Lead[]>([]);
-  const [unassignedLeads, setUnassignedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const router = useRouter();
@@ -70,44 +68,13 @@ export default function LeadsPage() {
   }, [user, authLoading, router, toast]);
 
   useEffect(() => {
-    if (user && allLeads.length > 0) {
-      setMyLeads(allLeads.filter(lead => lead.salesRepAssigned === user.displayName));
-      setUnassignedLeads(allLeads.filter(lead => !lead.salesRepAssigned));
+    if (user?.displayName && allLeads.length > 0) {
+      const userLeads = allLeads.filter(lead => lead.salesRepAssigned === user.displayName);
+      setMyLeads(userLeads);
+    } else {
+        setMyLeads([]);
     }
   }, [allLeads, user]);
-
-  const handleAssign = async (leadId: string, salesRep: string | null) => {
-    try {
-      await updateLeadSalesRep(leadId, salesRep);
-      const updatedLeads = allLeads.map(lead =>
-        lead.id === leadId ? { ...lead, salesRepAssigned: salesRep || undefined } : lead
-      );
-      setAllLeads(updatedLeads);
-    } catch (error) {
-      console.error("Failed to assign lead:", error);
-    }
-  };
-
-  const handleBulkAssign = async () => {
-    if (!user?.displayName) {
-      toast({ variant: "destructive", title: "Error", description: "You must be logged in to assign leads." });
-      return;
-    }
-    try {
-      const promises = selectedLeads.map(leadId => updateLeadSalesRep(leadId, user.displayName!));
-      await Promise.all(promises);
-
-      const updatedLeads = allLeads.map(lead =>
-        selectedLeads.includes(lead.id) ? { ...lead, salesRepAssigned: user.displayName! } : lead
-      );
-      setAllLeads(updatedLeads);
-      toast({ title: "Success", description: `${selectedLeads.length} lead(s) assigned to you.` });
-      setSelectedLeads([]);
-    } catch (error) {
-      console.error("Failed to bulk assign leads:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to assign leads." });
-    }
-  }
 
   const handleBulkUnassign = async () => {
     try {
@@ -125,23 +92,7 @@ export default function LeadsPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
     }
   };
-
-  const handleSelectLead = (leadId: string, checked: boolean | 'indeterminate') => {
-    if (checked) {
-      setSelectedLeads(prev => [...prev, leadId]);
-    } else {
-      setSelectedLeads(prev => prev.filter(id => id !== leadId));
-    }
-  }
   
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked) {
-      setSelectedLeads(unassignedLeads.map(l => l.id));
-    } else {
-      setSelectedLeads([]);
-    }
-  }
-
   const handleSelectMyLead = (leadId: string, checked: boolean | 'indeterminate') => {
     if (checked) {
       setSelectedMyLeads(prev => [...prev, leadId]);
@@ -175,8 +126,8 @@ export default function LeadsPage() {
     <>
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Outbound Leads</h1>
-        <p className="text-muted-foreground">Manage and engage with your synced leads.</p>
+        <h1 className="text-3xl font-bold tracking-tight">My Assigned Leads</h1>
+        <p className="text-muted-foreground">Engage with your assigned leads.</p>
       </header>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -264,7 +215,7 @@ export default function LeadsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
+                              <DropdownMenuItem onClick={() => updateLeadSalesRep(lead.id, null)}>
                                 Unassign
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -285,120 +236,6 @@ export default function LeadsPage() {
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>All Leads</CardTitle>
-            {selectedLeads.length > 0 && (
-                <Button onClick={handleBulkAssign}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Assign {selectedLeads.length} Lead(s) to Me
-                </Button>
-            )}
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8">
-                      <Checkbox
-                          checked={unassignedLeads.length > 0 && selectedLeads.length === unassignedLeads.length}
-                          onCheckedChange={handleSelectAll}
-                          aria-label="Select all"
-                      />
-                  </TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead>Sales Rep</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead className="w-[50px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
-                  </TableRow>
-                ) : allLeads.length > 0 ? (
-                  allLeads.map((lead) => {
-                    const addressString = formatAddress(lead.address);
-                    return (
-                      <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
-                        <TableCell>
-                            <Checkbox
-                                checked={selectedLeads.includes(lead.id)}
-                                onCheckedChange={(checked) => handleSelectLead(lead.id, checked)}
-                                aria-label={`Select lead ${lead.companyName}`}
-                            />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                            <Avatar>
-                                <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-                                <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex flex-col">
-                              <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                              disabled={addressString === 'N/A'}
-                              className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="View on map"
-                            >
-                              <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                            </button>
-                            <span>{addressString}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <LeadStatusBadge status={lead.status} />
-                        </TableCell>
-                        <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                        <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
-                        <TableCell>
-                          {lead.industryCategory}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => handleAssign(lead.id, user!.displayName)}>
-                                  Assign to Me
-                                </DropdownMenuItem>
-                                {lead.salesRepAssigned && (
-                                  <DropdownMenuItem onClick={() => handleAssign(lead.id, null)}>
-                                    Unassign
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                ) : (
-                  <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                          No leads found in the database.
-                      </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
      <MapModal
         isOpen={!!selectedAddress}
@@ -408,5 +245,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
