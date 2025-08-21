@@ -55,7 +55,7 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const fetchedLeads = await getLeadsTool();
+        const fetchedLeads = await getLeadsTool({});
         setAllLeads(fetchedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
