@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
   try {
     const data = JSON.parse(rawBody);
     console.log(`Received webhook for event: ${data.event}`);
+    console.log(`Raw body: ${rawBody}`);
+    console.log(`Parsed data:`, data);
+
 
     // We only care about when a call is finished and notes are added.
     if (data.event === 'call.ended' || data.event === 'call.commented') {
