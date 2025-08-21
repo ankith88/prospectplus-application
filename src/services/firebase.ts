@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -27,6 +28,12 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
 
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
+    if (typeof status === 'string') {
+        const cleanStatus = status.replace('SUSPECT-', '');
+        if (validStatuses.includes(cleanStatus as LeadStatus)) {
+            return cleanStatus as LeadStatus;
+        }
+    }
     if (validStatuses.includes(status)) {
         return status;
     }
@@ -64,7 +71,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           companyName: data.companyName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -127,7 +134,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           companyName: data.companyName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,

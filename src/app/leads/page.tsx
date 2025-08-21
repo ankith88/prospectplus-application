@@ -653,5 +653,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
