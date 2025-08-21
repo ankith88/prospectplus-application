@@ -6,7 +6,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
     try {
@@ -68,20 +68,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-          const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
-          const contactsSnapshot = await getSubCollectionDocs(contactsRef);
-          transformedLead.contacts = contactsSnapshot.docs.map(contactDoc => ({
-            id: contactDoc.id,
-            ...contactDoc.data()
-          } as Contact));
-
-          const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
-          const activitySnapshot = await getSubCollectionDocs(activityRef);
-          transformedLead.activity = activitySnapshot.docs.map(activityDoc => ({
-            id: activityDoc.id,
-            ...activityDoc.data()
-          } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          
+          transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
+          transformedLead.activity = await getLeadSubCollection<Activity>(docSnapshot.id, 'activity');
           transformedLead.contactCount = transformedLead.contacts.length;
         }
 
@@ -103,7 +91,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   try {
     console.log(`Fetching leads from Firebase (summary: ${summary})...`);
     const leadsRef = collection(firestore, 'leads');
-    const snapshot = await getSubCollectionDocs(leadsRef);
+    const snapshot = await getDocs(leadsRef);
 
     if (snapshot.empty) {
       console.log("No leads found in Firebase.");
@@ -145,20 +133,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         
         if (!summary) {
             try {
-                const contactsRef = collection(firestore, 'leads', docSnapshot.id, 'contacts');
-                const contactsSnapshot = await getSubCollectionDocs(contactsRef);
-                transformedLead.contacts = contactsSnapshot.docs.map(contactDoc => ({
-                  id: contactDoc.id,
-                  ...contactDoc.data()
-                } as Contact));
+                transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
                 transformedLead.contactCount = transformedLead.contacts.length;
-
-                const activityRef = collection(firestore, 'leads', docSnapshot.id, 'activity');
-                const activitySnapshot = await getSubCollectionDocs(activityRef);
-                transformedLead.activity = activitySnapshot.docs.map(activityDoc => ({
-                  id: activityDoc.id,
-                  ...activityDoc.data()
-                } as Activity)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                transformedLead.activity = await getLeadSubCollection<Activity>(docSnapshot.id, 'activity');
             } catch (e) {
                 console.log(e);
             }
@@ -177,7 +154,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 async function getLeadSubCollection<T extends Contact | Activity | Note>(leadId: string, collectionName: 'contacts' | 'activity' | 'notes'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
-    const snapshot = await getSubCollectionDocs(ref);
+    const snapshot = await getDocs(ref);
     const items = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
