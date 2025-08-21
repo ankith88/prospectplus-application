@@ -53,9 +53,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           id: docSnapshot.id,
           entityId: data.customerEntityId || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
-          status: (data.customerStatusId?.replace('SUSPECT-', '') || 'New') as LeadStatus,
+          status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatusId || 'New'}.`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -116,9 +116,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           id: docSnapshot.id,
           entityId: data.customerEntityId || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
-          status: (data.customerStatusId?.replace('SUSPECT-', '') || 'New') as LeadStatus,
+          status: (data.customerStatus?.replace('SUSPECT-', '') || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatusId || 'New'}.`,
+          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${data.customerStatus || 'New'}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -224,7 +224,7 @@ async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<voi
     try {
         const leadRef = doc(firestore, 'leads', leadId);
         await updateDoc(leadRef, {
-            customerStatusId: `SUSPECT-${status}`,
+            customerStatus: `SUSPECT-${status}`,
         });
         await logActivity(leadId, { type: 'Update', notes: `Status changed to ${status}` });
         console.log(`Lead ${leadId} status updated to ${status}`);
