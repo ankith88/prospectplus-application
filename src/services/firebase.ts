@@ -51,7 +51,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data.customerEntityId || docSnapshot.id,
+          entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
           status: (data.customerStatus || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
@@ -114,7 +114,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data.customerEntityId || docSnapshot.id,
+          entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: data.companyName || 'Unknown Company',
           status: (data.customerStatus || 'New') as LeadStatus,
           avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
@@ -322,3 +322,5 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 
 
 export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };
+
+    
