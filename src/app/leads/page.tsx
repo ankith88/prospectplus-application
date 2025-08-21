@@ -2,11 +2,6 @@
 "use client"
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
-import {
   Card,
   CardContent,
   CardHeader,
@@ -330,10 +325,6 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                          <Avatar>
-                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                          </Avatar>
                           <div className="flex flex-col">
                             <span className="font-medium group-hover:underline">{lead.companyName}</span>
                           </div>
@@ -438,10 +429,6 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                          <Avatar>
-                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                          </Avatar>
                           <div className="flex flex-col">
                             <span className="font-medium group-hover:underline">{lead.companyName}</span>
                           </div>
@@ -505,5 +492,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    

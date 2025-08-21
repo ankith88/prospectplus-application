@@ -42,7 +42,6 @@ import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { initiateCall } from '@/ai/flows/initiate-call-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -382,10 +381,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16">
-            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
-            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-          </Avatar>
           <div>
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
             <div className="flex items-center gap-2 mt-1">

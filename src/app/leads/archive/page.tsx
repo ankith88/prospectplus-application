@@ -2,11 +2,6 @@
 "use client"
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
-import {
   Card,
   CardContent,
   CardHeader,
@@ -174,10 +169,6 @@ export default function ArchivedLeadsPage() {
                     <TableRow key={lead.id}>
                       <TableCell>
                         <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
-                          <Avatar>
-                            <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo"/>
-                            <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
-                          </Avatar>
                           <div className="flex flex-col">
                             <span className="font-medium">{lead.companyName}</span>
                           </div>

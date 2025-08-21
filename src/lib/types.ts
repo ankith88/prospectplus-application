@@ -43,7 +43,7 @@ export interface Lead {
   entityId: string
   companyName: string
   status: LeadStatus
-  avatarUrl: string
+  avatarUrl?: string
   profile: string // This will be the text used for AI prompts
   activity?: Activity[]
   contacts?: Contact[]
