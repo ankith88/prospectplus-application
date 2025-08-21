@@ -90,8 +90,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             phoneNumber: details.phoneNumber,
         });
 
-        // To update the user state in this context
-        setUser({ ...user, displayName: `${details.firstName} ${details.lastName}` });
+        // Manually update the user object with the new display name to ensure the state is current
+        user.displayName = `${details.firstName} ${details.lastName}`;
+        setUser(user);
 
         return userCredential;
     }
