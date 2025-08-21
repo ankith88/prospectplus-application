@@ -1,7 +1,7 @@
 
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getFirestore, Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -21,24 +21,33 @@ const requiredConfig = [
 
 const missingConfig = requiredConfig.filter(key => !firebaseConfig[key as keyof typeof firebaseConfig]);
 
-let app;
+let app: FirebaseApp;
+let firestore: Firestore | null = null;
 
 if (missingConfig.length > 0) {
-    console.error(`ERROR: Missing Firebase config. Please add the following to your .env file: ${missingConfig.join(', ')}`);
-    // Prevent Firebase from initializing with a partial config
+    const errorMsg = `ERROR: Missing Firebase config. Please add the following to your .env file: ${missingConfig.join(', ')}`;
+    console.error(errorMsg);
     if (typeof window !== 'undefined') {
-      alert(`Missing Firebase configuration: ${missingConfig.join(', ')}. Please check your .env file.`);
+      // To avoid crashing the client-side, we don't throw an error here,
+      // but we ensure `app` is not initialized.
+      // A user-friendly message could be displayed elsewhere in the UI.
     }
 } else {
     // Initialize Firebase
     if (!getApps().length) {
-        app = initializeApp(firebaseConfig);
+        try {
+            app = initializeApp(firebaseConfig);
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+        }
     } else {
-        app = getApps()[0];
+        app = getApp();
     }
 }
 
+if (app!) {
+    firestore = getFirestore(app);
+}
 
-const firestore = app ? getFirestore(app) : null;
 
 export { app, firestore };

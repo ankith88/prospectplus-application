@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const unsubscribe = onAuthStateChanged(authInstance, (user) => {
                 setUser(user);
                 setLoading(false);
-                if (!user && window.location.pathname !== '/signup') {
+                if (!user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
                     router.push('/signin');
                 }
             });
@@ -65,7 +65,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return () => unsubscribe();
         } else {
             setLoading(false);
-            router.push('/signin');
+            console.error("Firebase app not initialized. Auth functionality will not work.");
+            // If on a protected route, redirect to signin
+            if (window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
+                router.push('/signin');
+            }
         }
     }, [router]);
 
@@ -96,9 +100,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ]);
 
         // Manually update the user object to reflect the new display name immediately
-        // as the user object from onAuthStateChanged might not be updated yet.
         const updatedUser = { ...createdUser, displayName } as User;
         setUser(updatedUser);
+        
+        router.push('/');
 
         return userCredential;
     }
