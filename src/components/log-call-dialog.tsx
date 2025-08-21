@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast'
 import type { Lead } from '@/lib/types'
 import { logCallActivity, updateLeadStatus, addContactToLead } from '@/services/firebase'
+import { sendToNetSuite } from '@/services/netsuite'
 
 const formSchema = z.object({
   notes: z.string().min(1, 'Call notes are required.'),
@@ -119,6 +120,64 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
      }
   }
 
+  const handleReferToLPO = async () => {
+    if (!form.formState.isValid) {
+      form.trigger();
+      toast({ variant: 'destructive', title: 'Error', description: 'Please fill in all required fields before referring to LPO.' });
+      return;
+    }
+
+    const values = form.getValues();
+    
+    try {
+      // 1. Send to NetSuite
+      await sendToNetSuite(lead);
+
+      // 2. Update status to 'LPO Review'
+      await updateLeadStatus(lead.id, 'LPO Review');
+
+      // 3. Log activity
+      const activityNotes = `Referred to LPO. Notes: ${values.notes}`;
+      await logCallActivity(lead.id, {
+        notes: activityNotes,
+        outcome: 'interested',
+      });
+      
+      // 4. Update local state
+      const updatedLead = {
+        ...lead,
+        status: 'LPO Review' as const,
+        activity: [
+          {
+            id: `activity-${Date.now()}`,
+            type: 'Call' as const,
+            date: new Date().toISOString(),
+            notes: activityNotes,
+          },
+          ...(lead.activity || [])
+        ]
+      };
+      onCallLogged(updatedLead);
+      
+      toast({
+        title: 'Success',
+        description: 'Lead has been referred to LPO and status updated to "LPO Review".',
+      });
+
+      // 5. Close dialog
+      setIsOpen(false);
+      form.reset();
+
+    } catch (error) {
+       console.error('Failed to refer lead to LPO:', error);
+       toast({
+           variant: 'destructive',
+           title: 'Error',
+           description: 'Failed to refer lead to LPO. Please try again.',
+       });
+    }
+  }
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       let updatedLead = { ...lead };
@@ -131,7 +190,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        // The status is now updated when the appointment is successfully set
+        // The status is now updated when the appointment is successfully set or referred to LPO
       } else {
         newStatus = 'Unqualified';
         await updateLeadStatus(lead.id, newStatus);
@@ -270,7 +329,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
               {outcome === 'interested' && (
                 <div className="space-y-4 rounded-md border p-4">
                     <DialogDescription>
-                      The lead is interested. Capture their details and book a follow-up meeting.
+                      The lead is interested. Capture their details and choose the next step.
                     </DialogDescription>
                     <FormField
                       control={form.control}
@@ -324,9 +383,14 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                         </FormItem>
                       )}
                     />
-                  <Button type="button" onClick={handleSetAppointment} className="w-full" disabled={!contactName || !contactEmail}>
-                    Set Appointment
-                  </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" onClick={handleReferToLPO} variant="secondary" disabled={form.formState.isSubmitting}>
+                            Refer to LPO
+                        </Button>
+                        <Button type="button" onClick={handleSetAppointment} disabled={!contactName || !contactEmail || form.formState.isSubmitting}>
+                            Set Appointment
+                        </Button>
+                    </div>
                 </div>
               )}
               
@@ -334,9 +398,11 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                   <DialogClose asChild>
                       <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Logging...' : 'Log Call'}
-                  </Button>
+                  {outcome === 'not-interested' && (
+                     <Button type="submit" disabled={form.formState.isSubmitting}>
+                        {form.formState.isSubmitting ? 'Logging...' : 'Log Call'}
+                     </Button>
+                  )}
               </DialogFooter>
             </form>
           </Form>

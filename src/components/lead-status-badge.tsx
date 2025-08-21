@@ -13,6 +13,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     Unqualified: "secondary",
     Won: "default",
     Lost: "destructive",
+    'LPO Review': 'default',
   }[status]
 
   const colorClass = {
@@ -22,6 +23,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     Unqualified: "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800",
     Won: "bg-primary text-primary-foreground",
     Lost: "bg-destructive text-destructive-foreground",
+    'LPO Review': 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800',
   }[status]
 
   return (
