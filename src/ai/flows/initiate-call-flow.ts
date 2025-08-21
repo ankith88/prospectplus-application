@@ -7,7 +7,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
 import { logActivity, getUserPhoneNumber } from '@/services/firebase';
 
 const InitiateCallInputSchema = z.object({
@@ -27,77 +26,8 @@ export type InitiateCallOutput = z.infer<typeof InitiateCallOutputSchema>;
 export async function initiateCall(
   input: InitiateCallInput
 ): Promise<InitiateCallOutput> {
-  return initiateCallFlow(input);
+  // This flow is now deprecated in favor of client-side aircall: protocol handling.
+  // This is a placeholder to prevent build errors from missing exports.
+  console.warn("initiateCall flow is deprecated and should not be used.");
+  return { success: false, error: "This function is deprecated." };
 }
-
-const initiateCallFlow = ai.defineFlow(
-  {
-    name: 'initiateCallFlow',
-    inputSchema: InitiateCallInputSchema,
-    outputSchema: InitiateCallOutputSchema,
-  },
-  async ({ phoneNumber, userDisplayName, leadId, contactName }) => {
-    const apiId = process.env.AIRCALL_API_ID;
-    const apiToken = process.env.AIRCALL_API_TOKEN;
-
-    if (!apiId || !apiToken) {
-        const errorMsg = "AirCall API ID or Token is not configured in environment variables.";
-        console.error(errorMsg);
-        return { success: false, error: errorMsg };
-    }
-
-    if (!userDisplayName) {
-        const errorMsg = "User display name is required to find the 'from' number.";
-        console.error(errorMsg);
-        return { success: false, error: errorMsg };
-    }
-
-    const fromNumber = await getUserPhoneNumber(userDisplayName);
-
-    if (!fromNumber) {
-        const errorMsg = `No phone number found in database for user "${userDisplayName}". Please check the user's profile.`;
-        console.error(errorMsg);
-        return { success: false, error: errorMsg };
-    }
-    
-    const base64Token = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
-    const headers = {
-        'Authorization': `Basic ${base64Token}`,
-        'Content-Type': 'application/json'
-    };
-
-    try {
-      // Dial the call directly using the from and to numbers.
-      const dialResponse = await fetch(`https://api.aircall.io/v1/calls`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-            from: fromNumber,
-            to: phoneNumber,
-            dialer_run_id: 'Studio Outbound' // Optional tag
-        })
-      });
-
-      if (!dialResponse.ok) {
-         const errorData = await dialResponse.json() as any;
-         console.error('AirCall API Error Response:', errorData);
-         const errorMessage = errorData?.error || `Failed to initiate call via AirCall API. Status: ${dialResponse.status}`;
-         return { success: false, error: errorMessage };
-      }
-
-      const note = contactName
-                ? `Initiated call with ${contactName} (${phoneNumber}) via AirCall.`
-                : `Initiated call to ${phoneNumber} via AirCall.`;
-      await logActivity(leadId, { type: 'Call', notes: note });
-
-
-      console.log(`Successfully initiated call to ${phoneNumber} from ${fromNumber}`);
-      return { success: true };
-
-    } catch (error: any) {
-      const errorMsg = error.message || 'An unexpected error occurred while initiating call via AirCall API.';
-      console.error('AirCall API Error:', errorMsg);
-      return { success: false, error: errorMsg };
-    }
-  }
-);

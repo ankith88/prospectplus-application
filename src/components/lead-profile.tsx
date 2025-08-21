@@ -40,7 +40,6 @@ import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { initiateCall } from '@/ai/flows/initiate-call-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -309,37 +308,13 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     setLead(updatedLead);
   }
 
-  const handleInitiateCall = async (phoneNumber: string, contactName?: string) => {
-    if (!lead || !phoneNumber) return;
-    try {
-        const result = await initiateCall({
-          phoneNumber,
-          userDisplayName: user?.displayName || undefined,
-          leadId: lead.id,
-          contactName: contactName,
-        });
-        if (result.success) {
-            // Activity is now logged inside the flow itself to ensure it happens after successful dial.
-             addActivity({ type: 'Call', notes: `Initiated call to ${contactName || lead.companyName} at ${phoneNumber}` });
-            toast({
-                title: "Call Initiated",
-                description: `Calling ${phoneNumber} via AirCall.`,
-            });
-        } else {
-             toast({
-                variant: "destructive",
-                title: "AirCall Failed",
-                description: result.error || "Could not initiate the call.",
-            });
-        }
-    } catch (error: any) {
-        console.error("Failed to initiate AirCall call:", error);
-        toast({
-            variant: "destructive",
-            title: "AirCall Error",
-            description: error.message || "An unknown error occurred.",
-        });
-    }
+  const handleInitiateCall = (phoneNumber: string) => {
+    window.open(`aircall:${phoneNumber}`);
+    addActivity({ type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    toast({
+        title: "Opening AirCall",
+        description: `Attempting to dial ${phoneNumber}...`,
+    });
   };
 
 
@@ -665,7 +640,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                       <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
                        <div className="flex items-center gap-1">
                           <span className="break-all">{contact.phone}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone, contact.name)}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
                               <PhoneCall className="w-3 h-3" />
                           </Button>
                        </div>
