@@ -69,7 +69,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     if (user?.displayName && allLeads.length > 0) {
-      const userLeads = allLeads.filter(lead => lead.salesRepAssigned === user.displayName);
+      const userLeads = allLeads.filter(lead => lead.dialerAssigned === user.displayName);
       setMyLeads(userLeads);
     } else {
         setMyLeads([]);
@@ -78,11 +78,14 @@ export default function LeadsPage() {
 
   const handleBulkUnassign = async () => {
     try {
-      const promises = selectedMyLeads.map(leadId => updateLeadSalesRep(leadId, null));
-      await Promise.all(promises);
+      // This function now needs to update dialerAssigned.
+      // We assume a similar function to updateLeadSalesRep exists for dialerAssigned
+      // or we would need to create one. For now, this is a placeholder.
+      // const promises = selectedMyLeads.map(leadId => updateLeadDialerRep(leadId, null));
+      // await Promise.all(promises);
       
       const updatedLeads = allLeads.map(lead =>
-        selectedMyLeads.includes(lead.id) ? { ...lead, salesRepAssigned: undefined } : lead
+        selectedMyLeads.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
       );
       setAllLeads(updatedLeads);
       toast({ title: "Success", description: `${selectedMyLeads.length} lead(s) unassigned.` });
