@@ -67,29 +67,14 @@ const initiateCallFlow = ai.defineFlow(
     };
 
     try {
-      // 1. Get the list of users to find an available user to make the call from
-      const usersResponse = await fetch('https://api.aircall.io/v1/users', { headers });
-      if (!usersResponse.ok) {
-        const errorData = await usersResponse.json();
-        throw new Error(`Failed to fetch AirCall users: ${JSON.stringify(errorData)}`);
-      }
-      const { users } = await usersResponse.json() as any;
-      const aircallUser = users.find((u:any) => u.available);
-
-      if (!aircallUser) {
-           const errorMsg = "No available AirCall users to initiate the call.";
-           console.error(errorMsg);
-           return { success: false, error: errorMsg };
-       }
-
-      // 2. Dial the call
+      // Dial the call directly using the from and to numbers.
       const dialResponse = await fetch(`https://api.aircall.io/v1/calls`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-            user_id: aircallUser.id,
-            to: phoneNumber,
             from: fromNumber,
+            to: phoneNumber,
+            dialer_run_id: 'Studio Outbound' // Optional tag
         })
       });
 
