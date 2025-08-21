@@ -14,12 +14,12 @@ const firebaseConfig = {
 };
 
 // Validate that all required environment variables are present
-const requiredConfig = [
+const requiredConfigKeys: (keyof typeof firebaseConfig)[] = [
     'apiKey', 'authDomain', 'projectId', 'storageBucket', 
     'messagingSenderId', 'appId'
 ];
 
-const missingConfig = requiredConfig.filter(key => !firebaseConfig[key as keyof typeof firebaseConfig]);
+const missingConfig = requiredConfigKeys.filter(key => !firebaseConfig[key]);
 
 let app: FirebaseApp;
 let firestore: Firestore | null = null;
@@ -27,27 +27,21 @@ let firestore: Firestore | null = null;
 if (missingConfig.length > 0) {
     const errorMsg = `ERROR: Missing Firebase config. Please add the following to your .env file: ${missingConfig.join(', ')}`;
     console.error(errorMsg);
-    if (typeof window !== 'undefined') {
-      // To avoid crashing the client-side, we don't throw an error here,
-      // but we ensure `app` is not initialized.
-      // A user-friendly message could be displayed elsewhere in the UI.
-    }
+    // Don't initialize app if config is missing
 } else {
     // Initialize Firebase
     if (!getApps().length) {
         try {
             app = initializeApp(firebaseConfig);
+            firestore = getFirestore(app);
         } catch (e) {
             console.error("Firebase initialization failed:", e);
         }
     } else {
         app = getApp();
+        firestore = getFirestore(app);
     }
 }
 
-if (app!) {
-    firestore = getFirestore(app);
-}
-
-
+// @ts-ignore
 export { app, firestore };
