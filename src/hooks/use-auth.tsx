@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const unsubscribe = onAuthStateChanged(authInstance, (user) => {
                 setUser(user);
                 setLoading(false);
-                if (!user) {
+                if (!user && window.location.pathname !== '/signup') {
                     router.push('/signin');
                 }
             });
@@ -75,24 +75,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const signUp = async (email: string, pass: string, details: UserDetails) => {
-        if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
-        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-        const { user } = userCredential;
-
-        await updateProfile(user, {
-            displayName: `${details.firstName} ${details.lastName}`,
-        });
+        if (!auth) {
+            throw new Error("Firebase Auth not initialized");
+        }
         
-        await createUserInFirestore(user.uid, {
-            email,
-            firstName: details.firstName,
-            lastName: details.lastName,
-            phoneNumber: details.phoneNumber,
-        });
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        const createdUser = userCredential.user;
 
-        // Manually update the user object with the new display name to ensure the state is current
-        user.displayName = `${details.firstName} ${details.lastName}`;
-        setUser(user);
+        const displayName = `${details.firstName} ${details.lastName}`;
+
+        // Update profile and create firestore entry in parallel
+        await Promise.all([
+            updateProfile(createdUser, { displayName }),
+            createUserInFirestore(createdUser.uid, {
+                email,
+                firstName: details.firstName,
+                lastName: details.lastName,
+                phoneNumber: details.phoneNumber,
+            })
+        ]);
+
+        // Manually update the user object to reflect the new display name immediately
+        // as the user object from onAuthStateChanged might not be updated yet.
+        const updatedUser = { ...createdUser, displayName } as User;
+        setUser(updatedUser);
 
         return userCredential;
     }
