@@ -33,12 +33,14 @@ import {
   Search,
   BookText,
   FileText,
+  PhoneCall,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { initiateCall } from '@/ai/flows/initiate-call-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -306,21 +308,37 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     setLead(updatedLead);
   }
 
-  const handleAirCallClick = (phoneNumber: string, contactName?: string) => {
+  const handleInitiateCall = async (phoneNumber: string, contactName?: string) => {
     if (!lead || !phoneNumber) return;
-    
-    const note = contactName 
-        ? `Initiated call with ${contactName} via AirCall.`
-        : `Initiated call with ${lead.companyName} via AirCall.`;
-
-    logActivity(lead.id, { type: 'Call', notes: note })
-        .catch(error => {
-            console.error("Failed to log AirCall activity:", error);
-            toast({ variant: "destructive", title: "Logging Failed", description: "Could not log the AirCall click." });
+    try {
+        const result = await initiateCall(phoneNumber);
+        if (result.success) {
+            const note = contactName
+                ? `Initiated call with ${contactName} via AirCall.`
+                : `Initiated call with ${lead.companyName} via AirCall.`;
+            await logActivity(lead.id, { type: 'Call', notes: note });
+             addActivity({ type: 'Call', notes: note });
+            toast({
+                title: "Call Initiated",
+                description: `Calling ${phoneNumber} via AirCall.`,
+            });
+        } else {
+             toast({
+                variant: "destructive",
+                title: "AirCall Failed",
+                description: result.error || "Could not initiate the call.",
+            });
+        }
+    } catch (error: any) {
+        console.error("Failed to initiate AirCall call:", error);
+        toast({
+            variant: "destructive",
+            title: "AirCall Error",
+            description: error.message || "An unknown error occurred.",
         });
-
-    window.location.href = `aircall:number:${phoneNumber}`;
+    }
   };
+
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -509,20 +527,16 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <div className="flex items-center gap-1">
-                        {lead.customerPhone ? (
-                          <div
-                            onClick={() => handleAirCallClick(lead.customerPhone!)}
-                            className="font-medium text-primary hover:underline cursor-pointer break-all"
-                          >
-                            {lead.customerPhone}
-                          </div>
-                        ) : (
-                          <p className="font-medium">N/A</p>
-                        )}
+                        <span className="font-medium break-all">{lead.customerPhone ?? 'N/A'}</span>
                         {lead.customerPhone && (
+                            <>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
                             </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.customerPhone!)}>
+                                <PhoneCall className="w-3 h-3" />
+                            </Button>
+                            </>
                         )}
                       </div>
                     </div>
@@ -650,12 +664,12 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                     </div>
                     <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
                       <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
-                       <div
-                          onClick={() => handleAirCallClick(contact.phone, contact.name)}
-                          className="text-primary hover:underline cursor-pointer break-all"
-                        >
-                          {contact.phone}
-                        </div>
+                       <div className="flex items-center gap-1">
+                          <span className="break-all">{contact.phone}</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone, contact.name)}>
+                              <PhoneCall className="w-3 h-3" />
+                          </Button>
+                       </div>
                     </div>
                   </div>
                 ))
