@@ -83,6 +83,7 @@ import { Loader } from '@/components/ui/loader'
 import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/hooks/use-auth'
 
 export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -100,6 +101,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   useEffect(() => {
     if (!initialLead) return;
@@ -311,7 +313,10 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const handleInitiateCall = async (phoneNumber: string, contactName?: string) => {
     if (!lead || !phoneNumber) return;
     try {
-        const result = await initiateCall(phoneNumber);
+        const result = await initiateCall({
+          phoneNumber,
+          userDisplayName: user?.displayName || undefined
+        });
         if (result.success) {
             const note = contactName
                 ? `Initiated call with ${contactName} via AirCall.`

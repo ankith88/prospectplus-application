@@ -10,7 +10,10 @@ import { z } from 'genkit';
 import Aircall from 'aircall';
 import { logActivity } from '@/services/firebase';
 
-const InitiateCallInputSchema = z.string().describe('The phone number to call.');
+const InitiateCallInputSchema = z.object({
+  phoneNumber: z.string().describe('The phone number to call.'),
+  userDisplayName: z.string().optional().describe("The display name of the user initiating the call."),
+});
 export type InitiateCallInput = z.infer<typeof InitiateCallInputSchema>;
 
 const InitiateCallOutputSchema = z.object({
@@ -31,15 +34,33 @@ const initiateCallFlow = ai.defineFlow(
     inputSchema: InitiateCallInputSchema,
     outputSchema: InitiateCallOutputSchema,
   },
-  async (phoneNumber) => {
+  async ({ phoneNumber, userDisplayName }) => {
     const apiKey = process.env.AIRCALL_API_KEY;
-    const fromNumber = process.env.AIRCALL_FROM_NUMBER;
+    const userNumberMappings = process.env.AIRCALL_USER_NUMBERS; // e.g., "Leonie Feata:+61412345678,Luke Forbes:+61487654321,Default:+61400000000"
 
-    if (!apiKey || !fromNumber) {
-        const errorMsg = "AirCall API key or 'from' number is not configured in environment variables.";
+    if (!apiKey || !userNumberMappings) {
+        const errorMsg = "AirCall API key or user number mappings are not configured in environment variables.";
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
+
+    // Parse the user-number mappings
+    const numberMap = new Map<string, string>();
+    userNumberMappings.split(',').forEach(pair => {
+        const [name, number] = pair.split(':');
+        if (name && number) {
+            numberMap.set(name.trim(), number.trim());
+        }
+    });
+
+    const fromNumber = (userDisplayName && numberMap.get(userDisplayName)) || numberMap.get('Default');
+
+    if (!fromNumber) {
+        const errorMsg = `No AirCall number found for user "${userDisplayName}" and no Default number is configured.`;
+        console.error(errorMsg);
+        return { success: false, error: errorMsg };
+    }
+
 
     try {
       const aircall = new Aircall({
