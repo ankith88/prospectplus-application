@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs as getSubCollectionDocs } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
     try {
@@ -344,5 +344,16 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
     }
 }
 
+async function createUserInFirestore(uid: string, userData: { email: string; firstName: string; lastName: string; phoneNumber: string; }) {
+    try {
+        const userRef = doc(firestore, 'users', uid);
+        await setDoc(userRef, userData);
+        console.log(`User document created in Firestore for UID: ${uid}`);
+    } catch (error) {
+        console.error('Error creating user document in Firestore:', error);
+        throw new Error('Failed to create user document in Firebase');
+    }
+}
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };
+
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, createUserInFirestore };

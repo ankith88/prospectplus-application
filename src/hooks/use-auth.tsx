@@ -19,14 +19,22 @@ import {
 } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { createUserInFirestore } from '@/services/firebase';
 
 const auth = getAuth(app);
+
+interface UserDetails {
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+}
 
 interface AuthContextType {
     user: User | null;
     loading: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
+    signUp: (email: string, pass: string, details: UserDetails) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -34,6 +42,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     signIn: async () => {},
     signOut: async () => {},
+    signUp: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -57,6 +66,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return signInWithEmailAndPassword(auth, email, pass);
     }
 
+    const signUp = async (email: string, pass: string, details: UserDetails) => {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        const { user } = userCredential;
+
+        await updateProfile(user, {
+            displayName: `${details.firstName} ${details.lastName}`,
+        });
+        
+        await createUserInFirestore(user.uid, {
+            email,
+            firstName: details.firstName,
+            lastName: details.lastName,
+            phoneNumber: details.phoneNumber,
+        });
+
+        // To update the user state in this context
+        setUser({ ...user, displayName: `${details.firstName} ${details.lastName}` });
+
+        return userCredential;
+    }
+
     const signOut = async () => {
         await firebaseSignOut(auth);
         setUser(null);
@@ -67,6 +97,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         signIn,
         signOut,
+        signUp,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

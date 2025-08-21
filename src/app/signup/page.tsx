@@ -19,25 +19,28 @@ import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function SignInPage() {
+export default function SignUpPage() {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signUp } = useAuth();
   const { toast } = useToast();
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signUp(email, password, { firstName, lastName, phoneNumber });
       router.push('/');
     } catch (error: any) {
-      console.error("Sign in failed:", error);
+      console.error("Sign up failed:", error);
       toast({
         variant: "destructive",
-        title: "Sign in Failed",
+        title: "Sign up Failed",
         description: error.message,
       })
     } finally {
@@ -56,11 +59,25 @@ export default function SignInPage() {
               alt="MailPlus CRM Logo"
               data-ai-hint="logo"
             />
-            <CardTitle className="text-2xl mt-4">MailPlus CRM</CardTitle>
-            <CardDescription className="text-center">Enter your email below to sign in to your account.</CardDescription>
+            <CardTitle className="text-2xl mt-4">Create an Account</CardTitle>
+            <CardDescription className="text-center">Enter your details below to create a new account.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input id="firstName" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input id="lastName" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </div>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number</Label>
+                <Input id="phoneNumber" type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -83,13 +100,12 @@ export default function SignInPage() {
               />
             </div>
              <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
-           <div>Don't have an account? <Link href="/signup" className="underline text-primary">Sign up</Link></div>
-           <div>By signing in, you agree to our terms of service.</div>
+        <CardFooter className="flex flex-col items-center text-center gap-2 text-sm text-muted-foreground">
+           <div>Already have an account? <Link href="/signin" className="underline text-primary">Sign in</Link></div>
         </CardFooter>
       </Card>
     </div>
