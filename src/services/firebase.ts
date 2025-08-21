@@ -29,13 +29,10 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
     if (typeof status === 'string') {
-        const cleanStatus = status.replace('SUSPECT-', '');
+        const cleanStatus = status.startsWith('SUSPECT-') ? status.substring(8) : status;
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }
-    }
-    if (validStatuses.includes(status)) {
-        return status;
     }
     return 'New';
 }
