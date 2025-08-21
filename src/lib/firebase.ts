@@ -3,6 +3,8 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
     apiKey: "REDACTED",
     authDomain: "REDACTED",
@@ -14,19 +16,15 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-let firestore: Firestore | null = null;
+let firestore: Firestore;
 
 // Initialize Firebase
 if (!getApps().length) {
-    try {
-        app = initializeApp(firebaseConfig);
-        firestore = getFirestore(app);
-    } catch (e) {
-        console.error("Firebase initialization failed:", e);
-    }
+    app = initializeApp(firebaseConfig);
 } else {
     app = getApp();
-    firestore = getFirestore(app);
 }
+
+firestore = getFirestore(app);
 
 export { app, firestore };
