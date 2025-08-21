@@ -39,7 +39,7 @@ import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, getLeadSubCollection } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -151,6 +151,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         });
         
         if (result.logoUrl) {
+          await updateLeadAvatar(lead.id, result.logoUrl);
           setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
           toast({ title: "Logo Found!", description: "Company logo has been updated." });
         }
@@ -305,13 +306,10 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     setLead(updatedLead);
   }
 
-  const handleAirCallClick = (phoneNumber: string, contactName?: string) => {
+  const handleAirCallClick = (e: React.MouseEvent, phoneNumber: string, contactName?: string) => {
+    e.preventDefault();
     if (!lead || !phoneNumber) return;
     
-    // Immediately attempt to open AirCall
-    window.open(`aircall:number:${phoneNumber}`, '_self');
-
-    // Log the activity in the background
     const note = contactName 
         ? `Initiated call with ${contactName} via AirCall.`
         : `Initiated call with ${lead.companyName} via AirCall.`;
@@ -328,6 +326,8 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             console.error("Failed to log AirCall activity:", error);
             toast({ variant: "destructive", title: "Logging Failed", description: "Could not log the AirCall click." });
         });
+
+    window.open(`aircall:number:${phoneNumber}`);
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
@@ -520,7 +520,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                         {lead.customerPhone ? (
                           <a
                             href={`aircall:number:${lead.customerPhone}`}
-                            onClick={(e) => { e.preventDefault(); handleAirCallClick(lead.customerPhone!); }}
+                            onClick={(e) => handleAirCallClick(e, lead.customerPhone!)}
                             className="font-medium text-primary hover:underline cursor-pointer break-all"
                           >
                             {lead.customerPhone}
@@ -661,7 +661,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                       <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
                        <a
                           href={`aircall:number:${contact.phone}`}
-                          onClick={(e) => { e.preventDefault(); handleAirCallClick(contact.phone, contact.name); }}
+                          onClick={(e) => handleAirCallClick(e, contact.phone, contact.name)}
                           className="text-primary hover:underline cursor-pointer break-all"
                         >
                           {contact.phone}
