@@ -37,9 +37,9 @@ const initiateCallFlow = ai.defineFlow(
     outputSchema: InitiateCallOutputSchema,
   },
   async ({ phoneNumber, userDisplayName, leadId, contactName }) => {
-    const apiKey = process.env.AIRCALL_API_KEY;
+    const apiToken = process.env.AIRCALL_API_KEY;
 
-    if (!apiKey) {
+    if (!apiToken) {
         const errorMsg = "AirCall API key is not configured in environment variables.";
         console.error(errorMsg);
         return { success: false, error: errorMsg };
@@ -62,7 +62,7 @@ const initiateCallFlow = ai.defineFlow(
 
     try {
       const aircall = new Aircall({
-        apiToken: apiKey
+        apiToken: apiToken
       });
       
       const aircallNumbers = await aircall.numbers.list();
