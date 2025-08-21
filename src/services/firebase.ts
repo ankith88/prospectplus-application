@@ -214,7 +214,7 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
     await updateDoc(leadRef, {
       salesRepAssigned: salesRep,
     });
-    const notes = salesRep ? `Lead assigned to ${salesRep}` : `Lead unassigned`;
+    const notes = salesRep ? `Lead assigned to sales rep ${salesRep}` : `Lead unassigned from sales rep`;
     await logActivity(leadId, { type: 'Update', notes });
     console.log(`Lead ${leadId} assigned to ${salesRep}`);
   } catch (error) {
@@ -222,6 +222,22 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null): Prom
     throw new Error('Failed to update lead in Firebase');
   }
 }
+
+async function updateLeadDialerRep(leadId: string, dialerRep: string | null): Promise<void> {
+  try {
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, {
+      dialerAssigned: dialerRep,
+    });
+    const notes = dialerRep ? `Lead assigned to dialer ${dialerRep}` : `Lead unassigned from dialer`;
+    await logActivity(leadId, { type: 'Update', notes });
+    console.log(`Lead ${leadId} assigned to dialer ${dialerRep}`);
+  } catch (error) {
+    console.error(`Failed to assign lead dialer ${leadId}:`, error);
+    throw new Error('Failed to update lead dialer in Firebase');
+  }
+}
+
 
 async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void> {
   try {
@@ -338,6 +354,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };
-
-    
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };

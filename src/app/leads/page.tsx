@@ -26,7 +26,7 @@ import type { Lead } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadSalesRep } from '@/services/firebase'
+import { updateLeadDialerRep } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, MapPin } from 'lucide-react'
@@ -77,12 +77,10 @@ export default function LeadsPage() {
   }, [allLeads, user]);
 
   const handleBulkUnassign = async () => {
+    if (selectedMyLeads.length === 0) return;
     try {
-      // This function now needs to update dialerAssigned.
-      // We assume a similar function to updateLeadSalesRep exists for dialerAssigned
-      // or we would need to create one. For now, this is a placeholder.
-      // const promises = selectedMyLeads.map(leadId => updateLeadDialerRep(leadId, null));
-      // await Promise.all(promises);
+      const promises = selectedMyLeads.map(leadId => updateLeadDialerRep(leadId, null));
+      await Promise.all(promises);
       
       const updatedLeads = allLeads.map(lead =>
         selectedMyLeads.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
@@ -109,6 +107,20 @@ export default function LeadsPage() {
       setSelectedMyLeads(myLeads.map(l => l.id));
     } else {
       setSelectedMyLeads([]);
+    }
+  };
+
+  const handleUnassign = async (leadId: string) => {
+    try {
+      await updateLeadDialerRep(leadId, null);
+      const updatedLeads = allLeads.map(lead =>
+        lead.id === leadId ? { ...lead, dialerAssigned: undefined } : lead
+      );
+      setAllLeads(updatedLeads);
+      toast({ title: "Success", description: "Lead unassigned." });
+    } catch (error) {
+      console.error("Failed to unassign lead:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to unassign lead." });
     }
   };
   
@@ -218,7 +230,7 @@ export default function LeadsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => updateLeadSalesRep(lead.id, null)}>
+                              <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
                                 Unassign
                               </DropdownMenuItem>
                             </DropdownMenuContent>
