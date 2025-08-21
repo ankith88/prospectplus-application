@@ -16,6 +16,8 @@ export const getLeadsTool = ai.defineTool(
     outputSchema: z.any(),
   },
   async (input) => {
+    // Ensure we fetch the full lead data, not just the summary,
+    // so that fields like 'dialerAssigned' are available for filtering.
     const summary = input?.summary ?? false;
     const leadId = input?.leadId;
     return await getLeadsFromFirebase({ leadId, summary });
