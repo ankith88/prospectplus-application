@@ -37,10 +37,11 @@ const initiateCallFlow = ai.defineFlow(
     outputSchema: InitiateCallOutputSchema,
   },
   async ({ phoneNumber, userDisplayName, leadId, contactName }) => {
+    const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
 
-    if (!apiToken) {
-        const errorMsg = "AirCall API token is not configured in environment variables.";
+    if (!apiId || !apiToken) {
+        const errorMsg = "AirCall API ID or Token is not configured in environment variables.";
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
@@ -59,7 +60,7 @@ const initiateCallFlow = ai.defineFlow(
         return { success: false, error: errorMsg };
     }
     
-    const base64Token = Buffer.from(`${apiToken}:`).toString('base64');
+    const base64Token = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     const headers = {
         'Authorization': `Basic ${base64Token}`,
         'Content-Type': 'application/json'
