@@ -13,6 +13,8 @@ import { logActivity, getUserPhoneNumber } from '@/services/firebase';
 const InitiateCallInputSchema = z.object({
   phoneNumber: z.string().describe('The phone number to call.'),
   userDisplayName: z.string().optional().describe("The display name of the user initiating the call."),
+  leadId: z.string().describe("The ID of the lead being called."),
+  contactName: z.string().optional().describe("The name of the contact being called."),
 });
 export type InitiateCallInput = z.infer<typeof InitiateCallInputSchema>;
 
@@ -34,7 +36,7 @@ const initiateCallFlow = ai.defineFlow(
     inputSchema: InitiateCallInputSchema,
     outputSchema: InitiateCallOutputSchema,
   },
-  async ({ phoneNumber, userDisplayName }) => {
+  async ({ phoneNumber, userDisplayName, leadId, contactName }) => {
     const apiKey = process.env.AIRCALL_API_KEY;
 
     if (!apiKey) {
@@ -52,7 +54,7 @@ const initiateCallFlow = ai.defineFlow(
     const fromNumber = await getUserPhoneNumber(userDisplayName);
 
     if (!fromNumber) {
-        const errorMsg = `No phone number found in database for user "${userDisplayName}".`;
+        const errorMsg = `No phone number found in database for user "${userDisplayName}". Please check the user's profile.`;
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
@@ -67,31 +69,46 @@ const initiateCallFlow = ai.defineFlow(
       const aircallNumber = aircallNumbers.find((n: any) => n.e164_format === fromNumber);
 
       if (!aircallNumber) {
-        const errorMsg = `The 'from' number ${fromNumber} (for user ${userDisplayName}) is not a valid AirCall number in your account.`
+        const validNumbers = aircallNumbers.map((n:any) => n.e164_format).join(', ');
+        const errorMsg = `The 'from' number ${fromNumber} (for user ${userDisplayName}) is not a valid AirCall number in your account. Valid numbers are: ${validNumbers}`;
         console.error(errorMsg);
         return { success: false, error: errorMsg };
       }
       
       const users = await aircall.users.list();
       if (!users.length) {
-          return { success: false, error: "No AirCall users found to initiate the call." };
+          const errorMsg = "No AirCall users found to initiate the call.";
+          console.error(errorMsg);
+          return { success: false, error: errorMsg };
       }
       // For this implementation, we'll just use the first available user to dial out from.
       // A more robust solution might map Firebase users to AirCall users.
-      const userId = users[0].id;
+      const aircallUser = users.find((u:any) => u.available);
+       if (!aircallUser) {
+           const errorMsg = "No available AirCall users to initiate the call.";
+           console.error(errorMsg);
+           return { success: false, error: errorMsg };
+       }
 
       await aircall.calls.dial({
-        user_id: userId,
+        user_id: aircallUser.id,
         to: phoneNumber,
         from: fromNumber,
       });
+      
+      const note = contactName
+                ? `Initiated call with ${contactName} (${phoneNumber}) via AirCall.`
+                : `Initiated call to ${phoneNumber} via AirCall.`;
+      await logActivity(leadId, { type: 'Call', notes: note });
+
 
       console.log(`Successfully initiated call to ${phoneNumber} from ${fromNumber}`);
       return { success: true };
 
     } catch (error: any) {
-      console.error('AirCall API Error:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.error || 'Failed to initiate call via AirCall API.';
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to initiate call via AirCall API.';
+      console.error('AirCall API Error:', errorMsg);
+      console.error('Full AirCall Error Response:', error.response?.data);
       return { success: false, error: errorMsg };
     }
   }

@@ -314,14 +314,13 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     try {
         const result = await initiateCall({
           phoneNumber,
-          userDisplayName: user?.displayName || undefined
+          userDisplayName: user?.displayName || undefined,
+          leadId: lead.id,
+          contactName: contactName,
         });
         if (result.success) {
-            const note = contactName
-                ? `Initiated call with ${contactName} via AirCall.`
-                : `Initiated call with ${lead.companyName} via AirCall.`;
-            await logActivity(lead.id, { type: 'Call', notes: note });
-             addActivity({ type: 'Call', notes: note });
+            // Activity is now logged inside the flow itself to ensure it happens after successful dial.
+             addActivity({ type: 'Call', notes: `Initiated call to ${contactName || lead.companyName} at ${phoneNumber}` });
             toast({
                 title: "Call Initiated",
                 description: `Calling ${phoneNumber} via AirCall.`,
