@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import Aircall from 'aircall';
+import fetch from 'node-fetch';
 import { logActivity, getUserPhoneNumber } from '@/services/firebase';
 
 const InitiateCallInputSchema = z.object({
@@ -37,10 +37,10 @@ const initiateCallFlow = ai.defineFlow(
     outputSchema: InitiateCallOutputSchema,
   },
   async ({ phoneNumber, userDisplayName, leadId, contactName }) => {
-    const apiToken = process.env.AIRCALL_API_KEY;
+    const apiToken = process.env.AIRCALL_API_TOKEN;
 
     if (!apiToken) {
-        const errorMsg = "AirCall API key is not configured in environment variables.";
+        const errorMsg = "AirCall API token is not configured in environment variables.";
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
@@ -58,44 +58,47 @@ const initiateCallFlow = ai.defineFlow(
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
-
+    
+    const base64Token = Buffer.from(`${apiToken}:`).toString('base64');
+    const headers = {
+        'Authorization': `Basic ${base64Token}`,
+        'Content-Type': 'application/json'
+    };
 
     try {
-      const aircall = new Aircall({
-        apiToken: apiToken
-      });
-      
-      const aircallNumbers = await aircall.numbers.list();
-      const aircallNumber = aircallNumbers.find((n: any) => n.e164_format === fromNumber);
-
-      if (!aircallNumber) {
-        const validNumbers = aircallNumbers.map((n:any) => n.e164_format).join(', ');
-        const errorMsg = `The 'from' number ${fromNumber} (for user ${userDisplayName}) is not a valid AirCall number in your account. Valid numbers are: ${validNumbers}`;
-        console.error(errorMsg);
-        return { success: false, error: errorMsg };
+      // 1. Get the list of users to find an available user to make the call from
+      const usersResponse = await fetch('https://api.aircall.io/v1/users', { headers });
+      if (!usersResponse.ok) {
+        const errorData = await usersResponse.json();
+        throw new Error(`Failed to fetch AirCall users: ${JSON.stringify(errorData)}`);
       }
-      
-      const users = await aircall.users.list();
-      if (!users.length) {
-          const errorMsg = "No AirCall users found to initiate the call.";
-          console.error(errorMsg);
-          return { success: false, error: errorMsg };
-      }
-      // For this implementation, we'll just use the first available user to dial out from.
-      // A more robust solution might map Firebase users to AirCall users.
+      const { users } = await usersResponse.json() as any;
       const aircallUser = users.find((u:any) => u.available);
-       if (!aircallUser) {
+
+      if (!aircallUser) {
            const errorMsg = "No available AirCall users to initiate the call.";
            console.error(errorMsg);
            return { success: false, error: errorMsg };
        }
 
-      await aircall.calls.dial({
-        user_id: aircallUser.id,
-        to: phoneNumber,
-        from: fromNumber,
+      // 2. Dial the call
+      const dialResponse = await fetch(`https://api.aircall.io/v1/calls`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            user_id: aircallUser.id,
+            to: phoneNumber,
+            from: fromNumber,
+        })
       });
-      
+
+      if (!dialResponse.ok) {
+         const errorData = await dialResponse.json() as any;
+         console.error('AirCall API Error Response:', errorData);
+         const errorMessage = errorData?.error || `Failed to initiate call via AirCall API. Status: ${dialResponse.status}`;
+         return { success: false, error: errorMessage };
+      }
+
       const note = contactName
                 ? `Initiated call with ${contactName} (${phoneNumber}) via AirCall.`
                 : `Initiated call to ${phoneNumber} via AirCall.`;
@@ -106,9 +109,8 @@ const initiateCallFlow = ai.defineFlow(
       return { success: true };
 
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to initiate call via AirCall API.';
+      const errorMsg = error.message || 'An unexpected error occurred while initiating call via AirCall API.';
       console.error('AirCall API Error:', errorMsg);
-      console.error('Full AirCall Error Response:', error.response?.data);
       return { success: false, error: errorMsg };
     }
   }
