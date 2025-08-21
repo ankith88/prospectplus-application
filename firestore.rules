@@ -1,0 +1,18 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to create their own document in the 'users' collection
+    // when they sign up. They can also read, update, and delete their own document.
+    match /users/{userId} {
+      allow create: if request.auth.uid == userId;
+      allow read, update, delete: if request.auth.uid == userId;
+    }
+
+    // Allow any authenticated user to read and write to the leads collection and its subcollections.
+    // In a production app, you would likely want more granular rules here.
+    match /leads/{leadId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
