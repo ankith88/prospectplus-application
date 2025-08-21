@@ -29,7 +29,7 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
     if (typeof status === 'string') {
-        const cleanStatus = status.startsWith('SUSPECT-') ? status.substring(8) : status;
+        const cleanStatus = status.replace('SUSPECT-', '');
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }
@@ -103,7 +103,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
       return lead ? [lead] : [];
   }
   try {
-    console.log(`Fetching leads from Firebase (summary: ${summary})...`);
+    console.log(`Fetching all leads from Firebase (summary: ${summary})...`);
     const leadsRef = collection(firestore, 'leads');
     const snapshot = await getDocs(leadsRef);
 
@@ -113,7 +113,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
     }
     
     const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (docSnapshot) => {
-        const data = docSnapshot.data();
+        const data = docSnapshot.data() || {};
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;

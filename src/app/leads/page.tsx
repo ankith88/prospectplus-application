@@ -22,39 +22,27 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus } from '@/lib/types'
+import type { Lead } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { updateLeadSalesRep } from '@/services/firebase'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserPlus, UserX, MapPin, ArrowUpDown } from 'lucide-react'
+import { MoreHorizontal, UserPlus, UserX, MapPin } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
 
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory' | 'industrySubCategory';
-
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [myLeads, setMyLeads] = useState<Lead[]>([]);
+  const [unassignedLeads, setUnassignedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'companyName', direction: 'ascending' });
-  const [myLeadsSortConfig, setMyLeadsSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'companyName', direction: 'ascending' });
-  const [filters, setFilters] = useState({
-    companyName: '',
-    status: 'all',
-    franchisee: 'all',
-    industryCategory: 'all'
-  });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [leadsPerPage, setLeadsPerPage] = useState(100);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -69,8 +57,8 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const allLeads = await getLeadsTool({ summary: true });
-        setLeads(allLeads);
+        const fetchedLeads = await getLeadsTool({ summary: true });
+        setAllLeads(fetchedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch leads." });
@@ -81,37 +69,20 @@ export default function LeadsPage() {
     getLeads();
   }, [user, authLoading, router, toast]);
 
-  const requestSort = (key: SortableLeadKeys) => {
-    let direction: 'ascending' | 'descending' = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+  useEffect(() => {
+    if (user && allLeads.length > 0) {
+      setMyLeads(allLeads.filter(lead => lead.salesRepAssigned === user.displayName));
+      setUnassignedLeads(allLeads.filter(lead => !lead.salesRepAssigned));
     }
-    setSortConfig({ key, direction });
-  };
-  
-  const getSortIndicator = (key: SortableLeadKeys, currentSortConfig: typeof sortConfig) => {
-    if (!currentSortConfig || currentSortConfig.key !== key) {
-      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
-    }
-    return currentSortConfig.direction === 'ascending' ? '▲' : '▼';
-  };
+  }, [allLeads, user]);
 
-  const requestMyLeadsSort = (key: SortableLeadKeys) => {
-    let direction: 'ascending' | 'descending' = 'ascending';
-    if (myLeadsSortConfig && myLeadsSortConfig.key === key && myLeadsSortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
-    setMyLeadsSortConfig({ key, direction });
-  };
-  
   const handleAssign = async (leadId: string, salesRep: string | null) => {
     try {
       await updateLeadSalesRep(leadId, salesRep);
-      setLeads(prevLeads =>
-        prevLeads.map(lead =>
-          lead.id === leadId ? { ...lead, salesRepAssigned: salesRep || undefined } : lead
-        )
+      const updatedLeads = allLeads.map(lead =>
+        lead.id === leadId ? { ...lead, salesRepAssigned: salesRep || undefined } : lead
       );
+      setAllLeads(updatedLeads);
     } catch (error) {
       console.error("Failed to assign lead:", error);
     }
@@ -126,11 +97,10 @@ export default function LeadsPage() {
       const promises = selectedLeads.map(leadId => updateLeadSalesRep(leadId, user.displayName!));
       await Promise.all(promises);
 
-      setLeads(prevLeads =>
-        prevLeads.map(lead =>
-          selectedLeads.includes(lead.id) ? { ...lead, salesRepAssigned: user.displayName! } : lead
-        )
+      const updatedLeads = allLeads.map(lead =>
+        selectedLeads.includes(lead.id) ? { ...lead, salesRepAssigned: user.displayName! } : lead
       );
+      setAllLeads(updatedLeads);
       toast({ title: "Success", description: `${selectedLeads.length} lead(s) assigned to you.` });
       setSelectedLeads([]);
     } catch (error) {
@@ -144,11 +114,10 @@ export default function LeadsPage() {
       const promises = selectedMyLeads.map(leadId => updateLeadSalesRep(leadId, null));
       await Promise.all(promises);
       
-      setLeads(prevLeads =>
-        prevLeads.map(lead =>
-          selectedMyLeads.includes(lead.id) ? { ...lead, salesRepAssigned: undefined } : lead
-        )
+      const updatedLeads = allLeads.map(lead =>
+        selectedMyLeads.includes(lead.id) ? { ...lead, salesRepAssigned: undefined } : lead
       );
+      setAllLeads(updatedLeads);
       toast({ title: "Success", description: `${selectedMyLeads.length} lead(s) unassigned.` });
       setSelectedMyLeads([]);
     } catch (error) {
@@ -156,66 +125,6 @@ export default function LeadsPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
     }
   };
-
-  const allLeadsRaw = useMemo(() => leads, [leads]);
-
-  const myLeads = useMemo(() => {
-    if (!user) return [];
-    let myLeadsList = allLeadsRaw.filter(lead => lead.salesRepAssigned === user.displayName);
-
-    if (myLeadsSortConfig !== null) {
-      myLeadsList.sort((a, b) => {
-        const aValue = a[myLeadsSortConfig.key] || '';
-        const bValue = b[myLeadsSortConfig.key] || '';
-        if (aValue < bValue) {
-          return myLeadsSortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return myLeadsSortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return myLeadsList;
-  }, [allLeadsRaw, user, myLeadsSortConfig]);
-
-
-  const filteredLeads = useMemo(() => {
-    let sortedItems = [...allLeadsRaw];
-    if (sortConfig !== null) {
-      sortedItems.sort((a, b) => {
-        const aValue = a[sortConfig.key] || '';
-        const bValue = b[sortConfig.key] || '';
-        if (aValue < bValue) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-
-    return sortedItems.filter(lead => {
-      const companyNameMatch = lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase());
-      const statusMatch = filters.status === 'all' || lead.status === filters.status;
-      const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
-      const industryMatch = filters.industryCategory === 'all' || lead.industryCategory === filters.industryCategory;
-      return companyNameMatch && statusMatch && franchiseeMatch && industryMatch;
-    });
-  }, [allLeadsRaw, sortConfig, filters]);
-
-  const paginatedLeads = useMemo(() => {
-    const startIndex = (currentPage - 1) * leadsPerPage;
-    const endIndex = startIndex + leadsPerPage;
-    return filteredLeads.slice(startIndex, endIndex);
-  }, [filteredLeads, currentPage, leadsPerPage]);
-
-  const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
-
-  const uniqueFranchisees = useMemo(() => [...new Set(allLeadsRaw.map(l => l.franchisee).filter(Boolean))], [allLeadsRaw]);
-  const uniqueIndustries = useMemo(() => [...new Set(allLeadsRaw.map(l => l.industryCategory).filter(Boolean))], [allLeadsRaw]);
-  const uniqueStatuses = useMemo(() => [...new Set(allLeadsRaw.map(l => l.status).filter(Boolean))], [allLeadsRaw]) as LeadStatus[];
 
   const handleSelectLead = (leadId: string, checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -227,7 +136,7 @@ export default function LeadsPage() {
   
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked) {
-      setSelectedLeads(paginatedLeads.map(l => l.id));
+      setSelectedLeads(unassignedLeads.map(l => l.id));
     } else {
       setSelectedLeads([]);
     }
@@ -269,45 +178,6 @@ export default function LeadsPage() {
         <h1 className="text-3xl font-bold tracking-tight">Outbound Leads</h1>
         <p className="text-muted-foreground">Manage and engage with your synced leads.</p>
       </header>
-       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input
-            placeholder="Filter by Company Name..."
-            value={filters.companyName}
-            onChange={(e) => setFilters(prev => ({...prev, companyName: e.target.value}))}
-          />
-          <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({...prev, status: value}))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {uniqueStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.franchisee} onValueChange={(value) => setFilters(prev => ({...prev, franchisee: value}))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Franchisee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Franchisees</SelectItem>
-              {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.industryCategory} onValueChange={(value) => setFilters(prev => ({...prev, industryCategory: value}))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by Industry" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Industries</SelectItem>
-              {uniqueIndustries.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </CardContent>
-       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>My Leads</CardTitle>
@@ -330,44 +200,18 @@ export default function LeadsPage() {
                       aria-label="Select all my leads"
                     />
                   </TableHead>
-                  <TableHead className="w-[280px]">
-                      <Button variant="ghost" onClick={() => requestMyLeadsSort('companyName')} className="group -ml-4">
-                          Company
-                          {getSortIndicator('companyName', myLeadsSortConfig)}
-                      </Button>
-                  </TableHead>
+                  <TableHead>Company</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>
-                      <Button variant="ghost" onClick={() => requestMyLeadsSort('status')} className="group -ml-4">
-                          Status
-                          {getSortIndicator('status', myLeadsSortConfig)}
-                      </Button>
-                  </TableHead>
-                  <TableHead>
-                      <Button variant="ghost" onClick={() => requestMyLeadsSort('franchisee')} className="group -ml-4">
-                          Franchisee
-                          {getSortIndicator('franchisee', myLeadsSortConfig)}
-                      </Button>
-                  </TableHead>
-                  <TableHead>
-                      <Button variant="ghost" onClick={() => requestMyLeadsSort('industryCategory')} className="group -ml-4">
-                          Industry
-                          {getSortIndicator('industryCategory', myLeadsSortConfig)}
-                      </Button>
-                  </TableHead>
-                  <TableHead>
-                      <Button variant="ghost" onClick={() => requestMyLeadsSort('industrySubCategory')} className="group -ml-4">
-                          Sub-Industry
-                          {getSortIndicator('industrySubCategory', myLeadsSortConfig)}
-                      </Button>
-                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Franchisee</TableHead>
+                  <TableHead>Industry</TableHead>
                   <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                      <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : myLeads.length > 0 ? (
                   myLeads.map((lead) => {
@@ -412,9 +256,6 @@ export default function LeadsPage() {
                       <TableCell>
                         {lead.industryCategory}
                       </TableCell>
-                      <TableCell>
-                        {lead.industrySubCategory}
-                      </TableCell>
                       <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -434,7 +275,7 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           You have not been assigned any leads.
                       </TableCell>
                   </TableRow>
@@ -461,58 +302,27 @@ export default function LeadsPage() {
                 <TableRow>
                   <TableHead className="w-8">
                       <Checkbox
-                          checked={paginatedLeads.length > 0 && selectedLeads.length === paginatedLeads.length}
+                          checked={unassignedLeads.length > 0 && selectedLeads.length === unassignedLeads.length}
                           onCheckedChange={handleSelectAll}
                           aria-label="Select all"
                       />
                   </TableHead>
-                  <TableHead className="w-[280px]">
-                    <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
-                        Company
-                        {getSortIndicator('companyName', sortConfig)}
-                    </Button>
-                  </TableHead>
+                  <TableHead>Company</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">
-                        Status
-                        {getSortIndicator('status', sortConfig)}
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
-                        Franchisee
-                        {getSortIndicator('franchisee', sortConfig)}
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group -ml-4">
-                        Sales Rep
-                        {getSortIndicator('salesRepAssigned', sortConfig)}
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">
-                        Industry
-                        {getSortIndicator('industryCategory', sortConfig)}
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('industrySubCategory')} className="group -ml-4">
-                        Sub-Industry
-                        {getSortIndicator('industrySubCategory', sortConfig)}
-                    </Button>
-                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Franchisee</TableHead>
+                  <TableHead>Sales Rep</TableHead>
+                  <TableHead>Industry</TableHead>
                   <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : paginatedLeads.length > 0 ? (
-                  paginatedLeads.map((lead) => {
+                ) : allLeads.length > 0 ? (
+                  allLeads.map((lead) => {
                     const addressString = formatAddress(lead.address);
                     return (
                       <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
@@ -525,6 +335,10 @@ export default function LeadsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                            <Avatar>
+                                <AvatarImage src={lead.avatarUrl} alt={lead.companyName} data-ai-hint="company logo" />
+                                <AvatarFallback>{lead.companyName.charAt(0)}</AvatarFallback>
+                            </Avatar>
                             <div className="flex flex-col">
                               <span className="font-medium group-hover:underline">{lead.companyName}</span>
                             </div>
@@ -551,9 +365,6 @@ export default function LeadsPage() {
                         <TableCell>
                           {lead.industryCategory}
                         </TableCell>
-                        <TableCell>
-                          {lead.industrySubCategory}
-                        </TableCell>
                         <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -578,64 +389,13 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                          No leads found matching your filters.
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                          No leads found in the database.
                       </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-          </div>
-          <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
-            <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                    {filteredLeads.length} Lead(s)
-                </span>
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Rows per page</span>
-                    <Select
-                        value={`${leadsPerPage}`}
-                        onValueChange={(value) => {
-                        setLeadsPerPage(Number(value));
-                        setCurrentPage(1);
-                        }}
-                    >
-                        <SelectTrigger className="w-[70px]">
-                        <SelectValue placeholder={leadsPerPage} />
-                        </SelectTrigger>
-                        <SelectContent>
-                        {[100, 250, 500, 1000].map((size) => (
-                            <SelectItem key={size} value={`${size}`}>
-                            {size}
-                            </SelectItem>
-                        ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
