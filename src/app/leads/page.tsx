@@ -70,12 +70,7 @@ export default function LeadsPage() {
       try {
         setLoading(true);
         const allLeads = await getLeadsTool({ summary: true });
-        const activeLeads = allLeads.filter(lead => 
-            lead.status !== 'Lost' && 
-            lead.status !== 'Qualified' &&
-            lead.status !== 'Won'
-        );
-        setLeads(activeLeads);
+        setLeads(allLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch leads." });
@@ -653,3 +648,5 @@ export default function LeadsPage() {
     </>
   )
 }
+
+    
