@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
+import { FirebaseError } from 'firebase/app';
 
 export default function SignUpPage() {
   const [firstName, setFirstName] = useState('');
@@ -38,10 +39,17 @@ export default function SignUpPage() {
       router.push('/');
     } catch (error: any) {
       console.error("Sign up failed:", error);
+      let description = "An unexpected error occurred. Please try again.";
+      if (error instanceof FirebaseError && error.code === 'auth/email-already-in-use') {
+        description = "An account with this email already exists. Please sign in instead.";
+      } else if (error.message) {
+        description = error.message;
+      }
+      
       toast({
         variant: "destructive",
         title: "Sign up Failed",
-        description: error.message,
+        description: description,
       })
     } finally {
       setLoading(false);
