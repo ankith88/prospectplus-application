@@ -11,13 +11,13 @@ import { z } from 'genkit'
 export const getLeadsTool = ai.defineTool(
   {
     name: 'getLeads',
-    description: 'Returns a list of leads from the CRM system (Firebase). Can fetch all leads or a single lead by ID.',
-    inputSchema: z.object({
-      leadId: z.string().optional().describe('The ID of a specific lead to fetch.'),
-      summary: z.boolean().optional().describe('If true, returns a summary of leads without detailed sub-collections like contacts and activities.'),
-    }),
+    description: 'Returns a list of leads from the CRM system (Firebase).',
+    inputSchema: z.any(),
+    outputSchema: z.any(),
   },
-  async ({ leadId, summary }) => {
+  async (input) => {
+    const summary = input?.summary ?? false;
+    const leadId = input?.leadId;
     return await getLeadsFromFirebase({ leadId, summary });
   }
 );
