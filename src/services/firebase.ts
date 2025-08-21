@@ -50,6 +50,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         }
 
         const data = docSnapshot.data();
+        const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
         if (data.street || data.city || data.state || data.zip || data.country) {
@@ -65,10 +66,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data['customer-entity-id'] || docSnapshot.id,
-          companyName: data.companyName || 'Unknown Company',
+          companyName: companyName,
           status: safeGetStatus(data.customerStatus),
-          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${companyName.charAt(0)}`,
+          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
@@ -113,6 +114,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
     
     const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (docSnapshot) => {
         const data = docSnapshot.data();
+        const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
         if (data.street || data.city || data.state || data.zip || data.country) {
@@ -128,10 +130,10 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data['customer-entity-id'] || docSnapshot.id,
-          companyName: data.companyName || 'Unknown Company',
+          companyName: companyName,
           status: safeGetStatus(data.customerStatus),
-          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${(data.companyName || 'UC').charAt(0)}`,
-          profile: `A lead for ${data.companyName || 'Unknown Company'}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          avatarUrl: data.avatarUrl || `https://placehold.co/100x100.png?text=${companyName.charAt(0)}`,
+          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
