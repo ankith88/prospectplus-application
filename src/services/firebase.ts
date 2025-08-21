@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
     try {
@@ -29,12 +29,42 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
     if (typeof status === 'string') {
-        const cleanStatus = status.replace('SUSPECT-', '');
+        let cleanStatus = status.replace('SUSPECT-', '');
+        if (cleanStatus === 'Unqualified') { // Specific mapping for your status
+            cleanStatus = 'Unqualified';
+        }
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }
     }
     return 'New';
+}
+
+async function getUserPhoneNumber(displayName: string): Promise<string | null> {
+    try {
+        const [firstName, lastName] = displayName.split(' ');
+        if (!firstName || !lastName) {
+            console.log(`Invalid display name format: ${displayName}`);
+            return null;
+        }
+
+        const usersRef = collection(firestore, 'users');
+        const q = query(usersRef, where('firstName', '==', firstName), where('lastName', '==', lastName), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            console.log(`No user found with display name: ${displayName}`);
+            return null;
+        }
+
+        const userDoc = querySnapshot.docs[0];
+        const phoneNumber = userDoc.data().phoneNumber;
+
+        return phoneNumber || null;
+    } catch (error) {
+        console.error(`Failed to get phone number for user ${displayName}:`, error);
+        return null;
+    }
 }
 
 
@@ -49,7 +79,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             return null;
         }
 
-        const data = docSnapshot.data();
+        const data = docSnapshot.data() || {};
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -68,7 +98,6 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
-          avatarUrl: data.avatarUrl,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
@@ -100,7 +129,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   const { leadId, summary = false } = options || {};
   
   if (leadId) {
-      const lead = await getLeadFromFirebase(leadId);
+      const lead = await getLeadFromFirebase(leadId, !summary);
       return lead ? [lead] : [];
   }
   try {
@@ -133,7 +162,6 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           entityId: data['customer-entity-id'] || docSnapshot.id,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
-          avatarUrl: data.avatarUrl,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
@@ -354,4 +382,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber };

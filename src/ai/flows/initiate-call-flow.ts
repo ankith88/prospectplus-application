@@ -8,7 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import Aircall from 'aircall';
-import { logActivity } from '@/services/firebase';
+import { logActivity, getUserPhoneNumber } from '@/services/firebase';
 
 const InitiateCallInputSchema = z.object({
   phoneNumber: z.string().describe('The phone number to call.'),
@@ -36,27 +36,23 @@ const initiateCallFlow = ai.defineFlow(
   },
   async ({ phoneNumber, userDisplayName }) => {
     const apiKey = process.env.AIRCALL_API_KEY;
-    const userNumberMappings = process.env.AIRCALL_USER_NUMBERS; // e.g., "Leonie Feata:+61412345678,Luke Forbes:+61487654321,Default:+61400000000"
 
-    if (!apiKey || !userNumberMappings) {
-        const errorMsg = "AirCall API key or user number mappings are not configured in environment variables.";
+    if (!apiKey) {
+        const errorMsg = "AirCall API key is not configured in environment variables.";
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
 
-    // Parse the user-number mappings
-    const numberMap = new Map<string, string>();
-    userNumberMappings.split(',').forEach(pair => {
-        const [name, number] = pair.split(':');
-        if (name && number) {
-            numberMap.set(name.trim(), number.trim());
-        }
-    });
+    if (!userDisplayName) {
+        const errorMsg = "User display name is required to find the 'from' number.";
+        console.error(errorMsg);
+        return { success: false, error: errorMsg };
+    }
 
-    const fromNumber = (userDisplayName && numberMap.get(userDisplayName)) || numberMap.get('Default');
+    const fromNumber = await getUserPhoneNumber(userDisplayName);
 
     if (!fromNumber) {
-        const errorMsg = `No AirCall number found for user "${userDisplayName}" and no Default number is configured.`;
+        const errorMsg = `No phone number found in database for user "${userDisplayName}".`;
         console.error(errorMsg);
         return { success: false, error: errorMsg };
     }
@@ -71,7 +67,7 @@ const initiateCallFlow = ai.defineFlow(
       const aircallNumber = aircallNumbers.find((n: any) => n.e164_format === fromNumber);
 
       if (!aircallNumber) {
-        const errorMsg = `The 'from' number ${fromNumber} is not a valid AirCall number in your account.`
+        const errorMsg = `The 'from' number ${fromNumber} (for user ${userDisplayName}) is not a valid AirCall number in your account.`
         console.error(errorMsg);
         return { success: false, error: errorMsg };
       }
@@ -80,11 +76,14 @@ const initiateCallFlow = ai.defineFlow(
       if (!users.length) {
           return { success: false, error: "No AirCall users found to initiate the call." };
       }
+      // For this implementation, we'll just use the first available user to dial out from.
+      // A more robust solution might map Firebase users to AirCall users.
       const userId = users[0].id;
 
-      await aircall.calls.transfer({
-        to_user_id: userId,
-        digits: phoneNumber,
+      await aircall.calls.dial({
+        user_id: userId,
+        to: phoneNumber,
+        from: fromNumber,
       });
 
       console.log(`Successfully initiated call to ${phoneNumber} from ${fromNumber}`);
