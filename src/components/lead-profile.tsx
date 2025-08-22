@@ -41,7 +41,7 @@ import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { getCallTranscript } from '@/ai/flows/get-call-transcript-flow'
+import { getCallTranscriptsForPhoneNumber } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -97,6 +97,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
+  const [isFetchingTranscripts, setIsFetchingTranscripts] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
@@ -325,9 +326,9 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     });
   };
 
-  const handleGetTranscript = async (callId: string | undefined) => {
-    if (!callId) {
-      toast({ variant: "destructive", title: "Error", description: "This call does not have an ID and a transcript cannot be fetched." });
+  const handleGetTranscripts = async () => {
+    if (!lead?.customerPhone) {
+      toast({ variant: "destructive", title: "Error", description: "This lead does not have a primary phone number." });
       return;
     }
     if (!user) {
@@ -336,29 +337,30 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     }
 
     try {
-        setFetchingTranscriptId(callId);
-        const result = await getCallTranscript({ callId });
+        setIsFetchingTranscripts(true);
+        const result = await getCallTranscriptsForPhoneNumber({
+            phoneNumber: lead.customerPhone,
+            leadId: lead.id,
+            leadAuthor: user.displayName || user.email || 'System'
+        });
 
         if (result.error) {
             throw new Error(result.error);
         }
-
-        if (result.transcript) {
-            const noteContent = `Transcript for call ID ${callId}:\n\n${result.transcript}`;
-            const newNote = await logNoteActivity(lead!.id, {
-                content: noteContent,
-                author: user.displayName || user.email || 'System',
-            });
-            handleNoteLogged(newNote);
-            toast({ title: "Success", description: "Transcript fetched and saved as a note." });
+        
+        if (result.transcriptsFound > 0) {
+            toast({ title: "Success", description: `${result.transcriptsFound} transcript(s) fetched and saved as notes.` });
+            // Re-fetch notes to update the UI
+            fetchSubCollections();
         } else {
-            toast({ title: "No Transcript", description: "No transcript was found for this call." });
+            toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });
         }
+
     } catch (error: any) {
-        console.error("Failed to get transcript:", error);
-        toast({ variant: "destructive", title: "Error", description: `Failed to get transcript: ${error.message}` });
+        console.error("Failed to get transcripts:", error);
+        toast({ variant: "destructive", title: "Error", description: `Failed to get transcripts: ${error.message}` });
     } finally {
-        setFetchingTranscriptId(null);
+        setIsFetchingTranscripts(false);
     }
   };
 
@@ -555,6 +557,16 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.customerPhone!)}>
                                 <PhoneCall className="w-3 h-3" />
                             </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleGetTranscripts} disabled={isFetchingTranscripts}>
+                                    {isFetchingTranscripts ? <Loader /> : <Download className="w-3 h-3" />}
+                                 </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Fetch all call transcripts for this number.</p>
+                              </TooltipContent>
+                            </Tooltip>
                             </>
                         )}
                       </div>
@@ -796,25 +808,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
-                        {item.type === 'Call' && item.callId && (
-                           <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleGetTranscript(item.callId)}
-                                    disabled={fetchingTranscriptId === item.callId}
-                                    className="transition-opacity"
-                                >
-                                    {fetchingTranscriptId === item.callId ? <Loader /> : <Download className="mr-2 h-3 w-3" />}
-                                    Get Transcript
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Fetch and save the call transcript as a note.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                        )}
                       </div>
                     </div>
                   </li>
