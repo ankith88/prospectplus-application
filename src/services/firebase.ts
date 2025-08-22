@@ -11,11 +11,17 @@ import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
-        const activityLog = {
+        const activityLog: Partial<Activity> = {
             ...activity,
             date: activity.date || new Date().toISOString(),
             duration: activity.duration || 'N/A'
         };
+
+        // Ensure callId is explicitly included if it exists
+        if (activity.callId) {
+            activityLog.callId = activity.callId;
+        }
+
         const docRef = await addDoc(activityRef, activityLog);
         console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
         return docRef.id;
