@@ -29,21 +29,33 @@ export async function getCallTranscriptsForPhoneNumber(input: GetTranscriptsInpu
 }
 
 /**
- * Converts a phone number to E.164 format.
+ * Converts an Australian phone number to E.164 format.
  * - Removes non-digit characters.
- * - Replaces leading '0' with '+61' for Australian numbers.
+ * - Handles local, national, and international formats.
  * @param phoneNumber The phone number to format.
  * @returns The formatted phone number.
  */
 function toE164(phoneNumber: string): string {
-    let digits = phoneNumber.replace(/\D/g, '');
+    // 1. Remove all non-digit characters except for a leading '+'
+    let digits = phoneNumber.replace(/(?!^)\D/g, '');
+
+    // 2. Handle country code
+    if (digits.startsWith('+61')) {
+        // Already in international format
+        return digits;
+    }
+    if (digits.startsWith('61')) {
+        // Missing plus sign
+        return `+${digits}`;
+    }
     if (digits.startsWith('0')) {
-        digits = '61' + digits.substring(1);
+        // Local number, replace leading 0 with +61
+        return `+61${digits.substring(1)}`;
     }
-    if (!digits.startsWith('+')) {
-        digits = '+' + digits;
-    }
-    return digits;
+    
+    // Assume it's a local number without a leading 0, prepend +61
+    // This handles cases like '412345678'
+    return `+61${digits}`;
 }
 
 
@@ -66,10 +78,10 @@ const getCallTranscriptsFlow = ai.defineFlow(
     const formattedPhoneNumber = toE164(phoneNumber);
 
     // This endpoint fetches calls for a given phone number
-    const url = `https://api.aircall.io/v1/calls?order=desc&per_page=50&phone_number=${encodeURIComponent(formattedPhoneNumber)}`;
+    const url = `https://api.aircall.io/v1/calls/search?phone_number=${encodeURIComponent(formattedPhoneNumber)}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching calls for phone number: ${formattedPhoneNumber}`);
+    console.log(`Fetching calls for phone number: ${phoneNumber} (Formatted as: ${formattedPhoneNumber})`);
 
     try {
       const response = await fetch(url, {
