@@ -28,6 +28,25 @@ export async function getCallTranscriptsForPhoneNumber(input: GetTranscriptsInpu
     return getCallTranscriptsFlow(input);
 }
 
+/**
+ * Converts a phone number to E.164 format.
+ * - Removes non-digit characters.
+ * - Replaces leading '0' with '+61' for Australian numbers.
+ * @param phoneNumber The phone number to format.
+ * @returns The formatted phone number.
+ */
+function toE164(phoneNumber: string): string {
+    let digits = phoneNumber.replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+        digits = '61' + digits.substring(1);
+    }
+    if (!digits.startsWith('+')) {
+        digits = '+' + digits;
+    }
+    return digits;
+}
+
+
 const getCallTranscriptsFlow = ai.defineFlow(
   {
     name: 'getCallTranscriptsFlow',
@@ -44,11 +63,13 @@ const getCallTranscriptsFlow = ai.defineFlow(
       return { transcriptsFound: 0, error: errorMsg };
     }
 
+    const formattedPhoneNumber = toE164(phoneNumber);
+
     // This endpoint fetches calls for a given phone number
-    const url = `https://api.aircall.io/v1/calls?order=desc&per_page=50&phone_number=${encodeURIComponent(phoneNumber)}`;
+    const url = `https://api.aircall.io/v1/calls?order=desc&per_page=50&phone_number=${encodeURIComponent(formattedPhoneNumber)}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching calls for phone number: ${phoneNumber}`);
+    console.log(`Fetching calls for phone number: ${formattedPhoneNumber}`);
 
     try {
       const response = await fetch(url, {
