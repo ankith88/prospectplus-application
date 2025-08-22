@@ -58,10 +58,17 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
 export async function POST(request: NextRequest) {
   const headersList = headers();
   const signature = headersList.get('x-aircall-signature');
+  const timestamp = headersList.get('x-aircall-timestamp');
 
   if (!signature) {
     console.warn('Received webhook without signature.');
     return new NextResponse('Signature missing', { status: 401 });
+  }
+
+  // Timestamp is required for signature verification
+  if (!timestamp) {
+    console.warn('Received webhook without timestamp.');
+    return new NextResponse('Timestamp missing', { status: 401 });
   }
 
   const token = process.env.AIRCALL_WEBHOOK_TOKEN;
@@ -73,7 +80,10 @@ export async function POST(request: NextRequest) {
   try {
     const requestBody = await request.text();
     const hmac = crypto.createHmac('sha1', token);
-    const calculatedSignature = hmac.update(requestBody).digest('hex');
+    
+    // The signature is generated from: webhook_timestamp + ":" + webhook_raw_body
+    const dataToSign = `${timestamp}:${requestBody}`;
+    const calculatedSignature = hmac.update(dataToSign).digest('hex');
 
     if (calculatedSignature !== signature) {
         console.warn('Received webhook with invalid signature. Check AIRCALL_WEBHOOK_TOKEN.');
