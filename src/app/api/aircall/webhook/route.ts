@@ -71,12 +71,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   return null;
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 
 /**
  * Handles POST requests from AirCall webhooks.
