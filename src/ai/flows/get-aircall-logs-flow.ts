@@ -6,7 +6,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { logActivity, getUserAircallId } from '@/services/firebase';
 import type { Activity } from '@/lib/types';
 import fetch from 'node-fetch';
