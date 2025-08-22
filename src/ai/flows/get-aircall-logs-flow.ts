@@ -30,6 +30,28 @@ export async function getAircallLogs(input: GetAircallLogsInput): Promise<GetAir
   return getAircallLogsFlow(input);
 }
 
+/**
+ * Normalizes an Australian phone number to E.164 format without the '+'.
+ * e.g., '0412345678' -> '61412345678'
+ * e.g., '412345678' -> '61412345678'
+ * e.g., '+61412345678' -> '61412345678'
+ * @param phoneNumber The phone number to normalize.
+ * @returns The normalized phone number string.
+ */
+function normalizeToE164AU(phoneNumber: string): string {
+    let digits = phoneNumber.replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+        digits = '61' + digits.substring(1);
+    } else if (digits.length === 9 && !digits.startsWith('61')) {
+        // Assumes mobile number without leading 0
+        digits = '61' + digits;
+    } else if (digits.startsWith('61')) {
+        // Already in correct format (or close enough)
+    }
+    return digits;
+}
+
+
 const getAircallLogsFlow = ai.defineFlow(
   {
     name: 'getAircallLogsFlow',
@@ -78,13 +100,15 @@ const getAircallLogsFlow = ai.defineFlow(
         const data: any = await response.json();
         
         if (data.calls && data.calls.length > 0) {
-            // Normalize phone numbers from the lead to match against call data
-            const normalizedLeadNumbers = new Set(phoneNumbers.map(num => num.replace(/\D/g, '').slice(-10)));
+            const normalizedLeadNumbers = new Set(phoneNumbers.map(normalizeToE164AU));
 
             const relevantCalls = data.calls.filter((call: any) => {
                 const callNumber = call.raw_digits || call.direct_link?.split(':').pop();
                 if (!callNumber) return false;
-                const normalizedCallNumber = callNumber.replace(/\D/g, '').slice(-10);
+                // AirCall numbers are often already in E.164, so we just strip non-digits.
+                const normalizedCallNumber = callNumber.replace(/\D/g, '');
+                
+                // Check if the normalized call number exists in our set of lead numbers
                 return normalizedLeadNumbers.has(normalizedCallNumber);
             });
 
