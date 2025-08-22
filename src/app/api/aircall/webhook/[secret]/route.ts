@@ -105,6 +105,9 @@ export async function POST(
       if (callData.tags && callData.tags.length > 0) {
          notes += ` Tags: ${callData.tags.map((t: any) => t.name).join(', ')}`;
       }
+      if (callData.transcription?.content) {
+        notes += `\n\nTranscript:\n${callData.transcription.content}`;
+      }
 
 
       if (lead) {
