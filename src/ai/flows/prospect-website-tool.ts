@@ -45,6 +45,22 @@ function extractDomain(url: string): string | null {
     }
 }
 
+/**
+ * Extracts a name from an email address.
+ * e.g., 'john.doe@example.com' -> 'John Doe'
+ */
+function extractNameFromEmail(email: string): string {
+    try {
+        const namePart = email.split('@')[0];
+        const names = namePart.replace(/[._-]/g, ' ').split(' ');
+        const capitalizedNames = names.map(name => name.charAt(0).toUpperCase() + name.slice(1));
+        return capitalizedNames.join(' ');
+    } catch (e) {
+        return 'N/A'; // Fallback for weirdly formatted emails
+    }
+}
+
+
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
@@ -82,12 +98,15 @@ export const prospectWebsiteTool = ai.defineTool(
 
       const hunterData = await response.json() as any;
 
-      const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => ({
-        name: `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim() || 'N/A',
-        title: emailInfo.position || 'N/A',
-        email: emailInfo.value,
-        phone: emailInfo.phone_number || 'N/A',
-      })) || [];
+      const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => {
+        const fullName = `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim();
+        return {
+            name: fullName || extractNameFromEmail(emailInfo.value),
+            title: emailInfo.position || 'N/A',
+            email: emailInfo.value,
+            phone: emailInfo.phone_number || 'N/A',
+        };
+      }) || [];
 
       console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
 
