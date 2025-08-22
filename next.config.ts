@@ -25,17 +25,6 @@ const nextConfig: NextConfig = {
       }
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/aircall/webhook',
-        destination: '/api/aircall/webhook',
-      },
-    ];
-  },
-  api: {
-    bodyParser: false,
-  },
 };
 
 export default nextConfig;
