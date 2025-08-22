@@ -1,11 +1,12 @@
 'use server';
 /**
- * @fileOverview A Genkit tool for prospecting a website for contacts and social media links.
+ * @fileOverview A Genkit tool for prospecting a website for contacts using Hunter.io.
  */
 
 import { ai } from '@/ai/genkit';
-import { addContactToLead, updateLeadAvatar } from '@/services/firebase';
+import { addContactToLead, getLeadFromFirebase } from '@/services/firebase';
 import { z } from 'genkit';
+import fetch from 'node-fetch';
 
 const SocialLinksSchema = z.object({
   linkedIn: z.string().optional(),
@@ -32,67 +33,90 @@ const ProspectWebsiteInputSchema = z.object({
   websiteUrl: z.string().describe('The URL of the website to prospect.'),
 });
 
+function extractDomain(url: string): string | null {
+    try {
+        const hostname = new URL(url).hostname;
+        // Remove 'www.' if it exists
+        return hostname.replace(/^www\./, '');
+    } catch (error) {
+        console.error("Invalid URL for domain extraction:", url, error);
+        return null;
+    }
+}
+
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links, contact information, and relevant keywords. This tool does not actually crawl the website, but simulates the result of such an operation for demonstration purposes.',
+    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
   async ({ leadId, websiteUrl }) => {
-    // In a real application, you would use a web scraping library
-    // (e.g., Cheerio, Puppeteer) to fetch and parse the website content.
-    // For this demo, we'll return mock data based on the URL.
-    console.log(`Prospecting website (mock): ${websiteUrl} for lead ${leadId}`);
+    const apiKey = process.env.HUNTER_API_KEY;
+    if (!apiKey) {
+      console.error('Hunter.io API key is not configured.');
+      throw new Error('Hunter.io API key is not configured.');
+    }
 
-    if (websiteUrl.includes('123buynow')) {
-      const foundContacts = [
-        {
-          name: 'John Doe',
-          title: 'CEO',
-          email: 'john.d@123buynow.com.au',
-        },
-        {
-          name: 'Jane Smith',
-          title: 'Head of Logistics',
-          email: 'jane.s@123buynow.com.au',
-        },
-      ];
-      const logoUrl = 'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png';
-
-      // Save contacts to Firebase
-      for (const contact of foundContacts) {
-        if (contact.name && contact.email) {
-          await addContactToLead(leadId, {
-            id: '', // Firestore will generate an ID
-            name: contact.name,
-            title: contact.title || 'N/A',
-            email: contact.email,
-            phone: 'N/A', // No phone in mock data
-          });
-        }
-      }
-      
-      // Update avatar in Firebase
-      await updateLeadAvatar(leadId, logoUrl);
-
+    const domain = extractDomain(websiteUrl);
+    if (!domain) {
       return {
-        logoUrl,
-        socialLinks: {
-          linkedIn: 'https://linkedin.com/company/123-buy-now',
-          twitter: 'https://x.com/123buynow',
-        },
-        contacts: foundContacts,
-        siteAnalysis: "The website mentions 'e-commerce store', 'shipping options', and 'returns policy', indicating they ship physical goods.",
+        contacts: [],
+        siteAnalysis: "Invalid website URL provided.",
       };
     }
     
-    // Return empty objects if no specific match
-    return {
-      logoUrl: undefined,
-      socialLinks: {},
-      contacts: [],
-      siteAnalysis: "No specific shipping-related keywords found on the website.",
-    };
+    console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
+
+    try {
+      const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
+      const response = await fetch(hunterUrl);
+
+      if (!response.ok) {
+        console.error(`Hunter.io API request failed with status: ${response.status}`);
+        const errorBody = await response.text();
+        console.error('Hunter.io error response:', errorBody);
+        throw new Error(`Hunter.io API request failed: ${response.statusText}`);
+      }
+
+      const hunterData = await response.json() as any;
+
+      const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => ({
+        name: `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim(),
+        title: emailInfo.position || 'N/A',
+        email: emailInfo.value,
+        phone: emailInfo.phone_number || 'N/A',
+      })) || [];
+
+      console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
+
+      // Get existing contacts to avoid duplicates
+      const lead = await getLeadFromFirebase(leadId, true);
+      const existingEmails = new Set((lead?.contacts || []).map(c => c.email.toLowerCase()));
+      
+      const newContacts = foundContacts.filter((contact: any) => contact.email && !existingEmails.has(contact.email.toLowerCase()));
+      
+      console.log(`Found ${newContacts.length} new unique contacts to add.`);
+
+      // Save new contacts to Firebase
+      for (const contact of newContacts) {
+        if (contact.name && contact.email) {
+          await addContactToLead(leadId, {
+            name: contact.name,
+            title: contact.title || 'N/A',
+            email: contact.email,
+            phone: contact.phone || 'N/A',
+          });
+        }
+      }
+
+      return {
+        contacts: newContacts,
+        siteAnalysis: `Found ${newContacts.length} new contacts via Hunter.io.`,
+      };
+    } catch (error) {
+      console.error('Error during website prospecting with Hunter.io:', error);
+      throw new Error('An error occurred while prospecting the website.');
+    }
   }
 );
