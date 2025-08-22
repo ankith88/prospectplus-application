@@ -56,7 +56,7 @@ const getAircallLogsFlow = ai.defineFlow(
     }
 
     const auth = 'Basic ' + Buffer.from(apiId + ':' + apiToken).toString('base64');
-    const endpoint = `https://api.aircall.io/v1/users/${aircallUserId}/calls`;
+    const endpoint = `https://api.aircall.io/v1/calls?user_id=${aircallUserId}`;
     
     let totalLogsFound = 0;
 
