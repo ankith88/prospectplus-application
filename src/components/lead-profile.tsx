@@ -84,6 +84,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -794,18 +795,25 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                         <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground">{item.notes}</p>
+                        <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
                         {item.type === 'Call' && item.callId && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleGetTranscript(item.callId)}
-                                disabled={fetchingTranscriptId === item.callId}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                                {fetchingTranscriptId === item.callId ? <Loader /> : <Download className="mr-2 h-3 w-3" />}
-                                Get Transcript
-                            </Button>
+                           <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGetTranscript(item.callId)}
+                                    disabled={fetchingTranscriptId === item.callId}
+                                    className="transition-opacity"
+                                >
+                                    {fetchingTranscriptId === item.callId ? <Loader /> : <Download className="mr-2 h-3 w-3" />}
+                                    Get Transcript
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Fetch and save the call transcript as a note.</p>
+                              </TooltipContent>
+                            </Tooltip>
                         )}
                       </div>
                     </div>
