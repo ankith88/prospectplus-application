@@ -7,13 +7,15 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { logActivity } from '@/services/firebase';
+import { logActivity, getUserAircallId } from '@/services/firebase';
 import type { Activity } from '@/lib/types';
 import fetch from 'node-fetch';
+import { useAuth } from '@/hooks/use-auth';
 
 const GetAircallLogsInputSchema = z.object({
   leadId: z.string().describe('The ID of the lead to fetch logs for.'),
   phoneNumbers: z.array(z.string()).describe('An array of phone numbers associated with the lead.'),
+  userDisplayName: z.string().describe('The display name of the user fetching the logs.')
 });
 export type GetAircallLogsInput = z.infer<typeof GetAircallLogsInputSchema>;
 
@@ -34,7 +36,7 @@ const getAircallLogsFlow = ai.defineFlow(
     inputSchema: GetAircallLogsInputSchema,
     outputSchema: GetAircallLogsOutputSchema,
   },
-  async ({ leadId, phoneNumbers }) => {
+  async ({ leadId, phoneNumbers, userDisplayName }) => {
     const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
 
@@ -48,53 +50,66 @@ const getAircallLogsFlow = ai.defineFlow(
         return { success: true, logsFound: 0 };
     }
 
+    const aircallUserId = await getUserAircallId(userDisplayName);
+    if (!aircallUserId) {
+      return { success: false, logsFound: 0, error: "AIRCALL_USER_ID_MISSING" };
+    }
+
     const auth = 'Basic ' + Buffer.from(apiId + ':' + apiToken).toString('base64');
+    const endpoint = `https://api.aircall.io/v1/users/${aircallUserId}/calls`;
     
     let totalLogsFound = 0;
 
-    for (const number of phoneNumbers) {
-        // Aircall API expects E.164 format, but let's try a simple search first
-        const endpoint = `https://api.aircall.io/v1/calls/search?phone_number=${encodeURIComponent(number)}`;
+    try {
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+            'Authorization': auth,
+            'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`AirCall API error fetching calls for user ${aircallUserId}: ${response.status} ${response.statusText}`, errorBody);
+            return { success: false, logsFound: 0, error: `API_ERROR: ${response.status}` };
+        }
+
+        const data: any = await response.json();
         
-        try {
-            const response = await fetch(endpoint, {
-                method: 'GET',
-                headers: {
-                'Authorization': auth,
-                'Content-Type': 'application/json',
-                },
+        if (data.calls && data.calls.length > 0) {
+            // Normalize phone numbers from the lead to match against call data
+            const normalizedLeadNumbers = new Set(phoneNumbers.map(num => num.replace(/\D/g, '').slice(-10)));
+
+            const relevantCalls = data.calls.filter((call: any) => {
+                const callNumber = call.raw_digits || call.direct_link?.split(':').pop();
+                if (!callNumber) return false;
+                const normalizedCallNumber = callNumber.replace(/\D/g, '').slice(-10);
+                return normalizedLeadNumbers.has(normalizedCallNumber);
             });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`AirCall API error for number ${number}: ${response.status} ${response.statusText}`, errorBody);
-                // Continue to next number if one fails
-                continue;
-            }
+            totalLogsFound = relevantCalls.length;
 
-            const data: any = await response.json();
-            
-            if (data.calls && data.calls.length > 0) {
-                totalLogsFound += data.calls.length;
-                for (const call of data.calls) {
-                    const minutes = Math.floor(call.duration / 60);
-                    const seconds = call.duration % 60;
-                    const duration = `${minutes}m ${seconds}s`;
+            for (const call of relevantCalls) {
+                const minutes = Math.floor(call.duration / 60);
+                const seconds = call.duration % 60;
+                const duration = `${minutes}m ${seconds}s`;
 
-                    const notes = `Call with ${call.direction} direction. Answered: ${call.status}. ${call.comments?.map((c: any) => c.content).join(' ') || 'N/A'}`;
-                    
-                    await logActivity(leadId, {
-                        type: 'Call',
-                        notes: notes,
-                        duration: duration,
-                        date: new Date(call.started_at).toISOString(),
-                    });
-                }
+                const notes = `Call with ${call.direction} direction. Answered: ${call.status}. ${call.comments?.map((c: any) => c.content).join(' ') || 'N/A'}`;
+                
+                await logActivity(leadId, {
+                    type: 'Call',
+                    notes: notes,
+                    duration: duration,
+                    date: new Date(call.started_at).toISOString(),
+                });
             }
-        } catch (error) {
-            console.error(`Failed to fetch or process logs for number ${number}:`, error);
         }
+    } catch (error) {
+        console.error(`Failed to fetch or process logs for user ${aircallUserId}:`, error);
+        return { success: false, logsFound: 0, error: 'FETCH_FAILED' };
     }
+
 
     return { success: true, logsFound: totalLogsFound };
   }

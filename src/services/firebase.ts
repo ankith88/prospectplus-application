@@ -40,6 +40,38 @@ function safeGetStatus(status: any): LeadStatus {
     return 'New';
 }
 
+async function getUserAircallId(displayName: string): Promise<string | null> {
+    try {
+        const [firstName, lastName] = displayName.split(' ');
+        if (!firstName || !lastName) {
+            console.log(`Invalid display name format: ${displayName}`);
+            return null;
+        }
+
+        const usersRef = collection(firestore, 'users');
+        const q = query(usersRef, where('firstName', '==', firstName), where('lastName', '==', lastName), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            console.log(`No user found with display name: ${displayName}`);
+            return null;
+        }
+
+        const userDoc = querySnapshot.docs[0];
+        const aircallUserId = userDoc.data().aircallUserId;
+
+        if (!aircallUserId) {
+            console.log(`AirCall User ID not found for user: ${displayName}`);
+            return null;
+        }
+
+        return aircallUserId;
+    } catch (error) {
+        console.error(`Failed to get AirCall User ID for user ${displayName}:`, error);
+        return null;
+    }
+}
+
 async function getUserPhoneNumber(displayName: string): Promise<string | null> {
     try {
         const [firstName, lastName] = displayName.split(' ');
@@ -382,4 +414,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };

@@ -200,17 +200,31 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   };
 
   const handleSyncCallLogs = async () => {
-    if (!lead) return;
+    if (!lead || !user?.displayName) return;
     try {
       setIsSyncing(true);
-      const result = await getAircallLogs({ leadId: lead.id, phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[] });
+      const result = await getAircallLogs({ 
+        leadId: lead.id, 
+        phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[],
+        userDisplayName: user.displayName,
+      });
       
-      if (!result.success && result.error === 'CREDENTIALS_MISSING') {
-          toast({
-              variant: "destructive",
-              title: "AirCall Credentials Missing",
-              description: "Please add your AirCall API ID and Token to the .env file.",
-          });
+      if (!result.success) {
+          if (result.error === 'CREDENTIALS_MISSING') {
+            toast({
+                variant: "destructive",
+                title: "AirCall Credentials Missing",
+                description: "Please add your AirCall API ID and Token to the .env file.",
+            });
+          } else if (result.error === 'AIRCALL_USER_ID_MISSING') {
+            toast({
+                variant: "destructive",
+                title: "AirCall User ID Missing",
+                description: "Please add the 'aircallUserId' to your user profile in Firebase.",
+            });
+          } else {
+            toast({ variant: "destructive", title: "Error", description: `Failed to sync call logs: ${result.error}` });
+          }
       } else {
           await fetchSubCollections(); // Refetch activities
           toast({ title: "Success", description: `Found and synced ${result.logsFound} call log(s) from AirCall.` });
