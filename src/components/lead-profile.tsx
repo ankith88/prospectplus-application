@@ -203,9 +203,18 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     if (!lead) return;
     try {
       setIsSyncing(true);
-      await getAircallLogs({ leadId: lead.id, phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[] });
-      await fetchSubCollections(); // Refetch activities
-      toast({ title: "Success", description: "Call logs have been synced from AirCall." });
+      const result = await getAircallLogs({ leadId: lead.id, phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[] });
+      
+      if (!result.success && result.error === 'CREDENTIALS_MISSING') {
+          toast({
+              variant: "destructive",
+              title: "AirCall Credentials Missing",
+              description: "Please add your AirCall API ID and Token to the .env file.",
+          });
+      } else {
+          await fetchSubCollections(); // Refetch activities
+          toast({ title: "Success", description: `Found and synced ${result.logsFound} call log(s) from AirCall.` });
+      }
     } catch (error) {
       console.error("Failed to sync call logs:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to sync call logs from AirCall." });

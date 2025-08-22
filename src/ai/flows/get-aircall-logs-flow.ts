@@ -20,6 +20,7 @@ export type GetAircallLogsInput = z.infer<typeof GetAircallLogsInputSchema>;
 const GetAircallLogsOutputSchema = z.object({
   success: z.boolean(),
   logsFound: z.number(),
+  error: z.string().optional(),
 });
 export type GetAircallLogsOutput = z.infer<typeof GetAircallLogsOutputSchema>;
 
@@ -38,8 +39,9 @@ const getAircallLogsFlow = ai.defineFlow(
     const apiToken = process.env.AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) {
-      console.error('AirCall API ID or Token is not set in environment variables.');
-      throw new Error('AirCall API credentials are not configured.');
+      const errorMessage = 'AirCall API ID or Token is not set in environment variables.';
+      console.error(errorMessage);
+      return { success: false, logsFound: 0, error: "CREDENTIALS_MISSING" };
     }
 
     if (phoneNumbers.length === 0) {
