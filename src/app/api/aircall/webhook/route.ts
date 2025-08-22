@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
         type: 'Call',
         notes: notes,
         duration: duration,
+        callId: callData.id,
       });
 
       console.log(`Successfully logged activity for lead ${lead.id}`);

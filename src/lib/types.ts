@@ -14,6 +14,7 @@ export interface Activity {
   date: string
   duration?: string // e.g., "5m 32s"
   notes: string
+  callId?: string
 }
 
 export interface Note {
