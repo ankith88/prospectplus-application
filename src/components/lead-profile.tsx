@@ -344,15 +344,17 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             leadAuthor: user.displayName || user.email || 'System'
         });
 
-        if (result.error) {
-            throw new Error(result.error);
-        }
-        
-        if (result.transcriptsFound > 0) {
+        if (result.error && result.error === 'NO_CALLS_FOUND') {
+            toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });
+        } else if (result.error) {
+            // Handle other, unexpected errors
+            toast({ variant: "destructive", title: "Error", description: `Failed to get transcripts: ${result.error}` });
+        } else if (result.transcriptsFound > 0) {
             toast({ title: "Success", description: `${result.transcriptsFound} transcript(s) fetched and saved as notes.` });
             // Re-fetch notes to update the UI
             fetchSubCollections();
         } else {
+             // This case handles if transcriptsFound is 0 and no error is set, which is the same as NO_CALLS_FOUND
             toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });
         }
 

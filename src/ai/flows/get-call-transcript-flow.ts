@@ -111,7 +111,7 @@ const getCallTranscriptsFlow = ai.defineFlow(
 
       if (matchedCalls.length === 0) {
         console.log(`No calls found matching phone number: ${targetPhoneNumber}`);
-        return { transcriptsFound: 0, error: 'No calls found for this phone number.' };
+        return { transcriptsFound: 0, error: 'NO_CALLS_FOUND' };
       }
 
       for (const call of matchedCalls) {
