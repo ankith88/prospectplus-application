@@ -34,14 +34,12 @@ import {
   BookText,
   FileText,
   PhoneCall,
-  RefreshCw,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { getAircallLogs } from '@/ai/flows/get-aircall-logs-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -93,7 +91,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -196,44 +193,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
     } finally {
         setIsProspecting(false);
-    }
-  };
-
-  const handleSyncCallLogs = async () => {
-    if (!lead || !user?.displayName) return;
-    try {
-      setIsSyncing(true);
-      const result = await getAircallLogs({ 
-        leadId: lead.id, 
-        phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[],
-        userDisplayName: user.displayName,
-      });
-      
-      if (!result.success) {
-          if (result.error === 'CREDENTIALS_MISSING') {
-            toast({
-                variant: "destructive",
-                title: "AirCall Credentials Missing",
-                description: "Please add your AirCall API ID and Token to the .env file.",
-            });
-          } else if (result.error === 'AIRCALL_USER_ID_MISSING') {
-            toast({
-                variant: "destructive",
-                title: "AirCall User ID Missing",
-                description: "Please add the 'aircallUserId' to your user profile in Firebase.",
-            });
-          } else {
-            toast({ variant: "destructive", title: "Error", description: `Failed to sync call logs: ${result.error}` });
-          }
-      } else {
-          await fetchSubCollections(); // Refetch activities
-          toast({ title: "Success", description: `Found and synced ${result.logsFound} call log(s) from AirCall.` });
-      }
-    } catch (error) {
-      console.error("Failed to sync call logs:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to sync call logs from AirCall." });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -409,9 +368,6 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleSyncCallLogs} disabled={isSyncing}>
-            {isSyncing ? <Loader /> : <><RefreshCw className="mr-2 h-4 w-4" /> Sync Call Logs</>}
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary">
