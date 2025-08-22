@@ -590,8 +590,8 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                   <Skeleton className="h-12 w-full" />
                  </div>
               ) : lead.contacts && lead.contacts.length > 0 ? (
-                lead.contacts.map((contact) => (
-                  <div key={contact.id} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
+                lead.contacts.map((contact, index) => (
+                  <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
                      <div className="absolute top-4 right-4">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
