@@ -57,7 +57,7 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
  */
 export async function POST(request: NextRequest) {
   const headersList = headers();
-  const signature = headersList.get('X-Aircall-Signature');
+  const signature = headersList.get('x-aircall-signature');
 
   if (!signature) {
     console.warn('Received webhook without signature.');
@@ -71,15 +71,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const data = await request.json();
-    const rawBody = JSON.stringify(data); // Use the JSON parsed body
-    const hash = crypto.createHmac('sha1', token).update(rawBody).digest('hex');
-    
-    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(signature, 'hex'))) {
+    const requestBody = await request.text();
+    const hmac = crypto.createHmac('sha1', token);
+    const calculatedSignature = hmac.update(requestBody).digest('hex');
+
+    if (calculatedSignature !== signature) {
         console.warn('Received webhook with invalid signature. Check AIRCALL_WEBHOOK_TOKEN.');
         return new NextResponse('Invalid signature', { status: 401 });
     }
-
+    
+    const data = JSON.parse(requestBody);
     console.log(`Received webhook for event: ${data.event}`);
 
     // We only care about when a call is finished and notes are added.
