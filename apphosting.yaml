@@ -5,3 +5,9 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+# Allow unauthenticated access to the AirCall webhook endpoint.
+# The webhook is still secured via signature verification in the code.
+public:
+  - path: /api/aircall/webhook
+    method: POST
