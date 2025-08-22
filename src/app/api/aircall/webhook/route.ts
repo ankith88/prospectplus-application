@@ -26,7 +26,14 @@ function verifySignature(signature: string, requestBody: string): boolean {
     return false;
   }
   const hash = crypto.createHmac('sha1', token).update(requestBody).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
+  const digest = Buffer.from(hash, 'utf8');
+  const signatureBuffer = Buffer.from(signature, 'utf8');
+
+  if (digest.length !== signatureBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(digest, signatureBuffer);
 }
 
 /**
@@ -64,6 +71,12 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   return null;
 }
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 
 /**
  * Handles POST requests from AirCall webhooks.
@@ -86,22 +99,14 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Signature missing', { status: 401 });
   }
 
-  // Bypassing signature verification if a specific header is present (for testing)
-  if (headersList.get('X-Bypass-Signature-Verification') !== 'true') {
-      if (!verifySignature(signature, rawBody)) {
-        console.warn('Received webhook with invalid signature.');
-        return new NextResponse('Invalid signature', { status: 401 });
-      }
-  } else {
-      console.log('Bypassing signature verification for testing.');
+  if (!verifySignature(signature, rawBody)) {
+    console.warn('Received webhook with invalid signature. Check AIRCALL_WEBHOOK_TOKEN.');
+    return new NextResponse('Invalid signature', { status: 401 });
   }
 
   try {
     const data = JSON.parse(rawBody);
     console.log(`Received webhook for event: ${data.event}`);
-    console.log(`Raw body: ${rawBody}`);
-    console.log(`Parsed data:`, data);
-
 
     // We only care about when a call is finished and notes are added.
     if (data.event === 'call.ended' || data.event === 'call.commented') {
