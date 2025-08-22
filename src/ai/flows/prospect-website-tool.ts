@@ -83,7 +83,7 @@ export const prospectWebsiteTool = ai.defineTool(
       const hunterData = await response.json() as any;
 
       const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => ({
-        name: `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim(),
+        name: `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim() || 'N/A',
         title: emailInfo.position || 'N/A',
         email: emailInfo.value,
         phone: emailInfo.phone_number || 'N/A',
@@ -93,11 +93,17 @@ export const prospectWebsiteTool = ai.defineTool(
 
       // Get existing contacts to avoid duplicates
       const lead = await getLeadFromFirebase(leadId, true);
-      const existingContacts = new Set((lead?.contacts || []).map(c => `${(c.email || '').toLowerCase()}:${(c.phone || 'N/A')}`));
+      const getContactKey = (contact: {email?: string | null, phone?: string | null}) => {
+          const email = (contact.email || '').toLowerCase();
+          const phone = (contact.phone && contact.phone !== 'N/A') ? contact.phone : '';
+          return `${email}:${phone}`;
+      };
+      
+      const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
       
       const newContacts = foundContacts.filter((contact: any) => {
         if (!contact.email) return false;
-        const contactKey = `${contact.email.toLowerCase()}:${contact.phone || 'N/A'}`;
+        const contactKey = getContactKey(contact);
         return !existingContacts.has(contactKey);
       });
       
@@ -105,7 +111,7 @@ export const prospectWebsiteTool = ai.defineTool(
 
       // Save new contacts to Firebase
       for (const contact of newContacts) {
-        if (contact.name && contact.email) {
+        if (contact.email) {
           await addContactToLead(leadId, {
             name: contact.name,
             title: contact.title || 'N/A',
