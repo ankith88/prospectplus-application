@@ -13,28 +13,6 @@ import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { logActivity, logUnmatchedActivity } from '@/services/firebase';
 import type { Lead } from '@/lib/types';
 
-/**
- * Verifies the signature of the incoming webhook request.
- * @param {string} signature The signature from the X-Aircall-Signature header.
- * @param {string} requestBody The raw request body.
- * @returns {boolean} Whether the signature is valid.
- */
-function verifySignature(signature: string, requestBody: string): boolean {
-  const token = process.env.AIRCALL_WEBHOOK_TOKEN;
-  if (!token) {
-    console.error('AIRCALL_WEBHOOK_TOKEN is not set.');
-    return false;
-  }
-  const hash = crypto.createHmac('sha1', token).update(requestBody).digest('hex');
-  const digest = Buffer.from(hash, 'utf8');
-  const signatureBuffer = Buffer.from(signature, 'utf8');
-
-  if (digest.length !== signatureBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(digest, signatureBuffer);
-}
 
 /**
  * Finds a lead in Firestore by a given phone number.
@@ -80,20 +58,28 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
 export async function POST(request: NextRequest) {
   const headersList = headers();
   const signature = headersList.get('X-Aircall-Signature');
-  const rawBody = await request.text();
 
   if (!signature) {
     console.warn('Received webhook without signature.');
     return new NextResponse('Signature missing', { status: 401 });
   }
 
-  if (!verifySignature(signature, rawBody)) {
-    console.warn('Received webhook with invalid signature. Check AIRCALL_WEBHOOK_TOKEN.');
-    return new NextResponse('Invalid signature', { status: 401 });
+  const token = process.env.AIRCALL_WEBHOOK_TOKEN;
+  if (!token) {
+    console.error('AIRCALL_WEBHOOK_TOKEN is not set.');
+    return new NextResponse('Webhook token not configured', { status: 500 });
   }
 
   try {
-    const data = JSON.parse(rawBody);
+    const data = await request.json();
+    const rawBody = JSON.stringify(data); // Use the JSON parsed body
+    const hash = crypto.createHmac('sha1', token).update(rawBody).digest('hex');
+    
+    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(signature, 'hex'))) {
+        console.warn('Received webhook with invalid signature. Check AIRCALL_WEBHOOK_TOKEN.');
+        return new NextResponse('Invalid signature', { status: 401 });
+    }
+
     console.log(`Received webhook for event: ${data.event}`);
 
     // We only care about when a call is finished and notes are added.
@@ -135,8 +121,8 @@ export async function POST(request: NextRequest) {
     }
 
     return new NextResponse('Webhook processed', { status: 200 });
-  } catch (error) {
-    console.error('Error processing webhook:', error);
+  } catch (error: any) {
+    console.error('Error processing webhook:', error.message);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
