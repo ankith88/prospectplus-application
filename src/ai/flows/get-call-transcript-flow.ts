@@ -75,13 +75,13 @@ const getCallTranscriptsFlow = ai.defineFlow(
       return { transcriptsFound: 0, error: errorMsg };
     }
 
-    const formattedPhoneNumber = toE164(phoneNumber);
+    const targetPhoneNumber = toE164(phoneNumber);
 
-    // This endpoint fetches calls for a given phone number
-    const url = `https://api.aircall.io/v1/calls/search?phone_number=${encodeURIComponent(formattedPhoneNumber)}`;
+    // This endpoint fetches all calls
+    const url = `https://api.aircall.io/v1/calls`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching calls for phone number: ${phoneNumber} (Formatted as: ${formattedPhoneNumber})`);
+    console.log(`Fetching all recent calls from AirCall to find match for: ${targetPhoneNumber}`);
 
     try {
       const response = await fetch(url, {
@@ -99,15 +99,22 @@ const getCallTranscriptsFlow = ai.defineFlow(
       }
 
       const responseData = await response.json() as any;
-      const calls = responseData?.calls || [];
+      const allCalls = responseData?.calls || [];
+      
+      // Filter calls in code
+      const matchedCalls = allCalls.filter((call: any) => {
+          // Aircall provides phone numbers in e164 format.
+          return call?.raw_digits === targetPhoneNumber || call?.phone_number?.e164 === targetPhoneNumber;
+      });
+
       let transcriptsFound = 0;
 
-      if (calls.length === 0) {
-        console.log(`No calls found for phone number: ${phoneNumber}`);
+      if (matchedCalls.length === 0) {
+        console.log(`No calls found matching phone number: ${targetPhoneNumber}`);
         return { transcriptsFound: 0, error: 'No calls found for this phone number.' };
       }
 
-      for (const call of calls) {
+      for (const call of matchedCalls) {
         if (call?.transcription?.content) {
           transcriptsFound++;
           const noteContent = `Transcript for call with ${call.direction} direction on ${new Date(call.started_at).toLocaleString()}:\n\n${call.transcription.content}`;
