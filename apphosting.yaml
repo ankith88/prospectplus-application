@@ -7,7 +7,7 @@ runConfig:
   maxInstances: 1
 
 # Allow unauthenticated access to the AirCall webhook endpoint.
-# The webhook is still secured via signature verification in the code.
+# The webhook is now secured via a secret in the URL.
 public:
-  - path: /api/aircall/webhook
+  - path: /api/aircall/webhook/**
     method: POST
