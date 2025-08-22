@@ -34,12 +34,14 @@ import {
   BookText,
   FileText,
   PhoneCall,
+  RefreshCw,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { getAircallLogs } from '@/ai/flows/get-aircall-logs-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -91,6 +93,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -101,20 +104,22 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  useEffect(() => {
-    if (!initialLead) return;
-    setLoading(true);
-
-    Promise.all([
-      getLeadSubCollection<Contact>(initialLead.id, 'contacts'),
-      getLeadSubCollection<Activity>(initialLead.id, 'activity'),
-      getLeadSubCollection<Note>(initialLead.id, 'notes'),
+  const fetchSubCollections = async () => {
+    if (!lead) return;
+     Promise.all([
+      getLeadSubCollection<Contact>(lead.id, 'contacts'),
+      getLeadSubCollection<Activity>(lead.id, 'activity'),
+      getLeadSubCollection<Note>(lead.id, 'notes'),
     ]).then(([contacts, activity, notes]) => {
       setLead(prev => prev ? { ...prev, contacts, activity } : null);
       setNotes(notes);
-    }).finally(() => {
-      setLoading(false);
     });
+  }
+
+  useEffect(() => {
+    if (!initialLead) return;
+    setLoading(true);
+    fetchSubCollections().finally(() => setLoading(false));
   }, [initialLead]);
 
 
@@ -191,6 +196,21 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
     } finally {
         setIsProspecting(false);
+    }
+  };
+
+  const handleSyncCallLogs = async () => {
+    if (!lead) return;
+    try {
+      setIsSyncing(true);
+      await getAircallLogs({ leadId: lead.id, phoneNumbers: [lead.customerPhone, ...(lead.contacts || []).map(c => c.phone)].filter(Boolean) as string[] });
+      await fetchSubCollections(); // Refetch activities
+      toast({ title: "Success", description: "Call logs have been synced from AirCall." });
+    } catch (error) {
+      console.error("Failed to sync call logs:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to sync call logs from AirCall." });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -366,6 +386,9 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleSyncCallLogs} disabled={isSyncing}>
+            {isSyncing ? <Loader /> : <><RefreshCw className="mr-2 h-4 w-4" /> Sync Call Logs</>}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary">

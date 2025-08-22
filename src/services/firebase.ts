@@ -9,12 +9,12 @@ import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
-async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date' | 'duration'> & { duration?: string }): Promise<string> {
+async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
         const activityLog = {
             ...activity,
-            date: new Date().toISOString(),
+            date: activity.date || new Date().toISOString(),
             duration: activity.duration || 'N/A'
         };
         const docRef = await addDoc(activityRef, activityLog);
@@ -27,7 +27,7 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won'];
+    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review'];
     if (typeof status === 'string') {
         let cleanStatus = status.replace('SUSPECT-', '');
         if (cleanStatus === 'Unqualified') { // Specific mapping for your status
