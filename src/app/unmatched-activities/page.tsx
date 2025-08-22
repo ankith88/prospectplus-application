@@ -39,37 +39,38 @@ export default function UnmatchedActivitiesPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  useEffect(() => {
-    async function getUnmatchedActivities() {
-      if (!user && !authLoading) {
-        router.push('/signin');
-        return;
-      }
-      if (authLoading) return;
-
-      try {
-        setLoading(true);
-        const activitiesRef = collection(firestore, 'unmatched_activities');
-        const q = query(activitiesRef, orderBy('date', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const activities = querySnapshot.docs.map(doc => {
-            const data = doc.data() as Activity;
-            const phoneNumber = data.notes.match(/Unmatched call from (\S+)\./)?.[1] || 'Unknown';
-            return {
-                ...data,
-                id: doc.id,
-                phoneNumber: phoneNumber,
-            }
-        }) as UnmatchedActivity[];
-        setUnmatchedActivities(activities);
-      } catch (error) {
-        console.error("Failed to fetch unmatched activities:", error);
-      } finally {
-        setLoading(false);
-      }
+  const fetchUnmatchedActivities = async () => {
+    try {
+      setLoading(true);
+      const activitiesRef = collection(firestore, 'unmatched_activities');
+      const q = query(activitiesRef, orderBy('date', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const activities = querySnapshot.docs.map(doc => {
+          const data = doc.data() as Activity;
+          const phoneNumber = data.notes.match(/Unmatched call from (\S+)\./)?.[1] || data.notes.match(/call with (\S+) on/)?.[1] || 'Unknown';
+          return {
+              ...data,
+              id: doc.id,
+              phoneNumber: phoneNumber,
+          }
+      }) as UnmatchedActivity[];
+      setUnmatchedActivities(activities);
+    } catch (error) {
+      console.error("Failed to fetch unmatched activities:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch activities.' });
+    } finally {
+      setLoading(false);
     }
-    getUnmatchedActivities();
-  }, [user, authLoading, router]);
+  }
+
+  useEffect(() => {
+    if (!user && !authLoading) {
+      router.push('/signin');
+      return;
+    }
+    if (authLoading) return;
+    fetchUnmatchedActivities();
+  }, [user, authLoading, router, toast]);
 
   const handleSyncTranscripts = async () => {
     if (!user?.displayName) {
@@ -82,8 +83,9 @@ export default function UnmatchedActivitiesPage() {
         
         if (result.error) {
             toast({ variant: 'destructive', title: 'Sync Failed', description: result.error });
-        } else if (result.transcriptsFound > 0) {
-            toast({ title: 'Success', description: `Synced ${result.transcriptsFound} new transcript(s).` });
+        } else if (result.newActivities.length > 0) {
+            toast({ title: 'Success', description: `Synced ${result.newActivities.length} new transcript(s).` });
+            setUnmatchedActivities(prev => [...result.newActivities, ...prev]);
         } else {
             toast({ title: 'No New Transcripts', description: 'No new transcripts were found to sync.' });
         }
