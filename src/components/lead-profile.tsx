@@ -751,7 +751,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                     <div className="flex-1 pb-4">
                       <div className="flex items-center justify-between">
                         <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                        <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleDateString()}</p>
+                        <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
                       </div>
                       <p className="text-sm text-muted-foreground">{item.notes}</p>
                     </div>
@@ -833,3 +833,5 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     </>
   )
 }
+
+    
