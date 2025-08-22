@@ -23,7 +23,9 @@ import { Loader } from '@/components/ui/loader'
 import { firestore } from '@/lib/firebase'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud } from 'lucide-react'
+import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
+import { useToast } from '@/hooks/use-toast'
 
 type UnmatchedActivity = Activity & {
     phoneNumber: string;
@@ -32,8 +34,10 @@ type UnmatchedActivity = Activity & {
 export default function UnmatchedActivitiesPage() {
   const [unmatchedActivities, setUnmatchedActivities] = useState<UnmatchedActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     async function getUnmatchedActivities() {
@@ -67,6 +71,29 @@ export default function UnmatchedActivitiesPage() {
     getUnmatchedActivities();
   }, [user, authLoading, router]);
 
+  const handleSyncTranscripts = async () => {
+    if (!user?.displayName) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not identify user.' });
+        return;
+    }
+    try {
+        setIsSyncing(true);
+        const result = await getUserCallTranscripts({ userDisplayName: user.displayName });
+        
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Sync Failed', description: result.error });
+        } else if (result.transcriptsFound > 0) {
+            toast({ title: 'Success', description: `Synced ${result.transcriptsFound} new transcript(s).` });
+        } else {
+            toast({ title: 'No New Transcripts', description: 'No new transcripts were found to sync.' });
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unknown error occurred.' });
+    } finally {
+        setIsSyncing(false);
+    }
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -78,9 +105,15 @@ export default function UnmatchedActivitiesPage() {
   return (
     <>
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Unmatched Activities</h1>
-        <p className="text-muted-foreground">Review incoming calls from numbers not associated with any lead.</p>
+      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">Unmatched Activities</h1>
+            <p className="text-muted-foreground">Review incoming calls from numbers not associated with any lead.</p>
+        </div>
+        <Button onClick={handleSyncTranscripts} disabled={isSyncing}>
+            {isSyncing ? <Loader/> : <DownloadCloud className="mr-2 h-4 w-4" />}
+            {isSyncing ? 'Syncing...' : 'Sync My Transcripts'}
+        </Button>
       </header>
       <Card>
         <CardHeader>
