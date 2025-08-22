@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit tool for prospecting a website for contacts using Hunter.io.
@@ -92,9 +93,13 @@ export const prospectWebsiteTool = ai.defineTool(
 
       // Get existing contacts to avoid duplicates
       const lead = await getLeadFromFirebase(leadId, true);
-      const existingEmails = new Set((lead?.contacts || []).map(c => c.email.toLowerCase()));
+      const existingContacts = new Set((lead?.contacts || []).map(c => `${(c.email || '').toLowerCase()}:${(c.phone || 'N/A')}`));
       
-      const newContacts = foundContacts.filter((contact: any) => contact.email && !existingEmails.has(contact.email.toLowerCase()));
+      const newContacts = foundContacts.filter((contact: any) => {
+        if (!contact.email) return false;
+        const contactKey = `${contact.email.toLowerCase()}:${contact.phone || 'N/A'}`;
+        return !existingContacts.has(contactKey);
+      });
       
       console.log(`Found ${newContacts.length} new unique contacts to add.`);
 
