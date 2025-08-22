@@ -101,6 +101,7 @@ const getAircallLogsFlow = ai.defineFlow(
         
         if (data.calls && data.calls.length > 0) {
             const normalizedLeadNumbers = new Set(phoneNumbers.map(normalizeToE164AU));
+            console.log("Normalized Lead Numbers to check:", Array.from(normalizedLeadNumbers));
 
             const relevantCalls = data.calls.filter((call: any) => {
                 const callNumber = call.raw_digits || call.direct_link?.split(':').pop();
@@ -113,20 +114,27 @@ const getAircallLogsFlow = ai.defineFlow(
             });
 
             totalLogsFound = relevantCalls.length;
+            console.log(`Found ${totalLogsFound} relevant calls for lead ${leadId}.`);
 
-            for (const call of relevantCalls) {
+            const loggingPromises = relevantCalls.map((call: any) => {
                 const minutes = Math.floor(call.duration / 60);
                 const seconds = call.duration % 60;
                 const duration = `${minutes}m ${seconds}s`;
 
-                const notes = `Call with ${call.direction} direction. Answered: ${call.status}. ${call.comments?.map((c: any) => c.content).join(' ') || 'N/A'}`;
+                const callComments = call.comments?.map((c: any) => c.content).join(' ') || 'N/A';
+                const notes = `Call direction: ${call.direction}. Status: ${call.status}. Comments: ${callComments}`;
                 
-                await logActivity(leadId, {
+                return logActivity(leadId, {
                     type: 'Call',
                     notes: notes,
                     duration: duration,
                     date: new Date(call.started_at).toISOString(),
                 });
+            });
+
+            await Promise.all(loggingPromises);
+            if (totalLogsFound > 0) {
+              console.log(`Successfully processed and logged ${totalLogsFound} activities for lead ${leadId}`);
             }
         }
     } catch (error) {
