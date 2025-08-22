@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive } from "lucide-react"
+import { Briefcase, LogOut, Archive, Inbox } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -27,7 +27,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, loading, signOut } = useAuth()
   const { isMobile } = useSidebar()
-  const isActive = (path: string) => pathname === path
+  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
+
 
   const handleSignOut = async () => {
     await signOut()
@@ -86,6 +87,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link href="/leads">
                   <Briefcase />
                   <span>Outbound Leads</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/unmatched-activities")} tooltip="Unmatched Activities">
+                <Link href="/unmatched-activities">
+                  <Inbox />
+                  <span>Unmatched Activities</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -10,7 +10,7 @@ import { headers } from 'next/headers';
 import crypto from 'crypto';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { logActivity } from '@/services/firebase';
+import { logActivity, logUnmatchedActivity } from '@/services/firebase';
 import type { Lead } from '@/lib/types';
 
 /**
@@ -114,25 +114,30 @@ export async function POST(request: NextRequest) {
 
       const lead = await findLeadByPhoneNumber(leadPhoneNumber);
 
-      if (!lead) {
-        console.log(`No lead found for phone number: ${leadPhoneNumber}`);
-        return new NextResponse('Lead not found', { status: 200 });
-      }
-
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
       const duration = `${minutes}m ${seconds}s`;
 
       const notes = `Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}. Notes: ${callData.comments?.map((c: any) => c.content).join(' ') || 'N/A'}`;
-      
-      await logActivity(lead.id, {
-        type: 'Call',
-        notes: notes,
-        duration: duration,
-        callId: callData.id,
-      });
 
-      console.log(`Successfully logged activity for lead ${lead.id}`);
+      if (lead) {
+        await logActivity(lead.id, {
+            type: 'Call',
+            notes: notes,
+            duration: duration,
+            callId: callData.id,
+        });
+        console.log(`Successfully logged activity for lead ${lead.id}`);
+      } else {
+        console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
+        await logUnmatchedActivity({
+            type: 'Call',
+            notes: `Unmatched call from ${leadPhoneNumber}. ${notes}`,
+            date: new Date(callData.started_at).toISOString(),
+            duration: duration,
+            callId: callData.id,
+        });
+      }
     }
 
     return new NextResponse('Webhook processed', { status: 200 });

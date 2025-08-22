@@ -31,6 +31,19 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
     }
 }
 
+async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<string> {
+    try {
+        const unmatchedActivitiesRef = collection(firestore, 'unmatched_activities');
+        const docRef = await addDoc(unmatchedActivitiesRef, activity);
+        console.log(`Unmatched activity logged with ID: ${docRef.id}`);
+        return docRef.id;
+    } catch (error) {
+        console.error(`Failed to log unmatched activity:`, error);
+        throw new Error('Failed to log unmatched activity in Firebase');
+    }
+}
+
+
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review'];
     if (typeof status === 'string') {
@@ -67,7 +80,6 @@ async function getUserAircallId(displayName: string): Promise<string | null> {
 
         if (!aircallUserId) {
             console.log(`AirCall User ID not found for user: ${displayName}`);
-            return null;
         }
 
         return aircallUserId;
@@ -342,7 +354,7 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         const notesRef = collection(firestore, 'leads', leadId, 'notes');
         const newNote = {
             ...noteData,
-            date: new new Date().toISOString()
+            date: new Date().toISOString()
         };
         const docRef = await addDoc(notesRef, newNote);
         
@@ -419,4 +431,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };
