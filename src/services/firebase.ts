@@ -47,10 +47,7 @@ async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<str
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch'];
     if (typeof status === 'string') {
-        let cleanStatus = status.replace('SUSPECT-', '');
-        if (cleanStatus === 'Unqualified') { // Specific mapping for your status
-            cleanStatus = 'Unqualified';
-        }
+        const cleanStatus = status.replace('SUSPECT-', '');
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }

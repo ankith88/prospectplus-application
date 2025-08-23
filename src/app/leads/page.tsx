@@ -98,7 +98,7 @@ export default function LeadsPage() {
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
-      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
+      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
       return filteredLeads.filter(lead => 
         lead.dialerAssigned === user.displayName && actionableStatuses.includes(lead.status)
       );
@@ -107,7 +107,7 @@ export default function LeadsPage() {
   }, [filteredLeads, user]);
 
   const unassignedLeads = useMemo(() => {
-    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'Unqualified', 'LPO Review'];
+    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'LPO Review'];
     return filteredLeads.filter(lead => !lead.dialerAssigned && !nonActionableStatuses.includes(lead.status));
   }, [filteredLeads]);
 
