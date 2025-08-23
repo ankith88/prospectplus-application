@@ -42,7 +42,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptsForPhoneNumber } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -86,15 +86,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-export function LeadProfile({ initialLead }: { initialLead: Lead }) {
+export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, initialNotes: Note[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [userScript, setUserScript] = useState('');
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [isFetchingTranscripts, setIsFetchingTranscripts] = useState(false);
@@ -106,23 +106,11 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const fetchSubCollections = async () => {
+  const fetchNotes = async () => {
     if (!lead) return;
-     Promise.all([
-      getLeadSubCollection<Contact>(lead.id, 'contacts'),
-      getLeadSubCollection<Activity>(lead.id, 'activity'),
-      getLeadSubCollection<Note>(lead.id, 'notes'),
-    ]).then(([contacts, activity, notes]) => {
-      setLead(prev => prev ? { ...prev, contacts, activity } : null);
-      setNotes(notes);
-    });
+    const fetchedNotes = await getLeadNotes(lead.id);
+    setNotes(fetchedNotes);
   }
-
-  useEffect(() => {
-    if (!initialLead) return;
-    setLoading(true);
-    fetchSubCollections().finally(() => setLoading(false));
-  }, [initialLead]);
 
 
   const handleCalculateScore = async () => {
@@ -352,7 +340,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         } else if (result.transcriptsFound > 0) {
             toast({ title: "Success", description: `${result.transcriptsFound} transcript(s) fetched and saved as notes.` });
             // Re-fetch notes to update the UI
-            fetchSubCollections();
+            fetchNotes();
         } else {
              // This case handles if transcriptsFound is 0 and no error is set, which is the same as NO_CALLS_FOUND
             toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });

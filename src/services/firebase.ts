@@ -245,7 +245,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
-async function getLeadSubCollection<T extends Contact | Activity | Note>(leadId: string, collectionName: 'contacts' | 'activity' | 'notes'): Promise<T[]> {
+async function getLeadSubCollection<T extends Contact | Activity>(leadId: string, collectionName: 'contacts' | 'activity'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
     const snapshot = await getDocs(ref);
@@ -254,8 +254,8 @@ async function getLeadSubCollection<T extends Contact | Activity | Note>(leadId:
       ...doc.data()
     } as T));
 
-    if (collectionName === 'activity' || collectionName === 'notes') {
-      (items as (Activity[] | Note[])).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (collectionName === 'activity') {
+      (items as Activity[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     
     return items;
@@ -264,6 +264,23 @@ async function getLeadSubCollection<T extends Contact | Activity | Note>(leadId:
     return [];
   }
 }
+
+async function getLeadNotes(leadId: string): Promise<Note[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'notes');
+        const snapshot = await getDocs(ref);
+        const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Note));
+        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return items;
+    } catch (error) {
+        console.error(`Failed to fetch notes for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
 
 async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): Promise<string> {
   try {
@@ -431,4 +448,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };
