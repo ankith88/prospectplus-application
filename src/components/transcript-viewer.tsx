@@ -29,15 +29,14 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
     
     let utterances: Utterance[] = [];
     try {
-        // Handle both stringified JSON and pre-parsed objects
-        const contentToParse = typeof transcript.content === 'string'
-            ? transcript.content
-            : JSON.stringify(transcript.content);
-            
-        const parsedContent = JSON.parse(contentToParse);
-        
-        if (Array.isArray(parsedContent)) {
-            utterances = parsedContent;
+        if (typeof transcript.content === 'string' && transcript.content.trim().startsWith('[')) {
+            utterances = JSON.parse(transcript.content);
+        } else if (Array.isArray(transcript.content)) {
+            // This case handles data that might not have been stringified upon saving
+            utterances = transcript.content;
+        } else if (typeof transcript.content === 'string') {
+             // Fallback for plain text content
+            utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
         }
     } catch(e) {
         console.error("Could not parse transcript content:", e);
@@ -47,7 +46,7 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
         }
     }
 
-    if (utterances.length === 0) {
+    if (!utterances || utterances.length === 0) {
         return <div className="text-center text-muted-foreground p-8">No transcript content available.</div>;
     }
     
