@@ -18,8 +18,9 @@ interface Utterance {
 }
 
 function getInitials(name: string) {
+    if (!name) return '??';
     const words = name.split(' ');
-    if (words.length > 1) {
+    if (words.length > 1 && words[0] && words[1]) {
         return `${words[0][0]}${words[1][0]}`.toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
@@ -29,19 +30,16 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
     
     let utterances: Utterance[] = [];
     try {
-        if (typeof transcript.content === 'string' && transcript.content.trim().startsWith('[')) {
+        if (typeof transcript.content === 'string') {
             utterances = JSON.parse(transcript.content);
         } else if (Array.isArray(transcript.content)) {
             // This case handles data that might not have been stringified upon saving
             utterances = transcript.content;
-        } else if (typeof transcript.content === 'string') {
-             // Fallback for plain text content
-            utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
         }
     } catch(e) {
-        console.error("Could not parse transcript content:", e);
-        // Fallback for plain text content
-        if (typeof transcript.content === 'string') {
+        console.error("Could not parse transcript content:", transcript.content, e);
+        // Fallback for plain text content just in case
+         if (typeof transcript.content === 'string') {
             utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
         }
     }
@@ -81,3 +79,4 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
         </ScrollArea>
     );
 }
+
