@@ -5,7 +5,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
@@ -311,6 +311,22 @@ async function getLeadNotes(leadId: string): Promise<Note[]> {
     }
 }
 
+async function getLeadTranscripts(leadId: string): Promise<Transcript[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'transcripts');
+        const snapshot = await getDocs(ref);
+        const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Transcript));
+        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return items;
+    } catch (error) {
+        console.error(`Failed to fetch transcripts for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
 
 async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): Promise<string> {
   try {
@@ -419,6 +435,28 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
     }
 }
 
+async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author: string, callId: string }): Promise<Transcript> {
+    try {
+        const transcriptsRef = collection(firestore, 'leads', leadId, 'transcripts');
+        const newTranscript = {
+            ...transcriptData,
+            date: new Date().toISOString()
+        };
+        const docRef = await addDoc(transcriptsRef, newTranscript);
+        
+        await logActivity(leadId, { 
+            type: 'Update', 
+            notes: `Transcript added for call ID ${transcriptData.callId}` 
+        });
+
+        console.log(`Transcript logged with ID: ${docRef.id} for lead ${leadId}`);
+        return { ...newTranscript, id: docRef.id };
+    } catch (error) {
+        console.error(`Failed to log transcript for lead ${leadId}:`, error);
+        throw new Error('Failed to log transcript in Firebase');
+    }
+}
+
 
 async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
   try {
@@ -479,6 +517,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity };
-
-    
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logTranscriptActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity };

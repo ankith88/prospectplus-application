@@ -8,7 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
-import { logNoteActivity } from '@/services/firebase';
+import { logTranscriptActivity } from '@/services/firebase';
 
 const GetTranscriptByCallIdInputSchema = z.object({
   callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),
@@ -72,11 +72,13 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       
       if (transcriptionData?.transcription?.content) {
         const transcript = transcriptionData.transcription.content;
-        const noteContent = `Transcript for call ID ${callId}:\n\n${transcript}`;
-        await logNoteActivity(leadId, {
-          content: noteContent,
-          author: leadAuthor,
+        
+        await logTranscriptActivity(leadId, {
+            content: transcript,
+            author: leadAuthor,
+            callId: callId,
         });
+
         console.log(`Transcript found and logged for call ID: ${callId}`);
         return { transcriptFound: true };
       } else {

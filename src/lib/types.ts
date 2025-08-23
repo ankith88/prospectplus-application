@@ -27,6 +27,14 @@ export interface Note {
     content: string;
 }
 
+export interface Transcript {
+    id: string;
+    date: string;
+    author: string;
+    content: string;
+    callId: string;
+}
+
 export interface Contact {
   id: string
   name: string

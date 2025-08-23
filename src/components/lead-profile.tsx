@@ -37,12 +37,12 @@ import {
   Download,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
-import type { Lead, Contact, Activity, Note } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, updateLeadStatus } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -89,9 +89,10 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 
-export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, initialNotes: Note[] }) {
+export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [userScript, setUserScript] = useState('');
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
@@ -151,6 +152,12 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
     if (!lead) return;
     const fetchedNotes = await getLeadNotes(lead.id);
     setNotes(fetchedNotes);
+  }
+  
+  const fetchTranscripts = async () => {
+    if (!lead) return;
+    const fetchedTranscripts = await getLeadTranscripts(lead.id);
+    setTranscripts(fetchedTranscripts);
   }
 
   const handlePostCallSubmit = async (outcome: string, notes: string, contact?: any) => {
@@ -412,8 +419,8 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
         } else if (result.error) {
             toast({ variant: "destructive", title: "Error", description: `Failed to get transcript: ${result.error}` });
         } else if (result.transcriptFound) {
-            toast({ title: "Success", description: `Transcript fetched and saved as a note.` });
-            fetchNotes();
+            toast({ title: "Success", description: `Transcript fetched and saved.` });
+            fetchTranscripts(); // Refresh transcripts
         } else {
             toast({ title: "No Transcript", description: "A transcript was not found for this call." });
         }
@@ -814,6 +821,33 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
                   ))
                 ) : (
                   <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
+                )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-muted-foreground" />
+                  Transcripts
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {loading ? (
+                  <div className="py-4 space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : transcripts.length > 0 ? (
+                  transcripts.map(transcript => (
+                    <div key={transcript.id} className="text-sm border-l-2 pl-4">
+                      <p className="whitespace-pre-wrap">{transcript.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Call ID: {transcript.callId} &bull; {new Date(transcript.date).toLocaleString()} by {transcript.author}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No transcripts for this lead yet.</p>
                 )}
             </CardContent>
           </Card>
