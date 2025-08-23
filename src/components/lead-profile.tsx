@@ -402,7 +402,7 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
     try {
         setFetchingTranscriptId(callId);
         const result = await getCallTranscriptByCallId({
-            callId: callId,
+            callId: callId.toString(),
             leadId: lead.id,
             leadAuthor: user.displayName || user.email || 'System'
         });
