@@ -28,21 +28,7 @@ function getInitials(name: string) {
 
 export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps) {
     
-    let utterances: Utterance[] = [];
-    try {
-        if (typeof transcript.content === 'string') {
-            utterances = JSON.parse(transcript.content);
-        } else if (Array.isArray(transcript.content)) {
-            // This case handles data that might not have been stringified upon saving
-            utterances = transcript.content;
-        }
-    } catch(e) {
-        console.error("Could not parse transcript content:", transcript.content, e);
-        // Fallback for plain text content just in case
-         if (typeof transcript.content === 'string') {
-            utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
-        }
-    }
+    const utterances: Utterance[] = (transcript.content as any)?.utterances || [];
 
     if (!utterances || utterances.length === 0) {
         return <div className="text-center text-muted-foreground p-8">No transcript content available.</div>;
@@ -79,4 +65,5 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
         </ScrollArea>
     );
 }
+
 
