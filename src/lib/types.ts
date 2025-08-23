@@ -7,6 +7,9 @@ export type LeadStatus =
   | 'Lost'
   | 'Won'
   | 'LPO Review'
+  | 'In Progress'
+  | 'Connected'
+  | 'High Touch'
 
 export interface Activity {
   id: string

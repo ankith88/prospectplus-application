@@ -45,7 +45,7 @@ async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<str
 
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review'];
+    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch'];
     if (typeof status === 'string') {
         let cleanStatus = status.replace('SUSPECT-', '');
         if (cleanStatus === 'Unqualified') { // Specific mapping for your status
@@ -347,13 +347,14 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
   }
 }
 
-async function updateLeadStatus(leadId: string, status: LeadStatus): Promise<void> {
+async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: string): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
         await updateDoc(leadRef, {
             customerStatus: status,
         });
-        await logActivity(leadId, { type: 'Update', notes: `Status changed to ${status}` });
+        const note = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
+        await logActivity(leadId, { type: 'Update', notes: note });
         console.log(`Lead ${leadId} status updated to ${status}`);
     } catch (error) {
         console.error(`Failed to update lead status for ${leadId}:`, error);

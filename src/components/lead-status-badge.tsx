@@ -6,16 +6,6 @@ interface LeadStatusBadgeProps {
 }
 
 export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
-  const variant: "default" | "secondary" | "destructive" | "outline" = {
-    New: "secondary",
-    Contacted: "outline",
-    Qualified: "default",
-    Unqualified: "secondary",
-    Won: "default",
-    Lost: "destructive",
-    'LPO Review': 'default',
-  }[status]
-
   const colorClass = {
     New: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800",
     Contacted: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 dark:border-yellow-800",
@@ -24,7 +14,11 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     Won: "bg-primary text-primary-foreground",
     Lost: "bg-destructive text-destructive-foreground",
     'LPO Review': 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800',
-  }[status]
+    'In Progress': 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-900/50 dark:text-cyan-300 dark:border-cyan-800',
+    'Connected': 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-800',
+    'High Touch': 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-800',
+  }[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
+
 
   return (
     <Badge variant="outline" className={`capitalize ${colorClass}`}>

@@ -42,7 +42,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptsForPhoneNumber } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, updateLeadStatus } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -85,6 +85,9 @@ import { MapModal } from '@/components/map-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { firestore } from '@/lib/firebase'
+import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 
 export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, initialNotes: Note[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -102,15 +105,90 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [showPostCallDialog, setShowPostCallDialog] = useState(false);
+  const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
+
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  useEffect(() => {
+    if (!lead) return;
+
+    const activityRef = collection(firestore, 'leads', lead.id, 'activity');
+    const q = query(activityRef, where('type', '==', 'Call'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+                const newActivity = { id: change.doc.id, ...change.doc.data() } as Activity;
+                // Check if this activity is not already processed
+                const isNew = !lead.activity?.find(a => a.id === newActivity.id || a.callId === newActivity.callId);
+                
+                if (isNew) {
+                    console.log("New call detected:", newActivity);
+                    setLastCallActivity(newActivity);
+                    setShowPostCallDialog(true);
+
+                    // Add to local state to prevent re-triggering
+                     setLead(prev => {
+                        if (!prev) return null;
+                        const existingActivities = prev.activity || [];
+                        if (existingActivities.find(a => a.id === newActivity.id)) {
+                            return prev;
+                        }
+                        return { ...prev, activity: [newActivity, ...existingActivities] };
+                    });
+                }
+            }
+        });
+    });
+
+    return () => unsubscribe();
+  }, [lead?.id]);
   
   const fetchNotes = async () => {
     if (!lead) return;
     const fetchedNotes = await getLeadNotes(lead.id);
     setNotes(fetchedNotes);
   }
+
+  const handlePostCallSubmit = async (outcome: string, notes: string, contact?: any) => {
+      if (!lead || !lastCallActivity) return;
+
+      const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
+          'Busy': { status: 'In Progress' },
+          'Call Back/Follow-up': { status: 'High Touch' },
+          'Gatekeeper': { status: 'Connected' },
+          'Disconnected': { status: 'In Progress' },
+          'Interested': { status: 'Qualified' },
+          'No Answer': { status: 'In Progress' },
+          'Not Interested': { status: 'Lost', reason: 'Not Interested' },
+          'Voicemail': { status: 'In Progress' },
+          'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
+          'Disqualified - Not a Fit': { status: 'Unqualified' },
+          'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+      };
+
+      const { status, reason } = outcomeStatusMap[outcome] || {};
+
+      if (status) {
+          await updateLeadStatus(lead.id, status, reason);
+          setLead(prev => prev ? { ...prev, status } : null);
+          toast({ title: 'Status Updated', description: `Lead status changed to ${status}.` });
+      }
+
+      // Log outcome as a new note or update the existing call activity
+      const activityNote = `Call Outcome: ${outcome}. Notes: ${notes}`;
+      await logNoteActivity(lead.id, {
+          content: activityNote,
+          author: user?.displayName || 'System'
+      });
+      fetchNotes(); // Refresh notes
+      
+      setShowPostCallDialog(false);
+      setLastCallActivity(null);
+  };
 
 
   const handleCalculateScore = async () => {
@@ -380,6 +458,15 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
 
   return (
     <>
+    {showPostCallDialog && lastCallActivity && (
+        <PostCallOutcomeDialog
+            isOpen={showPostCallDialog}
+            onClose={() => setShowPostCallDialog(false)}
+            lead={lead}
+            callActivity={lastCallActivity}
+            onSubmit={handlePostCallSubmit}
+        />
+    )}
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild>
@@ -409,12 +496,12 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-                <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                <DialogTrigger asChild>
+                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => setShowPostCallDialog(true)}>
                         <Phone className="mr-2 h-4 w-4" />
                         Log Call Outcome
-                    </DropdownMenuItem>
-                </LogCallDialog>
+                     </DropdownMenuItem>
+                </DialogTrigger>
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                         <FileText className="mr-2 h-4 w-4" />

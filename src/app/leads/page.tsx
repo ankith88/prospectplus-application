@@ -98,7 +98,10 @@ export default function LeadsPage() {
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
-      return filteredLeads.filter(lead => lead.dialerAssigned === user.displayName);
+      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
+      return filteredLeads.filter(lead => 
+        lead.dialerAssigned === user.displayName && actionableStatuses.includes(lead.status)
+      );
     }
     return [];
   }, [filteredLeads, user]);
@@ -252,7 +255,7 @@ export default function LeadsPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Statuses</SelectItem>
-                            {(['New', 'Contacted', 'LPO Review', 'Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
                     </Select>
                   </div>
@@ -370,7 +373,7 @@ export default function LeadsPage() {
                 ) : (
                   <TableRow>
                       <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                          You have not been assigned any leads.
+                          You have no actionable leads assigned.
                       </TableCell>
                   </TableRow>
                 )}

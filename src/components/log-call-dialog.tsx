@@ -190,7 +190,8 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        // The status is now updated when the appointment is successfully set or referred to LPO
+        newStatus = 'Qualified';
+        await updateLeadStatus(lead.id, newStatus);
       } else {
         newStatus = 'Unqualified';
         await updateLeadStatus(lead.id, newStatus);
@@ -231,6 +232,8 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       if (values.outcome === 'not-interested') {
         setIsOpen(false)
         form.reset()
+      } else if (values.outcome === 'interested') {
+         // Keep dialog open for LPO/Appointment actions
       }
     } catch (error) {
       console.error('Failed to log call:', error)
