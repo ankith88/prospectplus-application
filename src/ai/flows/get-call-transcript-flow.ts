@@ -44,10 +44,10 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}`;
+    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching call details from AirCall for call ID: ${callId}`);
+    console.log(`Fetching call transcript from AirCall for call ID: ${callId}`);
 
     try {
       const response = await fetch(url, {
@@ -58,17 +58,21 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`No transcript found for call ID: ${callId}`);
+          return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
+        }
         const errorBody = await response.text();
         const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
         console.error(errorMsg);
         return { transcriptFound: false, error: errorMsg };
       }
 
-      const call = await response.json() as any;
+      const transcriptionData = await response.json() as any;
       
-      if (call?.call?.transcription?.content) {
-        const transcript = call.call.transcription.content;
-        const noteContent = `Transcript for call on ${new Date(call.call.started_at).toLocaleString()}:\n\n${transcript}`;
+      if (transcriptionData?.transcription?.content) {
+        const transcript = transcriptionData.transcription.content;
+        const noteContent = `Transcript for call ID ${callId}:\n\n${transcript}`;
         await logNoteActivity(leadId, {
           content: noteContent,
           author: leadAuthor,
@@ -76,7 +80,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         console.log(`Transcript found and logged for call ID: ${callId}`);
         return { transcriptFound: true };
       } else {
-        console.log(`No transcript found for call ID: ${callId}`);
+        console.log(`No transcript content found for call ID: ${callId}`);
         return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
       }
 
