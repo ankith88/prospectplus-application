@@ -29,14 +29,22 @@ export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps
     
     let utterances: Utterance[] = [];
     try {
-        const parsedContent = JSON.parse(transcript.content);
+        // Handle both stringified JSON and pre-parsed objects
+        const contentToParse = typeof transcript.content === 'string'
+            ? transcript.content
+            : JSON.stringify(transcript.content);
+            
+        const parsedContent = JSON.parse(contentToParse);
+        
         if (Array.isArray(parsedContent)) {
             utterances = parsedContent;
         }
     } catch(e) {
         console.error("Could not parse transcript content:", e);
         // Fallback for plain text content
-        utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
+        if (typeof transcript.content === 'string') {
+            utterances = [{ speaker: transcript.author, text: transcript.content, participant_type: 'internal' }];
+        }
     }
 
     if (utterances.length === 0) {
