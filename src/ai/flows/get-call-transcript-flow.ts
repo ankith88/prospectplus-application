@@ -70,12 +70,12 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
       const transcriptionData = await response.json() as any;
       
-      const content = transcriptionData?.transcription?.content;
-      if (content && Array.isArray(content.utterances)) {
+      const utterances = transcriptionData?.transcription?.content?.utterances;
+      if (utterances && Array.isArray(utterances)) {
         
         // Save the structured utterances directly as a JSON string
         await logTranscriptActivity(leadId, {
-            content: JSON.stringify(content.utterances),
+            content: JSON.stringify(utterances),
             author: leadAuthor,
             callId: callId,
         });
