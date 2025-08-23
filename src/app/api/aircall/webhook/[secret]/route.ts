@@ -94,38 +94,11 @@ export async function POST(
       }
 
       const lead = await findLeadByPhoneNumber(leadPhoneNumber);
-      const callDate = callData.started_at ? new Date(callData.started_at).toISOString() : new Date().toISOString();
+      const callDate = callData.started_at ? new Date(callData.started_at * 1000).toISOString() : new Date().toISOString();
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
       const duration = `${minutes}m ${seconds}s`;
       
-      if (!lead) {
-          console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
-
-          let notes = `Unmatched call from ${leadPhoneNumber}. Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
-          if (callData.transcription?.content) {
-            const transcriptContent = callData.transcription.content;
-            if (typeof transcriptContent === 'string') {
-              notes += `\n\nTranscript:\n${transcriptContent}`;
-            } else if (typeof transcriptContent === 'object' && Array.isArray(transcriptContent.utterances)) {
-              notes += `\n\nTranscript:\n${transcriptContent.utterances.map((u: any) => `${u.speaker}: ${u.text}`).join('\n')}`;
-            }
-          }
-
-          await logUnmatchedActivity({
-              type: 'Call',
-              notes: notes,
-              date: callDate,
-              duration: duration,
-              callId: callId.toString(),
-          });
-          return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
-      }
-
-      // Find existing activity for this call
-      const existingActivity = await findActivityByCallId(lead.id, callId.toString());
-
-
       let notes = `Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
       if (callData.comments && callData.comments.length > 0) {
           notes += ` Notes: ${callData.comments.map((c: any) => c.content).join(' ') || 'N/A'}`;
@@ -138,9 +111,25 @@ export async function POST(
         if (typeof transcriptContent === 'string') {
           notes += `\n\nTranscript:\n${transcriptContent}`;
         } else if (typeof transcriptContent === 'object' && Array.isArray(transcriptContent.utterances)) {
-          notes += `\n\nTranscript:\n${transcriptContent.utterances.map((u: any) => `${u.speaker}: ${u.text}`).join('\n')}`;
+          const formattedTranscript = transcriptContent.utterances.map((u: any) => `${u.speaker}: ${u.text}`).join('\n');
+          notes += `\n\nTranscript:\n${formattedTranscript}`;
         }
       }
+      
+      if (!lead) {
+          console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
+          await logUnmatchedActivity({
+              type: 'Call',
+              notes: notes,
+              date: callDate,
+              duration: duration,
+              callId: callId.toString(),
+          });
+          return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
+      }
+
+      // Find existing activity for this call
+      const existingActivity = await findActivityByCallId(lead.id, callId.toString());
 
       if (existingActivity) {
           // Update the existing activity

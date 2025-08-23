@@ -31,7 +31,7 @@ export interface Transcript {
     id: string;
     date: string;
     author: string;
-    content: string;
+    content: string; // This will now be a JSON string of utterances
     callId: string;
 }
 

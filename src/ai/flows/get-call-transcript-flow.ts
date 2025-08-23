@@ -73,12 +73,9 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       const content = transcriptionData?.transcription?.content;
       if (content && Array.isArray(content.utterances)) {
         
-        const formattedTranscript = content.utterances.map((utt: any) => 
-            `${utt.speaker}: ${utt.text}`
-        ).join('\n');
-        
+        // Save the structured utterances directly.
         await logTranscriptActivity(leadId, {
-            content: formattedTranscript,
+            content: JSON.stringify(content.utterances),
             author: leadAuthor,
             callId: callId,
         });

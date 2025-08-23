@@ -88,6 +88,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
+import { TranscriptViewer } from './transcript-viewer'
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -103,8 +104,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [isFetchingTranscripts, setIsFetchingTranscripts] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
+  const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
@@ -827,30 +830,51 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-muted-foreground" />
-                  Transcripts
-              </CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-muted-foreground" />
+                    Transcripts
+                </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2">
                 {loading ? (
-                  <div className="py-4 space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : transcripts.length > 0 ? (
-                  transcripts.map(transcript => (
-                    <div key={transcript.id} className="text-sm border-l-2 pl-4">
-                      <p className="whitespace-pre-wrap">{transcript.content}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Call ID: {transcript.callId} &bull; {new Date(transcript.date).toLocaleString()} by {transcript.author}
-                      </p>
+                    <div className="py-4 space-y-4">
+                        <Skeleton className="h-12 w-full" />
                     </div>
-                  ))
+                ) : transcripts.length > 0 ? (
+                    transcripts.map(transcript => (
+                        <div key={transcript.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                            <div>
+                                <p className="text-sm font-medium">
+                                    Call with {transcript.author}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {new Date(transcript.date).toLocaleString()}
+                                </p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => {
+                                setSelectedTranscript(transcript);
+                                setIsTranscriptViewerOpen(true);
+                            }}>
+                                View Transcript
+                            </Button>
+                        </div>
+                    ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No transcripts for this lead yet.</p>
+                    <p className="text-sm text-muted-foreground">No transcripts for this lead yet.</p>
                 )}
             </CardContent>
           </Card>
+          
+          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
+              <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                      <DialogTitle>Call Transcript</DialogTitle>
+                  </DialogHeader>
+                  {selectedTranscript && lead && (
+                      <TranscriptViewer transcript={selectedTranscript} leadName={lead.companyName} />
+                  )}
+              </DialogContent>
+          </Dialog>
 
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
              <DialogContent>
