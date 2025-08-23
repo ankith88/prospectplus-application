@@ -94,29 +94,32 @@ export async function POST(
       }
 
       const lead = await findLeadByPhoneNumber(leadPhoneNumber);
+      const callDate = new Date(callData.started_at).toISOString();
+      const minutes = Math.floor(callData.duration / 60);
+      const seconds = callData.duration % 60;
+      const duration = `${minutes}m ${seconds}s`;
       
       if (!lead) {
           console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
-          const minutes = Math.floor(callData.duration / 60);
-          const seconds = callData.duration % 60;
-          const duration = `${minutes}m ${seconds}s`;
+
           let notes = `Unmatched call from ${leadPhoneNumber}. Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
+          if (callData.transcription?.content) {
+            notes += `\n\nTranscript:\n${callData.transcription.content}`;
+          }
+
           await logUnmatchedActivity({
               type: 'Call',
               notes: notes,
-              date: new Date(callData.started_at).toISOString(),
+              date: callDate,
               duration: duration,
-              callId: callId,
+              callId: callId.toString(),
           });
           return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
       }
 
       // Find existing activity for this call
-      const existingActivity = await findActivityByCallId(lead.id, callId);
+      const existingActivity = await findActivityByCallId(lead.id, callId.toString());
 
-      const minutes = Math.floor(callData.duration / 60);
-      const seconds = callData.duration % 60;
-      const duration = `${minutes}m ${seconds}s`;
 
       let notes = `Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
       if (callData.comments && callData.comments.length > 0) {
@@ -139,8 +142,8 @@ export async function POST(
               type: 'Call',
               notes: notes,
               duration: duration,
-              callId: callId,
-              date: new Date(callData.started_at).toISOString(),
+              callId: callId.toString(),
+              date: callDate,
           });
           console.log(`Successfully logged new activity for lead ${lead.id} and call ${callId}`);
       }
