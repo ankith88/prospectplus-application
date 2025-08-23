@@ -31,6 +31,39 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
     }
 }
 
+async function findActivityByCallId(leadId: string, callId: string): Promise<{ id: string; data: Activity } | null> {
+    try {
+        const activityRef = collection(firestore, 'leads', leadId, 'activity');
+        const q = query(activityRef, where('callId', '==', callId), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            return null;
+        }
+        
+        const doc = querySnapshot.docs[0];
+        return {
+            id: doc.id,
+            data: doc.data() as Activity
+        };
+
+    } catch (error) {
+        console.error(`Error finding activity by callId ${callId} for lead ${leadId}:`, error);
+        return null;
+    }
+}
+
+async function updateActivity(leadId: string, activityId: string, activityUpdate: Partial<Activity>): Promise<void> {
+    try {
+        const activityDocRef = doc(firestore, 'leads', leadId, 'activity', activityId);
+        await updateDoc(activityDocRef, activityUpdate);
+        console.log(`Activity ${activityId} updated for lead ${leadId}`);
+    } catch (error) {
+        console.error(`Failed to update activity ${activityId} for lead ${leadId}:`, error);
+        throw new Error('Failed to update activity in Firebase');
+    }
+}
+
 async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<string> {
     try {
         const unmatchedActivitiesRef = collection(firestore, 'unmatched_activities');
@@ -446,4 +479,4 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity };

@@ -8,8 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { logActivity, logUnmatchedActivity } from '@/services/firebase';
-import type { Lead } from '@/lib/types';
+import { logActivity, logUnmatchedActivity, findActivityByCallId, updateActivity } from '@/services/firebase';
+import type { Lead, Activity } from '@/lib/types';
 
 /**
  * Finds a lead in Firestore by a given phone number.
@@ -86,6 +86,7 @@ export async function POST(
     if (data.event === 'call.ended' || data.event === 'call.commented' || data.event === 'call.tagged') {
       const callData = data.data;
       const leadPhoneNumber = callData.raw_digits;
+      const callId = callData.id;
 
       if (!leadPhoneNumber) {
         console.log('Webhook payload did not contain a phone number to match.');
@@ -93,6 +94,25 @@ export async function POST(
       }
 
       const lead = await findLeadByPhoneNumber(leadPhoneNumber);
+      
+      if (!lead) {
+          console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
+          const minutes = Math.floor(callData.duration / 60);
+          const seconds = callData.duration % 60;
+          const duration = `${minutes}m ${seconds}s`;
+          let notes = `Unmatched call from ${leadPhoneNumber}. Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
+          await logUnmatchedActivity({
+              type: 'Call',
+              notes: notes,
+              date: new Date(callData.started_at).toISOString(),
+              duration: duration,
+              callId: callId,
+          });
+          return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
+      }
+
+      // Find existing activity for this call
+      const existingActivity = await findActivityByCallId(lead.id, callId);
 
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
@@ -109,24 +129,20 @@ export async function POST(
         notes += `\n\nTranscript:\n${callData.transcription.content}`;
       }
 
-
-      if (lead) {
-        await logActivity(lead.id, {
-            type: 'Call',
-            notes: notes,
-            duration: duration,
-            callId: callData.id,
-        });
-        console.log(`Successfully logged activity for lead ${lead.id}`);
+      if (existingActivity) {
+          // Update the existing activity
+          await updateActivity(lead.id, existingActivity.id, { notes });
+          console.log(`Successfully updated activity for lead ${lead.id} and call ${callId}`);
       } else {
-        console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
-        await logUnmatchedActivity({
-            type: 'Call',
-            notes: `Unmatched call from ${leadPhoneNumber}. ${notes}`,
-            date: new Date(callData.started_at).toISOString(),
-            duration: duration,
-            callId: callData.id,
-        });
+          // Create a new activity
+          await logActivity(lead.id, {
+              type: 'Call',
+              notes: notes,
+              duration: duration,
+              callId: callId,
+              date: new Date(callData.started_at).toISOString(),
+          });
+          console.log(`Successfully logged new activity for lead ${lead.id} and call ${callId}`);
       }
     }
 
