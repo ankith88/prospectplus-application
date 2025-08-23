@@ -41,7 +41,7 @@ import type { Lead, Contact, Activity, Note } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { getCallTranscriptsForPhoneNumber } from '@/ai/flows/get-call-transcript-flow'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, updateLeadStatus } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -392,43 +392,37 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
     });
   };
 
-  const handleGetTranscripts = async () => {
-    if (!lead?.customerPhone) {
-      toast({ variant: "destructive", title: "Error", description: "This lead does not have a primary phone number." });
-      return;
-    }
+  const handleGetTranscriptForCall = async (callId: string) => {
+    if (!lead) return;
     if (!user) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to perform this action." });
+        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in." });
         return;
     }
 
     try {
-        setIsFetchingTranscripts(true);
-        const result = await getCallTranscriptsForPhoneNumber({
-            phoneNumber: lead.customerPhone,
+        setFetchingTranscriptId(callId);
+        const result = await getCallTranscriptByCallId({
+            callId: callId,
             leadId: lead.id,
             leadAuthor: user.displayName || user.email || 'System'
         });
 
-        if (result.error && result.error === 'NO_CALLS_FOUND') {
-            toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });
+        if (result.error && result.error === 'NO_TRANSCRIPT_FOUND') {
+            toast({ title: "No Transcript", description: "A transcript was not found for this call." });
         } else if (result.error) {
-            // Handle other, unexpected errors
-            toast({ variant: "destructive", title: "Error", description: `Failed to get transcripts: ${result.error}` });
-        } else if (result.transcriptsFound > 0) {
-            toast({ title: "Success", description: `${result.transcriptsFound} transcript(s) fetched and saved as notes.` });
-            // Re-fetch notes to update the UI
+            toast({ variant: "destructive", title: "Error", description: `Failed to get transcript: ${result.error}` });
+        } else if (result.transcriptFound) {
+            toast({ title: "Success", description: `Transcript fetched and saved as a note.` });
             fetchNotes();
         } else {
-             // This case handles if transcriptsFound is 0 and no error is set, which is the same as NO_CALLS_FOUND
-            toast({ title: "No New Transcripts", description: "No new transcripts were found for this lead's primary phone number." });
+            toast({ title: "No Transcript", description: "A transcript was not found for this call." });
         }
 
     } catch (error: any) {
-        console.error("Failed to get transcripts:", error);
-        toast({ variant: "destructive", title: "Error", description: `Failed to get transcripts: ${error.message}` });
+        console.error("Failed to get transcript for call:", error);
+        toast({ variant: "destructive", title: "Error", description: `Failed to get transcript: ${error.message}` });
     } finally {
-        setIsFetchingTranscripts(false);
+        setFetchingTranscriptId(null);
     }
   };
 
@@ -634,16 +628,6 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.customerPhone!)}>
                                 <PhoneCall className="w-3 h-3" />
                             </Button>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleGetTranscripts} disabled={isFetchingTranscripts}>
-                                    {isFetchingTranscripts ? <Loader /> : <Download className="w-3 h-3" />}
-                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Fetch all call transcripts for this number.</p>
-                              </TooltipContent>
-                            </Tooltip>
                             </>
                         )}
                       </div>
@@ -893,6 +877,16 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
                               <Clipboard className="w-2.5 h-2.5" />
                           </Button>
+                           <Tooltip>
+                              <TooltipTrigger asChild>
+                                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleGetTranscriptForCall(item.callId!)} disabled={fetchingTranscriptId === item.callId}>
+                                    {fetchingTranscriptId === item.callId ? <Loader /> : <Download className="w-2.5 h-2.5" />}
+                                 </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Fetch transcript for this call.</p>
+                              </TooltipContent>
+                            </Tooltip>
                         </div>
                       )}
                     </div>
