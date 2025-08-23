@@ -107,8 +107,10 @@ export default function LeadsPage() {
   }, [filteredLeads, user]);
 
   const unassignedLeads = useMemo(() => {
-    return filteredLeads.filter(lead => !lead.dialerAssigned);
+    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'Unqualified', 'LPO Review'];
+    return filteredLeads.filter(lead => !lead.dialerAssigned && !nonActionableStatuses.includes(lead.status));
   }, [filteredLeads]);
+
 
   const handleBulkUnassign = async () => {
     if (selectedMyLeads.length === 0) return;
