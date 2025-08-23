@@ -70,11 +70,15 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
       const transcriptionData = await response.json() as any;
       
-      if (transcriptionData?.transcription?.content) {
-        const transcript = transcriptionData.transcription.content;
+      const content = transcriptionData?.transcription?.content;
+      if (content && Array.isArray(content.utterances)) {
+        
+        const formattedTranscript = content.utterances.map((utt: any) => 
+            `${utt.speaker}: ${utt.text}`
+        ).join('\n');
         
         await logTranscriptActivity(leadId, {
-            content: transcript,
+            content: formattedTranscript,
             author: leadAuthor,
             callId: callId,
         });
