@@ -26,7 +26,8 @@ import { Button } from '@/components/ui/button'
 import { Phone, Calendar, Clock, FileText, DownloadCloud, Link as LinkIcon, AlertCircle } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
-import { logActivity, getLeadsTool } from '@/services/firebase'
+import { logActivity } from '@/services/firebase'
+import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
   Dialog,
@@ -286,3 +287,5 @@ export default function UnmatchedActivitiesPage() {
     </>
   )
 }
+
+    

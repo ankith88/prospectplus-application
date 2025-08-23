@@ -479,4 +479,6 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
 }
 
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity, getLeadsTool };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity };
+
+    
