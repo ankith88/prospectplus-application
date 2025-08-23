@@ -94,7 +94,7 @@ export async function POST(
       }
 
       const lead = await findLeadByPhoneNumber(leadPhoneNumber);
-      const callDate = new Date(callData.started_at).toISOString();
+      const callDate = callData.started_at ? new Date(callData.started_at).toISOString() : new Date().toISOString();
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
       const duration = `${minutes}m ${seconds}s`;
@@ -104,7 +104,12 @@ export async function POST(
 
           let notes = `Unmatched call from ${leadPhoneNumber}. Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
           if (callData.transcription?.content) {
-            notes += `\n\nTranscript:\n${callData.transcription.content}`;
+            const transcriptContent = callData.transcription.content;
+            if (typeof transcriptContent === 'string') {
+              notes += `\n\nTranscript:\n${transcriptContent}`;
+            } else if (typeof transcriptContent === 'object' && Array.isArray(transcriptContent.utterances)) {
+              notes += `\n\nTranscript:\n${transcriptContent.utterances.map((u: any) => `${u.speaker}: ${u.text}`).join('\n')}`;
+            }
           }
 
           await logUnmatchedActivity({
@@ -129,7 +134,12 @@ export async function POST(
          notes += ` Tags: ${callData.tags.map((t: any) => t.name).join(', ')}`;
       }
       if (callData.transcription?.content) {
-        notes += `\n\nTranscript:\n${callData.transcription.content}`;
+        const transcriptContent = callData.transcription.content;
+        if (typeof transcriptContent === 'string') {
+          notes += `\n\nTranscript:\n${transcriptContent}`;
+        } else if (typeof transcriptContent === 'object' && Array.isArray(transcriptContent.utterances)) {
+          notes += `\n\nTranscript:\n${transcriptContent.utterances.map((u: any) => `${u.speaker}: ${u.text}`).join('\n')}`;
+        }
       }
 
       if (existingActivity) {
