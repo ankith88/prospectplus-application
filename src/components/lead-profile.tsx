@@ -123,7 +123,7 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
             if (change.type === "added") {
                 const newActivity = { id: change.doc.id, ...change.doc.data() } as Activity;
                 // Check if this activity is not already processed
-                const isNew = !lead.activity?.find(a => a.id === newActivity.id || a.callId === newActivity.callId);
+                const isNew = !lead.activity?.find(a => a.id === newActivity.id || (a.callId && a.callId === newActivity.callId));
                 
                 if (isNew) {
                     console.log("New call detected:", newActivity);
@@ -886,6 +886,15 @@ export function LeadProfile({ initialLead, initialNotes }: { initialLead: Lead, 
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
                       </div>
+                       {item.type === 'Call' && item.callId && (
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                          <Hash className="w-3 h-3" />
+                          <span>Call ID: {item.callId}</span>
+                           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                              <Clipboard className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}
