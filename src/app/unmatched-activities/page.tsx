@@ -15,17 +15,28 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Activity } from '@/lib/types'
+import type { Activity, Lead } from '@/lib/types'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { firestore } from '@/lib/firebase'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Link as LinkIcon, AlertCircle } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
+import { logActivity, getLeadsTool } from '@/services/firebase'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 type UnmatchedActivity = Activity & {
     phoneNumber: string;
@@ -33,8 +44,13 @@ type UnmatchedActivity = Activity & {
 
 export default function UnmatchedActivitiesPage() {
   const [unmatchedActivities, setUnmatchedActivities] = useState<UnmatchedActivity[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [activityToAssign, setActivityToAssign] = useState<UnmatchedActivity | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -63,13 +79,26 @@ export default function UnmatchedActivitiesPage() {
     }
   }
 
+  const fetchLeads = async () => {
+    try {
+        const leads = await getLeadsTool({ summary: true });
+        setAllLeads(leads);
+    } catch (error) {
+        console.error("Failed to fetch leads:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
+    }
+  }
+
   useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
       return;
     }
     if (authLoading) return;
+    
     fetchUnmatchedActivities();
+    fetchLeads();
+
   }, [user, authLoading, router, toast]);
 
   const handleSyncTranscripts = async () => {
@@ -85,7 +114,7 @@ export default function UnmatchedActivitiesPage() {
             toast({ variant: 'destructive', title: 'Sync Failed', description: result.error });
         } else if (result.newActivities.length > 0) {
             toast({ title: 'Success', description: `Synced ${result.newActivities.length} new transcript(s).` });
-            setUnmatchedActivities(prev => [...result.newActivities, ...prev]);
+            setUnmatchedActivities(prev => [...result.newActivities, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         } else {
             toast({ title: 'No New Transcripts', description: 'No new transcripts were found to sync.' });
         }
@@ -95,6 +124,44 @@ export default function UnmatchedActivitiesPage() {
         setIsSyncing(false);
     }
   }
+
+  const handleOpenAssignDialog = (activity: UnmatchedActivity) => {
+    setActivityToAssign(activity);
+    setSelectedLeadId(null);
+  };
+  
+  const handleCloseAssignDialog = () => {
+    setActivityToAssign(null);
+    setSelectedLeadId(null);
+  };
+
+  const handleAssignActivity = async () => {
+    if (!activityToAssign || !selectedLeadId) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Please select a lead to assign the activity to.' });
+        return;
+    }
+    
+    setIsAssigning(true);
+    try {
+        const { id, phoneNumber, ...activityData } = activityToAssign;
+        await logActivity(selectedLeadId, activityData);
+
+        // Delete the activity from unmatched_activities
+        const activityDocRef = doc(firestore, 'unmatched_activities', id);
+        await deleteDoc(activityDocRef);
+
+        // Remove from local state
+        setUnmatchedActivities(prev => prev.filter(act => act.id !== id));
+        
+        toast({ title: 'Success', description: 'Activity has been assigned to the lead.' });
+        handleCloseAssignDialog();
+    } catch (error) {
+        console.error("Failed to assign activity:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to assign activity.' });
+    } finally {
+        setIsAssigning(false);
+    }
+  };
 
   if (loading || authLoading) {
     return (
@@ -165,7 +232,8 @@ export default function UnmatchedActivitiesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => router.push('/leads')}>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenAssignDialog(activity)}>
+                            <LinkIcon className="mr-2 h-4 w-4" />
                             Assign to Lead
                         </Button>
                       </TableCell>
@@ -184,6 +252,37 @@ export default function UnmatchedActivitiesPage() {
         </CardContent>
       </Card>
     </div>
+    
+    <Dialog open={!!activityToAssign} onOpenChange={handleCloseAssignDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign Activity to Lead</DialogTitle>
+          <DialogDescription>
+            Select a lead from the dropdown to assign this call activity to.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+            <Select onValueChange={setSelectedLeadId}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Search for a lead..." />
+                </SelectTrigger>
+                <SelectContent>
+                    {allLeads.map(lead => (
+                        <SelectItem key={lead.id} value={lead.id}>
+                           {lead.companyName} ({lead.customerPhone || 'No Phone'})
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+        <DialogFooter>
+            <Button variant="outline" onClick={handleCloseAssignDialog}>Cancel</Button>
+            <Button onClick={handleAssignActivity} disabled={!selectedLeadId || isAssigning}>
+                {isAssigning ? <Loader /> : "Assign Activity"}
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

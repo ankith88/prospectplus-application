@@ -21,10 +21,10 @@ import type { Lead, LeadStatus } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -214,6 +214,15 @@ export default function LeadsPage() {
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
 
+  const handleInitiateCall = (leadId: string, phoneNumber: string) => {
+    window.open(`aircall:${phoneNumber}`);
+    logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    toast({
+        title: "Opening AirCall",
+        description: `Attempting to dial ${phoneNumber}...`,
+    });
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -305,6 +314,7 @@ export default function LeadsPage() {
                   </TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Address</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Industry</TableHead>
@@ -314,7 +324,7 @@ export default function LeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                      <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : myLeads.length > 0 ? (
                   myLeads.map((lead) => {
@@ -348,6 +358,16 @@ export default function LeadsPage() {
                           <span>{addressString}</span>
                         </div>
                       </TableCell>
+                       <TableCell>
+                        {lead.customerPhone ? (
+                           <div className="flex items-center gap-1">
+                               <span className="font-medium break-all">{lead.customerPhone}</span>
+                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                   <PhoneCall className="w-3 h-3" />
+                               </Button>
+                           </div>
+                        ) : 'N/A'}
+                       </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
@@ -374,7 +394,7 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           You have no actionable leads assigned.
                       </TableCell>
                   </TableRow>
@@ -409,6 +429,7 @@ export default function LeadsPage() {
                   </TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Address</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Industry</TableHead>
@@ -418,7 +439,7 @@ export default function LeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                      <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : unassignedLeads.length > 0 ? (
                   unassignedLeads.map((lead) => {
@@ -453,6 +474,16 @@ export default function LeadsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
+                        {lead.customerPhone ? (
+                           <div className="flex items-center gap-1">
+                               <span className="font-medium break-all">{lead.customerPhone}</span>
+                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                   <PhoneCall className="w-3 h-3" />
+                               </Button>
+                           </div>
+                        ) : 'N/A'}
+                       </TableCell>
+                      <TableCell>
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
@@ -478,7 +509,7 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No unassigned leads found.
                       </TableCell>
                   </TableRow>
