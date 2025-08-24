@@ -580,6 +580,52 @@ async function deleteUnmatchedActivity(activityId: string): Promise<void> {
     }
 }
 
+async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string } | null> {
+  if (!phoneNumber) return null;
+
+  const leadsRef = collection(firestore, 'leads');
+  
+  // Normalize phone number for broader matching
+  const variations = new Set<string>();
+  const digits = phoneNumber.replace(/\D/g, '');
+
+  if (digits.startsWith('61')) {
+    variations.add(`+${digits}`);
+    variations.add(`0${digits.substring(2)}`);
+  } else if (digits.startsWith('0')) {
+    variations.add(`+61${digits.substring(1)}`);
+    variations.add(digits);
+  } else {
+     variations.add(`+61${digits}`);
+     variations.add(`0${digits}`);
+  }
+   variations.add(phoneNumber);
+
+
+  for (const num of Array.from(variations)) {
+      const q = query(leadsRef, where('customerPhone', '==', num), limit(1));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        return { id: doc.id };
+      }
+
+      // Fallback search in contacts subcollection
+      const allLeadsSnapshot = await getDocs(leadsRef);
+      for (const leadDoc of allLeadsSnapshot.docs) {
+          const contactsRef = collection(firestore, 'leads', leadDoc.id, 'contacts');
+          const contactsQuery = query(contactsRef, where('phone', '==', num), limit(1));
+          const contactsSnapshot = await getDocs(contactsQuery);
+          if (!contactsSnapshot.empty) {
+              return { id: leadDoc.id };
+          }
+      }
+  }
+
+  return null;
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -606,5 +652,6 @@ export {
     updateLeadAiScore,
     updateTranscriptAnalysis,
     getAllTranscripts,
-    deleteUnmatchedActivity
+    deleteUnmatchedActivity,
+    findLeadByPhoneNumber,
 };
