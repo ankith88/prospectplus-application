@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { CommandDialog, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandInput } from '@/components/ui/command';
 import type { Lead } from '@/lib/types';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Building, Search } from 'lucide-react';
@@ -13,7 +13,7 @@ import { searchLeads } from '@/app/actions/search-leads';
 
 export function GlobalSearch() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Lead[]>([]);
+  const [results, setResults] = useState<Pick<Lead, 'id' | 'companyName'>[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const debouncedQuery = useDebounce(query, 300);
