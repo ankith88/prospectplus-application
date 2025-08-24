@@ -23,6 +23,7 @@ const GetTranscriptByCallIdOutputSchema = z.object({
 });
 export type GetTranscriptByCallIdOutput = z.infer<typeof GetTranscriptByCallIdOutputSchema>;
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
     return getCallTranscriptByCallIdFlow(input);
@@ -47,50 +48,65 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     const url = `https://api.aircall.io/v1/calls/${callId}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching call data from AirCall for call ID: ${callId}`);
+    const maxRetries = 3;
+    const retryDelay = 30000; // 30 seconds
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Basic ${credentials}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`Fetching call data from AirCall for call ID: ${callId} (Attempt ${attempt})`);
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.log(`No transcript found for call ID: ${callId}`);
-          return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
-        }
-        const errorBody = await response.text();
-        const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
-        console.error(errorMsg);
-        return { transcriptFound: false, error: errorMsg };
-      }
-
-      const callData = await response.json() as any;
-      
-      const utterances = callData?.call?.transcription?.content;
-
-      if (utterances && Array.isArray(utterances)) {
-        
-        // Save the structured utterances directly as a JSON string
-        await logTranscriptActivity(leadId, {
-            content: JSON.stringify(utterances),
-            author: leadAuthor,
-            callId: callId,
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+          },
         });
 
-        console.log(`Transcript found and logged for call ID: ${callId}`);
-        return { transcriptFound: true };
-      } else {
-        console.log(`No transcript content found for call ID: ${callId}`);
-        return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
-      }
+        if (!response.ok) {
+           if (response.status === 404) {
+             console.log(`No call record found for call ID: ${callId}. Stopping retries.`);
+             return { transcriptFound: false, error: 'NO_CALL_FOUND' };
+           }
+           const errorBody = await response.text();
+           const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
+           console.error(errorMsg);
+           // Don't retry on persistent server errors, only on not-found transcript.
+           return { transcriptFound: false, error: errorMsg };
+        }
 
-    } catch (error: any) {
-      console.error('Error fetching call transcript from AirCall:', error);
-      return { transcriptFound: false, error: `An unexpected error occurred: ${error.message}` };
+        const callData = await response.json() as any;
+        const utterances = callData?.call?.transcription?.content;
+
+        if (utterances && Array.isArray(utterances) && utterances.length > 0) {
+          await logTranscriptActivity(leadId, {
+              content: JSON.stringify(utterances),
+              author: leadAuthor,
+              callId: callId,
+          });
+
+          console.log(`Transcript found and logged for call ID: ${callId}`);
+          return { transcriptFound: true };
+        } else {
+          console.log(`Transcript content not yet available for call ID: ${callId}.`);
+          if (attempt < maxRetries) {
+            console.log(`Will retry in ${retryDelay / 1000} seconds...`);
+            await sleep(retryDelay);
+          } else {
+            console.log(`Max retries reached for call ID: ${callId}. No transcript found.`);
+            return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
+          }
+        }
+      } catch (error: any) {
+        console.error(`Error fetching call transcript from AirCall (Attempt ${attempt}):`, error);
+        if (attempt < maxRetries) {
+          await sleep(retryDelay);
+        } else {
+          return { transcriptFound: false, error: `An unexpected error occurred: ${error.message}` };
+        }
+      }
     }
+
+    // This part should not be reached, but as a fallback:
+    return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
   }
 );
