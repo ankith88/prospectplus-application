@@ -1,11 +1,12 @@
 
+
 'use server';
 
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
@@ -93,14 +94,8 @@ function safeGetStatus(status: any): LeadStatus {
 
 async function getUserAircallId(displayName: string): Promise<string | null> {
     try {
-        const [firstName, lastName] = displayName.split(' ');
-        if (!firstName || !lastName) {
-            console.log(`Invalid display name format: ${displayName}`);
-            return null;
-        }
-
         const usersRef = collection(firestore, 'users');
-        const q = query(usersRef, where('firstName', '==', firstName), where('lastName', '==', lastName), limit(1));
+        const q = query(usersRef, where('displayName', '==', displayName), limit(1));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -124,14 +119,8 @@ async function getUserAircallId(displayName: string): Promise<string | null> {
 
 async function getUserPhoneNumber(displayName: string): Promise<string | null> {
     try {
-        const [firstName, lastName] = displayName.split(' ');
-        if (!firstName || !lastName) {
-            console.log(`Invalid display name format: ${displayName}`);
-            return null;
-        }
-
         const usersRef = collection(firestore, 'users');
-        const q = query(usersRef, where('firstName', '==', firstName), where('lastName', '==', lastName), limit(1));
+        const q = query(usersRef, where('displayName', '==', displayName), limit(1));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -318,6 +307,37 @@ async function getLeadNotes(leadId: string): Promise<Note[]> {
     }
 }
 
+async function getAllTranscripts(): Promise<Transcript[]> {
+    try {
+        const allTranscripts: Transcript[] = [];
+        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+
+        for (const leadDoc of leadsSnapshot.docs) {
+            const transcriptsRef = collection(firestore, 'leads', leadDoc.id, 'transcripts');
+            const transcriptsSnapshot = await getDocs(transcriptsRef);
+            const leadTranscripts = transcriptsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                const leadData = leadDoc.data();
+                // Extract phone number from lead data if not on transcript
+                const phoneNumber = data.phoneNumber || leadData.customerPhone || 'Unknown';
+                return {
+                    id: doc.id,
+                    ...data,
+                    phoneNumber,
+                } as Transcript;
+            });
+            allTranscripts.push(...leadTranscripts);
+        }
+        
+        allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return allTranscripts;
+
+    } catch (error) {
+        console.error('Failed to fetch all transcripts:', error);
+        return [];
+    }
+}
+
 async function getLeadTranscripts(leadId: string): Promise<Transcript[]> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'transcripts');
@@ -457,7 +477,7 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
     }
 }
 
-async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author: string, callId: string }): Promise<Transcript> {
+async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
     try {
         const transcriptsRef = collection(firestore, 'leads', leadId, 'transcripts');
         const newTranscript = {
@@ -549,4 +569,42 @@ async function updateTranscriptAnalysis(leadId: string, transcriptId: string, an
   }
 }
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logTranscriptActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity, updateLeadAiScore, updateTranscriptAnalysis };
+async function deleteUnmatchedActivity(activityId: string): Promise<void> {
+    try {
+        const activityDocRef = doc(firestore, 'unmatched_activities', activityId);
+        await deleteDoc(activityDocRef);
+        console.log(`Unmatched activity ${activityId} deleted.`);
+    } catch (error) {
+        console.error(`Failed to delete unmatched activity ${activityId}:`, error);
+        throw new Error('Failed to delete unmatched activity from Firebase');
+    }
+}
+
+export { 
+    getLeadsFromFirebase,
+    addContactToLead,
+    updateLeadSalesRep,
+    updateLeadDialerRep,
+    updateLeadStatus,
+    logCallActivity,
+    logNoteActivity,
+    logTranscriptActivity,
+    logUnmatchedActivity,
+    updateContactInLead,
+    deleteContactFromLead,
+    updateLeadDetails,
+    logActivity,
+    getLeadFromFirebase,
+    getLeadSubCollection,
+    getLeadNotes,
+    getLeadTranscripts,
+    updateLeadAvatar,
+    getUserPhoneNumber,
+    getUserAircallId,
+    findActivityByCallId,
+    updateActivity,
+    updateLeadAiScore,
+    updateTranscriptAnalysis,
+    getAllTranscripts,
+    deleteUnmatchedActivity
+};

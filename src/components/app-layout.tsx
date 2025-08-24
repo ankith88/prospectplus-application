@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, Inbox, BarChart2 } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -92,10 +92,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/unmatched-activities")} tooltip="Unmatched Activities">
-                <Link href="/unmatched-activities">
-                  <Inbox />
-                  <span>Unmatched Activities</span>
+              <SidebarMenuButton asChild isActive={isActive("/transcripts")} tooltip="All Transcripts">
+                <Link href="/transcripts">
+                  <FileText />
+                  <span>All Transcripts</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

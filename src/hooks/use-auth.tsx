@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -20,7 +21,8 @@ import {
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import type { UserProfile } from '@/lib/types';
 
 interface UserDetails {
     firstName: string;
@@ -30,6 +32,7 @@ interface UserDetails {
 
 interface AuthContextType {
     user: User | null;
+    userProfile: UserProfile | null;
     loading: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
@@ -38,6 +41,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
+    userProfile: null,
     loading: true,
     signIn: async () => {},
     signOut: async () => {},
@@ -46,6 +50,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
@@ -54,8 +59,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (app) {
             const authInstance = getAuth(app);
             setAuth(authInstance);
-            const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+            const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
                 setUser(user);
+                if (user) {
+                    const userDocRef = doc(firestore, "users", user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    if (userDoc.exists()) {
+                        setUserProfile({ uid: user.uid, ...userDoc.data() } as UserProfile);
+                    } else {
+                        setUserProfile(null);
+                    }
+                } else {
+                    setUserProfile(null);
+                }
                 setLoading(false);
             });
 
@@ -73,9 +89,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [user, loading, router]);
 
 
-    const signIn = (email: string, pass: string) => {
+    const signIn = async (email: string, pass: string) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
-        return signInWithEmailAndPassword(auth, email, pass);
+        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+        const loggedInUser = userCredential.user;
+        if (loggedInUser) {
+            const userDocRef = doc(firestore, "users", loggedInUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                setUserProfile({ uid: loggedInUser.uid, ...userDoc.data() } as UserProfile);
+            }
+        }
+        return userCredential;
     }
 
     const signUp = async (email: string, pass: string, details: UserDetails) => {
@@ -88,27 +113,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const displayName = `${details.firstName} ${details.lastName}`;
 
         try {
-            // Update profile and create firestore entry
             await updateProfile(createdUser, { displayName });
             
             const userDocRef = doc(firestore, "users", createdUser.uid);
-            await setDoc(userDocRef, {
+            const newUserProfile: Omit<UserProfile, 'uid'> = {
                 email,
                 firstName: details.firstName,
                 lastName: details.lastName,
                 phoneNumber: details.phoneNumber,
-            });
+                role: 'user', // Default role
+            };
+            await setDoc(userDocRef, newUserProfile);
+            setUserProfile({ uid: createdUser.uid, ...newUserProfile });
              console.log(`User document created in Firestore for UID: ${createdUser.uid}`);
 
         } catch (error) {
             console.error('Error creating user profile or document:', error);
-            // Optionally, you might want to delete the user from Auth if the DB write fails
-            // await createdUser.delete();
             throw new Error('Failed to save user details.');
         }
 
-
-        // Manually update the user object to reflect the new display name immediately
         const updatedUser = { ...createdUser, displayName } as User;
         setUser(updatedUser);
         
@@ -121,10 +144,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         await firebaseSignOut(auth);
         setUser(null);
+        setUserProfile(null);
     };
 
     const value = {
         user,
+        userProfile,
         loading,
         signIn,
         signOut,

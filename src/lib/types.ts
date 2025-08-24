@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -40,6 +41,7 @@ export interface Transcript {
     content: string; // This will now be a JSON string of utterances
     callId: string;
     analysis?: TranscriptAnalysis;
+    phoneNumber?: string;
 }
 
 export interface Contact {
@@ -80,4 +82,14 @@ export interface Lead {
   customerPhone?: string
   aiScore?: number;
   aiReason?: string;
+}
+
+export interface UserProfile {
+    uid: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+    aircallUserId?: string;
+    role?: 'user' | 'admin';
 }
