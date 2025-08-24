@@ -16,14 +16,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Activity, Lead } from '@/lib/types'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { firestore } from '@/lib/firebase'
 import { collection, getDocs, orderBy, query, doc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud, Link as LinkIcon, AlertCircle } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Link as LinkIcon, AlertCircle, Hash, X } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
 import { logActivity } from '@/services/firebase'
@@ -38,6 +38,12 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Calendar as CalendarIcon } from 'lucide-react'
+import { Calendar as CalendarPicker } from '@/components/ui/calendar'
+import { format } from 'date-fns'
 
 type UnmatchedActivity = Activity & {
     phoneNumber: string;
@@ -51,6 +57,11 @@ export default function UnmatchedActivitiesPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [activityToAssign, setActivityToAssign] = useState<UnmatchedActivity | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [filters, setFilters] = useState({
+    phoneNumber: '',
+    callId: '',
+    date: undefined as Date | undefined,
+  });
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -101,6 +112,23 @@ export default function UnmatchedActivitiesPage() {
     fetchLeads();
 
   }, [user, authLoading, router, toast]);
+
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | Date | undefined) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ phoneNumber: '', callId: '', date: undefined });
+  };
+  
+  const filteredActivities = useMemo(() => {
+    return unmatchedActivities.filter(activity => {
+        const phoneMatch = filters.phoneNumber ? activity.phoneNumber.includes(filters.phoneNumber) : true;
+        const callIdMatch = filters.callId ? (activity.callId || '').includes(filters.callId) : true;
+        const dateMatch = filters.date ? format(new Date(activity.date), 'yyyy-MM-dd') === format(filters.date, 'yyyy-MM-dd') : true;
+        return phoneMatch && callIdMatch && dateMatch;
+    });
+  }, [unmatchedActivities, filters]);
 
   const handleSyncTranscripts = async () => {
     if (!user?.displayName) {
@@ -172,6 +200,8 @@ export default function UnmatchedActivitiesPage() {
     )
   }
 
+  const hasActiveFilters = Object.values(filters).some(val => val);
+
   return (
     <>
     <div className="flex flex-col gap-6">
@@ -185,6 +215,53 @@ export default function UnmatchedActivitiesPage() {
             {isSyncing ? 'Syncing...' : 'Sync My Transcripts'}
         </Button>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number</Label>
+                <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="callId">Call ID</Label>
+                <Input id="callId" value={filters.callId} onChange={(e) => handleFilterChange('callId', e.target.value)} />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="date">Date</Label>
+                 <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="date"
+                        variant={"outline"}
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {filters.date ? format(filters.date, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarPicker
+                        mode="single"
+                        selected={filters.date}
+                        onSelect={(date) => handleFilterChange('date', date)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                </Popover>
+            </div>
+             {hasActiveFilters && (
+                <div className="space-y-2">
+                    <Button variant="ghost" onClick={clearFilters}>
+                        <X className="mr-2 h-4 w-4" /> Clear Filters
+                    </Button>
+                </div>
+            )}
+        </CardContent>
+      </Card>
+      
       <Card>
         <CardHeader>
           <CardTitle>Unassigned Calls</CardTitle>
@@ -195,6 +272,7 @@ export default function UnmatchedActivitiesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Phone Number</TableHead>
+                  <TableHead>Call ID</TableHead>
                   <TableHead>Call Details</TableHead>
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Actions</TableHead>
@@ -203,15 +281,21 @@ export default function UnmatchedActivitiesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : unmatchedActivities.length > 0 ? (
-                  unmatchedActivities.map((activity) => (
+                ) : filteredActivities.length > 0 ? (
+                  filteredActivities.map((activity) => (
                     <TableRow key={activity.id}>
                       <TableCell>
                         <div className="flex items-center gap-2 font-medium">
                             <Phone className="h-4 w-4 text-muted-foreground" />
                             <span>{activity.phoneNumber}</span>
+                        </div>
+                      </TableCell>
+                       <TableCell>
+                        <div className="flex items-center gap-2 font-medium">
+                            <Hash className="h-4 w-4 text-muted-foreground" />
+                            <span>{activity.callId || 'N/A'}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -242,7 +326,7 @@ export default function UnmatchedActivitiesPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                           No unmatched activities found.
                       </TableCell>
                   </TableRow>
@@ -287,5 +371,3 @@ export default function UnmatchedActivitiesPage() {
     </>
   )
 }
-
-    

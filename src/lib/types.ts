@@ -27,12 +27,19 @@ export interface Note {
     content: string;
 }
 
+export interface TranscriptAnalysis {
+  summary: string;
+  sentiment: 'Positive' | 'Negative' | 'Neutral';
+  actionItems: string[];
+  keyTopics: string[];
+}
 export interface Transcript {
     id: string;
     date: string;
     author: string;
     content: string; // This will now be a JSON string of utterances
     callId: string;
+    analysis?: TranscriptAnalysis;
 }
 
 export interface Contact {
@@ -71,4 +78,6 @@ export interface Lead {
   campaign?: string
   customerServiceEmail?: string
   customerPhone?: string
+  aiScore?: number;
+  aiReason?: string;
 }

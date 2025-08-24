@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
 import { Loader } from "./ui/loader"
+import { GlobalSearch } from "./global-search"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -135,7 +136,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
          <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
           <SidebarTrigger />
           <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
-            {/* Future header content can go here */}
+            <GlobalSearch />
           </div>
         </header>
         <div className="p-4 sm:p-6 lg:p-8">

@@ -5,19 +5,22 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
+        
         const activityLog: Partial<Activity> = {
-            ...activity,
+            type: activity.type,
+            notes: activity.notes,
             date: activity.date || new Date().toISOString(),
-            duration: activity.duration || 'N/A'
         };
 
-        // Ensure callId is explicitly included if it exists
+        if (activity.duration) {
+            activityLog.duration = activity.duration;
+        }
         if (activity.callId) {
             activityLog.callId = activity.callId;
         }
@@ -27,7 +30,7 @@ async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date
         return docRef.id;
     } catch (error) {
         console.error(`Failed to log activity for lead ${leadId}:`, error);
-        throw new Error('Failed to log activity in Firebase');
+        throw new Error(`Failed to log activity in Firebase: [${error}]`);
     }
 }
 
@@ -188,6 +191,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           campaign: data.customerSource,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          aiScore: data.aiScore,
+          aiReason: data.aiReason,
         };
 
         if (includeSubCollections) {
@@ -253,6 +258,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           contactCount: data.contactCount || 0,
+          aiScore: data.aiScore,
+          aiReason: data.aiReason,
         };
         
         if (!summary) {
@@ -408,6 +415,21 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
     }
 }
 
+async function updateLeadAiScore(leadId: string, score: number, reason: string): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, {
+            aiScore: score,
+            aiReason: reason,
+        });
+        console.log(`AI score for lead ${leadId} updated to ${score}`);
+    } catch (error) {
+        console.error(`Failed to update AI score for lead ${leadId}:`, error);
+        throw new Error('Failed to update AI score in Firebase');
+    }
+}
+
+
 async function logCallActivity(leadId: string, callData: { notes: string; outcome: string; reason?: string }): Promise<string> {
     const notes = `Outcome: ${callData.outcome}${callData.reason ? ` (${callData.reason})` : ''}. Notes: ${callData.notes}`;
     return await logActivity(leadId, { type: 'Call', notes });
@@ -516,5 +538,15 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
     }
 }
 
+async function updateTranscriptAnalysis(leadId: string, transcriptId: string, analysis: TranscriptAnalysis): Promise<void> {
+  try {
+    const transcriptRef = doc(firestore, 'leads', leadId, 'transcripts', transcriptId);
+    await updateDoc(transcriptRef, { analysis });
+    console.log(`Transcript ${transcriptId} analysis updated for lead ${leadId}`);
+  } catch (error) {
+    console.error(`Failed to update transcript analysis for lead ${leadId}:`, error);
+    throw new Error('Failed to update transcript analysis in Firebase');
+  }
+}
 
-export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logTranscriptActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity };
+export { getLeadsFromFirebase, addContactToLead, updateLeadSalesRep, updateLeadDialerRep, updateLeadStatus, logCallActivity, logNoteActivity, logTranscriptActivity, logUnmatchedActivity, updateContactInLead, deleteContactFromLead, updateLeadDetails, logActivity, getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, updateLeadAvatar, getUserPhoneNumber, getUserAircallId, findActivityByCallId, updateActivity, updateLeadAiScore, updateTranscriptAnalysis };

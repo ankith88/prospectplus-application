@@ -13,6 +13,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getLeadsTool } from './get-leads-tool';
 import { prospectWebsiteTool } from './prospect-website-tool';
+import { updateLeadAiScore } from '@/services/firebase';
 
 const LeadToScoreSchema = z.object({
   leadId: z.string().describe('The ID of the lead.'),
@@ -74,7 +75,7 @@ const aiSingleLeadScoringPrompt = ai.definePrompt({
   
   - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
   - Use the prospectWebsite tool to gather information from the website to make your determination.
-  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
+  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", "shipping policy".
   - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
   Provide a reason for the assigned score, highlighting the key factors that influenced your assessment. Your reasoning should be based ONLY on the website analysis.
@@ -101,8 +102,8 @@ const aiSingleLeadScoringFlow = ai.defineFlow(
     }
     output.leadId = input.leadId; // Ensure leadId is in the final output.
     
-    // The following block was causing build errors and has been removed.
-    // The main functionality of scoring remains intact.
+    // Save the score to Firebase
+    await updateLeadAiScore(input.leadId, output.score, output.reason);
 
     return output;
   }
@@ -124,7 +125,7 @@ const aiLeadScoringPrompt = ai.definePrompt({
   
   - Give a higher score (75-100) to companies whose business model clearly involves shipping parcels within our target weight range and exclusively within Australia (e.g., e-commerce stores selling consumer goods, online retailers, parts distributors, specialty food producers).
   - Use the prospectWebsite tool to gather additional information from the website.
-  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", or "shipping policy".
+  - Increase the score if the website analysis finds keywords like "nationwide shipping", "ships Australia-wide", "express post", "delivery partners", "request a quote", "shipping policy".
   - Decrease the score for companies that likely ship very heavy items (e.g., "freight", "heavy machinery"), ship internationally, or sell digital-only products/services (e.g., "digital downloads", "software as a service", "consulting").
 
   If a lead profile is not provided, use the getLeads tool to fetch the leads first and score them individually.
@@ -155,6 +156,11 @@ const aiLeadScoringFlow = ai.defineFlow(
     const output = response.output;
     if (!output) {
       throw new Error("AI failed to generate scores.");
+    }
+    
+    // Save scores to Firebase in batch
+    for (const lead of output.scoredLeads) {
+        await updateLeadAiScore(lead.leadId, lead.score, lead.reason);
     }
     
     return output;

@@ -117,6 +117,17 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const { user } = useAuth();
   
   useEffect(() => {
+    if (initialLead.aiScore) {
+      setScoringResult({
+        leadId: initialLead.id,
+        score: initialLead.aiScore,
+        reason: initialLead.aiReason || '',
+        prospectedContacts: [],
+      });
+    }
+  }, [initialLead]);
+
+  useEffect(() => {
     if (!lead) return;
 
     const activityRef = collection(firestore, 'leads', lead.id, 'activity');
@@ -213,7 +224,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         };
         const scoring = await aiLeadScoring([leadToScore]);
         if (scoring.scoredLeads.length > 0) {
-            setScoringResult(scoring.scoredLeads[0]);
+            const result = scoring.scoredLeads[0];
+            setScoringResult(result);
+            setLead(prev => prev ? { ...prev, aiScore: result.score, aiReason: result.reason } : null);
         }
     } catch (error) {
         console.error("Failed to calculate score:", error);
@@ -871,7 +884,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                       <DialogTitle>Call Transcript</DialogTitle>
                   </DialogHeader>
                   {selectedTranscript && lead && (
-                      <TranscriptViewer transcript={selectedTranscript} leadName={lead.companyName} />
+                      <TranscriptViewer 
+                        transcript={selectedTranscript} 
+                        leadName={lead.companyName} 
+                        leadId={lead.id}
+                        onAnalysisComplete={(analysis) => {
+                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
+                        }}
+                      />
                   )}
               </DialogContent>
           </Dialog>
