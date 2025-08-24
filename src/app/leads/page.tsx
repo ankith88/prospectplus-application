@@ -4,6 +4,7 @@
 import {
   Card,
   CardContent,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -24,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Building, Briefcase } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -34,6 +35,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -243,6 +246,7 @@ export default function LeadsPage() {
   }
 
   const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const showUnassigned = userProfile?.role !== 'admin';
 
   return (
     <>
@@ -305,8 +309,8 @@ export default function LeadsPage() {
         </Card>
       </Collapsible>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="border-0 shadow-none bg-transparent">
+        <CardHeader className="flex flex-row items-center justify-between px-0">
           <CardTitle>My Assigned Leads</CardTitle>
           {selectedMyLeads.length > 0 && (
               <Button onClick={handleBulkUnassign} variant="outline">
@@ -315,109 +319,92 @@ export default function LeadsPage() {
               </Button>
           )}
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8">
-                    <Checkbox
-                      checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
-                      onCheckedChange={handleSelectAllMyLeads}
-                      aria-label="Select all my leads"
-                    />
-                  </TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead className="w-[50px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
-                  </TableRow>
-                ) : myLeads.length > 0 ? (
-                  myLeads.map((lead) => {
+        <CardContent className="px-0">
+           {loading ? (
+             <div className="text-center"><Loader /></div>
+           ) : myLeads.length > 0 ? (
+             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {myLeads.map((lead) => {
                     const addressString = formatAddress(lead.address);
                     return (
-                    <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
-                      <TableCell>
-                        <Checkbox
-                            checked={selectedMyLeads.includes(lead.id)}
-                            onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)}
-                            aria-label={`Select lead ${lead.companyName}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                          <div className="flex flex-col">
-                            <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                            disabled={addressString === 'N/A'}
-                            className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="View on map"
-                          >
-                            <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                          </button>
-                          <span>{addressString}</span>
-                        </div>
-                      </TableCell>
-                       <TableCell>
-                        {lead.customerPhone ? (
-                           <div className="flex items-center gap-1">
-                               <span className="font-medium break-all">{lead.customerPhone}</span>
-                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
-                                   <PhoneCall className="w-3 h-3" />
-                               </Button>
-                           </div>
-                        ) : 'N/A'}
-                       </TableCell>
-                      <TableCell>
-                        <LeadStatusBadge status={lead.status} />
-                      </TableCell>
-                      <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                      <TableCell>
-                        {lead.industryCategory}
-                      </TableCell>
-                      <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                <UserX className="mr-2 h-4 w-4" />
-                                Unassign
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                        <Card key={lead.id} className="flex flex-col group overflow-hidden">
+                           <CardHeader className="flex flex-row items-start gap-4 space-y-0">
+                                <Avatar className="w-12 h-12 rounded-lg">
+                                    <AvatarImage src={lead.avatarUrl} alt={lead.companyName} />
+                                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                                        <Building />
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <h3
+                                          className="font-semibold text-lg cursor-pointer hover:underline"
+                                          onClick={() => router.push(`/leads/${lead.id}`)}
+                                        >
+                                          {lead.companyName}
+                                        </h3>
+                                         <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent>
+                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
+                                                    <UserX className="mr-2 h-4 w-4" />
+                                                    Unassign
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <LeadStatusBadge status={lead.status} />
+                                </div>
+                            </CardHeader>
+                            <CardContent className="flex-1 space-y-3">
+                                <Separator />
+                                <div className="text-sm text-muted-foreground space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        <PhoneCall className="w-4 h-4 shrink-0"/>
+                                        {lead.customerPhone ? (
+                                           <div className="flex items-center gap-1">
+                                               <span className="font-medium text-foreground break-all">{lead.customerPhone}</span>
+                                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                                   <PhoneCall className="w-3 h-3" />
+                                               </Button>
+                                           </div>
+                                        ) : <span>N/A</span>}
+                                    </div>
+                                     <div className="flex items-center gap-3">
+                                        <MapPin className="w-4 h-4 shrink-0"/>
+                                        <span className="flex-1">{addressString}</span>
+                                        <Button
+                                            variant="ghost" size="icon"
+                                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                                            disabled={addressString === 'N/A'}
+                                            className="h-6 w-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="View on map"
+                                          >
+                                            <MapPin className="w-3 h-3" />
+                                          </Button>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <Briefcase className="w-4 h-4 shrink-0"/>
+                                        <span>{lead.industryCategory || 'N/A'}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                            <CardFooter>
+                                <Button className="w-full" variant="outline" onClick={() => router.push(`/leads/${lead.id}`)}>View Details</Button>
+                            </CardFooter>
+                        </Card>
                     )
-                  })
-                ) : (
-                  <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                          You have no actionable leads assigned.
-                      </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                })}
+             </div>
+           ) : (
+             <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
+                You have no actionable leads assigned.
+             </div>
+           )}
         </CardContent>
       </Card>
       
@@ -523,7 +510,7 @@ export default function LeadsPage() {
       </Card>
       )}
 
-      {userProfile?.role === 'admin' && (
+      {!showUnassigned && userProfile?.role === 'admin' && (
        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>All Unassigned Leads</CardTitle>
@@ -649,3 +636,5 @@ export default function LeadsPage() {
     </>
   )
 }
+
+    
