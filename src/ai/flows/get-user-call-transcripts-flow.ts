@@ -105,7 +105,8 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
       console.log(`Found and processed ${newTranscripts.length} transcripts for user: ${userDisplayName}`);
       return { newTranscripts };
 
-    } catch (error: any)      console.error('Error fetching call transcripts from AirCall:', error);
+    } catch (error: any) {
+      console.error('Error fetching call transcripts from AirCall:', error);
       return { newTranscripts: [], error: `An unexpected error occurred: ${error.message}` };
     }
   }
