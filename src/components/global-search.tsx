@@ -43,12 +43,6 @@ export function GlobalSearch() {
         setResults([]);
     }
   }, [debouncedQuery]);
-  
-  const handleSelect = (leadId: string) => {
-    router.push(`/leads/${leadId}`);
-    setIsOpen(false);
-    setQuery('');
-  };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
