@@ -45,14 +45,14 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}`;
+    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
     const maxRetries = 5;
     const retryDelay = 10000; // 10 seconds
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`Fetching call data from AirCall for call ID: ${callId} (Attempt ${attempt})`);
+      console.log(`Fetching transcript from AirCall for call ID: ${callId} (Attempt ${attempt})`);
 
       try {
         const response = await fetch(url, {
@@ -64,18 +64,25 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
         if (!response.ok) {
            if (response.status === 404) {
-             console.log(`No call record found for call ID: ${callId}. Stopping retries.`);
-             return { transcriptFound: false, error: 'NO_CALL_FOUND' };
+             console.log(`No transcript record found for call ID: ${callId}.`);
+             if (attempt < maxRetries) {
+                console.log(`Will retry in ${retryDelay / 1000} seconds...`);
+                await sleep(retryDelay);
+                continue; // Go to the next attempt
+             } else {
+                console.log(`Max retries reached for call ID: ${callId}. No transcript found.`);
+                return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
+             }
            }
            const errorBody = await response.text();
            const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
            console.error(errorMsg);
-           // Don't retry on persistent server errors, only on not-found transcript.
+           // Don't retry on other server errors.
            return { transcriptFound: false, error: errorMsg };
         }
 
-        const callData = await response.json() as any;
-        const utterances = callData?.call?.transcription?.content;
+        const transcriptionData = await response.json() as any;
+        const utterances = transcriptionData?.transcription?.content?.utterances || transcriptionData?.content?.utterances;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
           await logTranscriptActivity(leadId, {
