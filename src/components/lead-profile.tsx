@@ -175,7 +175,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   }
 
   const handlePostCallSubmit = async (outcome: string, notes: string, contact?: any) => {
-      if (!lead || !lastCallActivity) return;
+      if (!lead || !lastCallActivity || !lastCallActivity.callId) return;
 
       const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
           'Busy': { status: 'In Progress' },
@@ -199,7 +199,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           toast({ title: 'Status Updated', description: `Lead status changed to ${status}.` });
       }
 
-      // Log outcome as a new note or update the existing call activity
       const activityNote = `Call Outcome: ${outcome}. Notes: ${notes}`;
       await logNoteActivity(lead.id, {
           content: activityNote,
@@ -207,6 +206,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       });
       fetchNotes(); // Refresh notes
       
+      // Automatically fetch the transcript
+      toast({ title: "Fetching Transcript", description: "Attempting to fetch the transcript for this call..." });
+      await handleGetTranscriptForCall(lastCallActivity.callId);
+
       setShowPostCallDialog(false);
       setLastCallActivity(null);
   };
@@ -1046,3 +1049,5 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     </>
   )
 }
+
+    
