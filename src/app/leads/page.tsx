@@ -523,6 +523,7 @@ export default function LeadsPage() {
       </Card>
       )}
 
+      {userProfile?.role === 'admin' && (
        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>All Unassigned Leads</CardTitle>
@@ -638,6 +639,7 @@ export default function LeadsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
      <MapModal
         isOpen={!!selectedAddress}
@@ -647,5 +649,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
