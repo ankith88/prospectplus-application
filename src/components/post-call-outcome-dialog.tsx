@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Lead, Activity, Contact } from '@/lib/types'
 import { addContactToLead } from '@/services/firebase'
+import { useToast } from '@/hooks/use-toast'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -78,8 +79,15 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       notes: callActivity?.notes || '',
     },
   })
-
+  const { toast } = useToast()
   const outcome = form.watch('outcome');
+
+    // Mock Calendly links for sales reps
+  const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
+    'Leonie Feata': 'https://calendly.com/leonie-feata-mock/meeting',
+    'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
+    'Default': 'https://calendly.com/mailplus-default/meeting',
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     let newContact: Partial<Contact> | undefined;
@@ -90,10 +98,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
             phone: values.contactPhone,
             title: values.contactTitle,
         };
-        const existingContact = lead.contacts?.find(c => c.email === newContact.email);
+        const existingContact = lead.contacts?.find(c => c.email === newContact!.email);
         if (!existingContact) {
             await addContactToLead(lead.id, newContact as Omit<Contact, 'id'>);
         }
+
+        // Redirect to calendly
+        const salesRep = lead.salesRepAssigned || 'Default';
+        const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
+        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName)}&email=${encodeURIComponent(values.contactEmail)}`;
+        
+        toast({
+            title: 'Redirecting to Calendly...',
+            description: 'Please book the appointment for the lead.',
+        });
+
+        window.open(prefilledUrl, '_blank');
     }
     onSubmitProp(values.outcome, values.notes || '', newContact);
     form.reset();
@@ -147,7 +167,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
 
             {outcome === 'Interested' && (
               <div className="space-y-4 rounded-md border p-4">
-                  <p className="text-sm text-muted-foreground">The lead is interested. Capture their details.</p>
+                  <p className="text-sm text-muted-foreground">The lead is interested. Capture their details to book an appointment.</p>
                   <FormField
                     control={form.control}
                     name="contactName"
@@ -217,4 +237,3 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     </Dialog>
   )
 }
-
