@@ -17,24 +17,36 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead } from '@/lib/types'
+import type { Lead, LeadStatus } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory';
 
 export default function ArchivedLeadsPage() {
-  const [archivedLeads, setArchivedLeads] = useState<Lead[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const [filters, setFilters] = useState({
+    companyName: '',
+    status: 'all',
+    franchisee: '',
+    industryCategory: '',
+    phoneNumber: '',
+  });
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
     async function getArchivedLeads() {
@@ -46,13 +58,8 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        const allLeads = await getLeadsTool({ summary: true });
-        const filteredLeads = allLeads.filter(lead => 
-            lead.status === 'Lost' || 
-            lead.status === 'Qualified' || 
-            lead.status === 'Won'
-        );
-        setArchivedLeads(filteredLeads);
+        const fetchedLeads = await getLeadsTool({ summary: true });
+        setAllLeads(fetchedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
       } finally {
@@ -61,6 +68,34 @@ export default function ArchivedLeadsPage() {
     }
     getArchivedLeads();
   }, [user, authLoading, router]);
+
+  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      companyName: '',
+      status: 'all',
+      franchisee: '',
+      industryCategory: '',
+      phoneNumber: '',
+    });
+  };
+
+  const archivedLeads = useMemo(() => {
+     return allLeads.filter(lead => {
+        const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
+        const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
+        const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
+        const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
+
+        const isArchived = lead.status === 'Lost' || lead.status === 'Qualified' || lead.status === 'Won';
+
+        return isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
+    });
+  }, [allLeads, filters]);
 
   const sortedLeads = useMemo(() => {
     let sortableItems = [...archivedLeads];
@@ -107,6 +142,8 @@ export default function ArchivedLeadsPage() {
       </div>
     )
   }
+  
+  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
 
   return (
     <>
@@ -115,6 +152,62 @@ export default function ArchivedLeadsPage() {
         <h1 className="text-3xl font-bold tracking-tight">Archived Leads</h1>
         <p className="text-muted-foreground">View your qualified, won, and lost leads.</p>
       </header>
+
+      <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Filters</CardTitle>
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                        <SlidersHorizontal className="h-4 w-4" />
+                        <span className="ml-2">{isFilterOpen ? 'Close' : 'Open'} Filters</span>
+                    </Button>
+                </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                    <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                        <SelectTrigger id="status">
+                            <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Archived</SelectItem>
+                            <SelectItem value="Qualified">Qualified</SelectItem>
+                            <SelectItem value="Won">Won</SelectItem>
+                            <SelectItem value="Lost">Lost</SelectItem>
+                        </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="franchisee">Franchisee</Label>
+                    <Input id="franchisee" value={filters.franchisee} onChange={(e) => handleFilterChange('franchisee', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="industry">Industry</Label>
+                    <Input id="industry" value={filters.industryCategory} onChange={(e) => handleFilterChange('industryCategory', e.target.value)} />
+                  </div>
+              </CardContent>
+              {hasActiveFilters && (
+                <CardContent>
+                    <Button variant="ghost" onClick={clearFilters}>
+                        <X className="mr-2 h-4 w-4" /> Clear Filters
+                    </Button>
+                </CardContent>
+              )}
+            </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       <Card>
         <CardHeader>
           <CardTitle>Processed Leads</CardTitle>

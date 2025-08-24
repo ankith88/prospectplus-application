@@ -48,6 +48,7 @@ export default function LeadsPage() {
     status: 'all',
     franchisee: '',
     industryCategory: '',
+    phoneNumber: '',
   });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
@@ -83,6 +84,7 @@ export default function LeadsPage() {
       status: 'all',
       franchisee: '',
       industryCategory: '',
+      phoneNumber: '',
     });
   };
 
@@ -92,7 +94,8 @@ export default function LeadsPage() {
       const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
-      return companyMatch && statusMatch && franchiseeMatch && industryMatch;
+      const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
+      return companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
     });
   }, [allLeads, filters]);
 
@@ -257,6 +260,10 @@ export default function LeadsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="companyName">Company Name</Label>
                     <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                    <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
