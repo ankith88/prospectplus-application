@@ -5,11 +5,11 @@ import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { getLeadsTool } from '@/ai/flows/get-leads-tool';
 import type { Lead } from '@/lib/types';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Building, Search } from 'lucide-react';
 import { Button } from './ui/button';
+import { searchLeads } from '@/app/actions/search-leads';
 
 export function GlobalSearch() {
   const [query, setQuery] = useState('');
@@ -25,15 +25,7 @@ export function GlobalSearch() {
         return;
       }
       
-      const allLeads = await getLeadsTool({ summary: true });
-      const lowercasedQuery = debouncedQuery.toLowerCase();
-      
-      const filteredLeads = allLeads.filter(lead => 
-        lead.companyName.toLowerCase().includes(lowercasedQuery) ||
-        (lead.customerPhone && lead.customerPhone.includes(lowercasedQuery)) ||
-        (lead.contacts && lead.contacts.some(c => c.name.toLowerCase().includes(lowercasedQuery) || c.phone.includes(lowercasedQuery)))
-      ).slice(0, 10); // Limit results
-
+      const filteredLeads = await searchLeads(debouncedQuery);
       setResults(filteredLeads);
     };
 
