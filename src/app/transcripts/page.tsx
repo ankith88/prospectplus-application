@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
 import { getAllTranscripts } from '@/services/firebase'
@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 export default function TranscriptsPage() {
   const [allTranscripts, setAllTranscripts] = useState<Transcript[]>([]);
@@ -169,51 +170,64 @@ export default function TranscriptsPage() {
         </Button>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-            <div className="space-y-2">
-                <Label htmlFor="phoneNumber">Phone Number</Label>
-                <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="callId">Call ID</Label>
-                <Input id="callId" value={filters.callId} onChange={(e) => handleFilterChange('callId', e.target.value)} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="date">Date</Label>
-                 <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="date"
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {filters.date ? format(filters.date, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarPicker
-                        mode="single"
-                        selected={filters.date}
-                        onSelect={(date) => handleFilterChange('date', date)}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                </Popover>
-            </div>
-             {hasActiveFilters && (
-                <div className="space-y-2">
-                    <Button variant="ghost" onClick={clearFilters}>
-                        <X className="mr-2 h-4 w-4" /> Clear Filters
-                    </Button>
-                </div>
-            )}
-        </CardContent>
-      </Card>
+      <Collapsible>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                <span>Filters</span>
+              </CardTitle>
+               <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span className="ml-2">Toggle Filters</span>
+                  </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="phoneNumber">Phone Number</Label>
+                        <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="callId">Call ID</Label>
+                        <Input id="callId" value={filters.callId} onChange={(e) => handleFilterChange('callId', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="date">Date</Label>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="date"
+                                variant={"outline"}
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {filters.date ? format(filters.date, "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarPicker
+                                mode="single"
+                                selected={filters.date}
+                                onSelect={(date) => handleFilterChange('date', date)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                     {hasActiveFilters && (
+                        <div className="space-y-2">
+                            <Button variant="ghost" onClick={clearFilters}>
+                                <X className="mr-2 h-4 w-4" /> Clear Filters
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </CollapsibleContent>
+          </Card>
+      </Collapsible>
       
       <Card>
         <CardHeader>
