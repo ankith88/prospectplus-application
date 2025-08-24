@@ -44,10 +44,10 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
+    const url = `https://api.aircall.io/v1/calls/${callId}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    console.log(`Fetching call transcript from AirCall for call ID: ${callId}`);
+    console.log(`Fetching call data from AirCall for call ID: ${callId}`);
 
     try {
       const response = await fetch(url, {
@@ -68,9 +68,10 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         return { transcriptFound: false, error: errorMsg };
       }
 
-      const transcriptionData = await response.json() as any;
+      const callData = await response.json() as any;
       
-      const utterances = transcriptionData?.transcription?.content?.utterances;
+      const utterances = callData?.call?.transcription?.content;
+
       if (utterances && Array.isArray(utterances)) {
         
         // Save the structured utterances directly as a JSON string

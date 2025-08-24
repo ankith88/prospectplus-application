@@ -5,6 +5,7 @@ import type { Transcript } from '@/lib/types';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 interface TranscriptViewerProps {
     transcript: Transcript;
@@ -17,6 +18,13 @@ interface Utterance {
     participant_type: 'internal' | 'external';
 }
 
+interface GroupedUtterance {
+    speakerName: string;
+    isInternal: boolean;
+    initials: string;
+    texts: string[];
+}
+
 function getInitials(name: string) {
     if (!name) return '??';
     const words = name.split(' ');
@@ -27,43 +35,93 @@ function getInitials(name: string) {
 }
 
 export function TranscriptViewer({ transcript, leadName }: TranscriptViewerProps) {
-    
-    const utterances: Utterance[] = (transcript.content as any)?.utterances || [];
+    const [groupedUtterances, setGroupedUtterances] = useState<GroupedUtterance[]>([]);
 
-    if (!utterances || utterances.length === 0) {
-        return <div className="text-center text-muted-foreground p-8">No transcript content available.</div>;
+    useEffect(() => {
+        let utterances: Utterance[] = [];
+        try {
+            // The content might be a JSON string, so it needs to be parsed.
+            const parsedContent = JSON.parse(transcript.content);
+            // Check if parsed content has an 'utterances' property
+            utterances = parsedContent.utterances || parsedContent;
+            if (!Array.isArray(utterances)) {
+                utterances = [];
+            }
+        } catch (error) {
+            console.error("Failed to parse transcript content:", error);
+            // Handle case where content is not a valid JSON string
+            utterances = [];
+        }
+
+        if (utterances.length === 0) {
+            setGroupedUtterances([]);
+            return;
+        }
+
+        const groups: GroupedUtterance[] = [];
+        let currentGroup: GroupedUtterance | null = null;
+
+        for (const utt of utterances) {
+            const isInternal = utt.participant_type === 'internal';
+            const speakerName = isInternal ? transcript.author : leadName;
+
+            if (currentGroup && currentGroup.speakerName === speakerName) {
+                currentGroup.texts.push(utt.text);
+            } else {
+                if (currentGroup) {
+                    groups.push(currentGroup);
+                }
+                currentGroup = {
+                    speakerName: speakerName,
+                    isInternal: isInternal,
+                    initials: getInitials(speakerName),
+                    texts: [utt.text],
+                };
+            }
+        }
+        if (currentGroup) {
+            groups.push(currentGroup);
+        }
+        
+        setGroupedUtterances(groups);
+
+    }, [transcript, leadName]);
+
+
+    if (groupedUtterances.length === 0) {
+        return <div className="text-center text-muted-foreground p-8">No valid transcript content available.</div>;
     }
     
     return (
         <ScrollArea className="h-96">
             <div className="p-4 space-y-6">
-                {utterances.map((utt, index) => {
-                    const isInternal = utt.participant_type === 'internal';
-                    const speakerName = isInternal ? transcript.author : leadName;
-                    
-                    return (
-                        <div key={index} className="flex items-start gap-4">
-                             <Avatar className="h-8 w-8">
-                                <AvatarFallback className={cn(isInternal ? 'bg-primary text-primary-foreground' : 'bg-secondary')}>
-                                    {getInitials(speakerName)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className={cn(
-                                "flex-1 border-l-2 pl-4",
-                                isInternal ? "border-green-500" : "border-blue-500"
-                            )}>
-                                <p className={cn(
-                                    "font-bold text-sm",
-                                     isInternal ? "text-green-600" : "text-blue-600"
-                                )}>{speakerName}</p>
-                                <p className="text-foreground">{utt.text}</p>
+                {groupedUtterances.map((group, groupIndex) => (
+                    <div key={groupIndex} className="flex items-start gap-3">
+                        <Avatar className="h-8 w-8">
+                            <AvatarFallback className={cn(group.isInternal ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground')}>
+                                {group.initials}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                             <p className={cn(
+                                "font-bold text-sm mb-1",
+                                group.isInternal ? "text-primary" : "text-foreground"
+                            )}>{group.speakerName}</p>
+                            <div className="space-y-2">
+                                {group.texts.map((text, textIndex) => (
+                                     <div key={textIndex} className="flex items-start">
+                                        <div className={cn(
+                                            "w-1 rounded-full mr-3 shrink-0 self-stretch",
+                                            group.isInternal ? "bg-blue-500" : "bg-gray-300"
+                                        )}></div>
+                                        <p className="text-foreground text-sm">{text}</p>
+                                     </div>
+                                ))}
                             </div>
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
             </div>
         </ScrollArea>
     );
 }
-
-
