@@ -3,11 +3,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { getLeadsTool } from '@/ai/flows/get-leads-tool';
 import type { Lead } from '@/lib/types';
 import { useDebounce } from '@/hooks/use-debounce';
-import { Building, Phone, User } from 'lucide-react';
+import { Building, Search } from 'lucide-react';
+import { Button } from './ui/button';
 
 export function GlobalSearch() {
   const [query, setQuery] = useState('');
@@ -35,7 +36,11 @@ export function GlobalSearch() {
       setResults(filteredLeads);
     };
 
-    fetchResults();
+    if (debouncedQuery) {
+        fetchResults();
+    } else {
+        setResults([]);
+    }
   }, [debouncedQuery]);
   
   const handleSelect = (leadId: string) => {
@@ -55,35 +60,47 @@ export function GlobalSearch() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+  
+  const runCommand = React.useCallback((command: () => unknown) => {
+    setIsOpen(false)
+    command()
+  }, [])
 
 
   return (
-    <div className="relative w-full max-w-md">
-      <Command shouldFilter={false} className="rounded-lg border shadow-md">
+    <>
+    <Button
+        variant="outline"
+        className="relative h-9 w-full justify-start rounded-[0.5rem] text-sm text-muted-foreground sm:pr-12 md:w-40 lg:w-64"
+        onClick={() => setIsOpen(true)}
+      >
+        <Search className="h-4 w-4 mr-2" />
+        <span className="hidden lg:inline-flex">Search...</span>
+        <span className="inline-flex lg:hidden">Search...</span>
+        <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+          <span className="text-xs">⌘</span>K
+        </kbd>
+    </Button>
+    <CommandDialog open={isOpen} onOpenChange={setIsOpen}>
         <CommandInput 
           placeholder="Search leads, contacts, phone..."
           value={query}
           onValueChange={setQuery}
-          onFocus={() => setIsOpen(true)}
         />
-        {isOpen && (
-            <CommandList>
-                <CommandEmpty>{debouncedQuery.length > 1 ? 'No results found.' : 'Type to search...'}</CommandEmpty>
-                {results.length > 0 && (
-                    <CommandGroup heading="Leads">
-                        {results.map(lead => (
-                            <CommandItem key={lead.id} onSelect={() => handleSelect(lead.id)} value={lead.companyName}>
-                                <Building className="mr-2 h-4 w-4" />
-                                <span>{lead.companyName}</span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
-                )}
-            </CommandList>
-        )}
-      </Command>
-       {/* Close dropdown on outside click */}
-       {isOpen && <div className="fixed inset-0 z-[-1]" onClick={() => setIsOpen(false)} />}
-    </div>
+        <CommandList>
+            <CommandEmpty>{debouncedQuery.length > 1 ? 'No results found.' : 'Type to search...'}</CommandEmpty>
+            {results.length > 0 && (
+                <CommandGroup heading="Leads">
+                    {results.map(lead => (
+                        <CommandItem key={lead.id} onSelect={() => runCommand(() => router.push(`/leads/${lead.id}`))}>
+                            <Building className="mr-2 h-4 w-4" />
+                            <span>{lead.companyName}</span>
+                        </CommandItem>
+                    ))}
+                </CommandGroup>
+            )}
+        </CommandList>
+    </CommandDialog>
+    </>
   );
 }
