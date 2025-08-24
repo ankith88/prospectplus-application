@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
 import { getAllTranscripts } from '@/services/firebase'
@@ -267,7 +267,14 @@ export default function TranscriptsPage() {
                             )}
                         </div>
                       </TableCell>
-                      {userProfile?.role === 'admin' && <TableCell>{transcript.author}</TableCell>}
+                      {userProfile?.role === 'admin' && (
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            {transcript.author}
+                          </div>
+                        </TableCell>
+                      )}
                        <TableCell>
                         <div className="flex items-center gap-2 font-medium">
                             <Hash className="h-4 w-4 text-muted-foreground" />
