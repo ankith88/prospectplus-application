@@ -62,7 +62,7 @@ export function GlobalSearch() {
         onClick={() => setIsOpen(true)}
       >
         <Search className="h-4 w-4 mr-2" />
-        <span className="hidden lg:inline-flex">Search...</span>
+        <span className="hidden lg:inline-flex">Search leads...</span>
         <span className="inline-flex lg:hidden">Search...</span>
         <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
           <span className="text-xs">⌘</span>K
@@ -70,7 +70,7 @@ export function GlobalSearch() {
     </Button>
     <CommandDialog open={isOpen} onOpenChange={setIsOpen}>
         <CommandInput 
-          placeholder="Search leads, contacts, phone..."
+          placeholder="Search by company name..."
           value={query}
           onValueChange={setQuery}
         />

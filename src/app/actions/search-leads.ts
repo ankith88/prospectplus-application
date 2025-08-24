@@ -16,9 +16,7 @@ export async function searchLeads(query: string) {
     const lowercasedQuery = query.toLowerCase();
     
     const filteredLeads = allLeads.filter((lead: any) => 
-      lead.companyName.toLowerCase().includes(lowercasedQuery) ||
-      (lead.customerPhone && lead.customerPhone.includes(lowercasedQuery)) ||
-      (lead.contacts && lead.contacts.some((c: any) => c.name.toLowerCase().includes(lowercasedQuery) || c.phone.includes(lowercasedQuery)))
+      lead.companyName.toLowerCase().includes(lowercasedQuery)
     ).slice(0, 10); // Limit results
 
     return filteredLeads;
