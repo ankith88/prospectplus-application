@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Building, Briefcase } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -35,8 +35,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -112,6 +111,17 @@ export default function LeadsPage() {
     }
     return [];
   }, [filteredLeads, user]);
+
+  const leadsByStatus = useMemo(() => {
+    return myLeads.reduce((acc, lead) => {
+      const status = lead.status;
+      if (!acc[status]) {
+        acc[status] = [];
+      }
+      acc[status].push(lead);
+      return acc;
+    }, {} as Record<LeadStatus, Lead[]>);
+  }, [myLeads]);
   
   const allAssignedLeads = useMemo(() => {
     const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
@@ -309,8 +319,8 @@ export default function LeadsPage() {
         </Card>
       </Collapsible>
 
-      <Card className="border-0 shadow-none bg-transparent">
-        <CardHeader className="flex flex-row items-center justify-between px-0">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>My Assigned Leads</CardTitle>
           {selectedMyLeads.length > 0 && (
               <Button onClick={handleBulkUnassign} variant="outline">
@@ -319,87 +329,91 @@ export default function LeadsPage() {
               </Button>
           )}
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent>
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {myLeads.map((lead) => {
-                    const addressString = formatAddress(lead.address);
-                    return (
-                        <Card key={lead.id} className="flex flex-col group overflow-hidden">
-                           <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                                <Avatar className="w-12 h-12 rounded-lg">
-                                    <AvatarImage src={lead.avatarUrl} alt={lead.companyName} />
-                                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
-                                        <Building />
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <h3
-                                          className="font-semibold text-lg cursor-pointer hover:underline"
-                                          onClick={() => router.push(`/leads/${lead.id}`)}
-                                        >
-                                          {lead.companyName}
-                                        </h3>
-                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent>
-                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                                    <UserX className="mr-2 h-4 w-4" />
-                                                    Unassign
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+             <Accordion type="multiple" defaultValue={Object.keys(leadsByStatus)} className="w-full">
+                {Object.entries(leadsByStatus).map(([status, leads]) => (
+                  <AccordionItem value={status} key={status}>
+                    <AccordionTrigger>
+                      <div className="flex items-center gap-2">
+                        <LeadStatusBadge status={status as LeadStatus} />
+                        <span className="font-semibold">{status}</span>
+                        <Badge variant="secondary">{leads.length}</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                       <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Company</TableHead>
+                              <TableHead>Address</TableHead>
+                              <TableHead>Phone</TableHead>
+                              <TableHead>Industry</TableHead>
+                              <TableHead className="w-[50px] text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {leads.map((lead) => {
+                              const addressString = formatAddress(lead.address);
+                              return (
+                                <TableRow key={lead.id}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
+                                      </div>
                                     </div>
-                                    <LeadStatusBadge status={lead.status} />
-                                </div>
-                            </CardHeader>
-                            <CardContent className="flex-1 space-y-3">
-                                <Separator />
-                                <div className="text-sm text-muted-foreground space-y-3">
-                                    <div className="flex items-center gap-3">
-                                        <PhoneCall className="w-4 h-4 shrink-0"/>
-                                        {lead.customerPhone ? (
-                                           <div className="flex items-center gap-1">
-                                               <span className="font-medium text-foreground break-all">{lead.customerPhone}</span>
-                                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
-                                                   <PhoneCall className="w-3 h-3" />
-                                               </Button>
-                                           </div>
-                                        ) : <span>N/A</span>}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
+                                        disabled={addressString === 'N/A'}
+                                        className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="View on map"
+                                      >
+                                        <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                      </button>
+                                      <span>{addressString}</span>
                                     </div>
-                                     <div className="flex items-center gap-3">
-                                        <MapPin className="w-4 h-4 shrink-0"/>
-                                        <span className="flex-1">{addressString}</span>
-                                        <Button
-                                            variant="ghost" size="icon"
-                                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                                            disabled={addressString === 'N/A'}
-                                            className="h-6 w-6 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="View on map"
-                                          >
-                                            <MapPin className="w-3 h-3" />
+                                  </TableCell>
+                                  <TableCell>
+                                    {lead.customerPhone ? (
+                                      <div className="flex items-center gap-1">
+                                          <span className="font-medium break-all">{lead.customerPhone}</span>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                              <PhoneCall className="w-3 h-3" />
                                           </Button>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <Briefcase className="w-4 h-4 shrink-0"/>
-                                        <span>{lead.industryCategory || 'N/A'}</span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                            <CardFooter>
-                                <Button className="w-full" variant="outline" onClick={() => router.push(`/leads/${lead.id}`)}>View Details</Button>
-                            </CardFooter>
-                        </Card>
-                    )
-                })}
-             </div>
+                                      </div>
+                                    ) : 'N/A'}
+                                  </TableCell>
+                                  <TableCell>{lead.industryCategory}</TableCell>
+                                  <TableCell className="text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
+                                          <UserX className="mr-2 h-4 w-4" />
+                                          Unassign
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                       </Table>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+             </Accordion>
            ) : (
              <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                 You have no actionable leads assigned.
@@ -636,5 +650,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
