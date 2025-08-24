@@ -48,8 +48,8 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     const url = `https://api.aircall.io/v1/calls/${callId}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    const maxRetries = 3;
-    const retryDelay = 30000; // 30 seconds
+    const maxRetries = 5;
+    const retryDelay = 10000; // 10 seconds
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`Fetching call data from AirCall for call ID: ${callId} (Attempt ${attempt})`);
