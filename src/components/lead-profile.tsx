@@ -88,6 +88,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -108,6 +109,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
+  const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -420,6 +422,29 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         title: "Copied to clipboard",
         description: `${fieldName} copied successfully.`,
     });
+  };
+
+  const handleGetTranscriptForCall = async (callId: string) => {
+    if (!lead || !user?.displayName) return;
+    try {
+      setFetchingTranscriptId(callId);
+      const result = await getCallTranscriptByCallId({
+        callId,
+        leadId: lead.id,
+        leadAuthor: user.displayName,
+      });
+
+      if (result.transcriptFound) {
+        toast({ title: "Success", description: "Transcript fetched and logged." });
+        fetchTranscripts(); // Re-fetch transcripts to update the UI
+      } else {
+        toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "An unexpected error occurred." });
+    } finally {
+      setFetchingTranscriptId(null);
+    }
   };
 
   if (!lead) {
@@ -890,39 +915,54 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 </div>
               ) : (
               <ul className="space-y-4">
-                {lead.activity && lead.activity.map((item, index) => (
-                  <li key={item.id} className="flex gap-4 group">
-                    <div className="flex flex-col items-center">
-                      <div className="bg-secondary rounded-full p-2">
-                        {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                        {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                        {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                        {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                      </div>
-                      {lead.activity && index < lead.activity.length - 1 && (
-                        <div className="w-px h-full bg-border"></div>
-                      )}
-                    </div>
-                    <div className="flex-1 pb-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                        <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
-                      </div>
-                       {item.type === 'Call' && item.callId && (
-                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                          <Hash className="w-3 h-3" />
-                          <span>Call ID: {item.callId}</span>
-                           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                              <Clipboard className="w-2.5 h-2.5" />
-                          </Button>
+                {lead.activity && lead.activity.map((item, index) => {
+                   const hasTranscript = transcripts.some(t => t.callId === item.callId);
+                   return (
+                    <li key={item.id} className="flex gap-4 group">
+                      <div className="flex flex-col items-center">
+                        <div className="bg-secondary rounded-full p-2">
+                          {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                         </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        {lead.activity && index < lead.activity.length - 1 && (
+                          <div className="w-px h-full bg-border"></div>
+                        )}
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                          <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
+                        </div>
+                         {item.type === 'Call' && item.callId && (
+                           <div className="flex items-center justify-between mt-1">
+                             <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Hash className="w-3 h-3" />
+                                <span>Call ID: {item.callId}</span>
+                                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                    <Clipboard className="w-2.5 h-2.5" />
+                                </Button>
+                             </div>
+                              {!hasTranscript && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                  disabled={fetchingTranscriptId === item.callId}
+                                >
+                                  {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch transcript for this call'}
+                                </Button>
+                              )}
+                           </div>
+                         )}
+                      </div>
+                    </li>
+                   )
+                })}
               </ul>
               )}
             </CardContent>

@@ -116,7 +116,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         window.open(prefilledUrl, '_blank');
     }
     onSubmitProp(values.outcome, values.notes || '', newContact);
-    form.reset();
+    onClose();
   }
 
   return (
@@ -136,7 +136,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Outcome</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a call outcome" />
