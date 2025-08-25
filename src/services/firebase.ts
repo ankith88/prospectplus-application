@@ -325,15 +325,13 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
             });
         }
         
-        const finalCalls = allCalls;
-
-        finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
         if (user.role === 'admin') {
-            return finalCalls;
+            return allCalls;
         }
 
-        return finalCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
+        return allCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
 
     } catch (error) {
         console.error('Failed to fetch all call activities:', error);
