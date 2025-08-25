@@ -85,6 +85,7 @@ export async function POST(
 
     const callData = data.data;
     const callId = callData.id?.toString();
+    const author = callData.user?.name || 'Unknown User';
 
     // Event: transcription.created
     if (data.event === 'call.transcription.created') {
@@ -97,7 +98,6 @@ export async function POST(
         }
         
         const leadInfo = await findLeadByPhoneNumber(phoneNumber);
-        const author = callData.user?.name || 'Unknown User';
 
         if (leadInfo) {
             await logTranscriptActivity(leadInfo.id, {
@@ -129,7 +129,6 @@ export async function POST(
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
       const duration = `${minutes}m ${seconds}s`;
-      const author = callData.user?.name || 'Unknown User';
       
       let notes = `Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
       if (callData.comments && callData.comments.length > 0) {
@@ -154,7 +153,7 @@ export async function POST(
         duration: duration,
         callId: callId.toString(),
         date: callDate,
-        author: author,
+        author: author, // Ensure author is always included
       };
 
       if (!leadInfo) {
