@@ -84,7 +84,12 @@ async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<str
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch'];
     if (typeof status === 'string') {
-        const cleanStatus = status.replace('SUSPECT-', '');
+        let cleanStatus = status.replace('SUSPECT-', '');
+
+        if (cleanStatus === 'Unqualified') {
+            return 'New';
+        }
+
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }
@@ -290,6 +295,61 @@ async function getLeadSubCollection<T extends Contact | Activity>(leadId: string
     return [];
   }
 }
+
+async function getLeadActivity(leadId: string): Promise<Activity[]> {
+    return getLeadSubCollection<Activity>(leadId, 'activity');
+}
+
+
+async function getAllCallActivities(user: UserProfile | null): Promise<(Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string })[]> {
+    if (!user) return [];
+    try {
+        const allCalls: (Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string })[] = [];
+        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+
+        for (const leadDoc of leadsSnapshot.docs) {
+            const activitiesRef = collection(firestore, 'leads', leadDoc.id, 'activity');
+            const q = query(activitiesRef, where('type', '==', 'Call'));
+            const activitiesSnapshot = await getDocs(q);
+            const leadData = leadDoc.data();
+
+            const leadCalls = activitiesSnapshot.docs.map(doc => {
+                const activityData = doc.data() as Activity;
+                // Infer author from call notes if not present
+                let author = 'Unknown User';
+                if (activityData.notes) {
+                    const match = activityData.notes.match(/Call logged by (.+)/);
+                    if (match && match[1]) {
+                        author = match[1];
+                    }
+                }
+                
+                return {
+                    ...(activityData as Activity),
+                    id: doc.id,
+                    leadId: leadDoc.id,
+                    leadName: leadData.companyName || 'Unknown Lead',
+                    leadStatus: safeGetStatus(leadData.customerStatus),
+                    author: author,
+                };
+            });
+            allCalls.push(...leadCalls);
+        }
+        
+        // Filter by user if not admin
+        const finalCalls = user.role === 'admin' 
+            ? allCalls 
+            : allCalls.filter(call => call.author === user.firstName + ' ' + user.lastName);
+
+        finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return finalCalls;
+
+    } catch (error) {
+        console.error('Failed to fetch all call activities:', error);
+        return [];
+    }
+}
+
 
 async function getLeadNotes(leadId: string): Promise<Note[]> {
     try {
@@ -642,6 +702,7 @@ export {
     logActivity,
     getLeadFromFirebase,
     getLeadSubCollection,
+    getLeadActivity,
     getLeadNotes,
     getLeadTranscripts,
     updateLeadAvatar,
@@ -652,6 +713,7 @@ export {
     updateLeadAiScore,
     updateTranscriptAnalysis,
     getAllTranscripts,
+    getAllCallActivities,
     deleteUnmatchedActivity,
     findLeadByPhoneNumber,
 };
