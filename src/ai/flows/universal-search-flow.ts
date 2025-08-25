@@ -112,27 +112,10 @@ async function searchContacts(searchTerm: string): Promise<z.infer<typeof Search
 
 
 async function searchTranscripts(searchTerm: string): Promise<z.infer<typeof SearchTranscriptResultSchema>[]> {
-    if (!searchTerm) return [];
-    const transcriptsRef = collectionGroup(firestore, 'transcripts');
-    const q = query(transcriptsRef, where('callId', '==', searchTerm), limit(5));
-    const snapshot = await getDocs(q);
-
-    const results: z.infer<typeof SearchTranscriptResultSchema>[] = [];
-    for (const doc of snapshot.docs) {
-        const leadRef = doc.ref.parent.parent;
-        if (leadRef) {
-            const leadDoc = await getDoc(leadRef);
-            if (leadDoc.exists()) {
-                results.push({
-                    id: doc.id,
-                    callId: doc.data().callId,
-                    leadId: leadDoc.id,
-                    leadName: leadDoc.data().companyName,
-                });
-            }
-        }
-    }
-    return results;
+    // This query requires a composite index. Disabling for now to prevent app crashes.
+    // The user can create the required index in their Firebase console to re-enable this.
+    // The required index is on the 'transcripts' collection group, for the 'callId' field.
+    return [];
 }
 
 
