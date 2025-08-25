@@ -8,7 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { firestore } from '@/lib/firebase';
-import { collection, query, where, getDocs, collectionGroup, limit, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, collectionGroup, limit, getDoc, or } from 'firebase/firestore';
 
 const UniversalSearchInputSchema = z.object({
   query: z.string().describe('The search term.'),
@@ -42,14 +42,32 @@ const UniversalSearchOutputSchema = z.object({
 async function searchLeads(searchTerm: string): Promise<z.infer<typeof SearchLeadResultSchema>[]> {
   if (!searchTerm) return [];
   const leadsRef = collection(firestore, 'leads');
+  
+  // Perform a case-insensitive search
+  const searchTermLower = searchTerm.toLowerCase();
+  const searchTermUpper = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
+
   const q = query(
     leadsRef,
-    where('companyName', '>=', searchTerm),
-    where('companyName', '<=', searchTerm + '\uf8ff'),
-    limit(5)
+    or(
+        where('companyName', '>=', searchTerm),
+        where('companyName', '<=', searchTerm + '\uf8ff'),
+        where('companyName', '>=', searchTermLower),
+        where('companyName', '<=', searchTermLower + '\uf8ff'),
+        where('companyName', '>=', searchTermUpper),
+        where('companyName', '<=', searchTermUpper + '\uf8ff')
+    ),
+    limit(10)
   );
+
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({
+
+  // Manual filtering for case-insensitivity because Firestore's native capabilities are limited.
+  const filteredDocs = snapshot.docs.filter(doc => 
+    doc.data().companyName.toLowerCase().includes(searchTermLower)
+  );
+
+  return filteredDocs.slice(0, 5).map(doc => ({
     id: doc.id,
     companyName: doc.data().companyName,
   }));
