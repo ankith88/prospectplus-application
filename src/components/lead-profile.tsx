@@ -463,15 +463,13 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
   return (
     <>
-    {showPostCallDialog && lastCallActivity && (
-        <PostCallOutcomeDialog
-            isOpen={showPostCallDialog}
-            onClose={() => setShowPostCallDialog(false)}
-            lead={lead}
-            callActivity={lastCallActivity}
-            onSubmit={handlePostCallSubmit}
-        />
-    )}
+    <PostCallOutcomeDialog
+        isOpen={showPostCallDialog}
+        onClose={() => setShowPostCallDialog(false)}
+        lead={lead}
+        callActivity={lastCallActivity!}
+        onSubmit={handlePostCallSubmit}
+    />
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild>
@@ -501,12 +499,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-                <DialogTrigger asChild>
-                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => setShowPostCallDialog(true)}>
-                        <Phone className="mr-2 h-4 w-4" />
-                        Log Call Outcome
-                     </DropdownMenuItem>
-                </DialogTrigger>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => setShowPostCallDialog(true)}>
+                    <Phone className="mr-2 h-4 w-4" />
+                    Log Call Outcome
+                </DropdownMenuItem>
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                         <FileText className="mr-2 h-4 w-4" />
