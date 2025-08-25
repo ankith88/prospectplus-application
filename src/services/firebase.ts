@@ -172,7 +172,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customer-entity-id'] || data['internalid'],
+          entityId: data['customerEntityId'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -239,7 +239,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customer-entity-id'] || data['internalid'],
+          entityId: data['customerEntityId'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -323,7 +323,7 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
-                    dialerAssigned: leadData.dialerAssigned,
+                    dialerAssigned: leadData.dialerAssigned || 'Unassigned',
                 });
             });
         }
