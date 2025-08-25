@@ -1,4 +1,3 @@
-
 "use client"
 
 import {
@@ -268,7 +267,7 @@ export default function TranscriptsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead / Phone Number</TableHead>
-                  <TableHead>Author</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Transcript</TableHead>
@@ -300,7 +299,7 @@ export default function TranscriptsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          {transcript.author}
+                          {lead?.dialerAssigned || 'Unassigned'}
                         </div>
                       </TableCell>
                        <TableCell>

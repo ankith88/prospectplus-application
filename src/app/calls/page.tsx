@@ -1,4 +1,3 @@
-
 "use client"
 
 import {
@@ -35,7 +34,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 export default function AllCallsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
@@ -95,7 +94,7 @@ export default function AllCallsPage() {
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const userMatch = filters.user === 'all' || call.author === filters.user;
+        const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
         const callDate = new Date(call.date);
         const dateMatch = filters.date?.from ? (callDate >= filters.date.from && callDate <= (filters.date.to || filters.date.from)) : true;
@@ -119,8 +118,8 @@ export default function AllCallsPage() {
   }, [allCalls, filters]);
   
   const allUsers = useMemo(() => {
-      const users = new Set(allCalls.map(c => c.author).filter(author => author !== 'Unknown User'));
-      return Array.from(users);
+      const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
+      return Array.from(users as string[]);
   }, [allCalls]);
 
   if (loading || authLoading) {
@@ -252,7 +251,7 @@ export default function AllCallsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead</TableHead>
-                  <TableHead>Author</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead>Date & Time</TableHead>
@@ -278,7 +277,7 @@ export default function AllCallsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          {call.author || 'Unassigned'}
+                          {call.dialerAssigned || 'Unassigned'}
                         </div>
                       </TableCell>
                       <TableCell>

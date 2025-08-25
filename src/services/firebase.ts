@@ -16,8 +16,11 @@ async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id'
         const activityLog: Partial<Activity> = {
             ...activity,
             date: activity.date || new Date().toISOString(),
-            author: activity.author || 'System'
         };
+
+        if (activity.author) {
+            activityLog.author = activity.author;
+        }
 
         const docRef = await addDoc(activityRef, activityLog);
         console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
@@ -301,10 +304,10 @@ async function getLeadActivity(leadId: string): Promise<Activity[]> {
 }
 
 
-async function getAllCallActivities(user: UserProfile | null): Promise<(Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string })[]> {
+async function getAllCallActivities(user: UserProfile | null): Promise<(Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string })[]> {
     if (!user) return [];
     try {
-        const allCalls: (Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string })[] = [];
+        const allCalls: (Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string })[] = [];
         const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
 
         for (const leadDoc of leadsSnapshot.docs) {
@@ -314,14 +317,13 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
             const leadData = leadDoc.data();
 
             activitiesSnapshot.forEach(doc => {
-                const activityData = doc.data() as Activity;
                 allCalls.push({
-                    ...(activityData as Activity),
+                    ...(doc.data() as Activity),
                     id: doc.id,
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
-                    author: activityData.author || 'Unknown User',
+                    dialerAssigned: leadData.dialerAssigned,
                 });
             });
         }
@@ -333,7 +335,7 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
         }
         
         const currentUserName = `${user.firstName} ${user.lastName}`;
-        return allCalls.filter(call => call.author === currentUserName);
+        return allCalls.filter(call => call.dialerAssigned === currentUserName);
 
     } catch (error) {
         console.error('Failed to fetch all call activities:', error);
