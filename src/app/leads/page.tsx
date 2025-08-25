@@ -113,7 +113,7 @@ export default function LeadsPage() {
   }, [filteredLeads, user]);
 
   const leadsByStatus = useMemo(() => {
-    return myLeads.reduce((acc, lead) => {
+    const grouped = myLeads.reduce((acc, lead) => {
       const status = lead.status;
       if (!acc[status]) {
         acc[status] = [];
@@ -121,6 +121,20 @@ export default function LeadsPage() {
       acc[status].push(lead);
       return acc;
     }, {} as Record<LeadStatus, Lead[]>);
+
+    const preferredOrder: LeadStatus[] = ["New", "High Touch", "Connected", "In Progress"];
+    
+    return Object.entries(grouped).sort(([statusA], [statusB]) => {
+        const indexA = preferredOrder.indexOf(statusA as LeadStatus);
+        const indexB = preferredOrder.indexOf(statusB as LeadStatus);
+
+        if (indexA === -1 && indexB === -1) return statusA.localeCompare(statusB); // Sort alphabetically if both are not in preferred order
+        if (indexA === -1) return 1; // Put statusA at the end
+        if (indexB === -1) return -1; // Put statusB at the end
+        
+        return indexA - indexB; // Sort based on preferred order
+    });
+
   }, [myLeads]);
   
   const allAssignedLeads = useMemo(() => {
@@ -335,8 +349,8 @@ export default function LeadsPage() {
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-             <Accordion type="multiple" defaultValue={Object.keys(leadsByStatus)} className="w-full">
-                {Object.entries(leadsByStatus).map(([status, leads]) => (
+             <Accordion type="multiple" defaultValue={leadsByStatus.map(([status]) => status)} className="w-full">
+                {leadsByStatus.map(([status, leads]) => (
                   <AccordionItem value={status} key={status}>
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
