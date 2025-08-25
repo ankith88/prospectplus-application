@@ -2,13 +2,15 @@
 'use server';
 
 /**
- * @fileOverview A Genkit flow for universal search across leads, contacts, and calls.
+ * @fileOverview A Genkit flow for universal search across leads and contacts.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { firestore } from '@/lib/firebase';
-import { collection, query, where, getDocs, collectionGroup, limit, getDoc, or, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup, limit, getDoc, or, orderBy } from 'firebase/firestore';
+import type { Lead, Contact } from '@/lib/types';
+
 
 const UniversalSearchInputSchema = z.object({
   query: z.string().describe('The search term.'),
@@ -39,47 +41,72 @@ const UniversalSearchOutputSchema = z.object({
   transcripts: z.array(SearchTranscriptResultSchema),
 });
 
-async function searchLeads(searchTerm: string): Promise<z.infer<typeof SearchLeadResultSchema>[]> {
-  if (!searchTerm) return [];
-  const leadsRef = collection(firestore, 'leads');
-  const searchTermLower = searchTerm.toLowerCase();
 
-  // Basic prefix query. This is more reliable with Firestore indexing.
-  const q = query(
-    leadsRef,
-    orderBy('companyName'),
-    where('companyName', '>=', searchTerm),
-    where('companyName', '<=', searchTerm + '\uf8ff'),
-    limit(20)
-  );
+async function performSearch(searchTerm: string): Promise<z.infer<typeof UniversalSearchOutputSchema>> {
+    if (!searchTerm || searchTerm.length < 3) {
+        return { leads: [], contacts: [], transcripts: [] };
+    }
 
-  const snapshot = await getDocs(q);
+    const searchTermLower = searchTerm.toLowerCase();
+    const leadsRef = collection(firestore, 'leads');
+    const snapshot = await getDocs(leadsRef);
 
-  // Manual client-side filtering for case-insensitivity
-  const filteredDocs = snapshot.docs.filter(doc => 
-    doc.data().companyName.toLowerCase().includes(searchTermLower)
-  );
+    const foundLeads: z.infer<typeof SearchLeadResultSchema>[] = [];
+    const foundContacts: z.infer<typeof SearchContactResultSchema>[] = [];
 
-  return filteredDocs.slice(0, 5).map(doc => ({
-    id: doc.id,
-    companyName: doc.data().companyName,
-  }));
-}
+    const leadPromises = snapshot.docs.map(async (leadDoc) => {
+        const leadData = leadDoc.data() as Lead;
+        let leadAdded = false;
 
+        // Search lead fields
+        if (leadData.companyName?.toLowerCase().includes(searchTermLower) ||
+            leadData.customerPhone?.replace(/\D/g, '').includes(searchTermLower.replace(/\D/g, '')) ||
+            leadData.customerServiceEmail?.toLowerCase().includes(searchTermLower)) {
+            
+            foundLeads.push({
+                id: leadDoc.id,
+                companyName: leadData.companyName,
+            });
+            leadAdded = true;
+        }
 
-async function searchContacts(searchTerm: string): Promise<z.infer<typeof SearchContactResultSchema>[]> {
-  if (!searchTerm) return [];
-  // This query requires a composite index on the 'contacts' collection group.
-  // Disabling for now to prevent app crashes until the index is created in Firebase.
-  return [];
-}
+        // Search contacts subcollection
+        const contactsRef = collection(firestore, 'leads', leadDoc.id, 'contacts');
+        const contactsSnapshot = await getDocs(contactsRef);
+        contactsSnapshot.forEach((contactDoc) => {
+            const contactData = contactDoc.data() as Contact;
+            if (contactData.name?.toLowerCase().includes(searchTermLower) ||
+                contactData.phone?.replace(/\D/g, '').includes(searchTermLower.replace(/\D/g, '')) ||
+                contactData.email?.toLowerCase().includes(searchTermLower)) {
+                
+                foundContacts.push({
+                    id: contactDoc.id,
+                    name: contactData.name,
+                    leadId: leadDoc.id,
+                    leadName: leadData.companyName,
+                });
 
+                // Also add the parent lead to the results if it wasn't already
+                if (!leadAdded && !foundLeads.some(l => l.id === leadDoc.id)) {
+                    foundLeads.push({
+                        id: leadDoc.id,
+                        companyName: leadData.companyName,
+                    });
+                }
+            }
+        });
+    });
 
-async function searchTranscripts(searchTerm: string): Promise<z.infer<typeof SearchTranscriptResultSchema>[]> {
-    // This query requires a composite index. Disabling for now to prevent app crashes.
-    // The user can create the required index in their Firebase console to re-enable this.
-    // The required index is on the 'transcripts' collection group, for the 'callId' field.
-    return [];
+    await Promise.all(leadPromises);
+
+    // Remove duplicate leads that might have been added from contact matches
+    const uniqueLeads = Array.from(new Map(foundLeads.map(item => [item['id'], item])).values());
+    
+    return {
+        leads: uniqueLeads.slice(0, 5), // Limit results
+        contacts: foundContacts.slice(0, 5),
+        transcripts: [], // Transcripts search is disabled
+    };
 }
 
 
@@ -94,16 +121,6 @@ const universalSearchFlow = ai.defineFlow(
     outputSchema: UniversalSearchOutputSchema,
   },
   async ({ query: searchTerm }) => {
-    const [leadResults, contactResults, transcriptResults] = await Promise.all([
-      searchLeads(searchTerm),
-      searchContacts(searchTerm),
-      searchTranscripts(searchTerm),
-    ]);
-
-    return {
-      leads: leadResults,
-      contacts: contactResults,
-      transcripts: transcriptResults,
-    };
+    return performSearch(searchTerm);
   }
 );
