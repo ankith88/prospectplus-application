@@ -73,12 +73,10 @@ async function searchContacts(searchTerm: string): Promise<z.infer<typeof Search
   
   // This is a simplified search. For production, you might need a more complex solution
   // like a dedicated search service (e.g., Algolia/Elasticsearch) for full-text search.
-  const nameQuery = query(contactsRef, where('name', '>=', searchTerm), where('name', '<=', searchTerm + '\uf8ff'), limit(5));
   const emailQuery = query(contactsRef, where('email', '==', searchTerm), limit(5));
   const phoneQuery = query(contactsRef, where('phone', '==', searchTerm), limit(5));
 
-  const [nameSnapshot, emailSnapshot, phoneSnapshot] = await Promise.all([
-    getDocs(nameQuery),
+  const [emailSnapshot, phoneSnapshot] = await Promise.all([
     getDocs(emailQuery),
     getDocs(phoneQuery),
   ]);
@@ -105,7 +103,6 @@ async function searchContacts(searchTerm: string): Promise<z.infer<typeof Search
   }
 
   await Promise.all([
-    processSnapshot(nameSnapshot),
     processSnapshot(emailSnapshot),
     processSnapshot(phoneSnapshot),
   ]);
