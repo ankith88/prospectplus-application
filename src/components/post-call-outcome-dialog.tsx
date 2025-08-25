@@ -187,7 +187,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     }
 
     onClose();
-    router.refresh();
+    router.push('/');
   }
 
 
@@ -228,7 +228,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     }
 
     onClose();
-    router.refresh();
+    router.push('/');
   }
 
   return (
