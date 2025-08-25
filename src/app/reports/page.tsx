@@ -22,7 +22,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { getAllCallActivities } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
+const STATUS_COLORS: { [key in LeadStatus]: string } = {
+  'New': '#A0A0A0', // Neutral Gray
+  'Contacted': '#FFBB28', // Yellow
+  'In Progress': '#FF8042', // Orange
+  'Connected': '#0088FE', // Blue
+  'High Touch': '#8884d8', // Purple
+  'Qualified': '#00C49F', // Teal Green
+  'Won': '#22C55E', // Strong Green
+  'Unqualified': '#D1D5DB', // Light Gray
+  'Lost': '#EF4444', // Red
+  'LPO Review': '#A855F7', // Violet
+};
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string };
 
 export default function ReportsPage() {
@@ -392,7 +403,7 @@ export default function ReportsPage() {
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 >
                   {stats.leadsByStatus.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
                   ))}
                 </Pie>
                 <Tooltip />
