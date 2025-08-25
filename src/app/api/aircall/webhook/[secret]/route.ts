@@ -129,6 +129,7 @@ export async function POST(
       const minutes = Math.floor(callData.duration / 60);
       const seconds = callData.duration % 60;
       const duration = `${minutes}m ${seconds}s`;
+      const author = callData.user?.name || 'Unknown User';
       
       let notes = `Call with ${callData.direction} direction. Outcome: ${callData.status}. Duration: ${duration}.`;
       if (callData.comments && callData.comments.length > 0) {
@@ -147,15 +148,18 @@ export async function POST(
         }
       }
       
+      const activityData: Partial<Activity> = {
+        type: 'Call',
+        notes: notes,
+        duration: duration,
+        callId: callId.toString(),
+        date: callDate,
+        author: author,
+      };
+
       if (!leadInfo) {
           console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
-          await logUnmatchedActivity({
-              type: 'Call',
-              notes: notes,
-              date: callDate,
-              duration: duration,
-              callId: callId.toString(),
-          });
+          await logUnmatchedActivity(activityData as Omit<Activity, 'id'>);
           return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
       }
 
@@ -164,17 +168,11 @@ export async function POST(
 
       if (existingActivity) {
           // Update the existing activity
-          await updateActivity(leadInfo.id, existingActivity.id, { notes });
+          await updateActivity(leadInfo.id, existingActivity.id, activityData);
           console.log(`Successfully updated activity for lead ${leadInfo.id} and call ${callId}`);
       } else {
           // Create a new activity
-          await logActivity(leadInfo.id, {
-              type: 'Call',
-              notes: notes,
-              duration: duration,
-              callId: callId.toString(),
-              date: callDate,
-          });
+          await logActivity(leadInfo.id, activityData);
           console.log(`Successfully logged new activity for lead ${leadInfo.id} and call ${callId}`);
       }
     }

@@ -9,22 +9,14 @@ import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
-async function logActivity(leadId: string, activity: Omit<Activity, 'id' | 'date'> & { date?: string }): Promise<string> {
+async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
         
         const activityLog: Partial<Activity> = {
-            type: activity.type,
-            notes: activity.notes,
+            ...activity,
             date: activity.date || new Date().toISOString(),
         };
-
-        if (activity.duration) {
-            activityLog.duration = activity.duration;
-        }
-        if (activity.callId) {
-            activityLog.callId = activity.callId;
-        }
 
         const docRef = await addDoc(activityRef, activityLog);
         console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
@@ -171,7 +163,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customer-entity-id'] || docSnapshot.id,
+          entityId: data['customer-entity-id'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
@@ -237,7 +229,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customer-entity-id'] || docSnapshot.id,
+          entityId: data['customer-entity-id'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
@@ -315,22 +307,13 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
 
             const leadCalls = activitiesSnapshot.docs.map(doc => {
                 const activityData = doc.data() as Activity;
-                // Infer author from call notes if not present
-                let author = 'Unknown User';
-                if (activityData.notes) {
-                    const match = activityData.notes.match(/Call logged by (.+)/);
-                    if (match && match[1]) {
-                        author = match[1];
-                    }
-                }
-                
                 return {
                     ...(activityData as Activity),
                     id: doc.id,
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
-                    author: author,
+                    author: activityData.author || 'Unknown User',
                 };
             });
             allCalls.push(...leadCalls);

@@ -19,6 +19,7 @@ export interface Activity {
   duration?: string // e.g., "5m 32s"
   notes: string
   callId?: string
+  author?: string
 }
 
 export interface Note {
