@@ -123,7 +123,10 @@ export default function ReportsPage() {
       return userMatch && statusMatch;
     });
 
-    const leadsInQueue = relevantLeads.filter(lead => lead.status === 'New' && lead.dialerAssigned).length;
+    const assignedLeads = relevantLeads.filter(lead => !!lead.dialerAssigned);
+    const totalAssignedLeads = assignedLeads.length;
+
+    const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
     
     const callsOver2Min = filteredCalls.filter(c => parseDuration(c.duration) >= 120).length;
     const calls30sTo2min = filteredCalls.filter(c => {
@@ -150,11 +153,12 @@ export default function ReportsPage() {
       leadsContacted: leadsContactedIds.size,
       leadsInQueue,
       leadsByStatus,
-      totalLeads: relevantLeads.length,
+      totalAssignedLeads,
       callsOver2Min,
       calls30sTo2min,
       ratioOver2Min,
       ratio30sTo2min,
+      totalLeadsInFilter: relevantLeads.length
     };
   }, [filteredCalls, leads, filters]);
   
@@ -308,7 +312,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.leadsContacted}</div>
-            <p className="text-xs text-muted-foreground">out of {stats.totalLeads} total leads</p>
+            <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
           </CardContent>
         </Card>
         <Card>
@@ -318,16 +322,16 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
-            <p className="text-xs text-muted-foreground">Leads with 'New' status</p>
+            <p className="text-xs text-muted-foreground">New, assigned leads</p>
           </CardContent>
         </Card>
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLeads}</div>
+            <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
              <p className="text-xs text-muted-foreground">Matching current filters</p>
           </CardContent>
         </Card>
