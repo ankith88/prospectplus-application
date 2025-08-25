@@ -69,7 +69,7 @@ const aiSingleLeadScoringPrompt = ai.definePrompt({
   input: {schema: LeadToScoreSchema},
   output: {schema: ScoredLeadSchema},
   tools: [prospectWebsiteTool],
-  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a sales lead for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
+  prompt: `You are an AI assistant for ProspectPlus, an application powered by MailPlus, an express parcel delivery service. Your goal is to score a sales lead for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
   Analyze the lead's website to determine how likely they are to need this specific service.
   
@@ -119,7 +119,7 @@ const aiLeadScoringPrompt = ai.definePrompt({
   input: {schema: BatchScoringSchema},
   output: {schema: AiLeadScoringOutputSchema},
   tools: [getLeadsTool, prospectWebsiteTool],
-  prompt: `You are an AI assistant for MailPlus, an express parcel delivery service. Your goal is to score a batch of sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
+  prompt: `You are an AI assistant for ProspectPlus, an application powered by MailPlus, an express parcel delivery service. Your goal is to score a batch of sales leads for cold calling. The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 
   For each lead in the provided list, analyze their website to determine how likely they are to need this specific service.
   

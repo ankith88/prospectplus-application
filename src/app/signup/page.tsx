@@ -68,7 +68,7 @@ export default function SignUpPage() {
               data-ai-hint="logo"
             />
             <CardTitle className="text-2xl mt-4">Create an Account</CardTitle>
-            <CardDescription className="text-center">Enter your details below to create a new account.</CardDescription>
+            <CardDescription className="text-center">Powered by MailPlus</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp} className="space-y-4">

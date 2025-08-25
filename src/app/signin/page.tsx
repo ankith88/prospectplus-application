@@ -56,8 +56,8 @@ export default function SignInPage() {
               alt="MailPlus CRM Logo"
               data-ai-hint="logo"
             />
-            <CardTitle className="text-2xl mt-4">MailPlus CRM</CardTitle>
-            <CardDescription className="text-center">Enter your email below to sign in to your account.</CardDescription>
+            <CardTitle className="text-2xl mt-4">ProspectPlus</CardTitle>
+            <CardDescription className="text-center">Powered by MailPlus</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignIn} className="space-y-4">

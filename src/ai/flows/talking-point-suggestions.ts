@@ -32,7 +32,7 @@ const prompt = ai.definePrompt({
   name: 'talkingPointSuggestionsPrompt',
   input: {schema: TalkingPointSuggestionsInputSchema},
   output: {schema: TalkingPointSuggestionsOutputSchema},
-  prompt: `You are a sales expert for MailPlus, an express parcel delivery service. Your goal is to generate personalized talking points for a sales representative to use on a cold call.
+  prompt: `You are a sales expert for ProspectPlus, an application powered by MailPlus, an express parcel delivery service. Your goal is to generate personalized talking points for a sales representative to use on a cold call.
 
   The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 

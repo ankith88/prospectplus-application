@@ -39,7 +39,7 @@ const prompt = ai.definePrompt({
   name: 'improveScriptPrompt',
   input: {schema: ImproveScriptInputSchema},
   output: {schema: ImproveScriptOutputSchema},
-  prompt: `You are an expert sales coach for MailPlus, an express parcel delivery service. Your goal is to improve and personalize a sales representative's script for a cold call.
+  prompt: `You are an expert sales coach for ProspectPlus, an application powered by MailPlus, an express parcel delivery service. Your goal is to improve and personalize a sales representative's script for a cold call.
 
   The target service is **next-day delivery for parcels from 1kg to 20kg within Australia.**
 

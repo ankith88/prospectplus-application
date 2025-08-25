@@ -6,8 +6,8 @@ import { AuthProvider } from '@/hooks/use-auth'
 import { SidebarProvider } from '@/components/ui/sidebar'
 
 export const metadata: Metadata = {
-  title: 'MailPlus Outbound Leads CRM',
-  description: 'AI-powered CRM for outbound leads management.',
+  title: 'ProspectPlus',
+  description: 'Powered by MailPlus. AI-powered CRM for outbound leads management.',
 }
 
 export default function RootLayout({
