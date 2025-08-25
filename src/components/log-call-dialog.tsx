@@ -190,8 +190,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       let newStatus: Lead['status'] = lead.status;
       if (values.outcome === 'interested') {
-        newStatus = 'Qualified';
-        await updateLeadStatus(lead.id, newStatus);
+        // Status is handled by the new buttons, so we don't set it to Qualified here.
       } else {
         newStatus = 'Unqualified';
         await updateLeadStatus(lead.id, newStatus);
@@ -232,8 +231,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       if (values.outcome === 'not-interested') {
         setIsOpen(false)
         form.reset()
-      } else if (values.outcome === 'interested') {
-         // Keep dialog open for LPO/Appointment actions
       }
     } catch (error) {
       console.error('Failed to log call:', error)
@@ -386,7 +383,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                         </FormItem>
                       )}
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 pt-4">
                         <Button type="button" onClick={handleReferToLPO} variant="secondary" disabled={form.formState.isSubmitting}>
                             Refer to LPO
                         </Button>

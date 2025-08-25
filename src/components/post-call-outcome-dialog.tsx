@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -88,6 +88,15 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
     'Default': 'https://calendly.com/mailplus-default/meeting',
   };
+  
+  useEffect(() => {
+    if (!isOpen) {
+      form.reset({
+        outcome: '',
+        notes: callActivity?.notes || '',
+      });
+    }
+  }, [isOpen, callActivity, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     let newContact: Partial<Contact> | undefined;
