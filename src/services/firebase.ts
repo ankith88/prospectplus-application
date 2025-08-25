@@ -171,6 +171,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           entityId: data['customer-entity-id'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
+          statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
@@ -188,7 +189,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         if (includeSubCollections) {
           transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
-          transformedLead.activity = await getLeadSubCollection<Activity>(docSnapshot.id, 'activity');
+          transformedLead.activity = await getLeadActivity(docSnapshot.id);
           transformedLead.contactCount = transformedLead.contacts.length;
         }
 
@@ -237,6 +238,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           entityId: data['customer-entity-id'] || data['internalid'],
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
+          statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           franchisee: data.franchisee,
@@ -257,7 +259,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
             try {
                 transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
                 transformedLead.contactCount = transformedLead.contacts.length;
-                transformedLead.activity = await getLeadSubCollection<Activity>(docSnapshot.id, 'activity');
+                transformedLead.activity = await getLeadActivity(docSnapshot.id);
             } catch (e) {
                 console.log(e);
             }
@@ -323,13 +325,15 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
             });
         }
         
-        // Filter by user if not admin
-        const finalCalls = user.role === 'admin' 
-            ? allCalls 
-            : allCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
+        const finalCalls = allCalls;
 
         finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        return finalCalls;
+        
+        if (user.role === 'admin') {
+            return finalCalls;
+        }
+
+        return finalCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
 
     } catch (error) {
         console.error('Failed to fetch all call activities:', error);
