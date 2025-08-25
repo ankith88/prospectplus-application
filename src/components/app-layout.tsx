@@ -29,6 +29,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
 import { Loader } from "./ui/loader"
+import { UniversalSearch } from "./universal-search"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -127,7 +128,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarInset>
          <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6 sticky top-0 z-30">
           <SidebarTrigger />
-          <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
+          <div className="flex w-full items-center gap-4">
+            <div className="flex-1">
+                <UniversalSearch />
+            </div>
+            <div className="flex items-center gap-2 lg:gap-4 ml-auto">
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
@@ -154,6 +159,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </header>
         <div className="p-4 sm:p-6 lg:p-8">
