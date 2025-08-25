@@ -40,14 +40,6 @@ const formSchema = z.object({
   }),
   contactPhone: z.string().optional(),
   contactTitle: z.string().optional(),
-}).refine(data => {
-    if (data.outcome === 'Interested') {
-        return data.contactName && data.contactEmail && data.contactPhone && data.contactTitle
-    }
-    return true;
-}, {
-    message: "Contact details are required when the lead is Interested.",
-    path: ["contactName"],
 });
 
 interface PostCallOutcomeDialogProps {
@@ -104,12 +96,18 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   }, [isOpen, callActivity, form]);
 
   async function handleNextStep(action: 'lpo' | 'appointment') {
-    const isFormValid = await form.trigger();
-    if (!isFormValid) {
-       toast({ variant: 'destructive', title: 'Error', description: 'Please fill in all required contact fields before proceeding.' });
-       return;
-    }
     const values = form.getValues();
+
+    if (action === 'lpo') {
+      if (!values.contactName || !values.contactEmail || !values.contactPhone || !values.contactTitle) {
+        toast({
+          variant: 'destructive',
+          title: 'Missing Information',
+          description: 'Contact Name, Title, Email, and Phone are required to refer to an LPO.',
+        });
+        return;
+      }
+    }
     
     // Save contact if new
     const newContactData = {
@@ -118,9 +116,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         phone: values.contactPhone!,
         title: values.contactTitle!,
     };
-    const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
-    if (!existingContact) {
-        await addContactToLead(lead.id, newContactData);
+
+    if (newContactData.name && newContactData.email) {
+        const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
+        if (!existingContact) {
+            await addContactToLead(lead.id, newContactData);
+        }
     }
     
     // Log the base activity
@@ -142,7 +143,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     } else if (action === 'appointment') {
         const salesRep = lead.salesRepAssigned || 'Default';
         const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
-        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName!)}&email=${encodeURIComponent(values.contactEmail!)}`;
+        
+        let prefilledUrl = calendlyLink;
+        if (values.contactName && values.contactEmail) {
+           prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName!)}&email=${encodeURIComponent(values.contactEmail!)}`;
+        }
         
         await updateLeadStatus(lead.id, 'Qualified');
         
@@ -211,7 +216,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
 
             {outcome === 'Interested' && (
               <div className="space-y-4 rounded-md border p-4">
-                  <p className="text-sm text-muted-foreground">The lead is interested. Capture their details to book an appointment.</p>
+                  <p className="text-sm text-muted-foreground">The lead is interested. To refer to an LPO, all contact fields are required.</p>
                   <FormField
                     control={form.control}
                     name="contactName"
