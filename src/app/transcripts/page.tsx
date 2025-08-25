@@ -50,6 +50,7 @@ export default function TranscriptsPage() {
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [filters, setFilters] = useState({
+    leadName: '',
     phoneNumber: '',
     callId: '',
     date: undefined as DateRange | undefined,
@@ -106,8 +107,13 @@ export default function TranscriptsPage() {
   };
 
   const clearFilters = () => {
-    setFilters({ phoneNumber: '', callId: '', date: undefined });
+    setFilters({ leadName: '', phoneNumber: '', callId: '', date: undefined });
   };
+
+  const getLeadByPhoneNumber = (phoneNumber: string) => {
+      if (!phoneNumber) return null;
+      return allLeads.find(lead => lead.customerPhone === phoneNumber);
+  }
   
   const filteredTranscripts = useMemo(() => {
     return allTranscripts.filter(transcript => {
@@ -115,9 +121,12 @@ export default function TranscriptsPage() {
         const callIdMatch = filters.callId ? (transcript.callId || '').includes(filters.callId) : true;
         const transcriptDate = new Date(transcript.date);
         const dateMatch = filters.date?.from ? (transcriptDate >= filters.date.from && transcriptDate <= (filters.date.to || filters.date.from)) : true;
-        return phoneMatch && callIdMatch && dateMatch;
+        const lead = getLeadByPhoneNumber(transcript.phoneNumber || '');
+        const leadNameMatch = filters.leadName ? lead?.companyName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
+
+        return phoneMatch && callIdMatch && dateMatch && leadNameMatch;
     });
-  }, [allTranscripts, filters]);
+  }, [allTranscripts, filters, allLeads]);
 
   const handleSyncTranscripts = async () => {
     if (!user?.displayName) {
@@ -141,11 +150,6 @@ export default function TranscriptsPage() {
     } finally {
         setIsSyncing(false);
     }
-  }
-
-  const getLeadByPhoneNumber = (phoneNumber: string) => {
-      if (!phoneNumber) return null;
-      return allLeads.find(lead => lead.customerPhone === phoneNumber);
   }
 
   if (loading || authLoading) {
@@ -188,6 +192,10 @@ export default function TranscriptsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="leadName">Lead Name</Label>
+                        <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="phoneNumber">Phone Number</Label>
                         <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />

@@ -44,6 +44,7 @@ export default function AllCallsPage() {
     user: 'all',
     date: undefined as DateRange | undefined,
     duration: 'all',
+    leadName: '',
   });
 
   const router = useRouter();
@@ -80,7 +81,7 @@ export default function AllCallsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '' });
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -111,7 +112,9 @@ export default function AllCallsPage() {
             }
         };
 
-        return userMatch && dateMatch && durationMatch();
+        const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
+
+        return userMatch && dateMatch && durationMatch() && leadNameMatch;
     });
   }, [allCalls, filters]);
   
@@ -153,6 +156,10 @@ export default function AllCallsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="leadName">Lead Name</Label>
+                        <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
+                    </div>
                     {userProfile?.role === 'admin' && (
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
@@ -272,7 +279,7 @@ export default function AllCallsPage() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
-                            {call.author}
+                            {call.author || 'Unassigned'}
                           </div>
                         </TableCell>
                       )}
