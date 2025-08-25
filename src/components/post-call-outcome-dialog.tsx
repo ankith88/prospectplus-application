@@ -101,7 +101,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'Voicemail': { status: 'In Progress' },
       'No Answer': { status: 'In Progress' },
       'Busy': { status: 'In Progress' },
-      'Disqualified - Not a Fit': { status: 'Unqualified' },
+      'Disqualified - Not a Fit': { status: 'Lost', reason: 'Not Interested' },
       'Interested': { status: 'Qualified' },
       'Not Interested': { status: 'Lost', reason: 'Not Interested' },
       'Gatekeeper': { status: 'Connected' },
@@ -111,7 +111,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
   };
 
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List'];
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Disqualified - Not a Fit'];
 
   async function handleNextStep(action: 'lpo' | 'appointment') {
     const values = form.getValues();
@@ -200,6 +200,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 outcome: values.outcome,
                 reason: outcomeMapping.reason || '',
                 dialerAssigned: lead.dialerAssigned || '',
+                notes: values.notes || '',
             });
             toast({
                 title: "NetSuite Updated",
