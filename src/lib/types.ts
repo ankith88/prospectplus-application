@@ -66,6 +66,7 @@ export interface Lead {
   entityId: string
   companyName: string
   status: LeadStatus
+  statusReason?: string;
   avatarUrl?: string
   profile: string // This will be the text used for AI prompts
   activity?: Activity[]

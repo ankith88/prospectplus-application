@@ -26,10 +26,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Lead, Activity, Contact } from '@/lib/types'
+import type { Lead, Activity, Contact, LeadStatus } from '@/lib/types'
 import { addContactToLead, updateLeadStatus } from '@/services/firebase'
 import { useToast } from '@/hooks/use-toast'
-import { sendToNetSuite } from '@/services/netsuite'
+import { sendToNetSuiteForOutcome } from '@/services/netsuite'
+import { useRouter } from 'next/navigation'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -73,6 +74,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     },
   })
   const { toast } = useToast()
+  const router = useRouter();
   const outcome = form.watch('outcome');
 
     // Mock Calendly links for sales reps
@@ -94,6 +96,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       });
     }
   }, [isOpen, callActivity, form]);
+
+  const outcomeStatusMap: { [key: string]: { status: LeadStatus, reason?: string } } = {
+      'Voicemail': { status: 'In Progress' },
+      'No Answer': { status: 'In Progress' },
+      'Busy': { status: 'In Progress' },
+      'Disqualified - Not a Fit': { status: 'Unqualified' },
+      'Interested': { status: 'Qualified' },
+      'Not Interested': { status: 'Lost', reason: 'Not Interested' },
+      'Gatekeeper': { status: 'Connected' },
+      'Call Back/Follow-up': { status: 'High Touch' },
+      'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
+      'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
+      'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+  };
+
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List'];
 
   async function handleNextStep(action: 'lpo' | 'appointment') {
     const values = form.getValues();
@@ -130,7 +148,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
 
     if (action === 'lpo') {
        try {
-            await sendToNetSuite(lead);
             await updateLeadStatus(lead.id, 'LPO Review');
             toast({
                 title: 'Success',
@@ -160,12 +177,46 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     }
 
     onClose();
+    router.refresh();
   }
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     onSubmitProp(values.outcome, values.notes || '');
+
+    const outcomeMapping = outcomeStatusMap[values.outcome];
+    if (outcomeMapping) {
+        await updateLeadStatus(lead.id, outcomeMapping.status, outcomeMapping.reason);
+        toast({
+            title: "Status Updated",
+            description: `Lead status changed to ${outcomeMapping.status}.`
+        });
+    }
+    
+    if (netSuiteOutcomes.includes(values.outcome)) {
+        try {
+            await sendToNetSuiteForOutcome({
+                leadId: lead.id,
+                outcome: values.outcome,
+                reason: outcomeMapping.reason || '',
+                dialerAssigned: lead.dialerAssigned || '',
+            });
+            toast({
+                title: "NetSuite Updated",
+                description: "The outcome has been sent to NetSuite."
+            });
+        } catch (error) {
+            console.error("Failed to send outcome to NetSuite:", error);
+            toast({
+                variant: "destructive",
+                title: "NetSuite Error",
+                description: "Could not send outcome to NetSuite."
+            });
+        }
+    }
+
     onClose();
+    router.refresh();
   }
 
   return (
@@ -282,7 +333,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                         <Button type="button" onClick={() => handleNextStep('appointment')}>Set Appointment</Button>
                     </div>
                 ) : (
-                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                    <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
                         {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
                     </Button>
                 )}

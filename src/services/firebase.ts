@@ -81,6 +81,11 @@ function safeGetStatus(status: any): LeadStatus {
         if (cleanStatus === 'Unqualified') {
             return 'New';
         }
+        
+        // This is a specific business rule requested by the user
+        if (status === "SUSPECT-Unqualified") {
+            return 'New';
+        }
 
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
@@ -466,9 +471,15 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
 async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: string): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, {
+        const updateData: { customerStatus: LeadStatus; statusReason?: string } = {
             customerStatus: status,
-        });
+        };
+        if (reason) {
+            updateData.statusReason = reason;
+        }
+
+        await updateDoc(leadRef, updateData);
+
         const note = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
         await logActivity(leadId, { type: 'Update', notes: note });
         console.log(`Lead ${leadId} status updated to ${status}`);
