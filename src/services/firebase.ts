@@ -16,6 +16,7 @@ async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id'
         const activityLog: Partial<Activity> = {
             ...activity,
             date: activity.date || new Date().toISOString(),
+            author: activity.author || 'System'
         };
 
         const docRef = await addDoc(activityRef, activityLog);
@@ -714,5 +715,3 @@ export {
     deleteUnmatchedActivity,
     findLeadByPhoneNumber,
 };
-
-    
