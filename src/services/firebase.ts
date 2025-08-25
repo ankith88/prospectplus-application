@@ -315,7 +315,7 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
             activitiesSnapshot.forEach(doc => {
                 const activityData = doc.data() as Activity;
                 allCalls.push({
-                    ...activityData,
+                    ...(activityData as Activity),
                     id: doc.id,
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
@@ -477,6 +477,8 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
         };
         if (reason) {
             updateData.statusReason = reason;
+        } else {
+            updateData.statusReason = ''; // Explicitly clear reason if not provided
         }
 
         await updateDoc(leadRef, updateData);
@@ -712,3 +714,5 @@ export {
     deleteUnmatchedActivity,
     findLeadByPhoneNumber,
 };
+
+    
