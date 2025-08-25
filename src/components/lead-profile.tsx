@@ -35,13 +35,14 @@ import {
   FileText,
   PhoneCall,
   Download,
+  Voicemail,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -550,11 +551,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                      <p className="text-muted-foreground">Customer ID</p>
                      <div className="flex items-center gap-1">
                         <p className="font-medium break-all">{lead.entityId ?? 'N/A'}</p>
-                        {lead.entityId && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
-                                <Clipboard className="w-3 h-3" />
-                            </Button>
-                        )}
                      </div>
                    </div>
                  </div>
@@ -935,7 +931,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                           <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
                         </div>
                          {item.type === 'Call' && item.callId && (
-                           <div className="flex items-center justify-between mt-1">
+                           <div className="flex items-center justify-between mt-1 gap-2">
                              <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Hash className="w-3 h-3" />
                                 <span>Call ID: {item.callId}</span>
@@ -943,16 +939,25 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                                     <Clipboard className="w-2.5 h-2.5" />
                                 </Button>
                              </div>
-                              {!hasTranscript && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                  disabled={fetchingTranscriptId === item.callId}
-                                >
-                                  {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch transcript for this call'}
+                             <div className="flex items-center gap-2">
+                                {!hasTranscript && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                    disabled={fetchingTranscriptId === item.callId}
+                                  >
+                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                  <Voicemail className="mr-2 h-4 w-4" />
+                                  Recording
                                 </Button>
-                              )}
+                             </div>
                            </div>
                          )}
                       </div>

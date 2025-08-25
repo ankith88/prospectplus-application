@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User, Voicemail } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
 import { getAllTranscripts } from '@/services/firebase'
@@ -242,13 +242,14 @@ export default function TranscriptsPage() {
                   {userProfile?.role === 'admin' && <TableHead>User</TableHead>}
                   <TableHead>Call ID</TableHead>
                   <TableHead>Date & Time</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Transcript</TableHead>
+                  <TableHead>Recording</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredTranscripts.length > 0 ? (
                   filteredTranscripts.map((transcript) => {
@@ -299,11 +300,24 @@ export default function TranscriptsPage() {
                             View Transcript
                         </Button>
                       </TableCell>
+                       <TableCell>
+                          {transcript.callId ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => window.open(`https://assets.aircall.io/calls/${transcript.callId}/recording/info`, '_blank')}>
+                              <Voicemail className="mr-2 h-4 w-4" />
+                              View Recording
+                            </Button>
+                          ) : (
+                            <span>N/A</span>
+                          )}
+                        </TableCell>
                     </TableRow>
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                           No transcripts found.
                       </TableCell>
                   </TableRow>
