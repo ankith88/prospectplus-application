@@ -321,7 +321,7 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
-                    author: leadData.dialerAssigned || activityData.author || 'Unassigned',
+                    author: activityData.author || 'Unknown User',
                 });
             });
         }
@@ -331,8 +331,9 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
         if (user.role === 'admin') {
             return allCalls;
         }
-
-        return allCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
+        
+        const currentUserName = `${user.firstName} ${user.lastName}`;
+        return allCalls.filter(call => call.author === currentUserName);
 
     } catch (error) {
         console.error('Failed to fetch all call activities:', error);

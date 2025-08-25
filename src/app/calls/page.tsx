@@ -119,7 +119,7 @@ export default function AllCallsPage() {
   }, [allCalls, filters]);
   
   const allUsers = useMemo(() => {
-      const users = new Set(allCalls.map(c => c.author));
+      const users = new Set(allCalls.map(c => c.author).filter(author => author !== 'Unknown User'));
       return Array.from(users);
   }, [allCalls]);
 
@@ -252,7 +252,7 @@ export default function AllCallsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead</TableHead>
-                  {userProfile?.role === 'admin' && <TableHead>User</TableHead>}
+                  <TableHead>Author</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead>Date & Time</TableHead>
@@ -275,14 +275,12 @@ export default function AllCallsPage() {
                             {call.leadName}
                         </Button>
                       </TableCell>
-                      {userProfile?.role === 'admin' && (
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            {call.author || 'Unassigned'}
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          {call.author || 'Unassigned'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={call.leadStatus} />
                       </TableCell>
@@ -344,5 +342,3 @@ export default function AllCallsPage() {
     </>
   )
 }
-
-    

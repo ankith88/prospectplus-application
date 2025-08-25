@@ -268,7 +268,7 @@ export default function TranscriptsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead / Phone Number</TableHead>
-                  {userProfile?.role === 'admin' && <TableHead>User</TableHead>}
+                  <TableHead>Author</TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Transcript</TableHead>
@@ -297,14 +297,12 @@ export default function TranscriptsPage() {
                             )}
                         </div>
                       </TableCell>
-                      {userProfile?.role === 'admin' && (
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            {transcript.author}
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          {transcript.author}
+                        </div>
+                      </TableCell>
                        <TableCell>
                         <div className="flex items-center gap-2 font-medium">
                             <Hash className="h-4 w-4 text-muted-foreground" />
@@ -382,5 +380,3 @@ export default function TranscriptsPage() {
     </>
   )
 }
-
-    
