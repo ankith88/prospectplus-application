@@ -29,7 +29,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
 import { Loader } from "./ui/loader"
-import { UniversalSearch } from "./universal-search"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -130,7 +129,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarTrigger />
           <div className="flex w-full items-center gap-4">
             <div className="flex-1">
-                <UniversalSearch />
+                
             </div>
             <div className="flex items-center gap-2 lg:gap-4 ml-auto">
              <DropdownMenu>
