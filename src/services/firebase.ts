@@ -310,24 +310,23 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
             const activitiesSnapshot = await getDocs(q);
             const leadData = leadDoc.data();
 
-            const leadCalls = activitiesSnapshot.docs.map(doc => {
+            activitiesSnapshot.forEach(doc => {
                 const activityData = doc.data() as Activity;
-                return {
-                    ...(activityData as Activity),
+                allCalls.push({
+                    ...activityData,
                     id: doc.id,
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
                     author: activityData.author || 'Unknown User',
-                };
+                });
             });
-            allCalls.push(...leadCalls);
         }
         
         // Filter by user if not admin
         const finalCalls = user.role === 'admin' 
             ? allCalls 
-            : allCalls.filter(call => call.author === user.firstName + ' ' + user.lastName);
+            : allCalls.filter(call => call.author === `${user.firstName} ${user.lastName}`);
 
         finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return finalCalls;
