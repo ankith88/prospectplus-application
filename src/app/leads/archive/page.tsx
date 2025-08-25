@@ -23,12 +23,17 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import type { DateRange } from 'react-day-picker'
+
 
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory';
 
@@ -45,6 +50,7 @@ export default function ArchivedLeadsPage() {
     franchisee: '',
     industryCategory: '',
     phoneNumber: '',
+    date: undefined as DateRange | undefined,
   });
 
   useEffect(() => {
@@ -57,7 +63,7 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        const fetchedLeads = await getLeadsTool({ summary: true });
+        const fetchedLeads = await getLeadsTool({ summary: false }); // Fetch full data
         setAllLeads(fetchedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
@@ -68,7 +74,7 @@ export default function ArchivedLeadsPage() {
     getArchivedLeads();
   }, [user, authLoading, router]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -79,6 +85,7 @@ export default function ArchivedLeadsPage() {
       franchisee: '',
       industryCategory: '',
       phoneNumber: '',
+      date: undefined,
     });
   };
 
@@ -91,8 +98,14 @@ export default function ArchivedLeadsPage() {
         const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
 
         const isArchived = lead.status === 'Lost' || lead.status === 'Qualified' || lead.status === 'Won';
+        
+        let dateMatch = true;
+        if (filters.date?.from && lead.activity?.length) {
+            const lastActivityDate = new Date(lead.activity[0].date);
+            dateMatch = lastActivityDate >= filters.date.from && lastActivityDate <= (filters.date.to || filters.date.from)
+        }
 
-        return isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
+        return isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -166,7 +179,7 @@ export default function ArchivedLeadsPage() {
                     </CollapsibleTrigger>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -196,6 +209,48 @@ export default function ArchivedLeadsPage() {
                         <div className="space-y-2">
                             <Label htmlFor="industry">Industry</Label>
                             <Input id="industry" value={filters.industryCategory} onChange={(e) => handleFilterChange('industryCategory', e.target.value)} />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="date">Date (Last Activity)</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    id="date"
+                                    variant={"outline"}
+                                    className="w-full justify-start text-left font-normal"
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {filters.date?.from ? (
+                                    filters.date.to ? (
+                                        <>
+                                        {format(filters.date.from, "LLL dd, y")} -{" "}
+                                        {format(filters.date.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(filters.date.from, "LLL dd, y")
+                                    )
+                                    ) : (
+                                    <span>Pick a date</span>
+                                    )}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <div className="flex flex-col space-y-2 border-r p-2">
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: new Date(), to: new Date()})}>Today</Button>
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
+                                        <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                    </div>
+                                    <Calendar
+                                        mode="range"
+                                        selected={filters.date}
+                                        onSelect={(date) => handleFilterChange('date', date)}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </CardContent>
                     {hasActiveFilters && (
@@ -313,3 +368,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    

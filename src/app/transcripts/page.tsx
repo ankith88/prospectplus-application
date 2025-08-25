@@ -30,7 +30,8 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { Calendar as CalendarPicker } from '@/components/ui/calendar'
-import { format } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import type { DateRange } from 'react-day-picker'
 import { TranscriptViewer } from '@/components/transcript-viewer'
 import {
   Dialog,
@@ -51,7 +52,7 @@ export default function TranscriptsPage() {
   const [filters, setFilters] = useState({
     phoneNumber: '',
     callId: '',
-    date: undefined as Date | undefined,
+    date: undefined as DateRange | undefined,
   });
 
   const router = useRouter();
@@ -100,7 +101,7 @@ export default function TranscriptsPage() {
 
   }, [user, userProfile, authLoading, router, toast]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | Date | undefined) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -112,7 +113,8 @@ export default function TranscriptsPage() {
     return allTranscripts.filter(transcript => {
         const phoneMatch = filters.phoneNumber ? (transcript.phoneNumber || '').includes(filters.phoneNumber) : true;
         const callIdMatch = filters.callId ? (transcript.callId || '').includes(filters.callId) : true;
-        const dateMatch = filters.date ? format(new Date(transcript.date), 'yyyy-MM-dd') === format(filters.date, 'yyyy-MM-dd') : true;
+        const transcriptDate = new Date(transcript.date);
+        const dateMatch = filters.date?.from ? (transcriptDate >= filters.date.from && transcriptDate <= (filters.date.to || filters.date.from)) : true;
         return phoneMatch && callIdMatch && dateMatch;
     });
   }, [allTranscripts, filters]);
@@ -204,16 +206,35 @@ export default function TranscriptsPage() {
                                 className="w-full justify-start text-left font-normal"
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {filters.date ? format(filters.date, "PPP") : <span>Pick a date</span>}
+                                {filters.date?.from ? (
+                                  filters.date.to ? (
+                                    <>
+                                      {format(filters.date.from, "LLL dd, y")} -{" "}
+                                      {format(filters.date.to, "LLL dd, y")}
+                                    </>
+                                  ) : (
+                                    format(filters.date.from, "LLL dd, y")
+                                  )
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <CalendarPicker
-                                mode="single"
-                                selected={filters.date}
-                                onSelect={(date) => handleFilterChange('date', date)}
-                                initialFocus
-                              />
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <div className="flex flex-col space-y-2 border-r p-2">
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: new Date(), to: new Date()})}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                </div>
+                                <CalendarPicker
+                                  mode="range"
+                                  selected={filters.date}
+                                  onSelect={(date) => handleFilterChange('date', date)}
+                                  initialFocus
+                                />
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -353,3 +374,5 @@ export default function TranscriptsPage() {
     </>
   )
 }
+
+    
