@@ -321,7 +321,7 @@ async function getAllCallActivities(user: UserProfile | null): Promise<(Activity
                     leadId: leadDoc.id,
                     leadName: leadData.companyName || 'Unknown Lead',
                     leadStatus: safeGetStatus(leadData.customerStatus),
-                    author: activityData.author || 'Unknown User',
+                    author: leadData.dialerAssigned || activityData.author || 'Unassigned',
                 });
             });
         }
