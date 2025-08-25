@@ -13,7 +13,6 @@ import { collection, query, where, getDocs, collectionGroup, limit, getDoc } fro
 const UniversalSearchInputSchema = z.object({
   query: z.string().describe('The search term.'),
 });
-type UniversalSearchInput = z.infer<typeof UniversalSearchInputSchema>;
 
 const SearchLeadResultSchema = z.object({
   id: z.string(),
@@ -39,7 +38,6 @@ const UniversalSearchOutputSchema = z.object({
   contacts: z.array(SearchContactResultSchema),
   transcripts: z.array(SearchTranscriptResultSchema),
 });
-type UniversalSearchOutput = z.infer<typeof UniversalSearchOutputSchema>;
 
 async function searchLeads(searchTerm: string): Promise<z.infer<typeof SearchLeadResultSchema>[]> {
   if (!searchTerm) return [];
@@ -129,7 +127,7 @@ async function searchTranscripts(searchTerm: string): Promise<z.infer<typeof Sea
 }
 
 
-export async function universalSearch(input: UniversalSearchInput): Promise<UniversalSearchOutput> {
+export async function universalSearch(input: z.infer<typeof UniversalSearchInputSchema>): Promise<z.infer<typeof UniversalSearchOutputSchema>> {
   return universalSearchFlow(input);
 }
 
