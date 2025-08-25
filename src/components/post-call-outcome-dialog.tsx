@@ -27,8 +27,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Lead, Activity, Contact } from '@/lib/types'
-import { addContactToLead } from '@/services/firebase'
+import { addContactToLead, updateLeadStatus } from '@/services/firebase'
 import { useToast } from '@/hooks/use-toast'
+import { sendToNetSuite } from '@/services/netsuite'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -90,41 +91,75 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   };
   
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
       form.reset({
         outcome: '',
         notes: callActivity?.notes || '',
+        contactName: '',
+        contactEmail: '',
+        contactPhone: '',
+        contactTitle: '',
       });
     }
   }, [isOpen, callActivity, form]);
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    let newContact: Partial<Contact> | undefined;
-    if (values.outcome === 'Interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
-        newContact = {
-            name: values.contactName,
-            email: values.contactEmail,
-            phone: values.contactPhone,
-            title: values.contactTitle,
-        };
-        const existingContact = lead.contacts?.find(c => c.email === newContact!.email);
-        if (!existingContact) {
-            await addContactToLead(lead.id, newContact as Omit<Contact, 'id'>);
-        }
+  async function handleNextStep(action: 'lpo' | 'appointment') {
+    const isFormValid = await form.trigger();
+    if (!isFormValid) {
+       toast({ variant: 'destructive', title: 'Error', description: 'Please fill in all required contact fields before proceeding.' });
+       return;
+    }
+    const values = form.getValues();
+    
+    // Save contact if new
+    const newContactData = {
+        name: values.contactName!,
+        email: values.contactEmail!,
+        phone: values.contactPhone!,
+        title: values.contactTitle!,
+    };
+    const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
+    if (!existingContact) {
+        await addContactToLead(lead.id, newContactData);
+    }
+    
+    // Log the base activity
+    onSubmitProp(values.outcome, values.notes || '', newContactData);
 
-        // Redirect to calendly
+
+    if (action === 'lpo') {
+       try {
+            await sendToNetSuite(lead);
+            await updateLeadStatus(lead.id, 'LPO Review');
+            toast({
+                title: 'Success',
+                description: 'Lead has been referred to LPO and status updated to "LPO Review".',
+            });
+       } catch(e) {
+            console.error('Failed to refer lead to LPO:', e);
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to refer lead to LPO.' });
+       }
+    } else if (action === 'appointment') {
         const salesRep = lead.salesRepAssigned || 'Default';
         const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
-        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName)}&email=${encodeURIComponent(values.contactEmail)}`;
+        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName!)}&email=${encodeURIComponent(values.contactEmail!)}`;
+        
+        await updateLeadStatus(lead.id, 'Qualified');
         
         toast({
             title: 'Redirecting to Calendly...',
-            description: 'Please book the appointment for the lead.',
+            description: 'Please book the appointment for the lead. Status has been updated to Qualified.',
         });
 
         window.open(prefilledUrl, '_blank');
     }
-    onSubmitProp(values.outcome, values.notes || '', newContact);
+
+    onClose();
+  }
+
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    onSubmitProp(values.outcome, values.notes || '');
     onClose();
   }
 
@@ -236,9 +271,16 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                 </DialogClose>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
-                </Button>
+                {outcome === 'Interested' ? (
+                    <div className="flex gap-2">
+                        <Button type="button" variant="secondary" onClick={() => handleNextStep('lpo')}>Refer to LPO</Button>
+                        <Button type="button" onClick={() => handleNextStep('appointment')}>Set Appointment</Button>
+                    </div>
+                ) : (
+                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                        {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
+                    </Button>
+                )}
             </DialogFooter>
           </form>
         </Form>
