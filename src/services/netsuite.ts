@@ -42,6 +42,7 @@ interface NetSuiteOutcomePayload {
     reason: string;
     dialerAssigned: string;
     notes: string;
+    salesRecordInternalId: string;
 }
 
 /**
@@ -50,7 +51,7 @@ interface NetSuiteOutcomePayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload): Promise<{ success: boolean; message: string }> {
-    const { leadId, outcome, reason, dialerAssigned, notes } = payload;
+    const { leadId, outcome, reason, dialerAssigned, notes, salesRecordInternalId } = payload;
     
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -64,6 +65,10 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
         dialerAssigned: dialerAssigned,
         notes: notes,
     });
+
+    if (salesRecordInternalId) {
+        params.append('salesrecordid', salesRecordInternalId);
+    }
 
     const url = `${baseUrl}?${params.toString()}`;
 

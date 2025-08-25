@@ -149,6 +149,16 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     if (action === 'lpo') {
        try {
             await updateLeadStatus(lead.id, 'LPO Review');
+            
+            await sendToNetSuiteForOutcome({
+                leadId: lead.id,
+                outcome: values.outcome,
+                reason: 'LPO Referral',
+                dialerAssigned: lead.dialerAssigned || '',
+                notes: values.notes || '',
+                salesRecordInternalId: lead.entityId,
+            });
+
             toast({
                 title: 'Success',
                 description: 'Lead has been referred to LPO and status updated to "LPO Review".',
@@ -201,6 +211,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 reason: outcomeMapping.reason || '',
                 dialerAssigned: lead.dialerAssigned || '',
                 notes: values.notes || '',
+                salesRecordInternalId: lead.entityId
             });
             toast({
                 title: "NetSuite Updated",
