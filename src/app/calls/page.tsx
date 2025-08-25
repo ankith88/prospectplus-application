@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
@@ -228,12 +228,13 @@ export default function AllCallsPage() {
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead>Recording</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCalls.length > 0 ? (
                   filteredCalls.map((call) => {
@@ -282,11 +283,24 @@ export default function AllCallsPage() {
                        <TableCell className="max-w-xs truncate">
                           {call.notes}
                        </TableCell>
+                       <TableCell>
+                          {call.callId ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
+                              <Voicemail className="mr-2 h-4 w-4" />
+                              View Recording
+                            </Button>
+                          ) : (
+                            <span>N/A</span>
+                          )}
+                        </TableCell>
                     </TableRow>
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>
@@ -300,3 +314,5 @@ export default function AllCallsPage() {
     </>
   )
 }
+
+    
