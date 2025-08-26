@@ -40,7 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push("/signin")
+    // The redirect is handled by the useAuth hook's useEffect
   }
 
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
