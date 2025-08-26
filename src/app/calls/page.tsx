@@ -95,6 +95,8 @@ export default function AllCallsPage() {
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
+        if (!call.callId) return false;
+
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
         const callDate = new Date(call.date);
