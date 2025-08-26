@@ -28,12 +28,12 @@ import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, 
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
-import { Loader } from "./ui/loader"
+import { Loader, FullScreenLoader } from "./ui/loader"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading, signOut } = useAuth()
+  const { user, loading, signOut, isSigningOut } = useAuth()
   const { isMobile } = useSidebar()
   const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
@@ -53,14 +53,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, isAuthPage]);
   
+  if (isSigningOut) {
+      return <FullScreenLoader message="Signing out..." />;
+  }
+  
   if (isAuthPage) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 
-  if (isMobile === null) {
+  if (loading || isMobile === null) {
     return (
         <div className="flex h-screen items-center justify-center">
-            <Loader />
+            <FullScreenLoader message="Loading application..." />
         </div>
     )
   }
@@ -162,13 +166,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <div className="p-4 sm:p-6 lg:p-8">
-          {loading ? (
-             <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-                <Loader />
-             </div>
-          ) : (
-            children
-          )}
+            {children}
         </div>
       </SidebarInset>
     </>

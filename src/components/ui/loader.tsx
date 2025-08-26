@@ -8,3 +8,23 @@ export function Loader() {
     </div>
   );
 }
+
+import Image from "next/image";
+
+export function FullScreenLoader({ message }: { message?: string }) {
+    return (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4">
+                 <Image
+                    src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
+                    width={140}
+                    height={40}
+                    alt="MailPlus CRM Logo"
+                    data-ai-hint="logo"
+                />
+                <Loader />
+                {message && <p className="text-muted-foreground">{message}</p>}
+            </div>
+        </div>
+    );
+}

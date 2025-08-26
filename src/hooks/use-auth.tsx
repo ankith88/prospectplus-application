@@ -34,6 +34,7 @@ interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
     loading: boolean;
+    isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
     signUp: (email: string, pass: string, details: UserDetails) => Promise<any>;
@@ -43,6 +44,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
     loading: true,
+    isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
     signUp: async () => {},
@@ -52,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSigningOut, setIsSigningOut] = useState(false);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
 
@@ -142,15 +145,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const signOut = async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
+        setIsSigningOut(true);
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);
+        // The useEffect above will handle the redirect
+        setIsSigningOut(false);
     };
 
     const value = {
         user,
         userProfile,
         loading,
+        isSigningOut,
         signIn,
         signOut,
         signUp,

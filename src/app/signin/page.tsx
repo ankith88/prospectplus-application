@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
+import { FullScreenLoader } from '@/components/ui/loader';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -41,11 +42,13 @@ export default function SignInPage() {
         description: error.message,
       })
     } finally {
-      setLoading(false);
+      // Keep loading screen until redirect is complete
     }
   };
 
   return (
+    <>
+    {loading && <FullScreenLoader message="Signing in..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex flex-col items-center text-center">
@@ -70,6 +73,7 @@ export default function SignInPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -80,10 +84,11 @@ export default function SignInPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
              <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
+              Sign In
             </Button>
           </form>
         </CardContent>
@@ -93,5 +98,6 @@ export default function SignInPage() {
         </CardFooter>
       </Card>
     </div>
+    </>
   );
 }

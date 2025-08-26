@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
 import { FirebaseError } from 'firebase/app';
+import { FullScreenLoader } from '@/components/ui/loader';
 
 export default function SignUpPage() {
   const [firstName, setFirstName] = useState('');
@@ -51,12 +52,13 @@ export default function SignUpPage() {
         title: "Sign up Failed",
         description: description,
       })
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only set loading to false on error
     }
   };
 
   return (
+    <>
+    {loading && <FullScreenLoader message="Creating your account..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex flex-col items-center text-center">
@@ -75,16 +77,16 @@ export default function SignUpPage() {
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                    <Input id="firstName" required value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                    <Input id="lastName" required value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} />
                 </div>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="phoneNumber">Phone Number</Label>
-                <Input id="phoneNumber" type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                <Input id="phoneNumber" type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={loading} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -95,6 +97,7 @@ export default function SignUpPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -105,10 +108,11 @@ export default function SignUpPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
              <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating Account...' : 'Create Account'}
+              Create Account
             </Button>
           </form>
         </CardContent>
@@ -117,5 +121,6 @@ export default function SignUpPage() {
         </CardFooter>
       </Card>
     </div>
+    </>
   );
 }
