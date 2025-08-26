@@ -1,3 +1,4 @@
+
 "use client"
 
 import {
@@ -307,7 +308,7 @@ export default function AllCallsPage() {
                             <span>{call.duration || 'N/A'}</span>
                           </div>
                        </TableCell>
-                       <TableCell className="max-w-xs truncate">
+                       <TableCell className="min-w-[20rem] whitespace-pre-wrap">
                           {call.notes}
                        </TableCell>
                        <TableCell>
