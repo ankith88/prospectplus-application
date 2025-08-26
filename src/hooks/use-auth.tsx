@@ -37,7 +37,6 @@ interface AuthContextType {
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
-    signUp: (email: string, pass: string, details: UserDetails) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -47,7 +46,6 @@ const AuthContext = createContext<AuthContextType>({
     isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
-    signUp: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -106,43 +104,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return userCredential;
     }
 
-    const signUp = async (email: string, pass: string, details: UserDetails) => {
-        if (!auth) {
-            throw new Error("Firebase Auth not initialized");
-        }
-        
-        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-        const createdUser = userCredential.user;
-        const displayName = `${details.firstName} ${details.lastName}`;
-
-        try {
-            await updateProfile(createdUser, { displayName });
-            
-            const userDocRef = doc(firestore, "users", createdUser.uid);
-            const newUserProfile: Omit<UserProfile, 'uid'> = {
-                email,
-                firstName: details.firstName,
-                lastName: details.lastName,
-                phoneNumber: details.phoneNumber,
-                role: 'user', // Default role
-            };
-            await setDoc(userDocRef, newUserProfile);
-            setUserProfile({ uid: createdUser.uid, ...newUserProfile });
-             console.log(`User document created in Firestore for UID: ${createdUser.uid}`);
-
-        } catch (error) {
-            console.error('Error creating user profile or document:', error);
-            throw new Error('Failed to save user details.');
-        }
-
-        const updatedUser = { ...createdUser, displayName } as User;
-        setUser(updatedUser);
-        
-        router.push('/');
-
-        return userCredential;
-    }
-
     const signOut = async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
@@ -160,7 +121,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isSigningOut,
         signIn,
         signOut,
-        signUp,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

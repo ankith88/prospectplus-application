@@ -93,7 +93,6 @@ export default function SignInPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
-           <div>Don't have an account? <Link href="/signup" className="underline text-primary">Sign up</Link></div>
            <div>By signing in, you agree to our terms of service.</div>
         </CardFooter>
       </Card>
