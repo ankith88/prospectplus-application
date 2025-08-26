@@ -190,11 +190,11 @@ export default function AllCallsPage() {
                                 {filters.date?.from ? (
                                   filters.date.to ? (
                                     <>
-                                      {format(filters.date.from, "LLL dd, y")} -{" "}
-                                      {format(filters.date.to, "LLL dd, y")}
+                                      {format(filters.date.from, "LLL d, y")} -{" "}
+                                      {format(filters.date.to, "LLL d, y")}
                                     </>
                                   ) : (
-                                    format(filters.date.from, "LLL dd, y")
+                                    format(filters.date.from, "LLL d, y")
                                   )
                                 ) : (
                                   <span>Pick a date</span>
