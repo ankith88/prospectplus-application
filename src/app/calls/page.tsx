@@ -34,6 +34,7 @@ import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
@@ -245,8 +246,9 @@ export default function AllCallsPage() {
           </Card>
       </Collapsible>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Call History</CardTitle>
+          <Badge variant="secondary">{filteredCalls.length} call(s)</Badge>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
