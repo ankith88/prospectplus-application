@@ -29,7 +29,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { Calendar as CalendarPicker } from '@/components/ui/calendar'
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -100,8 +100,13 @@ export default function AllCallsPage() {
 
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
-        const callDate = new Date(call.date);
-        const dateMatch = filters.date?.from ? (callDate >= filters.date.from && callDate <= (filters.date.to || filters.date.from)) : true;
+        let dateMatch = true;
+        if (filters.date?.from) {
+            const callDate = new Date(call.date);
+            const fromDate = startOfDay(filters.date.from);
+            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            dateMatch = callDate >= fromDate && callDate <= toDate;
+        }
         
         const durationInSeconds = parseDuration(call.duration);
 
@@ -346,3 +351,5 @@ export default function AllCallsPage() {
     </>
   )
 }
+
+    
