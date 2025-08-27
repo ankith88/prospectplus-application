@@ -408,7 +408,7 @@ export default function LeadsPage() {
                                     ) : 'N/A'}
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
-                                  <TableCell className="max-w-[200px] truncate">
+                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
                                     {lastActivity ? (
                                       <div className="flex flex-col">
                                         <span className="font-medium">{lastActivity.notes}</span>
@@ -418,7 +418,7 @@ export default function LeadsPage() {
                                       'N/A'
                                     )}
                                   </TableCell>
-                                  <TableCell className="max-w-[200px] truncate">
+                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
                                     {lastNote ? (
                                         <div className="flex flex-col">
                                             <span className="font-medium">{lastNote.content}</span>
