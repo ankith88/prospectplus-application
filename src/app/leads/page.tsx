@@ -367,7 +367,9 @@ export default function LeadsPage() {
                               <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
                               <TableHead>Industry</TableHead>
-                              <TableHead className="w-[50px] text-right">Actions</TableHead>
+                              {userProfile?.role === 'admin' && (
+                                <TableHead className="w-[50px] text-right">Actions</TableHead>
+                              )}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -406,23 +408,23 @@ export default function LeadsPage() {
                                     ) : 'N/A'}
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
-                                  <TableCell className="text-right">
-                                    {userProfile?.role === 'admin' && (
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon">
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                          <UserX className="mr-2 h-4 w-4" />
-                                          Unassign
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                    )}
-                                  </TableCell>
+                                  {userProfile?.role === 'admin' && (
+                                    <TableCell className="text-right">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
+                                            <UserX className="mr-2 h-4 w-4" />
+                                            Unassign
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                  )}
                                 </TableRow>
                               )
                             })}
