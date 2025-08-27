@@ -338,7 +338,7 @@ export default function LeadsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>My Assigned Leads</CardTitle>
-          {selectedMyLeads.length > 0 && (
+          {userProfile?.role === 'admin' && selectedMyLeads.length > 0 && (
               <Button onClick={handleBulkUnassign} variant="outline">
               <UserX className="mr-2 h-4 w-4" />
               Unassign {selectedMyLeads.length} Lead(s)
@@ -407,6 +407,7 @@ export default function LeadsPage() {
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
                                   <TableCell className="text-right">
+                                    {userProfile?.role === 'admin' && (
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon">
@@ -420,6 +421,7 @@ export default function LeadsPage() {
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
+                                    )}
                                   </TableCell>
                                 </TableRow>
                               )
