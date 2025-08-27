@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
-import { getUserAircallId, logTranscriptActivity, findLeadByPhoneNumber, deleteUnmatchedActivity } from '@/services/firebase';
+import { getUserAircallId, logActivity, findLeadByPhoneNumber } from '@/services/firebase';
 import type { Activity, Transcript } from '@/lib/types';
 
 
@@ -88,22 +88,23 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
           
           const lead = await findLeadByPhoneNumber(phoneNumber);
           if (lead) {
-             const newTranscript = await logTranscriptActivity(lead.id, {
-                content: JSON.stringify(call.transcription.content.utterances || call.transcription.content),
-                author: userDisplayName,
-                callId: call.id.toString(),
-                phoneNumber: phoneNumber
-            });
-            newTranscripts.push(newTranscript);
-            console.log(`Transcript for call ID ${call.id} logged to lead ${lead.id}.`);
+             // The webhook now handles logging the transcript itself.
+             // We just log an activity to show the sync happened.
+             await logActivity(lead.id, {
+                type: 'Update',
+                notes: `Transcript for call ID ${call.id} synced.`
+             });
+             console.log(`Transcript for call ID ${call.id} synced to lead ${lead.id}.`);
+             // We don't have the full transcript object here to return,
+             // so we will return an empty array and the UI will refetch.
           } else {
             console.log(`No lead found for number ${phoneNumber}, skipping transcript for call ID ${call.id}.`);
           }
         }
       }
       
-      console.log(`Found and processed ${newTranscripts.length} transcripts for user: ${userDisplayName}`);
-      return { newTranscripts };
+      console.log(`Found and processed transcripts for user: ${userDisplayName}`);
+      return { newTranscripts }; // The UI will refetch all transcripts after sync
 
     } catch (error: any) {
       console.error('Error fetching call transcripts from AirCall:', error);
