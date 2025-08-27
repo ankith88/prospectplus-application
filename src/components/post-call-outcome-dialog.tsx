@@ -171,9 +171,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         const salesRep = lead.salesRepAssigned || 'Default';
         const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
         
+        const primaryContact = lead.contacts?.[0];
+        const contactName = primaryContact?.name || lead.companyName;
+        const contactEmail = primaryContact?.email || lead.customerServiceEmail;
+
         let prefilledUrl = calendlyLink;
-        if (values.contactName && values.contactEmail) {
-           prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName!)}&email=${encodeURIComponent(values.contactEmail!)}`;
+        if (contactName && contactEmail) {
+           prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(contactName)}&email=${encodeURIComponent(contactEmail)}`;
         }
         
         await updateLeadStatus(lead.id, 'Qualified');
@@ -276,64 +280,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 </FormItem>
               )}
             />
-
-            {outcome === 'Interested' && (
-              <div className="space-y-4 rounded-md border p-4">
-                  <p className="text-sm text-muted-foreground">The lead is interested. To refer to an LPO, all contact fields are required.</p>
-                  <FormField
-                    control={form.control}
-                    name="contactName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Person Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Jane Doe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contactTitle"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Head of Logistics" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                  <FormField
-                    control={form.control}
-                    name="contactEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input placeholder="jane.d@example.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contactPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input placeholder="123-456-7890" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-              </div>
-            )}
             
             <DialogFooter>
                 <DialogClose asChild>
@@ -341,7 +287,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 </DialogClose>
                 {outcome === 'Interested' ? (
                     <div className="flex gap-2">
-                        <Button type="button" variant="secondary" onClick={() => handleNextStep('lpo')}>Refer to LPO</Button>
                         <Button type="button" onClick={() => handleNextStep('appointment')}>Set Appointment</Button>
                     </div>
                 ) : (
