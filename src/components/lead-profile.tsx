@@ -797,6 +797,104 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                AI Lead Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center text-center gap-4">
+              {scoringLoading ? (
+                <Loader />
+              ) : scoringResult ? (
+                <>
+                  <ScoreIndicator score={scoringResult.score} size="lg" />
+                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
+                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
+                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
+                        <div>
+                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
+                        </div>
+                    </div>
+                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Calculate AI Score
+                    </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-primary" />
+                AI Script Enhancer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <Textarea
+                    placeholder="Paste your sales script here..."
+                    value={userScript}
+                    onChange={(e) => setUserScript(e.target.value)}
+                    rows={6}
+                    className="w-full"
+                />
+                <Button onClick={handleImproveScript} disabled={isImprovingScript || !userScript} className="w-full">
+                    {isImprovingScript ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>Improve Script</span></>}
+                </Button>
+                {improvedScript && (
+                    <div className="p-4 border-t mt-4">
+                        <h4 className="font-semibold mb-2">Suggested Improvement:</h4>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{improvedScript.improvedScript}</p>
+                    </div>
+                )}
+            </CardContent>
+          </Card>
+
+          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
+              <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                      <DialogTitle>Call Transcript</DialogTitle>
+                  </DialogHeader>
+                  {selectedTranscript && lead && (
+                      <TranscriptViewer 
+                        transcript={selectedTranscript} 
+                        leadName={lead.companyName} 
+                        leadId={lead.id}
+                        onAnalysisComplete={(analysis) => {
+                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
+                        }}
+                      />
+                  )}
+              </DialogContent>
+          </Dialog>
+
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+             <DialogContent>
+               <DialogHeader>
+                 <DialogTitle>Edit Contact</DialogTitle>
+                 <DialogDescription>
+                   Update the details for the contact.
+                 </DialogDescription>
+               </DialogHeader>
+               {selectedContact && (
+                <EditContactForm
+                  leadId={lead.id}
+                  contact={selectedContact}
+                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
+                />
+               )}
+             </DialogContent>
+          </Dialog>
+
+        </div>
+
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                   <BookText className="w-5 h-5 text-muted-foreground" />
                   Notes
               </CardTitle>
@@ -858,42 +956,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </CardContent>
           </Card>
           
-          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
-              <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                      <DialogTitle>Call Transcript</DialogTitle>
-                  </DialogHeader>
-                  {selectedTranscript && lead && (
-                      <TranscriptViewer 
-                        transcript={selectedTranscript} 
-                        leadName={lead.companyName} 
-                        leadId={lead.id}
-                        onAnalysisComplete={(analysis) => {
-                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
-                        }}
-                      />
-                  )}
-              </DialogContent>
-          </Dialog>
-
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-             <DialogContent>
-               <DialogHeader>
-                 <DialogTitle>Edit Contact</DialogTitle>
-                 <DialogDescription>
-                   Update the details for the contact.
-                 </DialogDescription>
-               </DialogHeader>
-               {selectedContact && (
-                <EditContactForm
-                  leadId={lead.id}
-                  contact={selectedContact}
-                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
-                />
-               )}
-             </DialogContent>
-          </Dialog>
-
           <Card>
             <CardHeader>
               <CardTitle>Activity History</CardTitle>
@@ -966,67 +1028,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 })}
               </ul>
               )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                AI Lead Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center text-center gap-4">
-              {scoringLoading ? (
-                <Loader />
-              ) : scoringResult ? (
-                <>
-                  <ScoreIndicator score={scoringResult.score} size="lg" />
-                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
-                </>
-              ) : (
-                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
-                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
-                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
-                        <div>
-                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
-                        </div>
-                    </div>
-                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Calculate AI Score
-                    </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="w-5 h-5 text-primary" />
-                AI Script Enhancer
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <Textarea
-                    placeholder="Paste your sales script here..."
-                    value={userScript}
-                    onChange={(e) => setUserScript(e.target.value)}
-                    rows={6}
-                    className="w-full"
-                />
-                <Button onClick={handleImproveScript} disabled={isImprovingScript || !userScript} className="w-full">
-                    {isImprovingScript ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>Improve Script</span></>}
-                </Button>
-                {improvedScript && (
-                    <div className="p-4 border-t mt-4">
-                        <h4 className="font-semibold mb-2">Suggested Improvement:</h4>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{improvedScript.improvedScript}</p>
-                    </div>
-                )}
             </CardContent>
           </Card>
         </div>
