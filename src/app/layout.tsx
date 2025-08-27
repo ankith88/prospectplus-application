@@ -8,6 +8,9 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 export const metadata: Metadata = {
   title: 'ProspectPlus',
   description: 'Powered by MailPlus. AI-powered CRM for outbound leads management.',
+  icons: {
+    icon: 'https://mailplus.com.au/wp-content/uploads/2024/08/cropped-MP-Logo-2024-Tile.png',
+  },
 }
 
 export default function RootLayout({
