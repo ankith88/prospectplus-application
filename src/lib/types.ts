@@ -70,6 +70,7 @@ export interface Lead {
   avatarUrl?: string
   profile: string // This will be the text used for AI prompts
   activity?: Activity[]
+  notes?: Note[]
   contacts?: Contact[]
   contactCount?: number
   address?: Address

@@ -18,11 +18,11 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, getLeadNotes } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter } from 'lucide-react'
@@ -37,8 +37,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
+type LeadWithDetails = Lead & { notes?: Note[] };
+
 export default function LeadsPage() {
-  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAllLeads, setSelectedAllLeads] = useState<string[]>([]);
@@ -65,8 +67,17 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const fetchedLeads = await getLeadsTool({});
-        setAllLeads(fetchedLeads);
+        const fetchedLeads = await getLeadsTool({ summary: false }); // Fetch full lead data
+
+        const leadsWithDetails = await Promise.all(
+          fetchedLeads.map(async (lead) => {
+            const notes = await getLeadNotes(lead.id);
+            return { ...lead, notes };
+          })
+        );
+        
+        setAllLeads(leadsWithDetails);
+
       } catch (error) {
         console.error("Failed to fetch leads:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch leads." });
@@ -120,7 +131,7 @@ export default function LeadsPage() {
       }
       acc[status].push(lead);
       return acc;
-    }, {} as Record<LeadStatus, Lead[]>);
+    }, {} as Record<LeadStatus, LeadWithDetails[]>);
 
     const preferredOrder: LeadStatus[] = ["New", "High Touch", "Connected", "In Progress"];
     
@@ -364,9 +375,10 @@ export default function LeadsPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Company</TableHead>
-                              <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
                               <TableHead>Industry</TableHead>
+                              <TableHead>Last Activity</TableHead>
+                              <TableHead>Last Note</TableHead>
                               {userProfile?.role === 'admin' && (
                                 <TableHead className="w-[50px] text-right">Actions</TableHead>
                               )}
@@ -374,7 +386,8 @@ export default function LeadsPage() {
                           </TableHeader>
                           <TableBody>
                             {leads.map((lead) => {
-                              const addressString = formatAddress(lead.address);
+                              const lastActivity = lead.activity?.[0];
+                              const lastNote = lead.notes?.[0];
                               return (
                                 <TableRow key={lead.id}>
                                   <TableCell>
@@ -382,19 +395,6 @@ export default function LeadsPage() {
                                       <div className="flex flex-col">
                                         <span className="font-medium group-hover:underline">{lead.companyName}</span>
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                                        disabled={addressString === 'N/A'}
-                                        className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="View on map"
-                                      >
-                                        <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                      </button>
-                                      <span>{addressString}</span>
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -408,6 +408,24 @@ export default function LeadsPage() {
                                     ) : 'N/A'}
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
+                                  <TableCell className="max-w-[200px] truncate">
+                                    {lastActivity ? (
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{lastActivity.notes}</span>
+                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
+                                      </div>
+                                    ) : (
+                                      'N/A'
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="max-w-[200px] truncate">
+                                    {lastNote ? (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{lastNote.content}</span>
+                                            <span className="text-xs text-muted-foreground">{new Date(lastNote.date).toLocaleDateString()} by {lastNote.author}</span>
+                                        </div>
+                                    ) : 'N/A'}
+                                  </TableCell>
                                   {userProfile?.role === 'admin' && (
                                     <TableCell className="text-right">
                                       <DropdownMenu>
