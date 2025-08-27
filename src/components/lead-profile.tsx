@@ -794,6 +794,46 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </CardContent>
           </Card>
           
+
+          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
+              <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                      <DialogTitle>Call Transcript</DialogTitle>
+                  </DialogHeader>
+                  {selectedTranscript && lead && (
+                      <TranscriptViewer 
+                        transcript={selectedTranscript} 
+                        leadName={lead.companyName} 
+                        leadId={lead.id}
+                        onAnalysisComplete={(analysis) => {
+                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
+                        }}
+                      />
+                  )}
+              </DialogContent>
+          </Dialog>
+
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+             <DialogContent>
+               <DialogHeader>
+                 <DialogTitle>Edit Contact</DialogTitle>
+                 <DialogDescription>
+                   Update the details for the contact.
+                 </DialogDescription>
+               </DialogHeader>
+               {selectedContact && (
+                <EditContactForm
+                  leadId={lead.id}
+                  contact={selectedContact}
+                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
+                />
+               )}
+             </DialogContent>
+          </Dialog>
+
+        </div>
+
+        <div className="lg:col-span-1 flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -852,46 +892,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 )}
             </CardContent>
           </Card>
-
-          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
-              <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                      <DialogTitle>Call Transcript</DialogTitle>
-                  </DialogHeader>
-                  {selectedTranscript && lead && (
-                      <TranscriptViewer 
-                        transcript={selectedTranscript} 
-                        leadName={lead.companyName} 
-                        leadId={lead.id}
-                        onAnalysisComplete={(analysis) => {
-                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
-                        }}
-                      />
-                  )}
-              </DialogContent>
-          </Dialog>
-
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-             <DialogContent>
-               <DialogHeader>
-                 <DialogTitle>Edit Contact</DialogTitle>
-                 <DialogDescription>
-                   Update the details for the contact.
-                 </DialogDescription>
-               </DialogHeader>
-               {selectedContact && (
-                <EditContactForm
-                  leadId={lead.id}
-                  contact={selectedContact}
-                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
-                />
-               )}
-             </DialogContent>
-          </Dialog>
-
-        </div>
-
-        <div className="lg:col-span-1 flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -984,18 +984,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                           <div className="w-px h-full bg-border"></div>
                         )}
                       </div>
-                      <div className="flex-1 pb-4">
-                        <div className="flex items-center justify-between">
+                      <div className="flex-1 pb-4 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
                           <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                          <p className="text-sm text-muted-foreground">{new Date(item.date).toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-muted-foreground flex-1 break-words mr-2">{item.notes}</p>
+                        <div className="text-sm text-muted-foreground break-words">
+                          {item.notes}
                         </div>
                          {item.type === 'Call' && item.callId && (
-                           <div className="flex items-center justify-between mt-1 gap-2">
-                             <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Hash className="w-3 h-3" />
+                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                             <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                                <Hash className="w-3 h-3 flex-shrink-0" />
                                 <span>Call ID: {item.callId}</span>
                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
                                     <Clipboard className="w-2.5 h-2.5" />
