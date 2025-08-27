@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { logActivity, logUnmatchedActivity, findActivityByCallId, updateActivity, logTranscriptActivity } from '@/services/firebase';
+import { logActivity, findActivityByCallId, updateActivity, logTranscriptActivity } from '@/services/firebase';
 import type { Lead, Activity } from '@/lib/types';
 
 /**
@@ -157,9 +157,8 @@ export async function POST(
       };
 
       if (!leadInfo) {
-          console.log(`No lead found for phone number: ${leadPhoneNumber}. Logging to unmatched activities.`);
-          await logUnmatchedActivity(activityData as Omit<Activity, 'id'>);
-          return new NextResponse('Webhook processed for unmatched activity', { status: 200 });
+          console.log(`No lead found for phone number: ${leadPhoneNumber}. Ignoring activity.`);
+          return new NextResponse('OK - No matching lead found', { status: 200 });
       }
 
       // Find existing activity for this call

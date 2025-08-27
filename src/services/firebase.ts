@@ -64,19 +64,6 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
     }
 }
 
-async function logUnmatchedActivity(activity: Omit<Activity, 'id'>): Promise<string> {
-    try {
-        const unmatchedActivitiesRef = collection(firestore, 'unmatched_activities');
-        const docRef = await addDoc(unmatchedActivitiesRef, activity);
-        console.log(`Unmatched activity logged with ID: ${docRef.id}`);
-        return docRef.id;
-    } catch (error) {
-        console.error(`Failed to log unmatched activity:`, error);
-        throw new Error('Failed to log unmatched activity in Firebase');
-    }
-}
-
-
 function safeGetStatus(status: any): LeadStatus {
     const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch'];
     if (typeof status === 'string') {
@@ -630,17 +617,6 @@ async function updateTranscriptAnalysis(leadId: string, transcriptId: string, an
   }
 }
 
-async function deleteUnmatchedActivity(activityId: string): Promise<void> {
-    try {
-        const activityDocRef = doc(firestore, 'unmatched_activities', activityId);
-        await deleteDoc(activityDocRef);
-        console.log(`Unmatched activity ${activityId} deleted.`);
-    } catch (error) {
-        console.error(`Failed to delete unmatched activity ${activityId}:`, error);
-        throw new Error('Failed to delete unmatched activity from Firebase');
-    }
-}
-
 async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string } | null> {
   if (!phoneNumber) return null;
 
@@ -696,7 +672,6 @@ export {
     logCallActivity,
     logNoteActivity,
     logTranscriptActivity,
-    logUnmatchedActivity,
     updateContactInLead,
     deleteContactFromLead,
     updateLeadDetails,
@@ -715,6 +690,5 @@ export {
     updateTranscriptAnalysis,
     getAllTranscripts,
     getAllCallActivities,
-    deleteUnmatchedActivity,
     findLeadByPhoneNumber,
 };
