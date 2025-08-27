@@ -156,7 +156,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 reason: 'LPO Referral',
                 dialerAssigned: lead.dialerAssigned || '',
                 notes: values.notes || '',
-                salesRecordInternalId: lead.entityId,
+                salesRecordInternalId: lead.salesRecordInternalId || '',
             });
 
             toast({
@@ -215,7 +215,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 reason: outcomeMapping.reason || '',
                 dialerAssigned: lead.dialerAssigned || '',
                 notes: values.notes || '',
-                salesRecordInternalId: lead.entityId
+                salesRecordInternalId: lead.salesRecordInternalId || ''
             });
             toast({
                 title: "NetSuite Updated",

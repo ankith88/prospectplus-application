@@ -85,6 +85,7 @@ export interface Lead {
   customerPhone?: string
   aiScore?: number;
   aiReason?: string;
+  salesRecordInternalId?: string;
 }
 
 export interface UserProfile {

@@ -160,6 +160,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data['customerEntityId'] || data['internalid'],
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -227,6 +228,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data['customerEntityId'] || data['internalid'],
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -528,6 +530,17 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
     try {
         const transcriptsRef = collection(firestore, 'leads', leadId, 'transcripts');
+        
+        // Check if a transcript with this callId already exists
+        const q = query(transcriptsRef, where('callId', '==', transcriptData.callId), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const existingDoc = querySnapshot.docs[0];
+            console.log(`Transcript for call ID ${transcriptData.callId} already exists. Skipping creation.`);
+            return { id: existingDoc.id, ...existingDoc.data() } as Transcript;
+        }
+
         const newTranscript = {
             ...transcriptData,
             date: new Date().toISOString()
@@ -671,7 +684,6 @@ export {
     updateLeadStatus,
     logCallActivity,
     logNoteActivity,
-    logTranscriptActivity,
     updateContactInLead,
     deleteContactFromLead,
     updateLeadDetails,
