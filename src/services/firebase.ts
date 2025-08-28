@@ -699,6 +699,32 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
     }
 }
 
+async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
+    try {
+        const allTasks: Array<Task & { leadId: string; leadName: string }> = [];
+        
+        const leadsRef = collection(firestore, 'leads');
+        const q = query(leadsRef, where('dialerAssigned', '==', displayName));
+        const leadsSnapshot = await getDocs(q);
+
+        for (const leadDoc of leadsSnapshot.docs) {
+            const tasks = await getLeadTasks(leadDoc.id);
+            const leadName = leadDoc.data().companyName || 'Unknown Lead';
+            const tasksWithLeadInfo = tasks.map(task => ({
+                ...task,
+                leadId: leadDoc.id,
+                leadName: leadName
+            }));
+            allTasks.push(...tasksWithLeadInfo);
+        }
+
+        return allTasks;
+    } catch (error) {
+        console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
+        return [];
+    }
+}
+
 async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
     try {
         const tasksRef = collection(firestore, 'leads', leadId, 'tasks');
@@ -778,6 +804,7 @@ export {
     getAllCallActivities,
     findLeadByPhoneNumber,
     getLeadTasks,
+    getAllUserTasks,
     addTaskToLead,
     updateTaskCompletion,
     deleteTaskFromLead,

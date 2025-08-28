@@ -29,6 +29,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
+import { TaskReminderBell } from "./task-reminder-bell"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -136,6 +137,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 
             </div>
             <div className="flex items-center gap-2 lg:gap-4 ml-auto">
+             <TaskReminderBell />
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
