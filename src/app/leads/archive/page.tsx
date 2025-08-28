@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus } from '@/lib/types'
+import type { Lead, LeadStatus, Note } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -33,12 +33,14 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
+import { getLeadNotes } from '@/services/firebase'
 
+type LeadWithDetails = Lead & { notes?: Note[] };
 
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'salesRepAssigned' | 'industryCategory';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory';
 
 export default function ArchivedLeadsPage() {
-  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
@@ -64,7 +66,15 @@ export default function ArchivedLeadsPage() {
       try {
         setLoading(true);
         const fetchedLeads = await getLeadsTool({ summary: false }); // Fetch full data
-        setAllLeads(fetchedLeads);
+        
+        const leadsWithDetails = await Promise.all(
+          fetchedLeads.map(async (lead) => {
+            const notes = await getLeadNotes(lead.id);
+            return { ...lead, notes };
+          })
+        );
+        
+        setAllLeads(leadsWithDetails);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
       } finally {
@@ -274,13 +284,12 @@ export default function ArchivedLeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[280px]">
+                  <TableHead className="w-[200px]">
                     <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
                       Company
                       {getSortIndicator('companyName')}
                     </Button>
                   </TableHead>
-                  <TableHead>Address</TableHead>
                   <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">
                       Status
@@ -294,9 +303,9 @@ export default function ArchivedLeadsPage() {
                     </Button>
                   </TableHead>
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('salesRepAssigned')} className="group -ml-4">
-                      Sales Rep
-                      {getSortIndicator('salesRepAssigned')}
+                    <Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">
+                      Dialer Assigned
+                      {getSortIndicator('dialerAssigned')}
                     </Button>
                   </TableHead>
                   <TableHead>
@@ -305,52 +314,60 @@ export default function ArchivedLeadsPage() {
                       {getSortIndicator('industryCategory')}
                     </Button>
                   </TableHead>
+                   <TableHead>Last Activity</TableHead>
+                   <TableHead>Last Note</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedLeads.length > 0 ? (
                   sortedLeads.map((lead) => {
-                    const addressString = formatAddress(lead.address);
+                    const lastActivity = lead.activity?.[0];
+                    const lastNote = lead.notes?.[0];
                     return (
                     <TableRow key={lead.id}>
                       <TableCell>
                         <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
                           <div className="flex flex-col">
-                            <span className="font-medium">{lead.companyName}</span>
+                            <span className="font-medium hover:underline">{lead.companyName}</span>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                            disabled={addressString === 'N/A'}
-                            className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="View on map"
-                          >
-                            <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                          </button>
-                          <span>{addressString}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                      <TableCell>{lead.salesRepAssigned ?? 'N/A'}</TableCell>
+                      <TableCell>{lead.dialerAssigned ?? 'N/A'}</TableCell>
                       <TableCell>
                         {lead.industryCategory}
+                      </TableCell>
+                      <TableCell className="min-w-[200px] whitespace-pre-wrap">
+                        {lastActivity ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">{lastActivity.notes}</span>
+                            <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-[200px] whitespace-pre-wrap">
+                        {lastNote ? (
+                            <div className="flex flex-col">
+                                <span className="font-medium">{lastNote.content}</span>
+                                <span className="text-xs text-muted-foreground">{new Date(lastNote.date).toLocaleDateString()} by {lastNote.author}</span>
+                            </div>
+                        ) : 'N/A'}
                       </TableCell>
                     </TableRow>
                     )
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
@@ -369,5 +386,3 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
-
-    
