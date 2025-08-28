@@ -36,13 +36,14 @@ import {
   PhoneCall,
   Download,
   Voicemail,
+  ListTodo,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -90,11 +91,19 @@ import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
+import { Input } from './ui/input'
+import { Checkbox } from './ui/checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { Calendar as CalendarIcon } from 'lucide-react'
+import { format } from 'date-fns'
+import { Calendar as CalendarPicker } from './ui/calendar'
+
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [userScript, setUserScript] = useState('');
   const [improvedScript, setImprovedScript] = useState<ImproveScriptOutput | null>(null);
@@ -111,6 +120,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
 
   const router = useRouter();
   const { toast } = useToast();
@@ -173,6 +184,17 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     const fetchedTranscripts = await getLeadTranscripts(lead.id);
     setTranscripts(fetchedTranscripts);
   }
+
+  const fetchTasks = async () => {
+    if (!lead) return;
+    const fetchedTasks = await getLeadTasks(lead.id);
+    setTasks(fetchedTasks);
+  }
+
+  useEffect(() => {
+    fetchTasks();
+  }, [lead?.id]);
+
 
   const handlePostCallSubmit = async (outcome: string, notes: string, contact?: any) => {
       if (!lead || !lastCallActivity || !lastCallActivity.callId) return;
@@ -447,6 +469,53 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       setFetchingTranscriptId(null);
     }
   };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead || !newTaskTitle || !newTaskDueDate || !user?.displayName) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Task title and due date are required.' });
+        return;
+    }
+    try {
+        const newTask = await addTaskToLead(lead.id, {
+            title: newTaskTitle,
+            dueDate: newTaskDueDate.toISOString(),
+            author: user.displayName,
+        });
+        setTasks(prev => [...prev, newTask]);
+        setNewTaskTitle('');
+        setNewTaskDueDate(undefined);
+        toast({ title: 'Success', description: 'Task added successfully.' });
+    } catch (error) {
+        console.error("Failed to add task:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to add task." });
+    }
+  };
+
+  const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
+      if (!lead) return;
+      try {
+          await updateTaskCompletion(lead.id, taskId, isCompleted);
+          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined } : t));
+          toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
+      } catch (error) {
+          console.error("Failed to update task:", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to update task." });
+      }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+      if (!lead) return;
+      try {
+          await deleteTaskFromLead(lead.id, taskId);
+          setTasks(prev => prev.filter(t => t.id !== taskId));
+          toast({ title: 'Success', description: 'Task deleted successfully.' });
+      } catch (error) {
+          console.error("Failed to delete task:", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete task." });
+      }
+  };
+
 
   if (!lead) {
     return (
@@ -865,6 +934,68 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
+           <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <ListTodo className="w-5 h-5 text-muted-foreground" />
+                        Tasks & Reminders
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleAddTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <Input 
+                            placeholder="Add a new task..." 
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                        />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className="min-w-[150px] justify-start text-left font-normal"
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {newTaskDueDate ? format(newTaskDueDate, "PPP") : <span>Set date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <CalendarPicker
+                                    mode="single"
+                                    selected={newTaskDueDate}
+                                    onSelect={setNewTaskDueDate}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Button type="submit">Add Task</Button>
+                    </form>
+                    <div className="space-y-2">
+                        {tasks.length > 0 ? (
+                            tasks.map(task => (
+                                <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
+                                    <Checkbox
+                                        id={`task-${task.id}`}
+                                        checked={task.isCompleted}
+                                        onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
+                                    />
+                                    <label htmlFor={`task-${task.id}`} className="flex-1 text-sm font-medium data-[completed=true]:line-through data-[completed=true]:text-muted-foreground" data-completed={task.isCompleted}>
+                                        {task.title}
+                                        <p className="text-xs text-muted-foreground">
+                                            Due: {format(new Date(task.dueDate), "PP")}
+                                        </p>
+                                    </label>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

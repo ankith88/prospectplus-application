@@ -29,6 +29,16 @@ export interface Note {
     content: string;
 }
 
+export interface Task {
+    id: string;
+    title: string;
+    dueDate: string;
+    isCompleted: boolean;
+    createdAt: string;
+    completedAt?: string;
+    author: string;
+}
+
 export interface TranscriptAnalysis {
   summary: string;
   sentiment: 'Positive' | 'Negative' | 'Neutral';

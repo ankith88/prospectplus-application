@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -676,6 +676,80 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   return null;
 }
 
+// Task Management Functions
+async function getLeadTasks(leadId: string): Promise<Task[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'tasks');
+        const snapshot = await getDocs(ref);
+        const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Task));
+        // Sort by due date, then completion status
+        items.sort((a, b) => {
+            if (a.isCompleted !== b.isCompleted) {
+                return a.isCompleted ? 1 : -1;
+            }
+            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        });
+        return items;
+    } catch (error) {
+        console.error(`Failed to fetch tasks for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
+async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
+    try {
+        const tasksRef = collection(firestore, 'leads', leadId, 'tasks');
+        const newTask: Omit<Task, 'id'> = {
+            ...taskData,
+            isCompleted: false,
+            createdAt: new Date().toISOString(),
+        };
+        const docRef = await addDoc(tasksRef, newTask);
+        await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"` });
+        console.log(`Task added with ID: ${docRef.id} to lead ${leadId}`);
+        return { ...newTask, id: docRef.id };
+    } catch (error) {
+        console.error(`Failed to add task to lead ${leadId}:`, error);
+        throw new Error('Failed to add task in Firebase');
+    }
+}
+
+async function updateTaskCompletion(leadId: string, taskId: string, isCompleted: boolean): Promise<void> {
+    try {
+        const taskRef = doc(firestore, 'leads', leadId, 'tasks', taskId);
+        const updateData: Partial<Task> = { isCompleted };
+        if (isCompleted) {
+            updateData.completedAt = new Date().toISOString();
+        }
+        await updateDoc(taskRef, updateData as any);
+        const taskDoc = await getDoc(taskRef);
+        const taskTitle = taskDoc.data()?.title || 'a task';
+        await logActivity(leadId, { type: 'Update', notes: `Task "${taskTitle}" marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
+        console.log(`Task ${taskId} for lead ${leadId} completion status updated to ${isCompleted}`);
+    } catch (error) {
+        console.error(`Failed to update task ${taskId} for lead ${leadId}:`, error);
+        throw new Error('Failed to update task in Firebase');
+    }
+}
+
+async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void> {
+    try {
+        const taskRef = doc(firestore, 'leads', leadId, 'tasks', taskId);
+         const taskDoc = await getDoc(taskRef);
+        const taskTitle = taskDoc.data()?.title || 'a task';
+        await deleteDoc(taskRef);
+        await logActivity(leadId, { type: 'Update', notes: `Task deleted: "${taskTitle}"` });
+        console.log(`Task ${taskId} deleted from lead ${leadId}`);
+    } catch (error) {
+        console.error(`Failed to delete task ${taskId} from lead ${leadId}:`, error);
+        throw new Error('Failed to delete task from Firebase');
+    }
+}
+
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -703,4 +777,8 @@ export {
     getAllTranscripts,
     getAllCallActivities,
     findLeadByPhoneNumber,
+    getLeadTasks,
+    addTaskToLead,
+    updateTaskCompletion,
+    deleteTaskFromLead,
 };
