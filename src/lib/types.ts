@@ -71,6 +71,45 @@ export interface Address {
   country: string
 }
 
+export interface ScorecardPillarScore {
+    pillar: string;
+    score: number;
+    feedback: string;
+}
+
+export interface ScorecardAnalysis {
+    overallScore: number;
+    overallFeedback: string;
+    pillarScores: ScorecardPillarScore[];
+}
+
+export interface Scorecard {
+    id: string;
+    leadId: string;
+    dialerAssigned: string;
+    date: string;
+    // Opening
+    openingClarity: 'clear' | 'unclear' | 'somewhat_clear';
+    openingRapport: boolean;
+    // Diagnostics
+    diagnosticQuestionQuality: 'effective' | 'ineffective' | 'needs_improvement';
+    painPointIdentification: boolean;
+    // Pitch
+    pitchClarity: 'clear' | 'unclear' | 'somewhat_clear';
+    pitchRelevance: 'relevant' | 'irrelevant' | 'somewhat_relevant';
+    valuePropositionCommunicated: boolean;
+    // Close
+    nextStepsDefined: 'clear' | 'unclear' | 'not_defined';
+    objectionHandling: 'effective' | 'ineffective' | 'not_applicable';
+    // Overall
+    callControl: 'strong' | 'weak' | 'moderate';
+    listeningSkills: 'strong' | 'weak' | 'moderate';
+    confidence: 'high' | 'low' | 'moderate';
+    // AI Analysis
+    analysis?: ScorecardAnalysis;
+}
+
+
 export interface Lead {
   id: string
   entityId: string
@@ -96,6 +135,7 @@ export interface Lead {
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;
+  scorecards?: Scorecard[];
 }
 
 export interface UserProfile {

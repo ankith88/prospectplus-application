@@ -6,8 +6,8 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, Scorecard, ScorecardAnalysis } from '@/lib/types';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, orderBy } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
     try {
@@ -775,6 +775,48 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
     }
 }
 
+// Scorecard Functions
+export async function addScorecard(leadId: string, scorecardData: Omit<Scorecard, 'id' | 'date'>): Promise<Scorecard> {
+  try {
+    const scorecardRef = collection(firestore, 'leads', leadId, 'scorecards');
+    const newScorecard = {
+      ...scorecardData,
+      date: new Date().toISOString(),
+    };
+    const docRef = await addDoc(scorecardRef, newScorecard);
+    await logActivity(leadId, { type: 'Update', notes: 'A new cold call scorecard has been submitted.' });
+    return { ...newScorecard, id: docRef.id };
+  } catch (error) {
+    console.error(`Failed to add scorecard to lead ${leadId}:`, error);
+    throw new Error('Failed to add scorecard in Firebase');
+  }
+}
+
+export async function getLeadScorecards(leadId: string): Promise<Scorecard[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'scorecards');
+        const q = query(ref, orderBy('date', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Scorecard));
+    } catch (error) {
+        console.error(`Failed to fetch scorecards for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
+export async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: ScorecardAnalysis): Promise<void> {
+    try {
+        const scorecardRef = doc(firestore, 'leads', leadId, 'scorecards', scorecardId);
+        await updateDoc(scorecardRef, { analysis });
+        await logActivity(leadId, { type: 'Update', notes: `AI analysis completed for scorecard ${scorecardId}.` });
+    } catch (error) {
+        console.error(`Failed to update scorecard analysis for lead ${leadId}:`, error);
+        throw new Error('Failed to update scorecard analysis in Firebase');
+    }
+}
 
 export { 
     getLeadsFromFirebase,
