@@ -84,7 +84,6 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const callData = await response.json() as any;
         const callInfo = callData.call;
         
-        // The transcript content is nested inside the 'call' object.
         const transcriptContent = callInfo?.transcription?.content;
 
         if (transcriptContent && Array.isArray(transcriptContent.utterances) && transcriptContent.utterances.length > 0) {
