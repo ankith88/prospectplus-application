@@ -437,15 +437,20 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   };
 
   const handleGetTranscriptForCall = async (callId: string) => {
-    if (!lead || !user?.displayName) return;
+    console.log(callId);
+    console.log(lead);
+    console.log(user?.displayName);
+    console.log((!lead || !user?.displayName))
+    // if (!lead || !user?.displayName) return;
     try {
+      console.log('inside try statement to fetch transcript')
       setFetchingTranscriptId(callId);
       const result = await getCallTranscriptByCallId({
         callId,
         leadId: lead.id,
         leadAuthor: user.displayName,
       });
-
+      console.log(result)
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
         fetchTranscripts(); // Re-fetch transcripts to update the UI

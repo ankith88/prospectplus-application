@@ -26,7 +26,7 @@ export type GetTranscriptByCallIdOutput = z.infer<typeof GetTranscriptByCallIdOu
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-    return getCallTranscriptByCallIdFlow(input);
+  return getCallTranscriptByCallIdFlow(input);
 }
 
 const getCallTranscriptByCallIdFlow = ai.defineFlow(
@@ -51,8 +51,10 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     const maxRetries = 5;
     const retryDelay = 10000; // 10 seconds
 
+    console.log(`[Flow] Fetching call data from AirCall for call ID: ${callId} (URL: ${url})`);
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`Fetching call data from AirCall for call ID: ${callId} (Attempt ${attempt})`);
+      console.log(`Fetching call data for call ID: ${callId} (Attempt ${attempt})`);
 
       try {
         const response = await fetch(url, {
