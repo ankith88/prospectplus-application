@@ -94,74 +94,101 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
 
   const watchLogisticsSetup = form.watch('logisticsSetup');
 
-  const calculateScoreAndRouting = (data: z.infer<typeof FormSchema>): { score: number, routingTag: string } => {
+  const calculateScoreAndRouting = (data: z.infer<typeof FormSchema>): { score: number, routingTag: string, scoringReason: string } => {
       let score = 0;
       const routingTags = new Set<string>();
+      const reasonParts: string[] = [];
 
       if (data.postOfficeRelationship === 'Yes-Post Office walk up') {
           score += 10;
           routingTags.add('Service');
+          reasonParts.push('+10 for using Post Office walk-up service.');
       } else if (data.postOfficeRelationship === 'Yes-Driver') {
           routingTags.add('LPO');
+          reasonParts.push('Route to LPO (has driver relationship).');
       }
 
-      if (data.logisticsSetup === 'Drop-off') score += 10;
+      if (data.logisticsSetup === 'Drop-off') {
+          score += 10;
+          reasonParts.push('+10 for dropping off items.');
+      }
       if (data.logisticsSetup) routingTags.add('Service');
       
       if (data.servicePayment === 'Yes') {
           score += 10;
           routingTags.add('Service');
+          reasonParts.push('+10 for paying for collection service.');
       }
 
-      if (data.shippingVolume === '<20') score += 5;
-      if (data.shippingVolume === '20-100') score += 10;
-      if (data.shippingVolume === '100+') score += 15;
+      if (data.shippingVolume === '<20') {
+          score += 5;
+          reasonParts.push('+5 for shipping <20 items/week.');
+      } else if (data.shippingVolume === '20-100') {
+          score += 10;
+          reasonParts.push('+10 for shipping 20-100 items/week.');
+      } else if (data.shippingVolume === '100+') {
+          score += 15;
+          reasonParts.push('+15 for shipping 100+ items/week.');
+      }
       if (data.shippingVolume) routingTags.add('Product or Service');
       
       if (data.expressVsStandard === 'Mostly Standard (≥80%)') {
           score += 10;
           routingTags.add('Service');
           routingTags.add('LPO');
-      }
-      if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') score += 5;
-      if (data.expressVsStandard === 'Mostly Express (≥80%)') {
+          reasonParts.push('+10 for mostly standard shipping.');
+      } else if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') {
+          score += 5;
+          reasonParts.push('+5 for balanced express/standard mix.');
+      } else if (data.expressVsStandard === 'Mostly Express (≥80%)') {
           score += 10;
           routingTags.add('Product');
+          reasonParts.push('+10 for mostly express shipping.');
       }
       if (data.expressVsStandard) routingTags.add('Service or Product (depending on mix)');
       
       if (data.packageType?.length) {
           score += 10;
           routingTags.add('Product or Service');
+          reasonParts.push('+10 for specifying package types.');
       }
 
       if (data.currentProvider?.length) {
           score += 5;
           routingTags.add('Competitor displacement');
+          reasonParts.push('+5 for using a current provider.');
       }
-      if (data.painPoints) score += 10;
+      if (data.painPoints) {
+          score += 10;
+          reasonParts.push('+10 for having known pain points.');
+      }
 
       if (data.eCommerceTech?.includes('Shopify') || data.eCommerceTech?.includes('None')) {
           score += 10;
+          reasonParts.push('+10 for using compatible e-commerce tech (Shopify or None).');
       }
       if (data.eCommerceTech?.length) routingTags.add('Product');
 
       if (data.sameDayCourier === 'Yes') {
           score += 5;
           routingTags.add('Product');
+          reasonParts.push('+5 for using same-day couriers.');
       }
       
       if (data.decisionMaker === 'Owner') {
           score += 10;
           routingTags.add('All');
+          reasonParts.push('+10 for direct contact with owner.');
       }
+      
+      const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'Score based on initial data.';
 
-      return { score: Math.min(score, 100), routingTag: Array.from(routingTags).join(', ') || 'N/A' };
+      return { score: Math.min(score, 100), routingTag: Array.from(routingTags).join(', ') || 'N/A', scoringReason };
   }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    const { score, routingTag } = calculateScoreAndRouting(data);
-    const discoveryData: DiscoveryData = { ...data, score, routingTag };
+    const { score, routingTag, scoringReason } = calculateScoreAndRouting(data);
+    const discoveryData: DiscoveryData = { ...data, score, routingTag, scoringReason };
     onSave(discoveryData);
   }
 

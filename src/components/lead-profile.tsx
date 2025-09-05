@@ -1017,11 +1017,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Route className="w-5 h-5 text-muted-foreground" />
-                        Discovery & Routing Score
+                        Discovery & Routing
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center text-center gap-4">
                     <ScoreIndicator score={lead.discoveryData.score} size="lg" />
+                    {lead.discoveryData.scoringReason && (
+                      <p className="text-sm text-muted-foreground">{lead.discoveryData.scoringReason}</p>
+                    )}
                     <div className="flex flex-col gap-2">
                         <h4 className="font-semibold">Routing Tags</h4>
                         <div className="flex flex-wrap justify-center gap-2">

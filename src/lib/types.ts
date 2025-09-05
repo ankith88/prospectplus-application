@@ -87,6 +87,7 @@ export interface DiscoveryData {
     painPoints?: string;
     score?: number;
     routingTag?: string;
+    scoringReason?: string;
 }
 
 export interface Lead {
