@@ -91,7 +91,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
-import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-by-call-id'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -117,6 +117,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
+  const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [isLogCallOpen, setIsLogCallOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
@@ -422,6 +423,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         description: `Attempting to dial ${phoneNumber}...`,
     });
     // Open discovery questions, then outcome
+    setIsChainedFlow(true);
     setIsDiscoveryQuestionsOpen(true);
   };
 
@@ -451,7 +453,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "An unexpected error occurred." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "An unexpected error occurred during analysis." });
     } finally {
       setFetchingTranscriptId(null);
     }
@@ -510,16 +512,30 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
         toast({ title: 'Success', description: 'Discovery questions saved.' });
         setIsDiscoveryQuestionsOpen(false);
-        setIsLogCallOpen(true); // Open log call dialog after discovery
+        // Only open the log call dialog if it's part of the chained flow
+        if (isChainedFlow) {
+          setIsLogCallOpen(true);
+        }
     } catch (error) {
         console.error("Failed to save discovery data:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to save discovery data." });
+    } finally {
+        if (!isChainedFlow) {
+            setIsDiscoveryQuestionsOpen(false);
+        }
     }
   };
 
-  const handleDiscoveryClose = () => {
-    setIsDiscoveryQuestionsOpen(false);
-    setIsLogCallOpen(true);
+  const handleDiscoveryClose = (open: boolean) => {
+    if (!open) { // Dialog is closing
+        setIsDiscoveryQuestionsOpen(false);
+        if (isChainedFlow) {
+            setIsLogCallOpen(true);
+            setIsChainedFlow(false); // Reset the flow
+        }
+    } else { // Dialog is opening
+        setIsDiscoveryQuestionsOpen(true);
+    }
   }
 
 
@@ -570,6 +586,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
            <LogCallDialog lead={lead} onCallLogged={handleCallLogged} isOpen={isLogCallOpen} onOpenChange={setIsLogCallOpen}>
              {/* This dialog is now opened programmatically */}
           </LogCallDialog>
+           <Button variant="outline" onClick={() => { setIsChainedFlow(false); setIsDiscoveryQuestionsOpen(true); }}>
+              <FileQuestion className="mr-2 h-4 w-4" />
+              Discovery Q's
+           </Button>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
               <ClipboardEdit className="mr-2 h-4 w-4" />

@@ -44,14 +44,14 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
+    const url = `https://api.aircall.io/v1/calls/${callId}`;
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
     const maxRetries = 5;
     const retryDelay = 10000; // 10 seconds
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`Fetching transcript from AirCall for call ID: ${callId} (Attempt ${attempt})`);
+      console.log(`Fetching call data from AirCall for call ID: ${callId} (Attempt ${attempt})`);
 
       try {
         const response = await fetch(url, {
@@ -63,14 +63,14 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
         if (!response.ok) {
            if (response.status === 404) {
-             console.log(`No transcript record found for call ID: ${callId}.`);
+             console.log(`No call record found for call ID: ${callId}.`);
              if (attempt < maxRetries) {
                 console.log(`Will retry in ${retryDelay / 1000} seconds...`);
                 await sleep(retryDelay);
                 continue; // Go to the next attempt
              } else {
-                console.log(`Max retries reached for call ID: ${callId}. No transcript found.`);
-                return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
+                console.log(`Max retries reached for call ID: ${callId}. No call found.`);
+                return { transcriptFound: false, error: 'NO_CALL_FOUND' };
              }
            }
            const errorBody = await response.text();
@@ -80,12 +80,12 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
            return { transcriptFound: false, error: errorMsg };
         }
 
-        const transcriptionData = await response.json() as any;
-        const utterances = transcriptionData?.transcription?.content?.utterances || transcriptionData?.content?.utterances;
-
-        if (utterances && Array.isArray(utterances) && utterances.length > 0) {
-          // This function is deprecated as webhook handles this automatically.
-          console.log(`Transcript found for call ID: ${callId}. Webhook will handle logging.`);
+        const callData = await response.json() as any;
+        
+        // The webhook now handles this automatically by listening for 'call.transcription.created'
+        // This manual fetch is a fallback. We just check if the call object indicates transcription is available.
+        if (callData?.call?.transcription?.content) {
+          console.log(`Transcript found for call ID: ${callId}. Webhook should handle logging.`);
           return { transcriptFound: true };
         } else {
           console.log(`Transcript content not yet available for call ID: ${callId}.`);
@@ -98,7 +98,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
           }
         }
       } catch (error: any) {
-        console.error(`Error fetching call transcript from AirCall (Attempt ${attempt}):`, error);
+        console.error(`Error fetching call data from AirCall (Attempt ${attempt}):`, error);
         if (attempt < maxRetries) {
           await sleep(retryDelay);
         } else {
