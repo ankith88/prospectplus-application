@@ -79,8 +79,9 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
   // Mock Calendly links for sales reps
   const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
-    'Leonie Feata': 'https://calendly.com/leonie-feata-mock/meeting',
-    'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
+    'Leonie Feata': 'https://calendly.com/leonie-feata-mailplus/mailplus-intro-call-leonie',
+    'Luke Forbes': 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke',
+    'Lee Russell': 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee',
     'Default': 'https://calendly.com/mailplus-default/meeting',
   };
 
