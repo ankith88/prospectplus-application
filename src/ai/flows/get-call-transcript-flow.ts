@@ -8,6 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
+import { logTranscriptActivity } from '@/services/firebase';
 
 const GetTranscriptByCallIdInputSchema = z.object({
   callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),
@@ -82,10 +83,15 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
         const callData = await response.json() as any;
         
-        // The webhook now handles this automatically by listening for 'call.transcription.created'
-        // This manual fetch is a fallback. We just check if the call object indicates transcription is available.
-        if (callData?.call?.transcription?.content) {
-          console.log(`Transcript found for call ID: ${callId}. Webhook should handle logging.`);
+        const transcriptContent = callData?.call?.transcription?.content?.utterances;
+        if (transcriptContent) {
+          console.log(`Transcript found for call ID: ${callId}. Logging to Firebase...`);
+           await logTranscriptActivity(leadId, {
+                content: JSON.stringify(transcriptContent),
+                author: callData.call.user.name || leadAuthor,
+                callId: callId,
+                phoneNumber: callData.call.raw_digits || 'Unknown',
+            });
           return { transcriptFound: true };
         } else {
           console.log(`Transcript content not yet available for call ID: ${callId}.`);
