@@ -100,6 +100,7 @@ import { Calendar as CalendarIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
+import { sendDiscoveryDataToNetSuite } from '@/services/netsuite'
 
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
@@ -522,14 +523,23 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         await updateLeadDiscoveryData(lead.id, data);
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
         toast({ title: 'Success', description: 'Discovery questions saved.' });
+
+        // Call NetSuite
+        const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: data });
+        if (nsResult.success) {
+            toast({ title: 'NetSuite Updated', description: 'Discovery data sent to NetSuite.' });
+        } else {
+            toast({ variant: 'destructive', title: 'NetSuite Error', description: nsResult.message });
+        }
+
         setIsDiscoveryQuestionsOpen(false);
         // Only open the log call dialog if it's part of the chained flow
         if (isChainedFlow) {
           setIsLogCallOpen(true);
         }
-    } catch (error) {
-        console.error("Failed to save discovery data:", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to save discovery data." });
+    } catch (error: any) {
+        console.error("Failed to save or send discovery data:", error);
+        toast({ variant: "destructive", title: "Error", description: `Failed to save or send discovery data: ${error.message}` });
     } finally {
         if (!isChainedFlow) {
             setIsDiscoveryQuestionsOpen(false);

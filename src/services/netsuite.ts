@@ -1,7 +1,7 @@
 
 'use server'
 
-import type { Lead } from "@/lib/types";
+import type { DiscoveryData, Lead } from "@/lib/types";
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -90,5 +90,61 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
     } catch (error) {
         console.error("[NetSuite API] Error sending outcome:", error);
         throw error;
+    }
+}
+
+interface NetSuiteDiscoveryPayload {
+    leadId: string;
+    discoveryData: DiscoveryData;
+}
+
+/**
+ * Sends discovery questions data to a NetSuite scriptlet.
+ * @param payload The discovery data to send.
+ * @returns A promise that resolves with the result of the API call.
+ */
+export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayload): Promise<{ success: boolean, message: string }> {
+    const { leadId, discoveryData } = payload;
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+    const params = new URLSearchParams({
+        script: "2161",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQrXaUiyrcK7JhiN0lUSv9b2uOL2FluSjbC6Z3EMXV3Qs",
+        leadID: leadId,
+    });
+
+    // Flatten the discoveryData object into query parameters
+    for (const [key, value] of Object.entries(discoveryData)) {
+        if (value) {
+            if (Array.isArray(value)) {
+                params.append(key, value.join(','));
+            } else {
+                params.append(key, value.toString());
+            }
+        }
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite API] Sending discovery data for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite API] URL: ${url}`);
+
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite API Error] Status: ${response.status}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite API] Successfully sent discovery data for lead ${leadId}. Response: ${responseBody}`);
+        return { success: true, message: 'Discovery data sent to NetSuite.' };
+    } catch (error: any) {
+        console.error("[NetSuite API] Error sending discovery data:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
