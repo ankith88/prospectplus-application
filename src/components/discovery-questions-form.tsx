@@ -11,7 +11,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -32,41 +31,49 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 
-const shippingProviders = [
-  { id: 'austPost', label: 'Aust Post' },
-  { id: 'couriersPlease', label: 'Couriers Please' },
+const currentProviders = [
+  { id: 'multiple', label: 'Multiple' },
+  { id: 'auspost', label: 'AusPost' },
+  { id: 'couriersplease', label: 'CouriersPlease' },
   { id: 'aramex', label: 'Aramex' },
-  { id: 'sendle', label: 'Sendle' },
-  { id: 'starTrack', label: 'StarTrack' },
+  { id: 'startrack', label: 'StarTrack' },
   { id: 'tge', label: 'TGE' },
+  { id: 'fedex', label: 'FedEx/TNT' },
   { id: 'allied', label: 'Allied' },
-  { id: 'tnt', label: 'TNT' },
-  { id: 'dhl', label: 'DHL' },
+  { id: 'other', label: 'Other' },
 ] as const;
 
-const labelPlatforms = [
+const eCommerceTechs = [
+    { id: 'mypost', label: 'MyPost' },
     { id: 'shopify', label: 'Shopify' },
-    { id: 'wooCommerce', label: 'Woo Commerce' },
-    { id: 'starshipit', label: 'StarShipit' },
-    { id: 'shipStation', label: 'ShipStation' },
-    { id: 'shippit', label: 'Shippit' },
-    { id: 'bigCommerce', label: 'Big Commerce' },
-    { id: 'wizz', label: 'Wizz' },
+    { id: 'woo', label: 'Woo' },
+    { id: 'sendle', label: 'Sendle' },
+    { id: 'other', label: 'Other' },
+    { id: 'none', label: 'None' },
+] as const;
+
+const packageTypes = [
+    { id: '500g', label: '<500g' },
+    { id: '1-3kg', label: '1-3kg' },
+    { id: '5kg+', label: '5kg+' },
+    { id: '10kg+', label: '10kg+' },
+    { id: '20kg+', label: '20kg+' },
 ] as const;
 
 
 const FormSchema = z.object({
-  hasAPRelationship: z.enum(['Yes', 'No']).optional(),
-  apCollectionType: z.enum(['Take themselves', 'Collection service']).optional(),
-  paidAPCollection: z.enum(['Yes', 'No']).optional(),
-  shippingProviders: z.array(z.string()).optional(),
-  otherShippingProvider: z.string().optional(),
-  expressItemsPerWeek: z.enum(['1 to 5', '6 to 10', '11 to 20', '21 to 30', '30 to 40', '40+']).optional(),
-  standardItemsPerWeek: z.enum(['1 to 5', '6 to 10', '11 to 20', '21 to 30', '30 to 40', '40+']).optional(),
-  useSameDayCouriers: z.enum(['Yes', 'No']).optional(),
-  typicalWeight: z.enum(['<500g', '1-3kg', '3-5kg', '5-10kg', '10-20kg', '20kg+']).optional(),
-  labelPlatform: z.array(z.string()).optional(),
-  otherLabelPlatform: z.string().optional(),
+  postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No']).optional(),
+  logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc']).optional(),
+  servicePayment: z.enum(['Yes', 'No']).optional(),
+  shippingVolume: z.enum(['<5', '<20', '20-100', '100+']).optional(),
+  expressVsStandard: z.enum(['Mostly Standard (≥80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (≥80%)']).optional(),
+  packageType: z.array(z.string()).optional(),
+  currentProvider: z.array(z.string()).optional(),
+  otherProvider: z.string().optional(),
+  eCommerceTech: z.array(z.string()).optional(),
+  otherECommerceTech: z.string().optional(),
+  sameDayCourier: z.enum(['Yes', 'Occasional', 'Never']).optional(),
+  decisionMaker: z.enum(['Owner', 'Influencer', 'Gatekeeper']).optional(),
   painPoints: z.string().optional(),
 });
 
@@ -85,11 +92,77 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
     defaultValues: lead.discoveryData || {},
   });
 
-  const watchAPRelationship = form.watch('hasAPRelationship');
-  const watchAPCollectionType = form.watch('apCollectionType');
+  const watchLogisticsSetup = form.watch('logisticsSetup');
+
+  const calculateScoreAndRouting = (data: z.infer<typeof FormSchema>): { score: number, routingTag: string } => {
+      let score = 0;
+      const routingTags = new Set<string>();
+
+      if (data.postOfficeRelationship === 'Yes-Post Office walk up') {
+          score += 10;
+          routingTags.add('Service');
+      } else if (data.postOfficeRelationship === 'Yes-Driver') {
+          routingTags.add('LPO');
+      }
+
+      if (data.logisticsSetup === 'Drop-off') score += 10;
+      if (data.logisticsSetup) routingTags.add('Service');
+      
+      if (data.servicePayment === 'Yes') {
+          score += 10;
+          routingTags.add('Service');
+      }
+
+      if (data.shippingVolume === '<20') score += 5;
+      if (data.shippingVolume === '20-100') score += 10;
+      if (data.shippingVolume === '100+') score += 15;
+      if (data.shippingVolume) routingTags.add('Product or Service');
+      
+      if (data.expressVsStandard === 'Mostly Standard (≥80%)') {
+          score += 10;
+          routingTags.add('Service');
+          routingTags.add('LPO');
+      }
+      if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') score += 5;
+      if (data.expressVsStandard === 'Mostly Express (≥80%)') {
+          score += 10;
+          routingTags.add('Product');
+      }
+      if (data.expressVsStandard) routingTags.add('Service or Product (depending on mix)');
+      
+      if (data.packageType?.length) {
+          score += 10;
+          routingTags.add('Product or Service');
+      }
+
+      if (data.currentProvider?.length) {
+          score += 5;
+          routingTags.add('Competitor displacement');
+      }
+      if (data.painPoints) score += 10;
+
+      if (data.eCommerceTech?.includes('Shopify') || data.eCommerceTech?.includes('None')) {
+          score += 10;
+      }
+      if (data.eCommerceTech?.length) routingTags.add('Product');
+
+      if (data.sameDayCourier === 'Yes') {
+          score += 5;
+          routingTags.add('Product');
+      }
+      
+      if (data.decisionMaker === 'Owner') {
+          score += 10;
+          routingTags.add('All');
+      }
+
+      return { score: Math.min(score, 100), routingTag: Array.from(routingTags).join(', ') || 'N/A' };
+  }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    onSave(data);
+    const { score, routingTag } = calculateScoreAndRouting(data);
+    const discoveryData: DiscoveryData = { ...data, score, routingTag };
+    onSave(discoveryData);
   }
 
   return (
@@ -107,13 +180,14 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
             <div className="space-y-8 pr-4">
                 <FormField
                 control={form.control}
-                name="hasAPRelationship"
+                name="postOfficeRelationship"
                 render={({ field }) => (
                     <FormItem className="space-y-3">
-                    <FormLabel>Do you have a relationship with AP?</FormLabel>
+                    <FormLabel>Do you have a relationship with Australia Post?</FormLabel>
                     <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
+                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem>
+                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem>
                         <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem>
                         </RadioGroup>
                     </FormControl>
@@ -122,32 +196,31 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
                 )}
                 />
 
-                {watchAPRelationship === 'Yes' && (
                 <FormField
                     control={form.control}
-                    name="apCollectionType"
+                    name="logisticsSetup"
                     render={({ field }) => (
-                    <FormItem className="space-y-3 ml-6">
-                        <FormLabel>Do you take Aust Post items to the Post Office yourself or do you have a collection service?</FormLabel>
+                    <FormItem className="space-y-3">
+                        <FormLabel>How do you lodge items?</FormLabel>
                         <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Take themselves" /></FormControl><FormLabel className="font-normal">Take themselves</FormLabel></FormItem>
-                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Collection service" /></FormControl><FormLabel className="font-normal">Collection service</FormLabel></FormItem>
+                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel className="font-normal">Drop-off</FormLabel></FormItem>
+                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Routine collection" /></FormControl><FormLabel className="font-normal">Routine collection</FormLabel></FormItem>
+                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem>
                         </RadioGroup>
                         </FormControl>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
-                )}
 
-                {watchAPRelationship === 'Yes' && watchAPCollectionType === 'Collection service' && (
+                {watchLogisticsSetup === 'Routine collection' && (
                 <FormField
                     control={form.control}
-                    name="paidAPCollection"
+                    name="servicePayment"
                     render={({ field }) => (
-                    <FormItem className="space-y-3 ml-12">
-                        <FormLabel>Do you pay for this service?</FormLabel>
+                    <FormItem className="space-y-3 ml-6">
+                        <FormLabel>If using collection: Do you pay for this service?</FormLabel>
                         <FormControl>
                         <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
                             <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
@@ -160,71 +233,33 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
                 />
                 )}
                 
-                <FormField
+                 <FormField
                     control={form.control}
-                    name="shippingProviders"
-                    render={() => (
-                        <FormItem>
-                            <div className="mb-4">
-                                <FormLabel className="text-base">Who do you use for shipping?</FormLabel>
-                            </div>
-                             <div className="grid grid-cols-3 gap-2">
-                                {shippingProviders.map((item) => (
-                                <FormField
-                                    key={item.id}
-                                    control={form.control}
-                                    name="shippingProviders"
-                                    render={({ field }) => {
-                                    return (
-                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                                        <FormControl>
-                                            <Checkbox
-                                            checked={field.value?.includes(item.label)}
-                                            onCheckedChange={(checked) => {
-                                                return checked
-                                                ? field.onChange([...(field.value || []), item.label])
-                                                : field.onChange(
-                                                    field.value?.filter(
-                                                        (value) => value !== item.label
-                                                    )
-                                                    )
-                                            }}
-                                            />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">{item.label}</FormLabel>
-                                        </FormItem>
-                                    )
-                                    }}
-                                />
+                    name="shippingVolume"
+                    render={({ field }) => (
+                        <FormItem className="space-y-3">
+                        <FormLabel>How many items per week?</FormLabel>
+                        <FormControl>
+                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">
+                                {(['<5', '<20', '20-100', '100+'] as const).map(val => (
+                                    <FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
                                 ))}
-                             </div>
-                             <FormField
-                                control={form.control}
-                                name="otherShippingProvider"
-                                render={({ field }) => (
-                                    <FormItem className="mt-2">
-                                        <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
-                                        <FormControl>
-                                            <Input {...field} placeholder="Other provider..." />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
-                            <FormMessage />
+                            </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
                         </FormItem>
                     )}
                 />
-                
-                 <FormField
+
+                <FormField
                     control={form.control}
-                    name="expressItemsPerWeek"
+                    name="expressVsStandard"
                     render={({ field }) => (
                         <FormItem className="space-y-3">
-                        <FormLabel>How many Express items do you send a week?</FormLabel>
+                        <FormLabel>What % of your shipping is Express vs Standard?</FormLabel>
                         <FormControl>
-                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">
-                                {(['1 to 5', '6 to 10', '11 to 20', '21 to 30', '30 to 40', '40+'] as const).map(val => (
+                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                                {(['Mostly Standard (≥80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (≥80%)'] as const).map(val => (
                                     <FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
                                 ))}
                             </RadioGroup>
@@ -236,109 +271,137 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
 
                 <FormField
                     control={form.control}
-                    name="standardItemsPerWeek"
-                    render={({ field }) => (
-                        <FormItem className="space-y-3">
-                        <FormLabel>How many Standard items do you send a week?</FormLabel>
-                        <FormControl>
-                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">
-                                {(['1 to 5', '6 to 10', '11 to 20', '21 to 30', '30 to 40', '40+'] as const).map(val => (
-                                    <FormItem key={`standard-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
+                    name="packageType"
+                    render={() => (
+                        <FormItem>
+                            <div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {packageTypes.map((item) => (
+                                <FormField key={item.id} control={form.control} name="packageType"
+                                    render={({ field }) => (
+                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                                        <FormControl><Checkbox checked={field.value?.includes(item.label)}
+                                            onCheckedChange={(checked) => {
+                                                return checked
+                                                ? field.onChange([...(field.value || []), item.label])
+                                                : field.onChange(field.value?.filter((value) => value !== item.label))
+                                            }}/>
+                                        </FormControl>
+                                        <FormLabel className="font-normal">{item.label}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
                                 ))}
-                            </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
+                            </div>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
 
                 <FormField
-                control={form.control}
-                name="useSameDayCouriers"
-                render={({ field }) => (
-                    <FormItem className="space-y-3">
-                    <FormLabel>Do you use same day couriers?</FormLabel>
-                    <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
-                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem>
-                        </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-
-                <FormField
                     control={form.control}
-                    name="typicalWeight"
-                    render={({ field }) => (
-                        <FormItem className="space-y-3">
-                        <FormLabel>What is the typical weight of your packages?</FormLabel>
-                        <FormControl>
-                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">
-                                {(['<500g', '1-3kg', '3-5kg', '5-10kg', '10-20kg', '20kg+'] as const).map(val => (
-                                    <FormItem key={`weight-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
+                    name="currentProvider"
+                    render={() => (
+                        <FormItem>
+                            <div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div>
+                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {currentProviders.map((item) => (
+                                <FormField key={item.id} control={form.control} name="currentProvider"
+                                    render={({ field }) => (
+                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                                        <FormControl><Checkbox checked={field.value?.includes(item.label)}
+                                            onCheckedChange={(checked) => {
+                                                return checked
+                                                ? field.onChange([...(field.value || []), item.label])
+                                                : field.onChange(field.value?.filter((value) => value !== item.label))
+                                            }}/>
+                                        </FormControl>
+                                        <FormLabel className="font-normal">{item.label}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
                                 ))}
-                            </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
+                             </div>
+                             <FormField control={form.control} name="otherProvider" render={({ field }) => (
+                                    <FormItem className="mt-2">
+                                        <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
+                                        <FormControl><Input {...field} placeholder="Other provider..." /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}/>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
                 
                 <FormField
                     control={form.control}
-                    name="labelPlatform"
+                    name="eCommerceTech"
                     render={() => (
                         <FormItem>
-                            <div className="mb-4">
-                                <FormLabel className="text-base">What platform do you use to generate your label?</FormLabel>
-                            </div>
-                             <div className="grid grid-cols-3 gap-2">
-                                {labelPlatforms.map((item) => (
-                                <FormField
-                                    key={item.id}
-                                    control={form.control}
-                                    name="labelPlatform"
-                                    render={({ field }) => {
-                                    return (
+                            <div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div>
+                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {eCommerceTechs.map((item) => (
+                                <FormField key={item.id} control={form.control} name="eCommerceTech"
+                                    render={({ field }) => (
                                         <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                                        <FormControl>
-                                            <Checkbox
-                                            checked={field.value?.includes(item.label)}
+                                        <FormControl><Checkbox checked={field.value?.includes(item.label)}
                                             onCheckedChange={(checked) => {
                                                 return checked
                                                 ? field.onChange([...(field.value || []), item.label])
-                                                : field.onChange(
-                                                    field.value?.filter(
-                                                        (value) => value !== item.label
-                                                    )
-                                                    )
-                                            }}
-                                            />
+                                                : field.onChange(field.value?.filter((value) => value !== item.label))
+                                            }}/>
                                         </FormControl>
                                         <FormLabel className="font-normal">{item.label}</FormLabel>
                                         </FormItem>
-                                    )
-                                    }}
+                                    )}
                                 />
                                 ))}
                              </div>
-                             <FormField
-                                control={form.control}
-                                name="otherLabelPlatform"
-                                render={({ field }) => (
-                                    <FormItem className="mt-2">
-                                        <FormLabel className="sr-only">Other Label Platform</FormLabel>
-                                        <FormControl>
-                                            <Input {...field} placeholder="Other platform..." />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                                />
+                             <FormField control={form.control} name="otherECommerceTech" render={({ field }) => (
+                                <FormItem className="mt-2">
+                                    <FormLabel className="sr-only">Other E-commerce Tech</FormLabel>
+                                    <FormControl><Input {...field} placeholder="Other platform..." /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}/>
                             <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="sameDayCourier"
+                    render={({ field }) => (
+                        <FormItem className="space-y-3">
+                        <FormLabel>Do you use same-day couriers?</FormLabel>
+                        <FormControl>
+                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
+                                {(['Yes', 'Occasional', 'Never'] as const).map(val => (
+                                    <FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
+                                ))}
+                            </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                 <FormField
+                    control={form.control}
+                    name="decisionMaker"
+                    render={({ field }) => (
+                        <FormItem className="space-y-3">
+                        <FormLabel>Who decides shipping?</FormLabel>
+                        <FormControl>
+                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
+                                {(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (
+                                    <FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>
+                                ))}
+                            </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
                         </FormItem>
                     )}
                 />

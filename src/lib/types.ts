@@ -72,18 +72,21 @@ export interface Address {
 }
 
 export interface DiscoveryData {
-    hasAPRelationship?: 'Yes' | 'No';
-    apCollectionType?: 'Take themselves' | 'Collection service';
-    paidAPCollection?: 'Yes' | 'No';
-    shippingProviders?: string[];
-    expressItemsPerWeek?: '1 to 5' | '6 to 10' | '11 to 20' | '21 to 30' | '30 to 40' | '40+';
-    standardItemsPerWeek?: '1 to 5' | '6 to 10' | '11 to 20' | '21 to 30' | '30 to 40' | '40+';
-    useSameDayCouriers?: 'Yes' | 'No';
-    typicalWeight?: '<500g' | '1-3kg' | '3-5kg' | '5-10kg' | '10-20kg' | '20kg+';
-    labelPlatform?: string[];
+    postOfficeRelationship?: 'Yes-Driver' | 'Yes-Post Office walk up' | 'No';
+    logisticsSetup?: 'Drop-off' | 'Routine collection' | 'Ad-hoc';
+    servicePayment?: 'Yes' | 'No';
+    shippingVolume?: '<5' | '<20' | '20-100' | '100+';
+    expressVsStandard?: 'Mostly Standard (≥80%)' | 'Balanced Mix (20-79% Express)' | 'Mostly Express (≥80%)';
+    packageType?: Array<'<500g' | '1-3kg' | '5kg+' | '10kg+' | '20kg+'>;
+    currentProvider?: Array<'Multiple' | 'AusPost' | 'CouriersPlease' | 'Aramex' | 'StarTrack' | 'TGE' | 'FedEx/TNT' | 'Allied' | 'Other'>;
+    otherProvider?: string;
+    eCommerceTech?: Array<'MyPost' | 'Shopify' | 'Woo' | 'Sendle' | 'Other' | 'None'>;
+    otherECommerceTech?: string;
+    sameDayCourier?: 'Yes' | 'Occasional' | 'Never';
+    decisionMaker?: 'Owner' | 'Influencer' | 'Gatekeeper';
     painPoints?: string;
-    otherShippingProvider?: string;
-    otherLabelPlatform?: string;
+    score?: number;
+    routingTag?: string;
 }
 
 export interface Lead {

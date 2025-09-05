@@ -589,6 +589,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             <div className="flex items-center gap-2 mt-1">
               <LeadStatusBadge status={lead.status} />
                {loading ? <Skeleton className="h-4 w-20" /> : <p className="text-muted-foreground">&bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>}
+                {lead.discoveryData?.score !== undefined && (
+                    <>
+                        <p className="text-muted-foreground">&bull;</p>
+                        <ScoreIndicator score={lead.discoveryData.score} />
+                    </>
+                )}
+                 {lead.discoveryData?.routingTag && (
+                    <>
+                        <p className="text-muted-foreground">&bull;</p>
+                        <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>
+                    </>
+                )}
             </div>
           </div>
         </div>
@@ -875,7 +887,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
               }
             </CardContent>
           </Card>
-          
+           
           <Card>
             <CardHeader>
               <CardTitle>Activity History</CardTitle>
