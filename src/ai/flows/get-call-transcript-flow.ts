@@ -25,10 +25,6 @@ export type GetTranscriptByCallIdOutput = z.infer<typeof GetTranscriptByCallIdOu
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-  return getCallTranscriptByCallIdFlow(input);
-}
-
 const getCallTranscriptByCallIdFlow = ai.defineFlow(
   {
     name: 'getCallTranscriptByCallIdFlow',
@@ -54,7 +50,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     console.log(`[Flow] Fetching call data from AirCall for call ID: ${callId} (URL: ${url})`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`Fetching call data for call ID: ${callId} (Attempt ${attempt})`);
+      console.log(`[Flow] Attempt ${attempt} for call ID: ${callId}`);
 
       try {
         const response = await fetch(url, {
@@ -66,20 +62,19 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
         if (!response.ok) {
            if (response.status === 404) {
-             console.log(`No call record found for call ID: ${callId}.`);
+             console.log(`[Flow] No call record found for call ID: ${callId}.`);
              if (attempt < maxRetries) {
-                console.log(`Will retry in ${retryDelay / 1000} seconds...`);
+                console.log(`[Flow] Will retry in ${retryDelay / 1000} seconds...`);
                 await sleep(retryDelay);
-                continue; // Go to the next attempt
+                continue;
              } else {
-                console.log(`Max retries reached for call ID: ${callId}. No call found.`);
+                console.log(`[Flow] Max retries reached for call ID: ${callId}. No call found.`);
                 return { transcriptFound: false, error: 'NO_CALL_FOUND' };
              }
            }
            const errorBody = await response.text();
            const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
-           console.error(errorMsg);
-           // Don't retry on other server errors.
+           console.error(`[Flow] ${errorMsg}`);
            return { transcriptFound: false, error: errorMsg };
         }
 
@@ -89,7 +84,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const utterances = callInfo?.transcription?.content;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
-          console.log(`Transcript found for call ID: ${callId}. Logging to Firebase...`);
+          console.log(`[Flow] Transcript found for call ID: ${callId}. Logging to Firebase...`);
            await logTranscriptActivity(leadId, {
                 content: JSON.stringify(utterances),
                 author: callInfo.user?.name || leadAuthor,
@@ -98,17 +93,17 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             });
           return { transcriptFound: true };
         } else {
-          console.log(`Transcript content not yet available for call ID: ${callId}.`);
+          console.log(`[Flow] Transcript content not yet available for call ID: ${callId}.`);
           if (attempt < maxRetries) {
-            console.log(`Will retry in ${retryDelay / 1000} seconds...`);
+            console.log(`[Flow] Will retry in ${retryDelay / 1000} seconds...`);
             await sleep(retryDelay);
           } else {
-            console.log(`Max retries reached for call ID: ${callId}. No transcript found.`);
+            console.log(`[Flow] Max retries reached for call ID: ${callId}. No transcript found.`);
             return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
           }
         }
       } catch (error: any) {
-        console.error(`Error fetching call data from AirCall (Attempt ${attempt}):`, error);
+        console.error(`[Flow] Error fetching call data from AirCall (Attempt ${attempt}):`, error);
         if (attempt < maxRetries) {
           await sleep(retryDelay);
         } else {
@@ -121,3 +116,8 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
   }
 );
+
+
+export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
+  return getCallTranscriptByCallIdFlow(input);
+}
