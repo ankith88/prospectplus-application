@@ -705,7 +705,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                      )}
                    </div>
                  </div>
-                 <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3">
                     <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                    <div>
                      <p className="text-muted-foreground">Industry</p>
