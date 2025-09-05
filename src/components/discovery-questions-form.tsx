@@ -73,11 +73,12 @@ const FormSchema = z.object({
 
 interface DiscoveryQuestionsDialogProps {
   lead: Lead;
-  children: React.ReactNode;
   onSave: (data: DiscoveryData) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
 }
 
-export function DiscoveryQuestionsDialog({ lead, children, onSave }: DiscoveryQuestionsDialogProps) {
+export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }: DiscoveryQuestionsDialogProps) {
   const { toast } = useToast();
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -89,15 +90,10 @@ export function DiscoveryQuestionsDialog({ lead, children, onSave }: DiscoveryQu
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     onSave(data);
-    toast({
-      title: "Saved!",
-      description: "Discovery questions have been saved for this lead.",
-    });
   }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl h-[90vh]">
         <DialogHeader>
           <DialogTitle>Discovery Questions</DialogTitle>
@@ -369,11 +365,9 @@ export function DiscoveryQuestionsDialog({ lead, children, onSave }: DiscoveryQu
                   Close
                 </Button>
               </DialogClose>
-              <DialogClose asChild>
                 <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Saving...' : 'Save'}
+                  {form.formState.isSubmitting ? 'Saving...' : 'Save & Continue'}
                 </Button>
-              </DialogClose>
             </DialogFooter>
           </form>
         </Form>

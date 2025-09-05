@@ -116,6 +116,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
+  const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
+  const [isLogCallOpen, setIsLogCallOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
@@ -504,6 +506,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         await updateLeadDiscoveryData(lead.id, data);
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
         toast({ title: 'Success', description: 'Discovery questions saved.' });
+        setIsDiscoveryQuestionsOpen(false);
+        setIsLogCallOpen(true);
     } catch (error) {
         console.error("Failed to save discovery data:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to save discovery data." });
@@ -555,18 +559,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave}>
-             <Button variant="outline">
-                <FileQuestion className="mr-2 h-4 w-4" />
-                Discovery
-             </Button>
-          </DiscoveryQuestionsDialog>
-          <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
-            <Button variant="outline">
-              <Phone className="mr-2 h-4 w-4" />
-              Log a Call
-            </Button>
-          </LogCallDialog>
+          <Button variant="outline" onClick={() => setIsDiscoveryQuestionsOpen(true)}>
+              <FileQuestion className="mr-2 h-4 w-4" />
+              Discovery
+          </Button>
+          <Button variant="outline" onClick={() => { setIsDiscoveryQuestionsOpen(true); }}>
+            <Phone className="mr-2 h-4 w-4" />
+            Log a Call
+          </Button>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
               <ClipboardEdit className="mr-2 h-4 w-4" />
@@ -575,6 +575,19 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </LogNoteDialog>
         </div>
       </header>
+
+      <DiscoveryQuestionsDialog 
+        lead={lead} 
+        onSave={handleDiscoverySave}
+        isOpen={isDiscoveryQuestionsOpen}
+        onOpenChange={setIsDiscoveryQuestionsOpen}
+      />
+      <LogCallDialog 
+        lead={lead} 
+        onCallLogged={handleCallLogged}
+        isOpen={isLogCallOpen}
+        onOpenChange={setIsLogCallOpen}
+      />
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">

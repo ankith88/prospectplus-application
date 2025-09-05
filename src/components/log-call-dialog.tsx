@@ -39,12 +39,12 @@ const formSchema = z.object({
 
 interface LogCallDialogProps {
   lead: Lead
-  children: React.ReactNode
   onCallLogged: (updatedLead: Lead) => void
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
 }
 
-export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function LogCallDialog({ lead, onCallLogged, isOpen, onOpenChange }: LogCallDialogProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -91,7 +91,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
         window.open(prefilledUrl, '_blank');
         
-        setIsOpen(false); // Close main dialog
+        onOpenChange(false); // Close main dialog
      } catch (error) {
         console.error('Failed to update lead status:', error);
         toast({
@@ -138,7 +138,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       })
       
       if (values.outcome === 'not-interested') {
-        setIsOpen(false)
+        onOpenChange(false)
         form.reset()
       }
     } catch (error) {
@@ -153,8 +153,7 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>{children}</DialogTrigger>
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Log Call Outcome</DialogTitle>
