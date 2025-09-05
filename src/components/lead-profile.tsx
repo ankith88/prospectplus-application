@@ -1026,12 +1026,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                       <p className="text-sm text-muted-foreground">{lead.discoveryData.scoringReason}</p>
                     )}
                     <div className="flex flex-col gap-2">
-                        <h4 className="font-semibold">Routing Tags</h4>
-                        <div className="flex flex-wrap justify-center gap-2">
-                            {lead.discoveryData.routingTag?.split(',').map(tag => (
-                                <Badge key={tag.trim()} variant="secondary">{tag.trim()}</Badge>
-                            ))}
-                        </div>
+                        <h4 className="font-semibold">Routing Tag</h4>
+                         {lead.discoveryData.routingTag && <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>}
                     </div>
                 </CardContent>
             </Card>
