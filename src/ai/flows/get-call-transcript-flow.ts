@@ -43,7 +43,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}`;
+    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
     console.log(`[Flow] Fetching from AirCall URL: ${url}`);
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
@@ -84,22 +84,18 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             return { transcriptFound: false, error: errorMsg };
         }
 
-        const callData = JSON.parse(responseText) as any;
-        console.log('[Flow] Parsed AirCall response data:', JSON.stringify(callData, null, 2));
-
-        const callInfo = callData?.call;
+        const transcriptionData = JSON.parse(responseText) as any;
+        console.log('[Flow] Parsed AirCall response data:', JSON.stringify(transcriptionData, null, 2));
         
-        const utterances = callInfo?.transcription?.content?.utterances;
+        const utterances = transcriptionData?.transcription?.content?.utterances;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
           console.log(`[Flow Success] Transcript found for call ID: ${callId}. Logging to Firebase...`);
-          const transcriptPayload = {
-            content: JSON.stringify(utterances), // Stringify the utterances array
-            author: callInfo.user?.name || leadAuthor,
+          await logTranscriptActivity(leadId, {
+            content: JSON.stringify(utterances),
+            author: leadAuthor,
             callId: callId,
-            phoneNumber: callInfo.raw_digits || 'Unknown',
-          };
-          await logTranscriptActivity(leadId, transcriptPayload);
+          });
           console.log('[Flow Success] Transcript logged to Firebase.');
           return { transcriptFound: true };
         } else {
