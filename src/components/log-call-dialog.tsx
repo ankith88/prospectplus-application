@@ -24,32 +24,17 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import type { Lead } from '@/lib/types'
-import { logCallActivity, updateLeadStatus, addContactToLead } from '@/services/firebase'
+import { logCallActivity, updateLeadStatus } from '@/services/firebase'
 
 const formSchema = z.object({
   notes: z.string().min(1, 'Call notes are required.'),
   outcome: z.enum(['interested', 'not-interested']),
   notInterestedReason: z.string().optional(),
-  contactName: z.string().optional(),
-  contactEmail: z.string().optional().refine(email => !email || z.string().email().safeParse(email).success, {
-    message: "Invalid email address",
-  }),
-  contactPhone: z.string().optional(),
-  contactTitle: z.string().optional(),
-}).refine(data => {
-    if (data.outcome === 'interested') {
-        return data.contactName && data.contactEmail && data.contactPhone && data.contactTitle
-    }
-    return true;
-}, {
-    message: "Contact details are required when the lead is interested.",
-    path: ["contactName"],
 });
 
 interface LogCallDialogProps {
@@ -67,15 +52,10 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
       notes: '',
       outcome: 'interested',
       notInterestedReason: '',
-      contactName: '',
-      contactEmail: '',
-      contactPhone: '',
-      contactTitle: '',
     },
   })
 
   const outcome = form.watch('outcome')
-  const { contactName, contactEmail } = form.getValues();
 
   // Mock Calendly links for sales reps
   const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
@@ -86,12 +66,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
   };
 
   const handleSetAppointment = async () => {
-    const values = form.getValues();
-    if (!values.contactName || !values.contactEmail) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Contact name and email are required to book an appointment.' });
-        return;
-    }
-    
     try {
         await updateLeadStatus(lead.id, 'Qualified');
         const updatedLead = { ...lead, status: 'Qualified' as const };
@@ -105,7 +79,15 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
         const salesRep = lead.salesRepAssigned || 'Default';
         const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
-        const prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(values.contactName)}&email=${encodeURIComponent(values.contactEmail)}`;
+        
+        const primaryContact = lead.contacts?.[0];
+        const contactName = primaryContact?.name || lead.companyName;
+        const contactEmail = primaryContact?.email || lead.customerServiceEmail;
+
+        let prefilledUrl = calendlyLink;
+        if (contactName && contactEmail) {
+           prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(contactName)}&email=${encodeURIComponent(contactEmail)}`;
+        }
 
         window.open(prefilledUrl, '_blank');
         
@@ -147,21 +129,6 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
 
       updatedLead.status = newStatus;
       updatedLead.activity = [newActivity, ...(updatedLead.activity || [])];
-
-      if (values.outcome === 'interested' && values.contactName && values.contactEmail && values.contactPhone && values.contactTitle) {
-        const newContactData = {
-            name: values.contactName,
-            email: values.contactEmail,
-            phone: values.contactPhone,
-            title: values.contactTitle,
-        };
-        const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
-        if (!existingContact) {
-            const newContactId = await addContactToLead(lead.id, newContactData);
-            const newContact = { ...newContactData, id: newContactId };
-            updatedLead.contacts = [...(updatedLead.contacts || []), newContact];
-        }
-      }
 
       onCallLogged(updatedLead);
 
@@ -267,77 +234,16 @@ export function LogCallDialog({ lead, children, onCallLogged }: LogCallDialogPro
                   )}
                 />
               )}
-
-              {outcome === 'interested' && (
-                <div className="space-y-4 rounded-md border p-4">
-                    <DialogDescription>
-                      The lead is interested. Capture their details and choose the next step.
-                    </DialogDescription>
-                    <FormField
-                      control={form.control}
-                      name="contactName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Contact Person Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Jane Doe" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="contactTitle"
-                      render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Title</FormLabel>
-                          <FormControl>
-                              <Input placeholder="Head of Logistics" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                          </FormItem>
-                      )}
-                      />
-                    <FormField
-                      control={form.control}
-                      name="contactEmail"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="jane.d@example.com" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="contactPhone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone</FormLabel>
-                          <FormControl>
-                            <Input placeholder="123-456-7890" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-1 gap-2 pt-4">
-                        <Button type="button" onClick={handleSetAppointment} disabled={!contactName || !contactEmail || form.formState.isSubmitting}>
-                            Set Appointment
-                        </Button>
-                    </div>
-                </div>
-              )}
               
               <DialogFooter>
                   <DialogClose asChild>
                       <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
-                  {outcome === 'not-interested' && (
+                  {outcome === 'interested' ? (
+                     <Button type="button" onClick={handleSetAppointment} disabled={form.formState.isSubmitting}>
+                        Set Appointment
+                     </Button>
+                  ) : (
                      <Button type="submit" disabled={form.formState.isSubmitting}>
                         {form.formState.isSubmitting ? 'Logging...' : 'Log Call'}
                      </Button>
