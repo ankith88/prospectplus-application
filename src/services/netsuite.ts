@@ -129,14 +129,14 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
     const url = `${baseUrl}?${params.toString()}`;
 
     console.log(`[NetSuite API] Sending discovery data for lead ${leadId} to NetSuite...`);
-    console.log(`[NetSuite API] URL: ${url}`);
+    console.log(`[NetSuite API] Request URL: ${url}`);
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { method: 'GET' });
 
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error(`[NetSuite API Error] Status: ${response.status}, Body: ${errorBody}`);
+            console.error(`[NetSuite API Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
             return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
         }
 
@@ -145,6 +145,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
         return { success: true, message: 'Discovery data sent to NetSuite.' };
     } catch (error: any) {
         console.error("[NetSuite API] Error sending discovery data:", error);
+        console.error(`[NetSuite API] Failed URL: ${url}`);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
