@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { updateContactInLead } from "@/services/firebase"
+import { sendContactToNetSuite } from "@/services/netsuite"
 import type { Contact } from "@/lib/types"
 
 const formSchema = z.object({
@@ -46,12 +47,33 @@ export function EditContactForm({ leadId, contact, onContactUpdated }: EditConta
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+      const updatedContactData = { ...contact, ...values };
       await updateContactInLead(leadId, contact.id, values);
       toast({
         title: "Success",
         description: "Contact updated successfully.",
       })
-      onContactUpdated({ ...contact, ...values });
+      onContactUpdated(updatedContactData);
+
+      // Call NetSuite
+      const nsResult = await sendContactToNetSuite({ 
+        leadId, 
+        contact: updatedContactData
+      });
+
+      if (nsResult.success) {
+        toast({
+          title: "NetSuite Updated",
+          description: "Contact information sent to NetSuite.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "NetSuite Sync Failed",
+          description: nsResult.message,
+        });
+      }
+
     } catch (error) {
       console.error("Failed to update contact:", error)
       toast({

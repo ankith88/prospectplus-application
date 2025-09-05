@@ -1,7 +1,7 @@
 
 'use server'
 
-import type { DiscoveryData, Lead } from "@/lib/types";
+import type { DiscoveryData, Lead, Contact } from "@/lib/types";
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -156,6 +156,65 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
     } catch (error: any) {
         console.error("[NetSuite Service] A fatal error occurred during fetch:", error);
         console.error(`[NetSuite Service] Failed URL: ${url}`);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
+
+interface NetSuiteContactPayload {
+    leadId: string;
+    contact: Contact;
+}
+
+/**
+ * Sends contact data to a NetSuite scriptlet.
+ * @param payload The contact data to send.
+ * @returns A promise that resolves with the result of the API call.
+ */
+export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Promise<{ success: boolean, message: string }> {
+    const { leadId, contact } = payload;
+    
+    if (!leadId || !contact) {
+        const errorMsg = 'Invalid payload: leadId and contact are required.';
+        console.error(`[NetSuite Contact Service Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+    const params = new URLSearchParams({
+        script: "2162",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQiABijVECkP4VMN5S4EQRn4vSKQ0EnMiG99-nTlSJ1ck",
+        leadID: leadId,
+        contactid: contact.id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        title: contact.title,
+    });
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite Contact Service] Sending contact data for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite Contact Service] Final Request URL being called: ${url}`);
+
+    try {
+        const response = await fetch(url, { method: 'GET' });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite Contact Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite Contact Service] Successfully sent contact data for lead ${leadId}. Response: ${responseBody}`);
+        return { success: true, message: 'Contact data sent to NetSuite.' };
+    } catch (error: any) {
+        console.error("[NetSuite Contact Service] A fatal error occurred during fetch:", error);
+        console.error(`[NetSuite Contact Service] Failed URL: ${url}`);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
