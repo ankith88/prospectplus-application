@@ -38,6 +38,7 @@ import {
   Voicemail,
   ListTodo,
   FileQuestion,
+  Route,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/types'
@@ -595,12 +596,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                         <ScoreIndicator score={lead.discoveryData.score} />
                     </>
                 )}
-                 {lead.discoveryData?.routingTag && (
-                    <>
-                        <p className="text-muted-foreground">&bull;</p>
-                        <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>
-                    </>
-                )}
             </div>
           </div>
         </div>
@@ -1016,6 +1011,27 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
               )}
             </CardContent>
           </Card>
+
+          {lead.discoveryData?.routingTag && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Route className="w-5 h-5 text-muted-foreground" />
+                        Discovery & Routing
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex flex-col gap-2">
+                        <h4 className="font-semibold">Routing Tags</h4>
+                        <div className="flex flex-wrap gap-2">
+                             {lead.discoveryData.routingTag.split(',').map(tag => (
+                                <Badge key={tag.trim()} variant="secondary">{tag.trim()}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+          )}
           
           <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
               <DialogContent className="max-w-2xl">
