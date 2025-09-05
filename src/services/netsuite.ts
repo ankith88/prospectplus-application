@@ -1,7 +1,7 @@
 
 'use server'
 
-import type { DiscoveryData, Lead, Contact, Note } from "@/lib/types";
+import type { DiscoveryData, Lead, Contact, Note, Activity } from "@/lib/types";
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -273,6 +273,67 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
     } catch (error: any) {
         console.error("[NetSuite Note Service] A fatal error occurred during fetch:", error);
         console.error(`[NetSuite Note Service] Failed URL: ${url}`);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
+interface NetSuiteActivityPayload {
+    leadId: string;
+    activity: Partial<Activity>;
+}
+
+/**
+ * Sends activity data to a NetSuite scriptlet.
+ * @param payload The activity data to send.
+ * @returns A promise that resolves with the result of the API call.
+ */
+export async function sendActivityToNetSuite(payload: NetSuiteActivityPayload): Promise<{ success: boolean, message: string }> {
+    const { leadId, activity } = payload;
+    
+    if (!leadId || !activity) {
+        const errorMsg = 'Invalid payload: leadId and activity data are required.';
+        console.error(`[NetSuite Activity Service Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+    const params = new URLSearchParams({
+        script: "2164",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQL_ftCT5OvCNWt6p0ldSNIXUd_vy0qXfpYpz8kfRPOt4",
+        leadID: leadId,
+    });
+
+    if (activity.callId) params.append('callID', activity.callId);
+    if (activity.date) params.append('date', activity.date);
+    if (activity.author) params.append('author', activity.author);
+    if (activity.notes) params.append('notes', activity.notes);
+    if (activity.duration) params.append('duration', activity.duration);
+    if (activity.type) params.append('type', activity.type);
+
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite Activity Service] Sending activity for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite Activity Service] Final Request URL being called: ${url}`);
+
+    try {
+        const response = await fetch(url, { method: 'GET' });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite Activity Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite Activity Service] Successfully sent activity for lead ${leadId}. Response: ${responseBody}`);
+        return { success: true, message: 'Activity sent to NetSuite.' };
+    } catch (error: any) {
+        console.error("[NetSuite Activity Service] A fatal error occurred during fetch:", error);
+        console.error(`[NetSuite Activity Service] Failed URL: ${url}`);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }

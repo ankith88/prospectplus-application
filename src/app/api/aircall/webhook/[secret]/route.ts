@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { logActivity, findActivityByCallId, updateActivity, logTranscriptActivity } from '@/services/firebase';
+import { sendActivityToNetSuite } from '@/services/netsuite';
 import type { Lead, Activity } from '@/lib/types';
 
 /**
@@ -173,6 +174,15 @@ export async function POST(
           await logActivity(leadInfo.id, activityData);
           console.log(`Successfully logged new activity for lead ${leadInfo.id} and call ${callId}`);
       }
+
+      // Send to NetSuite
+        try {
+            await sendActivityToNetSuite({ leadId: leadInfo.id, activity: activityData });
+            console.log(`Activity for call ID ${callId} successfully sent to NetSuite.`);
+        } catch (nsError) {
+            console.error(`Failed to send activity for call ID ${callId} to NetSuite:`, nsError);
+            // Do not block the webhook response for NetSuite errors
+        }
     }
 
     return new NextResponse('Webhook processed successfully', { status: 200 });
