@@ -1012,19 +1012,20 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </CardContent>
           </Card>
 
-          {lead.discoveryData?.routingTag && (
+          {lead.discoveryData?.score !== undefined && (
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Route className="w-5 h-5 text-muted-foreground" />
-                        Discovery & Routing
+                        Discovery & Routing Score
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex flex-col items-center text-center gap-4">
+                    <ScoreIndicator score={lead.discoveryData.score} size="lg" />
                     <div className="flex flex-col gap-2">
                         <h4 className="font-semibold">Routing Tags</h4>
-                        <div className="flex flex-wrap gap-2">
-                             {lead.discoveryData.routingTag.split(',').map(tag => (
+                        <div className="flex flex-wrap justify-center gap-2">
+                            {lead.discoveryData.routingTag?.split(',').map(tag => (
                                 <Badge key={tag.trim()} variant="secondary">{tag.trim()}</Badge>
                             ))}
                         </div>
