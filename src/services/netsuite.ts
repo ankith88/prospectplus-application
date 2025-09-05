@@ -137,7 +137,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
         if (!response.ok) {
             const errorBody = await response.text();
             console.error(`[NetSuite API Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
-            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
         }
 
         const responseBody = await response.text();
