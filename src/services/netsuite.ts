@@ -117,9 +117,11 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
 
     // Flatten the discoveryData object into query parameters
     for (const [key, value] of Object.entries(discoveryData)) {
-        if (value) {
+        if (value !== undefined && value !== null && value !== '') {
             if (Array.isArray(value)) {
-                params.append(key, value.join(','));
+                if (value.length > 0) {
+                    params.append(key, value.join(','));
+                }
             } else {
                 params.append(key, value.toString());
             }
@@ -132,6 +134,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
     console.log(`[NetSuite API] Request URL: ${url}`);
 
     try {
+        // Using GET as all data is in the URL
         const response = await fetch(url, { method: 'GET' });
 
         if (!response.ok) {
