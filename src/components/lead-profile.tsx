@@ -117,6 +117,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
+  const [isLogCallOpen, setIsLogCallOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
@@ -413,12 +414,15 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   }
 
   const handleInitiateCall = (phoneNumber: string) => {
+    if (!lead) return;
     window.open(`aircall:${phoneNumber}`);
     addActivity({ type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
     toast({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
     });
+    // Open discovery questions, then outcome
+    setIsDiscoveryQuestionsOpen(true);
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
@@ -506,11 +510,17 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
         toast({ title: 'Success', description: 'Discovery questions saved.' });
         setIsDiscoveryQuestionsOpen(false);
+        setIsLogCallOpen(true); // Open log call dialog after discovery
     } catch (error) {
         console.error("Failed to save discovery data:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to save discovery data." });
     }
   };
+
+  const handleDiscoveryClose = () => {
+    setIsDiscoveryQuestionsOpen(false);
+    setIsLogCallOpen(true);
+  }
 
 
   if (!lead || !user) {
@@ -557,15 +567,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setIsDiscoveryQuestionsOpen(true)}>
-              <FileQuestion className="mr-2 h-4 w-4" />
-              Discovery
-          </Button>
-          <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
-            <Button variant="outline">
-              <Phone className="mr-2 h-4 w-4" />
-              Log a Call
-            </Button>
+           <LogCallDialog lead={lead} onCallLogged={handleCallLogged} isOpen={isLogCallOpen} onOpenChange={setIsLogCallOpen}>
+             {/* This dialog is now opened programmatically */}
           </LogCallDialog>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
@@ -580,7 +583,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         lead={lead} 
         onSave={handleDiscoverySave}
         isOpen={isDiscoveryQuestionsOpen}
-        onOpenChange={setIsDiscoveryQuestionsOpen}
+        onOpenChange={handleDiscoveryClose}
       />
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
