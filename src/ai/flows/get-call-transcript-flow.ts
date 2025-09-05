@@ -82,15 +82,18 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         }
 
         const callData = await response.json() as any;
+        const callInfo = callData.call;
         
-        const transcriptContent = callData?.call?.transcription?.content?.utterances;
-        if (transcriptContent && Array.isArray(transcriptContent)) {
+        // The transcript content is nested inside the 'call' object.
+        const transcriptContent = callInfo?.transcription?.content;
+
+        if (transcriptContent && Array.isArray(transcriptContent.utterances) && transcriptContent.utterances.length > 0) {
           console.log(`Transcript found for call ID: ${callId}. Logging to Firebase...`);
            await logTranscriptActivity(leadId, {
-                content: JSON.stringify({ utterances: transcriptContent }), // Save the utterances object
-                author: callData.call.user.name || leadAuthor,
+                content: JSON.stringify(transcriptContent.utterances),
+                author: callInfo.user?.name || leadAuthor,
                 callId: callId,
-                phoneNumber: callData.call.raw_digits || 'Unknown',
+                phoneNumber: callInfo.raw_digits || 'Unknown',
             });
           return { transcriptFound: true };
         } else {
