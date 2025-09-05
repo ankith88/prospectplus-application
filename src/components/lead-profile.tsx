@@ -44,6 +44,7 @@ import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/type
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -91,7 +92,6 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
-import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -437,7 +437,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   };
 
   const handleGetTranscriptForCall = async (callId: string) => {
-    if (!lead || !user?.displayName) return;
+    if (!lead || !user?.displayName) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not identify lead or user.' });
+      return;
+    }
     try {
       setFetchingTranscriptId(callId);
       const result = await getCallTranscriptByCallId({
