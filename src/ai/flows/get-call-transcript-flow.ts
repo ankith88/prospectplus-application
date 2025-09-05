@@ -32,12 +32,14 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
   async ({ callId, leadId, leadAuthor }) => {
+    console.log('[Flow Start] Executing getCallTranscriptByCallIdFlow with input:', { callId, leadId });
+
     const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) {
       const errorMsg = 'AirCall API credentials are not configured.';
-      console.error(errorMsg);
+      console.error(`[Flow Error] ${errorMsg}`);
       return { transcriptFound: false, error: errorMsg };
     }
 
@@ -47,18 +49,19 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     const maxRetries = 5;
     const retryDelay = 10000; // 10 seconds
 
-    console.log(`[Flow] Fetching call data from AirCall for call ID: ${callId} (URL: ${url})`);
-
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`[Flow] Attempt ${attempt} for call ID: ${callId}`);
 
       try {
+        console.log(`[Flow] Fetching from AirCall URL: ${url}`);
         const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${credentials}`,
             'Content-Type': 'application/json',
           },
         });
+
+        console.log(`[Flow] AirCall API response status: ${response.status}`);
 
         if (!response.ok) {
            if (response.status === 404) {
@@ -74,7 +77,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
            }
            const errorBody = await response.text();
            const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
-           console.error(`[Flow] ${errorMsg}`);
+           console.error(`[Flow Error] ${errorMsg}`);
            return { transcriptFound: false, error: errorMsg };
         }
 
@@ -84,7 +87,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const utterances = callInfo?.transcription?.content;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
-          console.log(`[Flow] Transcript found for call ID: ${callId}. Logging to Firebase...`);
+          console.log(`[Flow Success] Transcript found for call ID: ${callId}. Logging to Firebase...`);
            await logTranscriptActivity(leadId, {
                 content: JSON.stringify(utterances),
                 author: callInfo.user?.name || leadAuthor,
@@ -93,17 +96,17 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             });
           return { transcriptFound: true };
         } else {
-          console.log(`[Flow] Transcript content not yet available for call ID: ${callId}.`);
+          console.log(`[Flow Info] Transcript content not yet available for call ID: ${callId}.`);
           if (attempt < maxRetries) {
-            console.log(`[Flow] Will retry in ${retryDelay / 1000} seconds...`);
+            console.log(`[Flow Info] Will retry in ${retryDelay / 1000} seconds...`);
             await sleep(retryDelay);
           } else {
-            console.log(`[Flow] Max retries reached for call ID: ${callId}. No transcript found.`);
+            console.log(`[Flow Error] Max retries reached for call ID: ${callId}. No transcript found.`);
             return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
           }
         }
       } catch (error: any) {
-        console.error(`[Flow] Error fetching call data from AirCall (Attempt ${attempt}):`, error);
+        console.error(`[Flow Exception] Error during fetch for call ID ${callId} (Attempt ${attempt}):`, error);
         if (attempt < maxRetries) {
           await sleep(retryDelay);
         } else {
@@ -112,12 +115,13 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       }
     }
 
-    // This part should not be reached, but as a fallback:
+    console.log(`[Flow Fallback] Reached end of function for call ID: ${callId}. This should not happen.`);
     return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
   }
 );
 
 
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
+  console.log('[Exported Function] getCallTranscriptByCallId called. Invoking flow...');
   return getCallTranscriptByCallIdFlow(input);
 }
