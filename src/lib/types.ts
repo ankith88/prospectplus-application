@@ -77,10 +77,10 @@ export interface DiscoveryData {
     servicePayment?: 'Yes' | 'No';
     shippingVolume?: '<5' | '<20' | '20-100' | '100+';
     expressVsStandard?: 'Mostly Standard (≥80%)' | 'Balanced Mix (20-79% Express)' | 'Mostly Express (≥80%)';
-    packageType?: Array<'<500g' | '1-3kg' | '5kg+' | '10kg+' | '20kg+'>;
-    currentProvider?: Array<'Multiple' | 'AusPost' | 'CouriersPlease' | 'Aramex' | 'StarTrack' | 'TGE' | 'FedEx/TNT' | 'Allied' | 'Other'>;
+    packageType?: Array<string>;
+    currentProvider?: Array<string>;
     otherProvider?: string;
-    eCommerceTech?: Array<'MyPost' | 'Shopify' | 'Woo' | 'Sendle' | 'Other' | 'None'>;
+    eCommerceTech?: Array<string>;
     otherECommerceTech?: string;
     sameDayCourier?: 'Yes' | 'Occasional' | 'Never';
     decisionMaker?: 'Owner' | 'Influencer' | 'Gatekeeper';
