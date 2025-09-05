@@ -62,6 +62,9 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         });
 
         console.log(`[Flow] AirCall API response status: ${response.status}`);
+        
+        const responseText = await response.text();
+        console.log('[Flow] Raw AirCall response text:', responseText);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -75,18 +78,16 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
                 return { transcriptFound: false, error: 'NO_CALL_FOUND' };
               }
             }
-            const errorBody = await response.text();
-            const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${errorBody}`;
+            const errorMsg = `AirCall API request failed with status: ${response.status}. Body: ${responseText}`;
             console.error(`[Flow Error] ${errorMsg}`);
             return { transcriptFound: false, error: errorMsg };
         }
 
-        const callData = await response.json() as any;
-        console.log('[Flow] Full AirCall response data:', JSON.stringify(callData, null, 2));
+        const callData = JSON.parse(responseText) as any;
+        console.log('[Flow] Parsed AirCall response data:', JSON.stringify(callData, null, 2));
 
         const callInfo = callData?.call;
         
-        // Correctly access the nested utterances array
         const utterances = callInfo?.transcription?.content?.utterances;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
