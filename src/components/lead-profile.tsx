@@ -584,8 +584,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         </div>
         <div className="flex flex-wrap items-center gap-2">
            <LogCallDialog lead={lead} onCallLogged={handleCallLogged} isOpen={isLogCallOpen} onOpenChange={setIsLogCallOpen}>
-             {/* This dialog is now opened programmatically */}
-          </LogCallDialog>
+                <Button variant="outline" onClick={() => { setIsChainedFlow(false); }}>
+                    <PhoneCall className="mr-2 h-4 w-4" />
+                    Log a Call
+                </Button>
+            </LogCallDialog>
            <Button variant="outline" onClick={() => { setIsChainedFlow(false); setIsDiscoveryQuestionsOpen(true); }}>
               <FileQuestion className="mr-2 h-4 w-4" />
               Discovery Q's
