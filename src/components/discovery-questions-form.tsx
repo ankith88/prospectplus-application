@@ -107,8 +107,8 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
       if (data.shippingVolume === '<20') { score += 5; productPoints++; reasonParts.push('+5 for <20 items/week.'); }
       else if (data.shippingVolume === '20-100') { score += 10; productPoints += 2; reasonParts.push('+10 for 20-100 items/week.'); }
       else if (data.shippingVolume === '100+') { score += 15; productPoints += 3; reasonParts.push('+15 for 100+ items/week.'); }
-      if (data.expressVsStandard === 'Mostly Standard (>=80%)') { score += 10; servicePoints += 2; reasonParts.push('+10 for mostly standard shipping.'); }
-      else if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') { score += 5; productPoints++; servicePoints++; reasonParts.push('+5 for balanced shipping mix.'); }
+      if (data.expressVsStandard === 'Mostly Standard (>=80%)') { score += 10; productPoints += 2; reasonParts.push('+10 for mostly standard shipping.'); }
+      else if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') { score += 5; productPoints += 2; reasonParts.push('+5 for balanced shipping mix.'); }
       else if (data.expressVsStandard === 'Mostly Express (>=80%)') { score += 10; productPoints += 2; reasonParts.push('+10 for mostly express shipping.'); }
       if (data.packageType?.length) { score += 10; productPoints++; reasonParts.push('+10 for specifying package types.'); }
       if (data.currentProvider?.length) { score += 5; reasonParts.push('+5 for using a current provider.'); }
