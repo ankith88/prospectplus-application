@@ -8,6 +8,7 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
+import { sendNoteToNetSuite } from './netsuite';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
     try {
@@ -507,14 +508,15 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<Note> {
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<{ newNote: Note, netSuiteResult: { success: boolean, message: string } }> {
     try {
         const notesRef = collection(firestore, 'leads', leadId, 'notes');
-        const newNote = {
+        const newNoteData = {
             ...noteData,
             date: new Date().toISOString()
         };
-        const docRef = await addDoc(notesRef, newNote);
+        const docRef = await addDoc(notesRef, newNoteData);
+        const newNote = { ...newNoteData, id: docRef.id };
         
         await logActivity(leadId, { 
             type: 'Update', 
@@ -522,7 +524,16 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         });
 
         console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
-        return { ...newNote, id: docRef.id };
+
+        // Call NetSuite after successful Firebase write
+        const netSuiteResult = await sendNoteToNetSuite({
+            leadId,
+            noteId: newNote.id,
+            author: newNote.author,
+            content: newNote.content,
+        });
+
+        return { newNote, netSuiteResult };
     } catch (error) {
         console.error(`Failed to log note for lead ${leadId}:`, error);
         throw new Error('Failed to log note in Firebase');
