@@ -519,30 +519,35 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
   const handleDiscoverySave = async (data: DiscoveryData) => {
     if (!lead) return;
-    console.log('[Client] handleDiscoverySave triggered. Preparing to call NetSuite server action.');
-    
-    // Call NetSuite first for easier debugging
+    console.log('[Client] handleDiscoverySave triggered.', { data });
+
+    // Step 1: Call NetSuite and handle its response.
     try {
-        console.log('[Client] Calling sendDiscoveryDataToNetSuite...');
+        console.log('[Client] Preparing to call NetSuite server action...');
         const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: data });
+        console.log('[Client] NetSuite call finished. Result:', nsResult);
+
         if (nsResult.success) {
             toast({ title: 'NetSuite Updated', description: 'Discovery data sent to NetSuite.' });
         } else {
-            toast({ variant: 'destructive', title: 'NetSuite Error', description: `Failed to send to NetSuite. ${nsResult.message}`, duration: 10000 });
+            toast({ variant: 'destructive', title: 'NetSuite Error', description: `Failed to send to NetSuite: ${nsResult.message}`, duration: 10000 });
         }
     } catch (error: any) {
-        console.error("[Client] Error in NetSuite call block:", error);
+        console.error("[Client] Error calling NetSuite server action:", error);
         toast({ variant: "destructive", title: "Error", description: `A client-side error occurred while sending to NetSuite: ${error.message}` });
+        // Decide if you want to stop the process if NetSuite fails. For now, we continue.
     }
     
-    // Then, save to Firebase
+    // Step 2: Save to Firebase, regardless of NetSuite outcome.
     try {
+        console.log('[Client] Preparing to save to Firebase...');
         await updateLeadDiscoveryData(lead.id, data);
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
-        toast({ title: 'Success', description: 'Discovery questions saved.' });
+        toast({ title: 'Success', description: 'Discovery questions saved to Firebase.' });
+        console.log('[Client] Firebase save successful.');
     } catch (error: any) {
-        console.error("Failed to save discovery data to Firebase:", error);
-        toast({ variant: "destructive", title: "Error", description: `Failed to save discovery data: ${error.message}` });
+        console.error("[Client] Failed to save discovery data to Firebase:", error);
+        toast({ variant: "destructive", title: "Firebase Error", description: `Failed to save discovery data: ${error.message}` });
     } finally {
         setIsDiscoveryQuestionsOpen(false);
         if (isChainedFlow) {
@@ -1025,7 +1030,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Route className="w-5 h-5 text-muted-foreground" />
-                        Discovery & Routing
+                        Discovery & Routing (Score: {lead.discoveryData.score.toFixed(0)})
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center text-center gap-4">

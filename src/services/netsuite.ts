@@ -104,8 +104,15 @@ interface NetSuiteDiscoveryPayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayload): Promise<{ success: boolean, message: string }> {
-    console.log('[NetSuite Service] Starting sendDiscoveryDataToNetSuite...');
+    console.log('[NetSuite Service] Server action received. Payload:', payload);
     const { leadId, discoveryData } = payload;
+    
+    if (!leadId || !discoveryData) {
+        const errorMsg = 'Invalid payload: leadId and discoveryData are required.';
+        console.error(`[NetSuite Service Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
 
     const params = new URLSearchParams({
@@ -132,7 +139,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
     const url = `${baseUrl}?${params.toString()}`;
 
     console.log(`[NetSuite Service] Sending discovery data for lead ${leadId} to NetSuite...`);
-    console.log(`[NetSuite Service] Final Request URL: ${url}`);
+    console.log(`[NetSuite Service] Final Request URL being called: ${url}`);
 
     try {
         const response = await fetch(url, { method: 'GET' });
@@ -147,7 +154,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
         console.log(`[NetSuite Service] Successfully sent discovery data for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Discovery data sent to NetSuite.' };
     } catch (error: any) {
-        console.error("[NetSuite Service] Error sending discovery data:", error);
+        console.error("[NetSuite Service] A fatal error occurred during fetch:", error);
         console.error(`[NetSuite Service] Failed URL: ${url}`);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
