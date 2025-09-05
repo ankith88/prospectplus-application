@@ -890,6 +890,81 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           
           <Card>
             <CardHeader>
+              <CardTitle>Activity History</CardTitle>
+            </CardHeader>
+            <CardContent>
+             {loading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : (
+              <ul className="space-y-4">
+                {lead.activity && lead.activity.map((item, index) => {
+                   const hasTranscript = transcripts.some(t => t.callId === item.callId);
+                   return (
+                    <li key={item.id} className="flex gap-4 group">
+                      <div className="flex flex-col items-center">
+                        <div className="bg-secondary rounded-full p-2">
+                          {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                          {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                        {lead.activity && index < lead.activity.length - 1 && (
+                          <div className="w-px h-full bg-border"></div>
+                        )}
+                      </div>
+                      <div className="flex-1 pb-4 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                          <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                        </div>
+                        <div className="text-sm text-muted-foreground break-words">
+                          {item.notes}
+                        </div>
+                         {item.type === 'Call' && item.callId && (
+                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                             <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                                <Hash className="w-3 h-3 flex-shrink-0" />
+                                <span>Call ID: {item.callId}</span>
+                                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                    <Clipboard className="w-2.5 h-2.5" />
+                                </Button>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                {!hasTranscript && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                    disabled={fetchingTranscriptId === item.callId}
+                                  >
+                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                  <Voicemail className="mr-2 h-4 w-4" />
+                                  Recording
+                                </Button>
+                             </div>
+                           </div>
+                         )}
+                      </div>
+                    </li>
+                   )
+                })}
+              </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" />
                 AI Lead Score
@@ -1085,80 +1160,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity History</CardTitle>
-            </CardHeader>
-            <CardContent>
-             {loading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : (
-              <ul className="space-y-4">
-                {lead.activity && lead.activity.map((item, index) => {
-                   const hasTranscript = transcripts.some(t => t.callId === item.callId);
-                   return (
-                    <li key={item.id} className="flex gap-4 group">
-                      <div className="flex flex-col items-center">
-                        <div className="bg-secondary rounded-full p-2">
-                          {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                        </div>
-                        {lead.activity && index < lead.activity.length - 1 && (
-                          <div className="w-px h-full bg-border"></div>
-                        )}
-                      </div>
-                      <div className="flex-1 pb-4 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                          <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                        </div>
-                        <div className="text-sm text-muted-foreground break-words">
-                          {item.notes}
-                        </div>
-                         {item.type === 'Call' && item.callId && (
-                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                             <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
-                                <Hash className="w-3 h-3 flex-shrink-0" />
-                                <span>Call ID: {item.callId}</span>
-                                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                    <Clipboard className="w-2.5 h-2.5" />
-                                </Button>
-                             </div>
-                             <div className="flex items-center gap-2">
-                                {!hasTranscript && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                    disabled={fetchingTranscriptId === item.callId}
-                                  >
-                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
-                                  </Button>
-                                )}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                  <Voicemail className="mr-2 h-4 w-4" />
-                                  Recording
-                                </Button>
-                             </div>
-                           </div>
-                         )}
-                      </div>
-                    </li>
-                   )
-                })}
-              </ul>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </main>
     </div>
