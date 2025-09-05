@@ -167,7 +167,7 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[90vh]">
+      <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Discovery Questions</DialogTitle>
           <DialogDescription>
@@ -175,7 +175,7 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 h-full flex flex-col">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 flex-grow flex flex-col overflow-hidden">
            <ScrollArea className="flex-grow">
             <div className="space-y-8 pr-4">
                 <FormField
