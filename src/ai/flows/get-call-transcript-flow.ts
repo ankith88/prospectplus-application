@@ -32,7 +32,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
   async ({ callId, leadId, leadAuthor }) => {
-    console.log('[Flow Start] Executing getCallTranscriptByCallIdFlow with input:', { callId, leadId });
+    console.log(`[Flow Start] Executing getCallTranscriptByCallIdFlow with input:`, { callId, leadId, leadAuthor });
 
     const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
@@ -84,16 +84,18 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const callData = await response.json() as any;
         const callInfo = callData?.call;
         
-        const utterances = callInfo?.transcription?.content;
+        const utterances = callInfo?.transcription?.content?.utterances;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
           console.log(`[Flow Success] Transcript found for call ID: ${callId}. Logging to Firebase...`);
-           await logTranscriptActivity(leadId, {
-                content: JSON.stringify(utterances),
-                author: callInfo.user?.name || leadAuthor,
-                callId: callId,
-                phoneNumber: callInfo.raw_digits || 'Unknown',
-            });
+          const transcriptPayload = {
+            content: JSON.stringify({ utterances }),
+            author: callInfo.user?.name || leadAuthor,
+            callId: callId,
+            phoneNumber: callInfo.raw_digits || 'Unknown',
+          };
+          await logTranscriptActivity(leadId, transcriptPayload);
+          console.log('[Flow Success] Transcript logged to Firebase.');
           return { transcriptFound: true };
         } else {
           console.log(`[Flow Info] Transcript content not yet available for call ID: ${callId}.`);
@@ -122,6 +124,6 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
 
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-  console.log('[Exported Function] getCallTranscriptByCallId called. Invoking flow...');
+  console.log('[Exported Function] getCallTranscriptByCallId called. Invoking flow with input:', input);
   return getCallTranscriptByCallIdFlow(input);
 }

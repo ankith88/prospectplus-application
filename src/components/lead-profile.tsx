@@ -437,18 +437,23 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   };
 
   const handleGetTranscriptForCall = async (callId: string) => {
+    console.log(`[Client] 'Fetch Transcript' button clicked for call ID: ${callId}`);
+
     if (!lead || !user?.displayName) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not identify lead or user.' });
       return;
     }
     try {
+      console.log('[Client] Calling getCallTranscriptByCallId flow...');
       setFetchingTranscriptId(callId);
       const result = await getCallTranscriptByCallId({
-        callId,
+        callId: callId,
         leadId: lead.id,
         leadAuthor: user.displayName,
       });
       
+      console.log('[Client] Flow result:', result);
+
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
         fetchTranscripts(); // Re-fetch transcripts to update the UI
@@ -456,6 +461,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
     } catch (error: any) {
+      console.error("[Client] Error calling flow:", error);
       toast({ variant: "destructive", title: "Error", description: error.message || "An unexpected error occurred during analysis." });
     } finally {
       setFetchingTranscriptId(null);
