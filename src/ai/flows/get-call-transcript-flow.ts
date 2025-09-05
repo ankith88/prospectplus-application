@@ -82,6 +82,8 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         }
 
         const callData = await response.json() as any;
+        console.log('[Flow] Full AirCall response data:', JSON.stringify(callData, null, 2));
+
         const callInfo = callData?.call;
         
         // Correctly access the nested utterances array
@@ -125,6 +127,6 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
 
 
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-    console.log("getCallTranscriptByCallId server action called with:", input);
+    console.log("[Client] Calling getCallTranscriptByCallId server action with:", input);
     return getCallTranscriptByCallIdFlow(input);
 }
