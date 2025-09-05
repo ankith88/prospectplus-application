@@ -37,14 +37,13 @@ import {
   Download,
   Voicemail,
   ListTodo,
-  Star,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, getLeadScorecards } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -98,7 +97,6 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { Calendar as CalendarPicker } from './ui/calendar'
-import { ColdCallScorecardDialog } from './cold-call-scorecard'
 
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
@@ -191,15 +189,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     setTasks(fetchedTasks);
   }
 
-  const fetchScorecards = async () => {
-    if (!lead) return;
-    const scorecards = await getLeadScorecards(lead.id);
-    setLead(prev => prev ? { ...prev, scorecards } : null);
-  };
-
   useEffect(() => {
     fetchTasks();
-    fetchScorecards();
   }, [lead?.id]);
 
 
@@ -550,31 +541,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            <ColdCallScorecardDialog
-                lead={lead}
-                dialerName={user.displayName || 'Unknown'}
-                onScorecardSubmit={fetchScorecards}
-            />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary">
-                  <ClipboardEdit className="mr-2 h-4 w-4" />
-                  Log an Activity
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => setShowPostCallDialog(true)}>
-                    <Phone className="mr-2 h-4 w-4" />
-                    Log Call Outcome
-                </DropdownMenuItem>
-                 <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                        <FileText className="mr-2 h-4 w-4" />
-                        Log a Note
-                    </DropdownMenuItem>
-                </LogNoteDialog>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
+            <Button variant="outline">
+              <Phone className="mr-2 h-4 w-4" />
+              Log a Call
+            </Button>
+          </LogCallDialog>
+          <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
+            <Button variant="outline">
+              <ClipboardEdit className="mr-2 h-4 w-4" />
+              Log a Note
+            </Button>
+          </LogNoteDialog>
         </div>
       </header>
 
