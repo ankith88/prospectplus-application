@@ -104,6 +104,7 @@ interface NetSuiteDiscoveryPayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayload): Promise<{ success: boolean, message: string }> {
+    console.log('[NetSuite Service] Starting sendDiscoveryDataToNetSuite...');
     const { leadId, discoveryData } = payload;
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
 
@@ -130,25 +131,24 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
 
     const url = `${baseUrl}?${params.toString()}`;
 
-    console.log(`[NetSuite API] Sending discovery data for lead ${leadId} to NetSuite...`);
-    console.log(`[NetSuite API] Request URL: ${url}`);
+    console.log(`[NetSuite Service] Sending discovery data for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite Service] Final Request URL: ${url}`);
 
     try {
-        // Using GET as all data is in the URL
         const response = await fetch(url, { method: 'GET' });
 
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error(`[NetSuite API Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            console.error(`[NetSuite Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
             return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
         }
 
         const responseBody = await response.text();
-        console.log(`[NetSuite API] Successfully sent discovery data for lead ${leadId}. Response: ${responseBody}`);
+        console.log(`[NetSuite Service] Successfully sent discovery data for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Discovery data sent to NetSuite.' };
     } catch (error: any) {
-        console.error("[NetSuite API] Error sending discovery data:", error);
-        console.error(`[NetSuite API] Failed URL: ${url}`);
+        console.error("[NetSuite Service] Error sending discovery data:", error);
+        console.error(`[NetSuite Service] Failed URL: ${url}`);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }

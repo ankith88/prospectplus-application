@@ -520,30 +520,33 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const handleDiscoverySave = async (data: DiscoveryData) => {
     if (!lead) return;
     console.log('[Client] handleDiscoverySave triggered. Preparing to call NetSuite server action.');
+    
+    // Call NetSuite first for easier debugging
     try {
-        await updateLeadDiscoveryData(lead.id, data);
-        setLead(prev => prev ? { ...prev, discoveryData: data } : null);
-        toast({ title: 'Success', description: 'Discovery questions saved.' });
-
-        // Call NetSuite
+        console.log('[Client] Calling sendDiscoveryDataToNetSuite...');
         const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: data });
         if (nsResult.success) {
             toast({ title: 'NetSuite Updated', description: 'Discovery data sent to NetSuite.' });
         } else {
             toast({ variant: 'destructive', title: 'NetSuite Error', description: `Failed to send to NetSuite. ${nsResult.message}`, duration: 10000 });
         }
-
-        setIsDiscoveryQuestionsOpen(false);
-        // Only open the log call dialog if it's part of the chained flow
-        if (isChainedFlow) {
-          setIsLogCallOpen(true);
-        }
     } catch (error: any) {
-        console.error("Failed to save or send discovery data:", error);
-        toast({ variant: "destructive", title: "Error", description: `Failed to save or send discovery data: ${error.message}` });
+        console.error("[Client] Error in NetSuite call block:", error);
+        toast({ variant: "destructive", title: "Error", description: `A client-side error occurred while sending to NetSuite: ${error.message}` });
+    }
+    
+    // Then, save to Firebase
+    try {
+        await updateLeadDiscoveryData(lead.id, data);
+        setLead(prev => prev ? { ...prev, discoveryData: data } : null);
+        toast({ title: 'Success', description: 'Discovery questions saved.' });
+    } catch (error: any) {
+        console.error("Failed to save discovery data to Firebase:", error);
+        toast({ variant: "destructive", title: "Error", description: `Failed to save discovery data: ${error.message}` });
     } finally {
-        if (!isChainedFlow) {
-            setIsDiscoveryQuestionsOpen(false);
+        setIsDiscoveryQuestionsOpen(false);
+        if (isChainedFlow) {
+            setIsLogCallOpen(true);
         }
     }
   };
