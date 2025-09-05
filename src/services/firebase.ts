@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -177,6 +177,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
+          discoveryData: data.discoveryData,
         };
 
         if (includeSubCollections) {
@@ -246,6 +247,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           contactCount: data.contactCount || 0,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
+          discoveryData: data.discoveryData,
         };
         
         if (!summary) {
@@ -775,6 +777,18 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
     }
 }
 
+async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, { discoveryData: data });
+        await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.' });
+        console.log(`Discovery data for lead ${leadId} updated.`);
+    } catch (error) {
+        console.error(`Failed to update discovery data for lead ${leadId}:`, error);
+        throw new Error('Failed to update discovery data in Firebase');
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -808,4 +822,5 @@ export {
     addTaskToLead,
     updateTaskCompletion,
     deleteTaskFromLead,
+    updateLeadDiscoveryData,
 };

@@ -37,13 +37,14 @@ import {
   Download,
   Voicemail,
   ListTodo,
+  FileQuestion,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -97,6 +98,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { Calendar as CalendarPicker } from './ui/calendar'
+import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
@@ -496,6 +498,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       }
   };
 
+  const handleDiscoverySave = async (data: any) => {
+    if (!lead) return;
+    try {
+        await updateLeadDiscoveryData(lead.id, data);
+        setLead(prev => prev ? { ...prev, discoveryData: data } : null);
+        toast({ title: 'Success', description: 'Discovery questions saved.' });
+    } catch (error) {
+        console.error("Failed to save discovery data:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to save discovery data." });
+    }
+  };
+
 
   if (!lead || !user) {
     return (
@@ -541,6 +555,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave}>
+             <Button variant="outline">
+                <FileQuestion className="mr-2 h-4 w-4" />
+                Discovery
+             </Button>
+          </DiscoveryQuestionsDialog>
           <LogCallDialog lead={lead} onCallLogged={handleCallLogged}>
             <Button variant="outline">
               <Phone className="mr-2 h-4 w-4" />

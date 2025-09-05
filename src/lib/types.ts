@@ -71,6 +71,21 @@ export interface Address {
   country: string
 }
 
+export interface DiscoveryData {
+    hasAPRelationship?: 'Yes' | 'No';
+    apCollectionType?: 'Take themselves' | 'Collection service';
+    paidAPCollection?: 'Yes' | 'No';
+    shippingProviders?: string[];
+    expressItemsPerWeek?: '1 to 5' | '6 to 10' | '11 to 20' | '21 to 30' | '30 to 40' | '40+';
+    standardItemsPerWeek?: '1 to 5' | '6 to 10' | '11 to 20' | '21 to 30' | '30 to 40' | '40+';
+    useSameDayCouriers?: 'Yes' | 'No';
+    typicalWeight?: '<500g' | '1-3kg' | '3-5kg' | '5-10kg' | '10-20kg' | '20kg+';
+    labelPlatform?: string[];
+    painPoints?: string;
+    otherShippingProvider?: string;
+    otherLabelPlatform?: string;
+}
+
 export interface Lead {
   id: string
   entityId: string
@@ -96,6 +111,7 @@ export interface Lead {
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;
+  discoveryData?: DiscoveryData;
 }
 
 export interface UserProfile {
