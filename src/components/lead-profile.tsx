@@ -41,7 +41,7 @@ import {
   Route,
 } from 'lucide-react'
 import { useEffect, useState, use } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -517,8 +517,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       }
   };
 
-  const handleDiscoverySave = async (data: any) => {
+  const handleDiscoverySave = async (data: DiscoveryData) => {
     if (!lead) return;
+    console.log('[Client] handleDiscoverySave triggered. Preparing to call NetSuite server action.');
     try {
         await updateLeadDiscoveryData(lead.id, data);
         setLead(prev => prev ? { ...prev, discoveryData: data } : null);
@@ -529,7 +530,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         if (nsResult.success) {
             toast({ title: 'NetSuite Updated', description: 'Discovery data sent to NetSuite.' });
         } else {
-            toast({ variant: 'destructive', title: 'NetSuite Error', description: nsResult.message });
+            toast({ variant: 'destructive', title: 'NetSuite Error', description: `Failed to send to NetSuite. ${nsResult.message}`, duration: 10000 });
         }
 
         setIsDiscoveryQuestionsOpen(false);
