@@ -437,20 +437,15 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   };
 
   const handleGetTranscriptForCall = async (callId: string) => {
-    console.log(callId);
-    console.log(lead);
-    console.log(user?.displayName);
-    console.log((!lead || !user?.displayName))
-    // if (!lead || !user?.displayName) return;
+    if (!lead || !user?.displayName) return;
     try {
-      console.log('inside try statement to fetch transcript')
       setFetchingTranscriptId(callId);
       const result = await getCallTranscriptByCallId({
         callId,
         leadId: lead.id,
         leadAuthor: user.displayName,
       });
-      console.log(result)
+      
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
         fetchTranscripts(); // Re-fetch transcripts to update the UI
@@ -752,29 +747,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                </div>
              </CardContent>
            </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-muted-foreground" />
-                Address
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <button
-                    onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
-                    disabled={fullAddress === 'No address available'}
-                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                    title="View on map"
-                >
-                    <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                </button>
-                <p className="text-sm text-muted-foreground">{fullAddress}</p>
-              </div>
-            </CardContent>
-          </Card>
-          
+           
           <Card>
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2">
@@ -965,6 +938,28 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 })}
               </ul>
               )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-muted-foreground" />
+                  Address
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <button
+                    onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
+                    disabled={fullAddress === 'No address available'}
+                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    title="View on map"
+                >
+                    <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                </button>
+                <p className="text-sm text-muted-foreground">{fullAddress}</p>
+              </div>
             </CardContent>
           </Card>
 
