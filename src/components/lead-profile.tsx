@@ -446,6 +446,20 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     try {
       console.log('[Client] Calling getCallTranscriptByCallId flow...');
       setFetchingTranscriptId(callId);
+      const apiId = process.env.AIRCALL_API_ID;
+      const apiToken = process.env.AIRCALL_API_TOKEN;
+      const url = `https://api.aircall.io/v1/calls/${callId}`;
+      console.log(`[Flow] Fetching from AirCall URL: ${url}`);
+      const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
+      const response = await fetch(url, {
+                headers: {
+                  'Authorization': `Basic ${credentials}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+      
+      console.log(`[Flow] AirCall API response: ${JSON.stringify(response)}`);
+      console.log(`[Flow] AirCall API response status: ${response.status}`);
       const result = await getCallTranscriptByCallId({
         callId: callId,
         leadId: lead.id,

@@ -57,6 +57,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${credentials}`,
+            'X-Aircall-Api-Id': apiId,
             'Content-Type': 'application/json',
           },
         });
