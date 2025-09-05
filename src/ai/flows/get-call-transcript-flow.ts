@@ -25,14 +25,14 @@ export type GetTranscriptByCallIdOutput = z.infer<typeof GetTranscriptByCallIdOu
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const getCallTranscriptByCallIdFlow = ai.defineFlow(
+export const getCallTranscriptByCallId = ai.defineFlow(
   {
-    name: 'getCallTranscriptByCallIdFlow',
+    name: 'getCallTranscriptByCallId',
     inputSchema: GetTranscriptByCallIdInputSchema,
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
   async ({ callId, leadId, leadAuthor }) => {
-    console.log(`[Flow Start] Executing getCallTranscriptByCallIdFlow with input:`, { callId, leadId, leadAuthor });
+    console.log(`[Flow Start] Executing getCallTranscriptByCallId with input:`, { callId, leadId, leadAuthor });
 
     const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
@@ -89,7 +89,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
           console.log(`[Flow Success] Transcript found for call ID: ${callId}. Logging to Firebase...`);
           const transcriptPayload = {
-            content: JSON.stringify({ utterances }),
+            content: JSON.stringify(callInfo.transcription.content),
             author: callInfo.user?.name || leadAuthor,
             callId: callId,
             phoneNumber: callInfo.raw_digits || 'Unknown',
@@ -121,9 +121,3 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
   }
 );
-
-
-export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-  console.log('[Exported Function] getCallTranscriptByCallId called. Invoking flow with input:', input);
-  return getCallTranscriptByCallIdFlow(input);
-}
