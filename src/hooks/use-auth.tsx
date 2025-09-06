@@ -40,7 +40,6 @@ interface AuthContextType {
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
-    signInWithLink: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -50,7 +49,6 @@ const AuthContext = createContext<AuthContextType>({
     isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
-    signInWithLink: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -91,25 +89,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setLoading(false);
             });
 
-            // Handle sign-in with email link
-            if (isSignInWithEmailLink(authInstance, window.location.href)) {
-                let email = window.localStorage.getItem('emailForSignIn');
-                if (!email) {
-                    email = window.prompt('Please provide your email for confirmation');
-                }
-                if (email) {
-                    signInWithEmailLink(authInstance, email, window.location.href)
-                        .then(() => {
-                            window.localStorage.removeItem('emailForSignIn');
-                            router.replace('/leads');
-                        })
-                        .catch((error) => {
-                            console.error("Error signing in with email link:", error);
-                        });
-                }
-            }
-
-
             return () => unsubscribe();
         } else {
             setLoading(false);
@@ -138,16 +117,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return userCredential;
     }
 
-    const signInWithLink = async (email: string) => {
-        if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
-        const actionCodeSettings = {
-            url: window.location.origin, // Use the base URL for the redirect
-            handleCodeInApp: true,
-        };
-        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-        window.localStorage.setItem('emailForSignIn', email);
-    }
-
     const signOut = async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
@@ -164,7 +133,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isSigningOut,
         signIn,
         signOut,
-        signInWithLink,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

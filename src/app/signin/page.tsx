@@ -20,15 +20,13 @@ import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
 import { FullScreenLoader } from '@/components/ui/loader';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Mail } from 'lucide-react';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
-  const { signInWithLink, user, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
   useEffect(() => {
@@ -41,12 +39,14 @@ export default function SignInPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signInWithLink(email);
-      setEmailSent(true);
+      await signIn(email, password);
+      // The redirect is handled by the useEffect
     } catch (error: any) {
       console.error("Sign in failed:", error);
-      let errorMessage = "An unexpected error occurred.";
-      if (error.code === 'auth/invalid-email') {
+      let errorMessage = "An unexpected error occurred. Please check your credentials.";
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+          errorMessage = "Invalid email or password. Please try again.";
+      } else if (error.code === 'auth/invalid-email') {
           errorMessage = "Please enter a valid email address.";
       } else {
           errorMessage = error.message;
@@ -67,7 +67,7 @@ export default function SignInPage() {
 
   return (
     <>
-    {loading && <FullScreenLoader message="Sending link..." />}
+    {loading && <FullScreenLoader message="Signing in..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex flex-col items-center text-center">
@@ -80,19 +80,10 @@ export default function SignInPage() {
             />
             <CardTitle className="text-2xl mt-4">ProspectPlus</CardTitle>
             <CardDescription className="text-center">
-                {emailSent ? "Check your email for the sign-in link." : "Sign in with a secure link."}
+                Sign in to your account
             </CardDescription>
         </CardHeader>
         <CardContent>
-          {emailSent ? (
-            <Alert>
-              <Mail className="h-4 w-4" />
-              <AlertTitle>Email Sent!</AlertTitle>
-              <AlertDescription>
-                A sign-in link has been sent to <strong>{email}</strong>. Please check your inbox (and spam folder) to continue.
-              </AlertDescription>
-            </Alert>
-          ) : (
             <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -106,11 +97,21 @@ export default function SignInPage() {
                     disabled={loading}
                 />
                 </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                        id="password"
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={loading}
+                    />
+                </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                Send Sign-in Link
+                 Sign In
                 </Button>
             </form>
-          )}
         </CardContent>
         <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
            <div>By signing in, you agree to our terms of service.</div>
