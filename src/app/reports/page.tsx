@@ -67,14 +67,17 @@ export default function ReportsPage() {
             getAllLeadsForReport()
         ]);
         
-        const dialers = Array.from(new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean))) as string[];
-        setAllDialers(dialers);
-
+        const dialerSet = new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean));
+        if (userProfile.role !== 'admin' && userProfile.displayName) {
+            dialerSet.add(userProfile.displayName); // Ensure current user is in the list
+        }
+        setAllDialers(Array.from(dialerSet) as string[]);
+        
         setAllCalls(fetchedCalls);
         setAllLeads(fetchedLeads);
         
-        if (userProfile.role !== 'admin') {
-            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
+        if (userProfile.role !== 'admin' && userProfile.displayName) {
+            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName! }));
         }
 
       } catch (error) {
@@ -237,10 +240,7 @@ export default function ReportsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 {userProfile?.role === 'admin' && <SelectItem value="all">All Users</SelectItem>}
-                                {userProfile?.role === 'admin' 
-                                    ? allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)
-                                    : userProfile?.displayName && <SelectItem value={userProfile.displayName}>{userProfile.displayName}</SelectItem>
-                                }
+                                {allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -439,5 +439,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
