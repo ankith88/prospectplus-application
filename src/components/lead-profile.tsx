@@ -101,6 +101,7 @@ import { format } from 'date-fns'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { sendDiscoveryDataToNetSuite } from '@/services/netsuite'
+import { DiscoveryRadarChart } from './discovery-radar-chart'
 
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
@@ -1185,18 +1186,15 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                         Open Form
                     </Button>
                 </CardHeader>
-                {lead.discoveryData?.score !== undefined && (
-                <CardContent className="flex flex-col items-center text-center gap-4">
-                    <ScoreIndicator score={lead.discoveryData.score} size="lg" />
-                    {lead.discoveryData.scoringReason && (
-                      <p className="text-sm text-muted-foreground">{lead.discoveryData.scoringReason}</p>
+                 <CardContent>
+                    {lead.discoveryData ? (
+                        <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                    ) : (
+                         <div className="text-center text-muted-foreground py-4">
+                            <p>No discovery data yet. Open the form to begin.</p>
+                        </div>
                     )}
-                    <div className="flex flex-col gap-2">
-                        <h4 className="font-semibold">Routing Tag</h4>
-                         {lead.discoveryData.routingTag && <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>}
-                    </div>
                 </CardContent>
-                )}
             </Card>
 
            <Card>
