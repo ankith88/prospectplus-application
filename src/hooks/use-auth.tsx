@@ -18,6 +18,10 @@ import {
     signOut as firebaseSignOut,
     updateProfile,
     Auth,
+    sendSignInLinkToEmail,
+    isSignInWithEmailLink,
+    signInWithEmailLink,
+    ActionCodeSettings,
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
@@ -36,6 +40,7 @@ interface AuthContextType {
     loading: boolean;
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
+    signInWithLink: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -45,6 +50,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     isSigningOut: false,
     signIn: async () => {},
+    signInWithLink: async () => {},
     signOut: async () => {},
 });
 
@@ -60,28 +66,57 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (app) {
             const authInstance = getAuth(app);
             setAuth(authInstance);
-            const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
-                setUser(user);
-                if (user) {
-                    const userDocRef = doc(firestore, "users", user.uid);
-                    const userDoc = await getDoc(userDocRef);
-                    if (userDoc.exists()) {
-                        setUserProfile({ uid: user.uid, ...userDoc.data() } as UserProfile);
+
+            // Handle sign-in completion from email link
+            if (isSignInWithEmailLink(authInstance, window.location.href)) {
+                let email = window.localStorage.getItem('emailForSignIn');
+                if (!email) {
+                    // This can happen if the user opens the link on a different device.
+                    email = window.prompt('Please provide your email for confirmation');
+                }
+                if (email) {
+                    signInWithEmailLink(authInstance, email, window.location.href)
+                        .then(async (result) => {
+                            window.localStorage.removeItem('emailForSignIn');
+                            setUser(result.user);
+                            const userDocRef = doc(firestore, "users", result.user.uid);
+                            const userDoc = await getDoc(userDocRef);
+                            if (userDoc.exists()) {
+                                setUserProfile({ uid: result.user.uid, ...userDoc.data() } as UserProfile);
+                            }
+                            router.push('/'); // Redirect to home after successful sign-in
+                        })
+                        .catch((error) => {
+                            console.error("Error signing in with email link:", error);
+                            // Handle error, e.g., show a toast notification
+                        })
+                        .finally(() => setLoading(false));
+                } else {
+                    setLoading(false);
+                }
+            } else {
+                 const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+                    setUser(user);
+                    if (user) {
+                        const userDocRef = doc(firestore, "users", user.uid);
+                        const userDoc = await getDoc(userDocRef);
+                        if (userDoc.exists()) {
+                            setUserProfile({ uid: user.uid, ...userDoc.data() } as UserProfile);
+                        } else {
+                            setUserProfile(null);
+                        }
                     } else {
                         setUserProfile(null);
                     }
-                } else {
-                    setUserProfile(null);
-                }
-                setLoading(false);
-            });
-
-            return () => unsubscribe();
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }
         } else {
             setLoading(false);
             console.error("Firebase app not initialized. Auth functionality will not work.");
         }
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         if (!loading && !user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
@@ -104,6 +139,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return userCredential;
     }
 
+    const signInWithLink = async (email: string) => {
+        if (!auth) throw new Error("Firebase Auth not initialized");
+        const actionCodeSettings: ActionCodeSettings = {
+            url: window.location.origin + '/leads', // URL to redirect to after sign-in
+            handleCodeInApp: true,
+        };
+        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+        window.localStorage.setItem('emailForSignIn', email);
+    }
+
     const signOut = async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
@@ -120,6 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         isSigningOut,
         signIn,
+        signInWithLink,
         signOut,
     };
 
