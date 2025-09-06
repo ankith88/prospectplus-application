@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from "@/components/ui/button"
@@ -27,8 +27,14 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
-  const { signInWithLink } = useAuth();
+  const { signInWithLink, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/leads');
+    }
+  }, [user, authLoading, router]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

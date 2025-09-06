@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const signInWithLink = async (email: string) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
         const actionCodeSettings: ActionCodeSettings = {
-            url: window.location.origin + '/leads', // URL to redirect to after sign-in
+            url: window.location.href, // URL to redirect to after sign-in
             handleCodeInApp: true,
         };
         await sendSignInLinkToEmail(auth, email, actionCodeSettings);
