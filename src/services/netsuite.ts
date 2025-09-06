@@ -119,7 +119,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
         script: "2161",
         deploy: "1",
         compid: "1048144",
-        "ns-at": "AAEJ7tMQrXaUiyrcK7JhiN0lUSv9b2uOL2FluSjbC6Z3EMXV3Qs",
+        "ns-at": "AAEJ7tMQ0npCZCvJuVUBGGvoJjWTgPUWIKy4vZfFXJJ2pOutWQo",
         leadID: leadId,
     });
 
