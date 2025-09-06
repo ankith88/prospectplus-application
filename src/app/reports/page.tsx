@@ -19,8 +19,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getAllCallActivities } from '@/services/firebase';
+import { getAllCallActivities, getAllLeadsForReport } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'New': '#A0A0A0', // Neutral Gray
@@ -34,22 +35,28 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
 };
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, author: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 export default function ReportsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
-    user: 'all',
+    dialerAssigned: 'all',
     status: 'all' as LeadStatus | 'all',
     date: undefined as DateRange | undefined,
     duration: 'all',
   });
+
+  useEffect(() => {
+    if (!authLoading && userProfile && userProfile.role !== 'admin') {
+      setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
+    }
+  }, [authLoading, userProfile]);
 
   useEffect(() => {
     async function getData() {
@@ -63,11 +70,11 @@ export default function ReportsPage() {
         setLoading(true);
         const [fetchedCalls, fetchedLeads] = await Promise.all([
             getAllCallActivities(),
-            getLeadsTool({ summary: true })
+            getAllLeadsForReport()
         ]);
 
         setAllCalls(fetchedCalls);
-        setLeads(fetchedLeads);
+        setAllLeads(fetchedLeads);
 
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -85,7 +92,7 @@ export default function ReportsPage() {
 
   const clearFilters = () => {
     setFilters({
-      user: 'all',
+      dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
       status: 'all',
       date: undefined,
       duration: 'all',
@@ -100,14 +107,32 @@ export default function ReportsPage() {
     const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
     return minutes * 60 + seconds;
   };
+  
+  const allDialers = useMemo(() => {
+    const dialers = new Set(allLeads.map(l => l.dialerAssigned).filter(Boolean));
+    return Array.from(dialers as string[]);
+  }, [allLeads]);
+
+  const filteredLeads = useMemo(() => {
+     return allLeads.filter(lead => {
+      const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
+      const statusMatch = filters.status === 'all' || lead.status === filters.status;
+      return dialerMatch && statusMatch;
+    });
+  }, [allLeads, filters.dialerAssigned, filters.status]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const userMatch = filters.user === 'all' || call.author === filters.user;
+        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
-        const callDate = new Date(call.date);
-        const dateMatch = filters.date?.from ? (callDate >= filters.date.from && callDate <= (filters.date.to || filters.date.from)) : true;
+        let dateMatch = true;
+        if (filters.date?.from) {
+          const callDate = new Date(call.date);
+          const fromDate = filters.date.from;
+          const toDate = filters.date.to || filters.date.from;
+          dateMatch = callDate >= fromDate && callDate <= toDate;
+        }
         
         const durationInSeconds = parseDuration(call.duration);
         const durationMatch = () => {
@@ -120,21 +145,16 @@ export default function ReportsPage() {
             }
         };
 
-        return userMatch && statusMatch && dateMatch && durationMatch();
+        return dialerMatch && statusMatch && dateMatch && durationMatch();
     });
   }, [allCalls, filters]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
-    
-    const relevantLeads = leads.filter(l => {
-      const userMatch = filters.user === 'all' || l.dialerAssigned === filters.user;
-      const statusMatch = filters.status === 'all' || l.status === filters.status;
-      return userMatch && statusMatch;
-    });
 
-    const assignedLeads = relevantLeads.filter(lead => !!lead.dialerAssigned);
+    const totalLeadsInFilter = filteredLeads.length;
+    const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
     const totalAssignedLeads = assignedLeads.length;
 
     const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
@@ -148,7 +168,7 @@ export default function ReportsPage() {
     const ratioOver2Min = totalCalls > 0 ? (callsOver2Min / totalCalls) * 100 : 0;
     const ratio30sTo2min = totalCalls > 0 ? (calls30sTo2min / totalCalls) * 100 : 0;
     
-    const leadsByStatus = relevantLeads.reduce((acc, lead) => {
+    const leadsByStatus = filteredLeads.reduce((acc, lead) => {
       const status = lead.status;
       const existingEntry = acc.find(item => item.name === status);
       if (existingEntry) {
@@ -169,16 +189,15 @@ export default function ReportsPage() {
       calls30sTo2min,
       ratioOver2Min,
       ratio30sTo2min,
-      totalLeadsInFilter: relevantLeads.length
+      totalLeadsInFilter,
     };
-  }, [filteredCalls, leads, filters]);
-  
-  const allUsers = useMemo(() => {
-      const users = new Set(allCalls.map(c => c.author));
-      return Array.from(users);
-  }, [allCalls]);
+  }, [filteredCalls, filteredLeads]);
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const hasActiveFilters = 
+    filters.dialerAssigned !== 'all' || 
+    filters.status !== 'all' || 
+    !!filters.date || 
+    filters.duration !== 'all';
 
   if (loading || authLoading) {
     return (
@@ -211,20 +230,22 @@ export default function ReportsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                    {userProfile?.role === 'admin' && (
-                        <div className="space-y-2">
-                            <Label htmlFor="user">User</Label>
-                             <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
+                    <div className="space-y-2">
+                        <Label htmlFor="user">Assigned To</Label>
+                          {userProfile?.role === 'admin' ? (
+                             <Select value={filters.dialerAssigned} onValueChange={(value) => handleFilterChange('dialerAssigned', value)}>
                                 <SelectTrigger id="user">
                                     <SelectValue placeholder="Select user" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Users</SelectItem>
-                                    {allUsers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                    {allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                                 </SelectContent>
                             </Select>
-                        </div>
-                    )}
+                          ) : (
+                            <Input id="user" value={filters.dialerAssigned} disabled />
+                          )}
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
                         <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
@@ -420,5 +441,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

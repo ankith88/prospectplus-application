@@ -268,6 +268,31 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
+async function getAllLeadsForReport(): Promise<Lead[]> {
+    try {
+        const leadsRef = collection(firestore, 'leads');
+        const snapshot = await getDocs(leadsRef);
+
+        if (snapshot.empty) {
+            return [];
+        }
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                dialerAssigned: data.dialerAssigned,
+                status: safeGetStatus(data.customerStatus),
+            } as Lead;
+        });
+
+    } catch (error) {
+        console.error("Failed to fetch all leads for report:", error);
+        return [];
+    }
+}
+
+
 async function getLeadSubCollection<T extends Contact | Activity>(leadId: string, collectionName: 'contacts' | 'activity'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
@@ -851,6 +876,7 @@ export {
     getLeadNotes,
     getAllNotes,
     getAllActivities,
+    getAllLeadsForReport,
     getLeadTranscripts,
     updateLeadAvatar,
     getUserPhoneNumber,
@@ -870,5 +896,3 @@ export {
     deleteTaskFromLead,
     updateLeadDiscoveryData,
 };
-
-    
