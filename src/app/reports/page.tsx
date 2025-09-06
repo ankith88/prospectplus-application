@@ -70,14 +70,11 @@ export default function ReportsPage() {
         const dialers = Array.from(new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean))) as string[];
         setAllDialers(dialers);
 
-        if (userProfile.role === 'admin') {
-            setAllCalls(fetchedCalls);
-            setAllLeads(fetchedLeads);
-        } else {
-            const userDisplayName = userProfile.displayName || '';
-            setAllCalls(fetchedCalls.filter(c => c.dialerAssigned === userDisplayName));
-            setAllLeads(fetchedLeads.filter(l => l.dialerAssigned === userDisplayName));
-            setFilters(prev => ({ ...prev, dialerAssigned: userDisplayName }));
+        setAllCalls(fetchedCalls);
+        setAllLeads(fetchedLeads);
+        
+        if (userProfile.role !== 'admin') {
+            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
         }
 
       } catch (error) {
@@ -443,3 +440,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
