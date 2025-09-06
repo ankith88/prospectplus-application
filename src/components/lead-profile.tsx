@@ -1140,6 +1140,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
+          {/*
            <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1171,6 +1172,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
               )}
             </CardContent>
           </Card>
+          */}
           
            <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
