@@ -226,25 +226,24 @@ export default function ReportsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                    {userProfile?.role === 'admin' ? (
-                        <div className="space-y-2">
-                            <Label htmlFor="user">Assigned To</Label>
-                             <Select value={filters.dialerAssigned} onValueChange={(value) => handleFilterChange('dialerAssigned', value)}>
-                                <SelectTrigger id="user">
-                                    <SelectValue placeholder="Select user" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Users</SelectItem>
-                                    {allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <Label htmlFor="user-display">Assigned To</Label>
-                            <Input id="user-display" value={userProfile.displayName || 'Current User'} disabled />
-                        </div>
-                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="user">Assigned To</Label>
+                            <Select 
+                                value={filters.dialerAssigned} 
+                                onValueChange={(value) => handleFilterChange('dialerAssigned', value)}
+                            >
+                            <SelectTrigger id="user">
+                                <SelectValue placeholder="Select user" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {userProfile?.role === 'admin' && <SelectItem value="all">All Users</SelectItem>}
+                                {userProfile?.role === 'admin' 
+                                    ? allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)
+                                    : userProfile?.displayName && <SelectItem value={userProfile.displayName}>{userProfile.displayName}</SelectItem>
+                                }
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
                         <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
