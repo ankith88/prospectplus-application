@@ -52,10 +52,8 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && userProfile) {
-        if (userProfile.role !== 'admin') {
-            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
-        }
+    if (!authLoading && userProfile && userProfile.role !== 'admin') {
+        setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
     }
   }, [authLoading, userProfile]);
 
@@ -124,7 +122,7 @@ export default function ReportsPage() {
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const dialerMatch = filters.dialerAssigned === 'all' || call.author === filters.dialerAssigned;
+        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
         let dateMatch = true;
@@ -244,7 +242,7 @@ export default function ReportsPage() {
                                 </SelectContent>
                             </Select>
                           ) : (
-                            <Input id="user" value={filters.dialerAssigned === 'all' ? userProfile.displayName : filters.dialerAssigned} disabled />
+                            <Input id="user" value={userProfile.displayName || ''} disabled />
                           )}
                     </div>
                     <div className="space-y-2">
