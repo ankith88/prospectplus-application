@@ -39,16 +39,17 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 export default function ReportsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const [adminSelectedUser, setAdminSelectedUser] = useState('all');
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
     date: undefined as DateRange | undefined,
     duration: 'all',
+    dialerAssigned: 'all',
   });
 
   useEffect(() => {
@@ -66,6 +67,9 @@ export default function ReportsPage() {
             getAllLeadsForReport()
         ]);
         
+        const dialers = Array.from(new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean))) as string[];
+        setAllDialers(dialers);
+
         if (userProfile.role === 'admin') {
             setAllCalls(fetchedCalls);
             setAllLeads(fetchedLeads);
@@ -73,6 +77,7 @@ export default function ReportsPage() {
             const userDisplayName = userProfile.displayName || '';
             setAllCalls(fetchedCalls.filter(c => c.dialerAssigned === userDisplayName));
             setAllLeads(fetchedLeads.filter(l => l.dialerAssigned === userDisplayName));
+            setFilters(prev => ({ ...prev, dialerAssigned: userDisplayName }));
         }
 
       } catch (error) {
@@ -94,8 +99,8 @@ export default function ReportsPage() {
       status: 'all',
       date: undefined,
       duration: 'all',
+      dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
     });
-    setAdminSelectedUser('all');
   };
 
   const parseDuration = (durationStr?: string): number => {
@@ -106,25 +111,18 @@ export default function ReportsPage() {
     const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
     return minutes * 60 + seconds;
   };
-  
-  const allDialers = useMemo(() => {
-    const dialers = new Set(allLeads.map(l => l.dialerAssigned).filter(Boolean));
-    return Array.from(dialers as string[]);
-  }, [allLeads]);
-  
-  const selectedUser = userProfile?.role === 'admin' ? adminSelectedUser : userProfile?.displayName || 'all';
 
   const filteredLeads = useMemo(() => {
      return allLeads.filter(lead => {
-      const dialerMatch = selectedUser === 'all' || lead.dialerAssigned === selectedUser;
+      const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
       const statusMatch = filters.status === 'all' || lead.status === filters.status;
       return dialerMatch && statusMatch;
     });
-  }, [allLeads, selectedUser, filters.status]);
+  }, [allLeads, filters.dialerAssigned, filters.status]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const dialerMatch = selectedUser === 'all' || call.dialerAssigned === selectedUser;
+        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
         let dateMatch = true;
@@ -148,7 +146,7 @@ export default function ReportsPage() {
 
         return dialerMatch && statusMatch && dateMatch && durationMatch();
     });
-  }, [allCalls, selectedUser, filters]);
+  }, [allCalls, filters]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -195,7 +193,7 @@ export default function ReportsPage() {
   }, [filteredCalls, filteredLeads]);
 
   const hasActiveFilters = 
-    (userProfile?.role === 'admin' && adminSelectedUser !== 'all') || 
+    (filters.dialerAssigned !== 'all' && userProfile?.role === 'admin') || 
     filters.status !== 'all' || 
     !!filters.date || 
     filters.duration !== 'all';
@@ -231,10 +229,10 @@ export default function ReportsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                    {userProfile?.role === 'admin' && (
+                    {userProfile?.role === 'admin' ? (
                         <div className="space-y-2">
                             <Label htmlFor="user">Assigned To</Label>
-                             <Select value={adminSelectedUser} onValueChange={setAdminSelectedUser}>
+                             <Select value={filters.dialerAssigned} onValueChange={(value) => handleFilterChange('dialerAssigned', value)}>
                                 <SelectTrigger id="user">
                                     <SelectValue placeholder="Select user" />
                                 </SelectTrigger>
@@ -243,6 +241,11 @@ export default function ReportsPage() {
                                     {allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                                 </SelectContent>
                             </Select>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <Label htmlFor="user-display">Assigned To</Label>
+                            <Input id="user-display" value={userProfile.displayName || 'Current User'} disabled />
                         </div>
                     )}
                     <div className="space-y-2">
@@ -440,5 +443,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
