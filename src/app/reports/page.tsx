@@ -15,7 +15,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getAllCallActivities, getAllLeadsForReport } from '@/services/firebase';
@@ -128,8 +128,8 @@ export default function ReportsPage() {
         let dateMatch = true;
         if (filters.date?.from) {
           const callDate = new Date(call.date);
-          const fromDate = filters.date.from;
-          const toDate = filters.date.to || filters.date.from;
+          const fromDate = startOfDay(filters.date.from);
+          const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
           dateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
@@ -234,6 +234,7 @@ export default function ReportsPage() {
                             <Select 
                                 value={filters.dialerAssigned} 
                                 onValueChange={(value) => handleFilterChange('dialerAssigned', value)}
+                                disabled={userProfile?.role !== 'admin'}
                             >
                             <SelectTrigger id="user">
                                 <SelectValue placeholder="Select user" />
