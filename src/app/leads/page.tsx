@@ -22,7 +22,7 @@ import type { Lead, LeadStatus, Note, Activity } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, getLeadNotes } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, getAllNotes, getAllActivities } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter } from 'lucide-react'
@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
-type LeadWithDetails = Lead & { notes?: Note[] };
+type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -67,14 +67,33 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const fetchedLeads = await getLeadsTool({ summary: false }); // Fetch full lead data
+        const [fetchedLeads, allNotes, allActivities] = await Promise.all([
+          getLeadsTool({ summary: true }),
+          getAllNotes(),
+          getAllActivities()
+        ]);
 
-        const leadsWithDetails = await Promise.all(
-          fetchedLeads.map(async (lead) => {
-            const notes = await getLeadNotes(lead.id);
-            return { ...lead, notes };
-          })
-        );
+        const notesByLead = new Map<string, Note[]>();
+        allNotes.forEach(note => {
+            if (!notesByLead.has(note.leadId)) {
+                notesByLead.set(note.leadId, []);
+            }
+            notesByLead.get(note.leadId)!.push(note);
+        });
+
+        const activitiesByLead = new Map<string, Activity[]>();
+        allActivities.forEach(activity => {
+            if (!activitiesByLead.has(activity.leadId)) {
+                activitiesByLead.set(activity.leadId, []);
+            }
+            activitiesByLead.get(activity.leadId)!.push(activity);
+        });
+
+        const leadsWithDetails = fetchedLeads.map(lead => ({
+          ...lead,
+          notes: notesByLead.get(lead.id) || [],
+          activity: activitiesByLead.get(lead.id) || [],
+        }));
         
         setAllLeads(leadsWithDetails);
 

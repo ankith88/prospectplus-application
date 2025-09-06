@@ -345,6 +345,46 @@ async function getLeadNotes(leadId: string): Promise<Note[]> {
     }
 }
 
+async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
+    try {
+        const notesSnapshot = await getDocs(collectionGroup(firestore, 'notes'));
+        const allNotes = notesSnapshot.docs.map(doc => {
+            const noteData = doc.data() as Note;
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                ...noteData,
+                id: doc.id,
+                leadId: leadId,
+            };
+        });
+        allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return allNotes;
+    } catch (error) {
+        console.error('Failed to fetch all notes:', error);
+        return [];
+    }
+}
+
+async function getAllActivities(): Promise<Array<Activity & { leadId: string }>> {
+    try {
+        const activitiesSnapshot = await getDocs(collectionGroup(firestore, 'activity'));
+        const allActivities = activitiesSnapshot.docs.map(doc => {
+            const activityData = doc.data() as Activity;
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                ...activityData,
+                id: doc.id,
+                leadId: leadId,
+            };
+        });
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return allActivities;
+    } catch (error) {
+        console.error('Failed to fetch all activities:', error);
+        return [];
+    }
+}
+
 async function getAllTranscripts(): Promise<Transcript[]> {
     try {
         const transcriptsSnapshot = await getDocs(collectionGroup(firestore, 'transcripts'));
@@ -809,6 +849,8 @@ export {
     getLeadSubCollection,
     getLeadActivity,
     getLeadNotes,
+    getAllNotes,
+    getAllActivities,
     getLeadTranscripts,
     updateLeadAvatar,
     getUserPhoneNumber,
