@@ -34,6 +34,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { getLeadNotes } from '@/services/firebase'
+import { Badge } from '@/components/ui/badge'
 
 type LeadWithDetails = Lead & { notes?: Note[] };
 
@@ -276,8 +277,9 @@ export default function ArchivedLeadsPage() {
         </Collapsible>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Processed Leads</CardTitle>
+          <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -386,3 +388,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    
