@@ -18,6 +18,9 @@ import {
     signOut as firebaseSignOut,
     updateProfile,
     Auth,
+    sendSignInLinkToEmail,
+    isSignInWithEmailLink,
+    signInWithEmailLink,
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
@@ -37,6 +40,7 @@ interface AuthContextType {
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
+    signInWithLink: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -46,6 +50,7 @@ const AuthContext = createContext<AuthContextType>({
     isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
+    signInWithLink: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -71,11 +76,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         const fullProfile = { uid: user.uid, ...profileData };
                         setUserProfile(fullProfile);
 
-                        // Ensure Firebase Auth user object has the correct displayName
                         const displayName = `${fullProfile.firstName} ${fullProfile.lastName}`;
                         if (user.displayName !== displayName) {
                             await updateProfile(user, { displayName });
-                            // You might want to reload the user to get the updated state
                             await user.reload();
                             setUser(authInstance.currentUser); 
                         }
@@ -87,12 +90,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
                 setLoading(false);
             });
+
+            // Handle sign-in with email link
+            if (isSignInWithEmailLink(authInstance, window.location.href)) {
+                let email = window.localStorage.getItem('emailForSignIn');
+                if (!email) {
+                    email = window.prompt('Please provide your email for confirmation');
+                }
+                if (email) {
+                    signInWithEmailLink(authInstance, email, window.location.href)
+                        .then(() => {
+                            window.localStorage.removeItem('emailForSignIn');
+                            router.replace('/leads');
+                        })
+                        .catch((error) => {
+                            console.error("Error signing in with email link:", error);
+                        });
+                }
+            }
+
+
             return () => unsubscribe();
         } else {
             setLoading(false);
             console.error("Firebase app not initialized. Auth functionality will not work.");
         }
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         if (!loading && !user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
@@ -115,13 +138,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return userCredential;
     }
 
+    const signInWithLink = async (email: string) => {
+        if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
+        const actionCodeSettings = {
+            url: window.location.origin + '/signin', // Redirect here after sign-in
+            handleCodeInApp: true,
+        };
+        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+        window.localStorage.setItem('emailForSignIn', email);
+    }
+
     const signOut = async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);
-        // The useEffect above will handle the redirect
         setIsSigningOut(false);
     };
 
@@ -132,6 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isSigningOut,
         signIn,
         signOut,
+        signInWithLink,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
