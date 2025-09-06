@@ -938,91 +938,131 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity History</CardTitle>
-            </CardHeader>
-            <CardContent>
-             {loading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : (
-              <ul className="space-y-4">
-                {displayedActivities && displayedActivities.map((item, index) => {
-                   const hasTranscript = transcripts.some(t => t.callId === item.callId);
-                   return (
-                    <li key={item.id} className="flex gap-4 group">
-                      <div className="flex flex-col items-center">
-                        <div className="bg-secondary rounded-full p-2">
-                          {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                          {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Activity History</CardTitle>
+              </CardHeader>
+              <CardContent>
+              {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : (
+                <ul className="space-y-4">
+                  {displayedActivities && displayedActivities.map((item, index) => {
+                    const hasTranscript = transcripts.some(t => t.callId === item.callId);
+                    return (
+                      <li key={item.id} className="flex gap-4 group">
+                        <div className="flex flex-col items-center">
+                          <div className="bg-secondary rounded-full p-2">
+                            {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                            {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                            {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                            {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                          </div>
+                          {displayedActivities && index < displayedActivities.length - 1 && (
+                            <div className="w-px h-full bg-border"></div>
+                          )}
                         </div>
-                        {displayedActivities && index < displayedActivities.length - 1 && (
-                          <div className="w-px h-full bg-border"></div>
-                        )}
-                      </div>
-                      <div className="flex-1 pb-4 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                          <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                        </div>
-                        <div className="text-sm text-muted-foreground break-words">
-                          {item.notes}
-                        </div>
-                         {item.type === 'Call' && item.callId && (
-                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                             <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                        <div className="flex-1 pb-4 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                            <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                          </div>
+                          <div className="text-sm text-muted-foreground break-words">
+                            {item.notes}
+                          </div>
+                          {item.type === 'Call' && item.callId && (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                              <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
                                 <Hash className="w-3 h-3 flex-shrink-0" />
                                 <span>Call ID: {item.callId}</span>
-                                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                    <Clipboard className="w-2.5 h-2.5" />
-                                </Button>
-                             </div>
-                             <div className="flex items-center gap-2">
-                                {!hasTranscript && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                    disabled={fetchingTranscriptId === item.callId}
-                                  >
-                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                      <Clipboard className="w-2.5 h-2.5" />
                                   </Button>
-                                )}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                  <Voicemail className="mr-2 h-4 w-4" />
-                                  Recording
-                                </Button>
-                             </div>
-                           </div>
-                         )}
-                      </div>
-                    </li>
-                   )
-                })}
-              </ul>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  {!hasTranscript && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                      disabled={fetchingTranscriptId === item.callId}
+                                    >
+                                      {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                    </Button>
+                                  )}
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                    <Voicemail className="mr-2 h-4 w-4" />
+                                    Recording
+                                  </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+                )}
+              </CardContent>
+              {lead.activity && lead.activity.length > 5 && (
+                <CardFooter>
+                  <Button
+                    variant="link"
+                    className="w-full"
+                    onClick={() => setIsActivityExpanded(!isActivityExpanded)}
+                  >
+                    {isActivityExpanded ? 'Show less' : 'Show all activity'}
+                  </Button>
+                </CardFooter>
               )}
-            </CardContent>
-            {lead.activity && lead.activity.length > 5 && (
-              <CardFooter>
-                <Button
-                  variant="link"
-                  className="w-full"
-                  onClick={() => setIsActivityExpanded(!isActivityExpanded)}
-                >
-                  {isActivityExpanded ? 'Show less' : 'Show all activity'}
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <BookText className="w-5 h-5 text-muted-foreground" />
+                    Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  {loading ? (
+                    <div className="py-4 space-y-4">
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : displayedNotes.length > 0 ? (
+                    displayedNotes.map(note => (
+                      <div key={note.id} className="text-sm border-l-2 pl-4">
+                        <p className="whitespace-pre-wrap">{note.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(note.date).toLocaleString()} by {note.author}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
+                  )}
+              </CardContent>
+              {notes.length > 5 && (
+                  <CardFooter>
+                      <Button
+                          variant="link"
+                          className="w-full"
+                          onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                      >
+                          {isNotesExpanded ? 'Show less' : 'Show all notes'}
+                      </Button>
+                  </CardFooter>
+              )}
+            </Card>
+          </div>
           
           <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
               <DialogContent className="max-w-2xl">
@@ -1059,6 +1099,43 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                )}
              </DialogContent>
           </Dialog>
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-muted-foreground" />
+                    Transcripts
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                {loading ? (
+                    <div className="py-4 space-y-4">
+                        <Skeleton className="h-12 w-full" />
+                    </div>
+                ) : transcripts.length > 0 ? (
+                    transcripts.map(transcript => (
+                        <div key={transcript.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                            <div>
+                                <p className="text-sm font-medium">
+                                    Call with {transcript.author}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {new Date(transcript.date).toLocaleString()}
+                                </p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => {
+                                setSelectedTranscript(transcript);
+                                setIsTranscriptViewerOpen(true);
+                            }}>
+                                View Transcript
+                            </Button>
+                        </div>
+                    ))
+                ) : (
+                    <p className="text-sm text-muted-foreground">No transcripts for this lead yet.</p>
+                )}
+            </CardContent>
+          </Card>
 
         </div>
 
@@ -1181,81 +1258,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                     </div>
                 </CardContent>
             </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                  <BookText className="w-5 h-5 text-muted-foreground" />
-                  Notes
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {loading ? (
-                  <div className="py-4 space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : displayedNotes.length > 0 ? (
-                  displayedNotes.map(note => (
-                    <div key={note.id} className="text-sm border-l-2 pl-4">
-                      <p className="whitespace-pre-wrap">{note.content}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(note.date).toLocaleString()} by {note.author}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
-                )}
-            </CardContent>
-            {notes.length > 5 && (
-                <CardFooter>
-                    <Button
-                        variant="link"
-                        className="w-full"
-                        onClick={() => setIsNotesExpanded(!isNotesExpanded)}
-                    >
-                        {isNotesExpanded ? 'Show less' : 'Show all notes'}
-                    </Button>
-                </CardFooter>
-            )}
-          </Card>
-          
-          <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-muted-foreground" />
-                    Transcripts
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-                {loading ? (
-                    <div className="py-4 space-y-4">
-                        <Skeleton className="h-12 w-full" />
-                    </div>
-                ) : transcripts.length > 0 ? (
-                    transcripts.map(transcript => (
-                        <div key={transcript.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                            <div>
-                                <p className="text-sm font-medium">
-                                    Call with {transcript.author}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                    {new Date(transcript.date).toLocaleString()}
-                                </p>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => {
-                                setSelectedTranscript(transcript);
-                                setIsTranscriptViewerOpen(true);
-                            }}>
-                                View Transcript
-                            </Button>
-                        </div>
-                    ))
-                ) : (
-                    <p className="text-sm text-muted-foreground">No transcripts for this lead yet.</p>
-                )}
-            </CardContent>
-          </Card>
           
         </div>
       </main>
