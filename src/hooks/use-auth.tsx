@@ -67,7 +67,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const userDocRef = doc(firestore, "users", user.uid);
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
-                        setUserProfile({ uid: user.uid, ...userDoc.data() } as UserProfile);
+                        const profileData = userDoc.data() as Omit<UserProfile, 'uid'>;
+                        const fullProfile = { uid: user.uid, ...profileData };
+                        setUserProfile(fullProfile);
+
+                        // Ensure Firebase Auth user object has the correct displayName
+                        const displayName = `${fullProfile.firstName} ${fullProfile.lastName}`;
+                        if (user.displayName !== displayName) {
+                            await updateProfile(user, { displayName });
+                            // You might want to reload the user to get the updated state
+                            await user.reload();
+                            setUser(authInstance.currentUser); 
+                        }
                     } else {
                         setUserProfile(null);
                     }
