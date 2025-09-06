@@ -68,8 +68,8 @@ export default function ReportsPage() {
         ]);
         
         const dialerSet = new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean));
-        if (userProfile.role !== 'admin' && userProfile.displayName) {
-            dialerSet.add(userProfile.displayName); // Ensure current user is in the list
+        if (userProfile.displayName) { // Ensure current user is in the list
+            dialerSet.add(userProfile.displayName);
         }
         setAllDialers(Array.from(dialerSet) as string[]);
         
