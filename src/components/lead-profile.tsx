@@ -519,7 +519,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
   const handleDiscoverySave = async (data: DiscoveryData) => {
     if (!lead) return;
-    console.log('[Client] handleDiscoverySave triggered.', { data });
+    console.log('[Client] handleDiscoverySave triggered.');
 
     // Step 1: Call NetSuite and handle its response.
     try {
@@ -903,18 +903,34 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                     Address
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
+              <CardContent className="space-y-2">
+                <div className="flex items-start gap-2">
                   <button
                       onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
                       disabled={fullAddress === 'No address available'}
-                      className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 mt-1"
                       title="View on map"
                   >
                       <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
                   </button>
                   <p className="text-sm text-muted-foreground">{fullAddress}</p>
                 </div>
+                {fullAddress !== 'No address available' && (
+                    <div className="h-48 w-full rounded-md overflow-hidden border">
+                        <iframe
+                            width="100%"
+                            height="100%"
+                            frameBorder="0"
+                            style={{ border: 0 }}
+                            src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                                fullAddress
+                            )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                            allowFullScreen
+                            aria-hidden="false"
+                            tabIndex={0}
+                        ></iframe>
+                    </div>
+                )}
               </CardContent>
             </Card>
           </div>
