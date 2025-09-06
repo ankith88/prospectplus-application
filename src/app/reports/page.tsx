@@ -52,10 +52,10 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && userProfile && userProfile.role !== 'admin') {
-        setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
+    if (userProfile && userProfile.role !== 'admin') {
+      setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
     }
-  }, [authLoading, userProfile]);
+  }, [userProfile]);
 
   useEffect(() => {
     async function getData() {
