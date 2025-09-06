@@ -778,124 +778,147 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
              </CardContent>
            </Card>
            
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-muted-foreground" />
-                Contacts
-              </CardTitle>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Contact
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Contact</DialogTitle>
-                    <DialogDescription>
-                      Enter the details for the new contact.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent className="divide-y divide-border">
-              {loading ? (
-                 <div className="py-4 space-y-4">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                 </div>
-              ) : lead.contacts && lead.contacts.length > 0 ? (
-                lead.contacts.map((contact, index) => (
-                  <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
-                     <div className="absolute top-4 right-4">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                  <span className="text-red-500">Delete</span>
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the contact {contact.name}.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-muted-foreground" />
+                  Contacts
+                </CardTitle>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Contact
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Contact</DialogTitle>
+                      <DialogDescription>
+                        Enter the details for the new contact.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent className="divide-y divide-border">
+                {loading ? (
+                  <div className="py-4 space-y-4">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : lead.contacts && lead.contacts.length > 0 ? (
+                  lead.contacts.map((contact, index) => (
+                    <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
+                      <div className="absolute top-4 right-4">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                    <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                    <span className="text-red-500">Delete</span>
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the contact {contact.name}.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                        <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <span className="break-all">{contact.name}</span>
                       </div>
-                    <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                      <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <span className="break-all">{contact.name}</span>
+                      <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
+                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                        <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                          {contact.email}
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                        <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <div className="flex items-center gap-1">
+                            <span className="break-all">{contact.phone}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                <PhoneCall className="w-3 h-3" />
+                            </Button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
-                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                        {contact.email}
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
-                       <div className="flex items-center gap-1">
-                          <span className="break-all">{contact.phone}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
-                              <PhoneCall className="w-3 h-3" />
-                          </Button>
-                       </div>
-                    </div>
+                  ))
+                ) : (
+                  <div className="py-4 text-center text-muted-foreground">
+                    No existing contacts found.
                   </div>
-                ))
-              ) : (
-                <div className="py-4 text-center text-muted-foreground">
-                  No existing contacts found.
+                )}
+                {scoringResult?.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
+                  scoringResult.prospectedContacts.map((contact, index) => (
+                    <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                        <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <span className="break-all">{contact.name}</span>
+                        <Badge variant="outline">Found on website</Badge>
+                      </div>
+                      <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
+                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                        <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                        <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                          {contact.email}
+                        </a>
+                      </div>
+                    </div>
+                  ))
+                }
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-muted-foreground" />
+                    Address
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <button
+                      onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
+                      disabled={fullAddress === 'No address available'}
+                      className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      title="View on map"
+                  >
+                      <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                  </button>
+                  <p className="text-sm text-muted-foreground">{fullAddress}</p>
                 </div>
-              )}
-              {scoringResult?.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
-                scoringResult.prospectedContacts.map((contact, index) => (
-                  <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                      <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <span className="break-all">{contact.name}</span>
-                      <Badge variant="outline">Found on website</Badge>
-                    </div>
-                    <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
-                    <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                      <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                        {contact.email}
-                      </a>
-                    </div>
-                  </div>
-                ))
-              }
-            </CardContent>
-          </Card>
-           
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle>Activity History</CardTitle>
@@ -971,28 +994,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-muted-foreground" />
-                  Address
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <button
-                    onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
-                    disabled={fullAddress === 'No address available'}
-                    className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                    title="View on map"
-                >
-                    <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                </button>
-                <p className="text-sm text-muted-foreground">{fullAddress}</p>
-              </div>
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
