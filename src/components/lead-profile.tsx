@@ -1188,7 +1188,26 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 </CardHeader>
                  <CardContent>
                     {lead.discoveryData ? (
-                        <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                        <div className="flex flex-col gap-4">
+                             {lead.discoveryData.score !== undefined && lead.discoveryData.routingTag && (
+                                <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                                    <div className="flex flex-col items-center">
+                                        <p className="text-sm text-muted-foreground">Score</p>
+                                        <p className="text-2xl font-bold">{lead.discoveryData.score}</p>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                        <Badge variant="outline">{lead.discoveryData.routingTag}</Badge>
+                                    </div>
+                                </div>
+                            )}
+                            <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                             {lead.discoveryData.scoringReason && (
+                                <div className="text-xs text-muted-foreground p-2 border-t">
+                                    <strong>Scoring Rationale:</strong> {lead.discoveryData.scoringReason}
+                                </div>
+                            )}
+                        </div>
                     ) : (
                          <div className="text-center text-muted-foreground py-4">
                             <p>No discovery data yet. Open the form to begin.</p>
