@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -212,8 +212,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
       return [];
     }
     
-    const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (docSnapshot) => {
-        const data = docSnapshot.data() || {};
+    const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const leadsArray: Lead[] = await Promise.all(leadsData.map(async (data) => {
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -228,7 +229,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         }
 
         const transformedLead: Lead = {
-          id: docSnapshot.id,
+          id: data.id,
           entityId: data['customerEntityId'] || data['internalid'],
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
@@ -252,13 +253,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         };
         
         if (!summary) {
-            try {
-                transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
-                transformedLead.contactCount = transformedLead.contacts.length;
-                transformedLead.activity = await getLeadActivity(docSnapshot.id);
-            } catch (e) {
-                console.log(e);
-            }
+            transformedLead.contacts = await getLeadSubCollection<Contact>(data.id, 'contacts');
+            transformedLead.contactCount = transformedLead.contacts.length;
+            transformedLead.activity = await getLeadActivity(data.id);
         }
 
         return transformedLead;
@@ -295,39 +292,35 @@ async function getLeadActivity(leadId: string): Promise<Activity[]> {
     return getLeadSubCollection<Activity>(leadId, 'activity');
 }
 
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
-async function getAllCallActivities(user: UserProfile | null): Promise<(Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string })[]> {
-    if (!user) return [];
+async function getAllCallActivities(): Promise<CallActivity[]> {
     try {
-        const allCalls: (Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string })[] = [];
-        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
-
-        for (const leadDoc of leadsSnapshot.docs) {
-            const activitiesRef = collection(firestore, 'leads', leadDoc.id, 'activity');
-            const q = query(activitiesRef, where('type', '==', 'Call'));
-            const activitiesSnapshot = await getDocs(q);
-            const leadData = leadDoc.data();
-
-            activitiesSnapshot.forEach(doc => {
-                allCalls.push({
-                    ...(doc.data() as Activity),
-                    id: doc.id,
-                    leadId: leadDoc.id,
-                    leadName: leadData.companyName || 'Unknown Lead',
-                    leadStatus: safeGetStatus(leadData.customerStatus),
-                    dialerAssigned: leadData.dialerAssigned || 'Unassigned',
-                });
-            });
-        }
+        const activitiesSnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call')));
+        const leadIds = new Set(activitiesSnapshot.docs.map(doc => doc.ref.parent.parent!.id));
         
+        if (leadIds.size === 0) return [];
+
+        const leadDocs = await Promise.all(Array.from(leadIds).map(id => getDoc(doc(firestore, 'leads', id))));
+        const leadsMap = new Map(leadDocs.map(doc => [doc.id, doc.data()]));
+
+        const allCalls = activitiesSnapshot.docs.map(doc => {
+            const activityData = doc.data() as Activity;
+            const leadId = doc.ref.parent.parent!.id;
+            const leadData = leadsMap.get(leadId);
+
+            return {
+                ...activityData,
+                id: doc.id,
+                leadId: leadId,
+                leadName: leadData?.companyName || 'Unknown Lead',
+                leadStatus: safeGetStatus(leadData?.customerStatus),
+                dialerAssigned: leadData?.dialerAssigned || 'Unassigned',
+            };
+        });
+
         allCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        if (user.role === 'admin') {
-            return allCalls;
-        }
-        
-        const currentUserName = `${user.firstName} ${user.lastName}`;
-        return allCalls.filter(call => call.dialerAssigned === currentUserName);
+        return allCalls;
 
     } catch (error) {
         console.error('Failed to fetch all call activities:', error);
@@ -354,25 +347,25 @@ async function getLeadNotes(leadId: string): Promise<Note[]> {
 
 async function getAllTranscripts(): Promise<Transcript[]> {
     try {
-        const allTranscripts: Transcript[] = [];
-        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+        const transcriptsSnapshot = await getDocs(collectionGroup(firestore, 'transcripts'));
+        const leadIds = new Set(transcriptsSnapshot.docs.map(doc => doc.ref.parent.parent!.id));
+        
+        if (leadIds.size === 0) return [];
 
-        for (const leadDoc of leadsSnapshot.docs) {
-            const transcriptsRef = collection(firestore, 'leads', leadDoc.id, 'transcripts');
-            const transcriptsSnapshot = await getDocs(transcriptsRef);
-            const leadTranscripts = transcriptsSnapshot.docs.map(doc => {
-                const data = doc.data();
-                const leadData = leadDoc.data();
-                // Extract phone number from lead data if not on transcript
-                const phoneNumber = data.phoneNumber || leadData.customerPhone || 'Unknown';
-                return {
-                    id: doc.id,
-                    ...data,
-                    phoneNumber,
-                } as Transcript;
-            });
-            allTranscripts.push(...leadTranscripts);
-        }
+        const leadDocs = await Promise.all(Array.from(leadIds).map(id => getDoc(doc(firestore, 'leads', id))));
+        const leadsMap = new Map(leadDocs.map(doc => [doc.id, doc.data()]));
+
+        const allTranscripts = transcriptsSnapshot.docs.map(doc => {
+            const transcriptData = doc.data();
+            const leadId = doc.ref.parent.parent!.id;
+            const leadData = leadsMap.get(leadId);
+            
+            return {
+                id: doc.id,
+                ...transcriptData,
+                phoneNumber: transcriptData.phoneNumber || leadData?.customerPhone || 'Unknown',
+            } as Transcript;
+        });
         
         allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allTranscripts;
@@ -835,3 +828,5 @@ export {
     deleteTaskFromLead,
     updateLeadDiscoveryData,
 };
+
+    

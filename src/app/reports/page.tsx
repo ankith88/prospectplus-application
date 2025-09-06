@@ -62,7 +62,7 @@ export default function ReportsPage() {
       try {
         setLoading(true);
         const [fetchedCalls, fetchedLeads] = await Promise.all([
-            getAllCallActivities(userProfile),
+            getAllCallActivities(),
             getLeadsTool({ summary: true })
         ]);
 
@@ -420,3 +420,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    

@@ -56,8 +56,14 @@ export default function AllCallsPage() {
     if (!userProfile) return;
     try {
       setLoading(true);
-      const fetchedCalls = await getAllCallActivities(userProfile);
-      setAllCalls(fetchedCalls);
+      const fetchedCalls = await getAllCallActivities();
+      
+      if (userProfile.role === 'admin') {
+          setAllCalls(fetchedCalls);
+      } else {
+          setAllCalls(fetchedCalls.filter(c => c.dialerAssigned === userProfile.displayName));
+      }
+
     } catch (error) {
       console.error("Failed to fetch calls:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls.' });
