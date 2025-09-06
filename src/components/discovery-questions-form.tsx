@@ -141,7 +141,7 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     const { score, routingTag, scoringReason } = calculateScoreAndRouting(data);
     const discoveryData: DiscoveryData = { ...data, score, routingTag, scoringReason };
-    onSave(discoveryData);
+    await onSave(discoveryData);
   }
 
   return (
