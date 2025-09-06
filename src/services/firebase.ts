@@ -321,30 +321,53 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
     try {
+        console.log("Fetching all call activities...");
         const activitiesSnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call')));
-        const leadIds = new Set(activitiesSnapshot.docs.map(doc => doc.ref.parent.parent!.id));
+        console.log(`Found ${activitiesSnapshot.docs.length} call activities in total.`);
         
-        if (leadIds.size === 0) return [];
+        const leadIds = new Set<string>();
+        activitiesSnapshot.forEach(doc => {
+            const leadId = doc.ref.parent.parent?.id;
+            if (leadId) {
+                leadIds.add(leadId);
+            }
+        });
 
+        if (leadIds.size === 0) {
+            console.log("No leads associated with call activities found.");
+            return [];
+        }
+
+        console.log(`Fetching data for ${leadIds.size} unique leads.`);
         const leadDocs = await Promise.all(Array.from(leadIds).map(id => getDoc(doc(firestore, 'leads', id))));
-        const leadsMap = new Map(leadDocs.map(doc => [doc.id, doc.data()]));
+        
+        const leadsMap = new Map<string, any>();
+        leadDocs.forEach(doc => {
+            if (doc.exists()) {
+                leadsMap.set(doc.id, doc.data());
+            }
+        });
+        console.log(`Successfully mapped ${leadsMap.size} leads.`);
 
-        const allCalls = activitiesSnapshot.docs.map(doc => {
-            const activityData = doc.data() as Activity;
-            const leadId = doc.ref.parent.parent!.id;
+        const allCalls = activitiesSnapshot.docs.map(activityDoc => {
+            const activityData = activityDoc.data() as Activity;
+            const leadId = activityDoc.ref.parent.parent!.id;
             const leadData = leadsMap.get(leadId);
 
             return {
                 ...activityData,
-                id: doc.id,
+                id: activityDoc.id,
                 leadId: leadId,
                 leadName: leadData?.companyName || 'Unknown Lead',
                 leadStatus: safeGetStatus(leadData?.customerStatus),
                 dialerAssigned: leadData?.dialerAssigned || 'Unassigned',
             };
-        });
+        }).filter(call => call.leadId); // Filter out any calls that couldn't be mapped to a lead
+
+        console.log(`Processed ${allCalls.length} call activities with lead data.`);
 
         allCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
         return allCalls;
 
     } catch (error) {
