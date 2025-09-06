@@ -428,9 +428,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
     });
-    // Open discovery questions, then outcome
-    setIsChainedFlow(true);
-    setIsDiscoveryQuestionsOpen(true);
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
