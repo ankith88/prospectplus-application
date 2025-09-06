@@ -53,17 +53,10 @@ export default function AllCallsPage() {
   const { toast } = useToast();
 
   const fetchCalls = async () => {
-    if (!userProfile) return;
     try {
       setLoading(true);
       const fetchedCalls = await getAllCallActivities();
-      
-      if (userProfile.role === 'admin') {
-          setAllCalls(fetchedCalls);
-      } else {
-          setAllCalls(fetchedCalls.filter(c => c.dialerAssigned === userProfile.displayName));
-      }
-
+      setAllCalls(fetchedCalls);
     } catch (error) {
       console.error("Failed to fetch calls:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls.' });
@@ -77,11 +70,11 @@ export default function AllCallsPage() {
       router.push('/signin');
       return;
     }
-    if (authLoading || !userProfile) return;
+    if (authLoading) return;
     
     fetchCalls();
 
-  }, [user, userProfile, authLoading, router, toast]);
+  }, [user, authLoading, router]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -101,7 +94,13 @@ export default function AllCallsPage() {
   };
 
   const filteredCalls = useMemo(() => {
-    return allCalls.filter(call => {
+    let callsToFilter = allCalls;
+
+    if (userProfile?.role !== 'admin' && userProfile?.displayName) {
+        callsToFilter = allCalls.filter(c => c.dialerAssigned === userProfile.displayName);
+    }
+
+    return callsToFilter.filter(call => {
         if (!call.callId) return false;
 
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
@@ -127,10 +126,12 @@ export default function AllCallsPage() {
         };
 
         const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
+        
+        const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return userMatch && dateMatch && durationMatch() && leadNameMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch;
     });
-  }, [allCalls, filters]);
+  }, [allCalls, filters, userProfile]);
   
   const allUsers = useMemo(() => {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
@@ -145,7 +146,7 @@ export default function AllCallsPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
 
   return (
     <>
@@ -357,5 +358,3 @@ export default function AllCallsPage() {
     </>
   )
 }
-
-    

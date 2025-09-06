@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -296,16 +296,12 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
 async function getLeadSubCollection<T extends Contact | Activity>(leadId: string, collectionName: 'contacts' | 'activity'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
-    const snapshot = await getDocs(ref);
+    const q = query(ref, orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
     const items = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     } as T));
-
-    if (collectionName === 'activity') {
-      (items as Activity[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }
-    
     return items;
   } catch (error) {
     console.error(`Failed to fetch ${collectionName} for lead ${leadId}:`, error);
@@ -321,51 +317,39 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
     try {
-        console.log("Fetching all call activities...");
-        const activitiesSnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call')));
-        console.log(`Found ${activitiesSnapshot.docs.length} call activities in total.`);
-        
-        const leadIds = new Set<string>();
-        activitiesSnapshot.forEach(doc => {
-            const leadId = doc.ref.parent.parent?.id;
-            if (leadId) {
-                leadIds.add(leadId);
-            }
-        });
-
-        if (leadIds.size === 0) {
-            console.log("No leads associated with call activities found.");
+        console.log("Fetching all leads to get call activities...");
+        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+        if (leadsSnapshot.empty) {
+            console.log("No leads found.");
             return [];
         }
 
-        console.log(`Fetching data for ${leadIds.size} unique leads.`);
-        const leadDocs = await Promise.all(Array.from(leadIds).map(id => getDoc(doc(firestore, 'leads', id))));
-        
-        const leadsMap = new Map<string, any>();
-        leadDocs.forEach(doc => {
-            if (doc.exists()) {
-                leadsMap.set(doc.id, doc.data());
+        const allCalls: CallActivity[] = [];
+
+        for (const leadDoc of leadsSnapshot.docs) {
+            const leadData = leadDoc.data();
+            const leadId = leadDoc.id;
+
+            const activityRef = collection(firestore, 'leads', leadId, 'activity');
+            const q = query(activityRef, where('type', '==', 'Call'));
+            const activitySnapshot = await getDocs(q);
+
+            if (!activitySnapshot.empty) {
+                activitySnapshot.forEach(activityDoc => {
+                    const activityData = activityDoc.data() as Activity;
+                    allCalls.push({
+                        ...activityData,
+                        id: activityDoc.id,
+                        leadId: leadId,
+                        leadName: leadData.companyName || 'Unknown Lead',
+                        leadStatus: safeGetStatus(leadData.customerStatus),
+                        dialerAssigned: leadData.dialerAssigned || 'Unassigned',
+                    });
+                });
             }
-        });
-        console.log(`Successfully mapped ${leadsMap.size} leads.`);
+        }
 
-        const allCalls = activitiesSnapshot.docs.map(activityDoc => {
-            const activityData = activityDoc.data() as Activity;
-            const leadId = activityDoc.ref.parent.parent!.id;
-            const leadData = leadsMap.get(leadId);
-
-            return {
-                ...activityData,
-                id: activityDoc.id,
-                leadId: leadId,
-                leadName: leadData?.companyName || 'Unknown Lead',
-                leadStatus: safeGetStatus(leadData?.customerStatus),
-                dialerAssigned: leadData?.dialerAssigned || 'Unassigned',
-            };
-        }).filter(call => call.leadId); // Filter out any calls that couldn't be mapped to a lead
-
-        console.log(`Processed ${allCalls.length} call activities with lead data.`);
-
+        console.log(`Found ${allCalls.length} total call activities.`);
         allCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
         return allCalls;
@@ -380,12 +364,12 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
 async function getLeadNotes(leadId: string): Promise<Note[]> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'notes');
-        const snapshot = await getDocs(ref);
+        const q = query(ref, orderBy('date', 'desc'));
+        const snapshot = await getDocs(q);
         const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Note));
-        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return items;
     } catch (error) {
         console.error(`Failed to fetch notes for lead ${leadId}:`, error);
@@ -467,12 +451,12 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 async function getLeadTranscripts(leadId: string): Promise<Transcript[]> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'transcripts');
-        const snapshot = await getDocs(ref);
+        const q = query(ref, orderBy('date', 'desc'));
+        const snapshot = await getDocs(q);
         const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Transcript));
-        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return items;
     } catch (error) {
         console.error(`Failed to fetch transcripts for lead ${leadId}:`, error);
@@ -774,12 +758,13 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
 async function getLeadTasks(leadId: string): Promise<Task[]> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'tasks');
-        const snapshot = await getDocs(ref);
+        const q = query(ref, orderBy('dueDate', 'asc'));
+        const snapshot = await getDocs(q);
         const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Task));
-        // Sort by due date, then completion status
+        // Sort by completion status, then due date
         items.sort((a, b) => {
             if (a.isCompleted !== b.isCompleted) {
                 return a.isCompleted ? 1 : -1;
