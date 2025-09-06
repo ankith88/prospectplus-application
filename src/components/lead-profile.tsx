@@ -146,41 +146,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       });
     }
   }, [initialLead]);
-
-  useEffect(() => {
-    if (!lead) return;
-
-    const activityRef = collection(firestore, 'leads', lead.id, 'activity');
-    const q = query(activityRef, where('type', '==', 'Call'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
-                const newActivity = { id: change.doc.id, ...change.doc.data() } as Activity;
-                // Check if this activity is not already processed
-                const isNew = !lead.activity?.find(a => a.id === newActivity.id || (a.callId && a.callId === newActivity.callId));
-                
-                if (isNew) {
-                    console.log("New call detected:", newActivity);
-                    setLastCallActivity(newActivity);
-                    setShowPostCallDialog(true);
-
-                    // Add to local state to prevent re-triggering
-                     setLead(prev => {
-                        if (!prev) return null;
-                        const existingActivities = prev.activity || [];
-                        if (existingActivities.find(a => a.id === newActivity.id)) {
-                            return prev;
-                        }
-                        return { ...prev, activity: [newActivity, ...existingActivities] };
-                    });
-                }
-            }
-        });
-    });
-
-    return () => unsubscribe();
-  }, [lead?.id]);
   
   const fetchNotes = async () => {
     if (!lead) return;
@@ -1187,18 +1152,16 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                  <CardContent>
                     {lead.discoveryData ? (
                         <div className="flex flex-col gap-4">
-                             {lead.discoveryData.score !== undefined && lead.discoveryData.routingTag && (
-                                <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                                    <div className="flex flex-col items-center">
-                                        <p className="text-sm text-muted-foreground">Score</p>
-                                        <p className="text-2xl font-bold">{lead.discoveryData.score}</p>
-                                    </div>
-                                    <div className="flex flex-col items-center">
-                                        <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                        <Badge variant="outline">{lead.discoveryData.routingTag}</Badge>
-                                    </div>
+                             <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Score</p>
+                                    <p className="text-2xl font-bold">{lead.discoveryData.score}</p>
                                 </div>
-                            )}
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                    <Badge variant="outline">{lead.discoveryData.routingTag}</Badge>
+                                </div>
+                            </div>
                             <DiscoveryRadarChart discoveryData={lead.discoveryData} />
                              {lead.discoveryData.scoringReason && (
                                 <div className="text-xs text-muted-foreground p-2 border-t">
