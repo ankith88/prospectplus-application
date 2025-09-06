@@ -48,7 +48,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
@@ -127,6 +127,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
+  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
+  const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+
 
   const router = useRouter();
   const { toast } = useToast();
@@ -583,6 +586,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
   const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
 
+  const displayedActivities = isActivityExpanded ? lead.activity : lead.activity?.slice(0, 5);
+  const displayedNotes = isNotesExpanded ? notes : notes.slice(0, 5);
+
+
   return (
     <>
     <PostCallOutcomeDialog
@@ -948,7 +955,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 </div>
               ) : (
               <ul className="space-y-4">
-                {lead.activity && lead.activity.map((item, index) => {
+                {displayedActivities && displayedActivities.map((item, index) => {
                    const hasTranscript = transcripts.some(t => t.callId === item.callId);
                    return (
                     <li key={item.id} className="flex gap-4 group">
@@ -959,7 +966,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                           {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
                           {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                         </div>
-                        {lead.activity && index < lead.activity.length - 1 && (
+                        {displayedActivities && index < displayedActivities.length - 1 && (
                           <div className="w-px h-full bg-border"></div>
                         )}
                       </div>
@@ -1008,6 +1015,17 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
               </ul>
               )}
             </CardContent>
+            {lead.activity && lead.activity.length > 5 && (
+              <CardFooter>
+                <Button
+                  variant="link"
+                  className="w-full"
+                  onClick={() => setIsActivityExpanded(!isActivityExpanded)}
+                >
+                  {isActivityExpanded ? 'Show less' : 'Show all activity'}
+                </Button>
+              </CardFooter>
+            )}
           </Card>
           
           <Card>
@@ -1176,8 +1194,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                   <div className="py-4 space-y-4">
                     <Skeleton className="h-12 w-full" />
                   </div>
-                ) : notes.length > 0 ? (
-                  notes.map(note => (
+                ) : displayedNotes.length > 0 ? (
+                  displayedNotes.map(note => (
                     <div key={note.id} className="text-sm border-l-2 pl-4">
                       <p className="whitespace-pre-wrap">{note.content}</p>
                       <p className="text-xs text-muted-foreground mt-2">
@@ -1189,6 +1207,17 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                   <p className="text-sm text-muted-foreground">No notes for this lead yet.</p>
                 )}
             </CardContent>
+            {notes.length > 5 && (
+                <CardFooter>
+                    <Button
+                        variant="link"
+                        className="w-full"
+                        onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                    >
+                        {isNotesExpanded ? 'Show less' : 'Show all notes'}
+                    </Button>
+                </CardFooter>
+            )}
           </Card>
           
           <Card>
