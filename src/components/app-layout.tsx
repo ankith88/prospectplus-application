@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import Link from "next/link"
@@ -34,7 +35,7 @@ import { TaskReminderBell } from "./task-reminder-bell"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading, signOut, isSigningOut } = useAuth()
+  const { user, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
   const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
@@ -56,6 +57,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   if (isSigningOut) {
       return <FullScreenLoader message="Signing out..." />;
+  }
+
+  if (isSigningIn) {
+      return <FullScreenLoader message="Signing in..." />;
   }
   
   if (isAuthPage) {

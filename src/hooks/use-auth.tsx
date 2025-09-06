@@ -37,6 +37,7 @@ interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
     loading: boolean;
+    isSigningIn: boolean;
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
@@ -46,6 +47,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
     loading: true,
+    isSigningIn: false,
     isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
@@ -55,6 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSigningIn, setIsSigningIn] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
@@ -105,16 +108,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const signIn = async (email: string, pass: string) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
-        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-        const loggedInUser = userCredential.user;
-        if (loggedInUser) {
-            const userDocRef = doc(firestore, "users", loggedInUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                setUserProfile({ uid: loggedInUser.uid, ...userDoc.data() } as UserProfile);
+        setIsSigningIn(true);
+        try {
+            const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+            const loggedInUser = userCredential.user;
+            if (loggedInUser) {
+                const userDocRef = doc(firestore, "users", loggedInUser.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    setUserProfile({ uid: loggedInUser.uid, ...userDoc.data() } as UserProfile);
+                }
             }
+             return userCredential;
+        } catch(error) {
+            // Rethrow the error to be caught by the calling component
+            throw error;
+        } finally {
+            setIsSigningIn(false);
         }
-        return userCredential;
     }
 
     const signOut = async () => {
@@ -130,6 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         userProfile,
         loading,
+        isSigningIn,
         isSigningOut,
         signIn,
         signOut,

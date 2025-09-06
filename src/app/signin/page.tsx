@@ -24,9 +24,8 @@ import { FullScreenLoader } from '@/components/ui/loader';
 export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { signIn, user, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading, isSigningIn } = useAuth();
   const { toast } = useToast();
   
   useEffect(() => {
@@ -37,10 +36,9 @@ export default function SignInPage() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     try {
       await signIn(email, password);
-      // The redirect is handled by the useEffect
+      // The redirect is handled by the useEffect in useAuth
     } catch (error: any) {
       console.error("Sign in failed:", error);
       let errorMessage = "An unexpected error occurred. Please check your credentials.";
@@ -56,8 +54,6 @@ export default function SignInPage() {
         title: "Sign in Failed",
         description: errorMessage,
       })
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -67,7 +63,7 @@ export default function SignInPage() {
 
   return (
     <>
-    {loading && <FullScreenLoader message="Signing in..." />}
+    {(isSigningIn) && <FullScreenLoader message="Signing in..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardHeader className="flex flex-col items-center text-center">
@@ -94,7 +90,7 @@ export default function SignInPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
+                    disabled={isSigningIn}
                 />
                 </div>
                  <div className="space-y-2">
@@ -105,10 +101,10 @@ export default function SignInPage() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        disabled={loading}
+                        disabled={isSigningIn}
                     />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={isSigningIn}>
                  Sign In
                 </Button>
             </form>
