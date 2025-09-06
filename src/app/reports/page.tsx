@@ -4,7 +4,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { getLeadsTool } from '@/ai/flows/get-leads-tool';
 import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -53,8 +52,10 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && userProfile && userProfile.role !== 'admin') {
-      setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
+    if (!authLoading && userProfile) {
+        if (userProfile.role !== 'admin') {
+            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
+        }
     }
   }, [authLoading, userProfile]);
 
@@ -72,7 +73,7 @@ export default function ReportsPage() {
             getAllCallActivities(),
             getAllLeadsForReport()
         ]);
-
+        
         setAllCalls(fetchedCalls);
         setAllLeads(fetchedLeads);
 
@@ -123,7 +124,7 @@ export default function ReportsPage() {
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
+        const dialerMatch = filters.dialerAssigned === 'all' || call.author === filters.dialerAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
         let dateMatch = true;
@@ -194,12 +195,12 @@ export default function ReportsPage() {
   }, [filteredCalls, filteredLeads]);
 
   const hasActiveFilters = 
-    filters.dialerAssigned !== 'all' || 
+    (userProfile?.role === 'admin' && filters.dialerAssigned !== 'all') || 
     filters.status !== 'all' || 
     !!filters.date || 
     filters.duration !== 'all';
 
-  if (loading || authLoading) {
+  if (loading || authLoading || !userProfile) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -243,7 +244,7 @@ export default function ReportsPage() {
                                 </SelectContent>
                             </Select>
                           ) : (
-                            <Input id="user" value={filters.dialerAssigned} disabled />
+                            <Input id="user" value={filters.dialerAssigned === 'all' ? userProfile.displayName : filters.dialerAssigned} disabled />
                           )}
                     </div>
                     <div className="space-y-2">
