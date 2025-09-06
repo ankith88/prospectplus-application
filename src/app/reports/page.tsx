@@ -44,18 +44,12 @@ export default function ReportsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
+  const [adminSelectedUser, setAdminSelectedUser] = useState('all');
   const [filters, setFilters] = useState({
-    dialerAssigned: 'all',
     status: 'all' as LeadStatus | 'all',
     date: undefined as DateRange | undefined,
     duration: 'all',
   });
-
-  useEffect(() => {
-    if (userProfile && userProfile.role !== 'admin') {
-      setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName || 'all' }));
-    }
-  }, [userProfile]);
 
   useEffect(() => {
     async function getData() {
@@ -72,8 +66,14 @@ export default function ReportsPage() {
             getAllLeadsForReport()
         ]);
         
-        setAllCalls(fetchedCalls);
-        setAllLeads(fetchedLeads);
+        if (userProfile.role === 'admin') {
+            setAllCalls(fetchedCalls);
+            setAllLeads(fetchedLeads);
+        } else {
+            const userDisplayName = userProfile.displayName || '';
+            setAllCalls(fetchedCalls.filter(c => c.dialerAssigned === userDisplayName));
+            setAllLeads(fetchedLeads.filter(l => l.dialerAssigned === userDisplayName));
+        }
 
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -91,11 +91,11 @@ export default function ReportsPage() {
 
   const clearFilters = () => {
     setFilters({
-      dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
       status: 'all',
       date: undefined,
       duration: 'all',
     });
+    setAdminSelectedUser('all');
   };
 
   const parseDuration = (durationStr?: string): number => {
@@ -111,18 +111,20 @@ export default function ReportsPage() {
     const dialers = new Set(allLeads.map(l => l.dialerAssigned).filter(Boolean));
     return Array.from(dialers as string[]);
   }, [allLeads]);
+  
+  const selectedUser = userProfile?.role === 'admin' ? adminSelectedUser : userProfile?.displayName || 'all';
 
   const filteredLeads = useMemo(() => {
      return allLeads.filter(lead => {
-      const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
+      const dialerMatch = selectedUser === 'all' || lead.dialerAssigned === selectedUser;
       const statusMatch = filters.status === 'all' || lead.status === filters.status;
       return dialerMatch && statusMatch;
     });
-  }, [allLeads, filters.dialerAssigned, filters.status]);
+  }, [allLeads, selectedUser, filters.status]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
-        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
+        const dialerMatch = selectedUser === 'all' || call.dialerAssigned === selectedUser;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
         let dateMatch = true;
@@ -146,7 +148,7 @@ export default function ReportsPage() {
 
         return dialerMatch && statusMatch && dateMatch && durationMatch();
     });
-  }, [allCalls, filters]);
+  }, [allCalls, selectedUser, filters]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -193,7 +195,7 @@ export default function ReportsPage() {
   }, [filteredCalls, filteredLeads]);
 
   const hasActiveFilters = 
-    (userProfile?.role === 'admin' && filters.dialerAssigned !== 'all') || 
+    (userProfile?.role === 'admin' && adminSelectedUser !== 'all') || 
     filters.status !== 'all' || 
     !!filters.date || 
     filters.duration !== 'all';
@@ -229,10 +231,10 @@ export default function ReportsPage() {
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                    <div className="space-y-2">
-                        <Label htmlFor="user">Assigned To</Label>
-                          {userProfile?.role === 'admin' ? (
-                             <Select value={filters.dialerAssigned} onValueChange={(value) => handleFilterChange('dialerAssigned', value)}>
+                    {userProfile?.role === 'admin' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="user">Assigned To</Label>
+                             <Select value={adminSelectedUser} onValueChange={setAdminSelectedUser}>
                                 <SelectTrigger id="user">
                                     <SelectValue placeholder="Select user" />
                                 </SelectTrigger>
@@ -241,10 +243,8 @@ export default function ReportsPage() {
                                     {allDialers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                                 </SelectContent>
                             </Select>
-                          ) : (
-                            <Input id="user" value={userProfile.displayName || ''} disabled />
-                          )}
-                    </div>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
                         <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
