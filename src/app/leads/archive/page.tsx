@@ -277,9 +277,11 @@ export default function ArchivedLeadsPage() {
         </Collapsible>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Processed Leads</CardTitle>
-          <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span>Processed Leads</span>
+            <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

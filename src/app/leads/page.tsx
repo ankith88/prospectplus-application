@@ -481,9 +481,11 @@ export default function LeadsPage() {
       
       {userProfile?.role === 'admin' && (
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>All Assigned Leads</CardTitle>
-            <Badge variant="secondary">{allAssignedLeads.length} lead(s)</Badge>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <span>All Assigned Leads</span>
+                <Badge variant="secondary">{allAssignedLeads.length} lead(s)</Badge>
+            </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -585,9 +587,11 @@ export default function LeadsPage() {
       {!showUnassigned && userProfile?.role === 'admin' && (
        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>All Unassigned Leads</CardTitle>
-            <div className="flex items-center gap-4">
+            <CardTitle className="flex items-center gap-2">
+                <span>All Unassigned Leads</span>
                 <Badge variant="secondary">{unassignedLeads.length} lead(s)</Badge>
+            </CardTitle>
+            <div className="flex items-center gap-4">
                 {selectedAllLeads.length > 0 && (
                     <Button onClick={handleBulkAssign} variant="outline">
                     <UserPlus className="mr-2 h-4 w-4" />
