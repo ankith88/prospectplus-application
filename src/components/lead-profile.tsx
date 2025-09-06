@@ -428,6 +428,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
     });
+    setIsDiscoveryQuestionsOpen(true);
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
