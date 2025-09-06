@@ -626,10 +626,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                     Log a Call
                 </Button>
             </LogCallDialog>
-           <Button variant="outline" onClick={() => { setIsChainedFlow(false); setIsDiscoveryQuestionsOpen(true); }}>
-              <FileQuestion className="mr-2 h-4 w-4" />
-              Discovery Q's
-           </Button>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
               <ClipboardEdit className="mr-2 h-4 w-4" />
@@ -1028,59 +1024,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             )}
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                AI Lead Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center text-center gap-4">
-              {scoringLoading ? (
-                <Loader />
-              ) : scoringResult ? (
-                <>
-                  <ScoreIndicator score={scoringResult.score} size="lg" />
-                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
-                </>
-              ) : (
-                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
-                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
-                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
-                        <div>
-                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
-                        </div>
-                    </div>
-                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Calculate AI Score
-                    </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {lead.discoveryData?.score !== undefined && (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Route className="w-5 h-5 text-muted-foreground" />
-                        Discovery & Routing (Score: {lead.discoveryData.score.toFixed(0)})
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center text-center gap-4">
-                    <ScoreIndicator score={lead.discoveryData.score} size="lg" />
-                    {lead.discoveryData.scoringReason && (
-                      <p className="text-sm text-muted-foreground">{lead.discoveryData.scoringReason}</p>
-                    )}
-                    <div className="flex flex-col gap-2">
-                        <h4 className="font-semibold">Routing Tag</h4>
-                         {lead.discoveryData.routingTag && <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>}
-                    </div>
-                </CardContent>
-            </Card>
-          )}
-          
           <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
               <DialogContent className="max-w-2xl">
                   <DialogHeader>
@@ -1120,6 +1063,63 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
+           <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                AI Lead Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center text-center gap-4">
+              {scoringLoading ? (
+                <Loader />
+              ) : scoringResult ? (
+                <>
+                  <ScoreIndicator score={scoringResult.score} size="lg" />
+                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
+                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
+                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
+                        <div>
+                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
+                        </div>
+                    </div>
+                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Calculate AI Score
+                    </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+           <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <Route className="w-5 h-5 text-muted-foreground" />
+                        Discovery & Routing
+                    </CardTitle>
+                     <Button variant="outline" size="sm" onClick={() => { setIsChainedFlow(false); setIsDiscoveryQuestionsOpen(true); }}>
+                        <FileQuestion className="mr-2 h-4 w-4" />
+                        Open Form
+                    </Button>
+                </CardHeader>
+                {lead.discoveryData?.score !== undefined && (
+                <CardContent className="flex flex-col items-center text-center gap-4">
+                    <ScoreIndicator score={lead.discoveryData.score} size="lg" />
+                    {lead.discoveryData.scoringReason && (
+                      <p className="text-sm text-muted-foreground">{lead.discoveryData.scoringReason}</p>
+                    )}
+                    <div className="flex flex-col gap-2">
+                        <h4 className="font-semibold">Routing Tag</h4>
+                         {lead.discoveryData.routingTag && <Badge variant="secondary">{lead.discoveryData.routingTag}</Badge>}
+                    </div>
+                </CardContent>
+                )}
+            </Card>
+
            <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
