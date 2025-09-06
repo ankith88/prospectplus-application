@@ -89,7 +89,7 @@ import { MapModal } from '@/components/map-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
@@ -146,6 +146,45 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
       });
     }
   }, [initialLead]);
+
+  useEffect(() => {
+    if (!lead?.id) return;
+
+    const activityRef = collection(firestore, 'leads', lead.id, 'activity');
+    const q = query(activityRef, orderBy('date', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const activities: Activity[] = [];
+      let latestCall: Activity | null = null;
+      let latestCallTime = 0;
+
+      querySnapshot.forEach((doc) => {
+        const activity = { id: doc.id, ...doc.data() } as Activity;
+        activities.push(activity);
+        if (activity.type === 'Call') {
+            const callTime = new Date(activity.date).getTime();
+            if (callTime > latestCallTime) {
+                latestCallTime = callTime;
+                latestCall = activity;
+            }
+        }
+      });
+      
+      setLead(prevLead => prevLead ? {...prevLead, activity: activities} : null);
+
+      if (latestCall && latestCall.callId && querySnapshot.docChanges().some(change => change.type === 'added' && change.doc.id === latestCall!.id)) {
+         // This is a naive check. A better approach might involve checking a flag on the activity
+         // to see if it's already been processed by the UI.
+         const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+         if (new Date(latestCall.date).getTime() > fiveMinutesAgo) {
+            setLastCallActivity(latestCall);
+            setShowPostCallDialog(true);
+         }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [lead?.id]);
   
   const fetchNotes = async () => {
     if (!lead) return;
