@@ -63,11 +63,11 @@ export function DiscoveryRadarChart({ discoveryData }: DiscoveryRadarChartProps)
   const chartData = transformDiscoveryDataForChart(discoveryData)
 
   return (
-    <div className="h-[350px]">
+    <div className="h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
+        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
           <PolarGrid />
-          <PolarAngleAxis dataKey="name" tick={{ fontSize: 12 }} />
+          <PolarAngleAxis dataKey="name" tick={{ fontSize: 10 }} />
           <PolarRadiusAxis angle={30} domain={[0, 100]} />
           <Radar
             name="Score"
