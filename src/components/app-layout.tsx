@@ -31,6 +31,7 @@ import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
+import { UniversalSearch } from "./universal-search"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -183,7 +184,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex-1 flex justify-center">
-             <h1 className="text-xl font-bold">ProspectPlus</h1>
+             <UniversalSearch />
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
