@@ -35,7 +35,7 @@ import { TaskReminderBell } from "./task-reminder-bell"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading, signOut, isSigningOut, isSigningIn } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
   const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
@@ -160,6 +160,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                  <User className="h-5 w-5" />
                  <div className="flex flex-col items-start">
                    <span className="font-medium text-sm truncate">{user?.displayName}</span>
+                   {userProfile?.phoneNumber && (
+                    <span className="text-xs text-sidebar-foreground/70">{userProfile.phoneNumber}</span>
+                   )}
                  </div>
                  <ChevronsUpDown className="h-4 w-4" />
               </Button>
