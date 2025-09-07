@@ -141,7 +141,7 @@ export function UniversalSearch() {
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}
-        className="text-sm text-muted-foreground"
+        className="text-sidebar-accent hover:text-sidebar-hover-foreground"
       >
         <Search className="h-5 w-5" />
         <span className="sr-only">Search</span>
