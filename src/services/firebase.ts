@@ -254,8 +254,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         
         if (!summary) {
             transformedLead.contacts = await getLeadSubCollection<Contact>(data.id, 'contacts');
-            transformedLead.contactCount = transformedLead.contacts.length;
             transformedLead.activity = await getLeadActivity(data.id);
+            transformedLead.contactCount = transformedLead.contacts.length;
         }
 
         return transformedLead;
