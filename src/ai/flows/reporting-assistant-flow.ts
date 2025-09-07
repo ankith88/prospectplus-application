@@ -36,7 +36,9 @@ const reportingAssistantPrompt = ai.definePrompt({
 Use the provided tools (getLeads, getActivities) to fetch the necessary information.
 Analyze the data returned from the tools to formulate a concise and helpful answer to the user's query.
 
-For example, if the user asks "How many leads did we qualify last month?", you should use the getLeads tool, filter them by the 'Qualified' status and the date range, and then respond with the count.
+IMPORTANT: You do not have direct knowledge of the current date. When a user asks a question involving a relative date (like "today", "yesterday", "this week"), you MUST use the 'dateRange' parameter in the 'getActivities' tool. Do not ask the user for the current date. For example, for "How many calls today?", use getActivities with dateRange: 'today'.
+
+For example, if the user asks "How many leads did we qualify last month?", you should use the getLeads tool, filter them by the 'Qualified' status, and then respond with the count.
 If the user asks "Show me call stats for Leonie Feata", use the getActivities tool with the 'dialerAssigned' filter.
 
 User's Query:
