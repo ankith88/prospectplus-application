@@ -190,12 +190,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
            <TaskReminderBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent">
+              <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
                  <User className="h-5 w-5" />
                  <div className="flex flex-col items-start">
-                   <span className="font-medium text-sm truncate">{user?.displayName}</span>
+                   <span className="font-medium text-sm truncate group-hover:text-sidebar-hover-foreground">{user?.displayName}</span>
                    {userProfile?.phoneNumber && (
-                    <span className="text-xs text-sidebar-foreground/70">{formatAustralianPhoneNumber(userProfile.phoneNumber)}</span>
+                    <span className="text-xs text-sidebar-foreground/70 group-hover:text-sidebar-hover-foreground/70">{formatAustralianPhoneNumber(userProfile.phoneNumber)}</span>
                    )}
                  </div>
                  <ChevronsUpDown className="h-4 w-4" />
