@@ -60,6 +60,8 @@ export default function ReportsPage() {
       }
       if (authLoading || !user || !userProfile) return;
 
+      console.log("[Reports Page] Signed-in user profile:", userProfile);
+
       try {
         setLoading(true);
         const [fetchedCalls, fetchedLeads] = await Promise.all([
@@ -77,7 +79,8 @@ export default function ReportsPage() {
         setAllLeads(fetchedLeads);
         
         if (userProfile.role !== 'admin' && userProfile.displayName) {
-            setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName! }));
+          console.log(`[Reports Page] Defaulting filter to non-admin user: ${userProfile.displayName}`);
+          setFilters(prev => ({ ...prev, dialerAssigned: userProfile.displayName! }));
         }
 
       } catch (error) {
@@ -91,6 +94,7 @@ export default function ReportsPage() {
   }, [user, userProfile, authLoading, router, toast]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    console.log(`[Reports Page] Filter changed: ${filterName} =`, value);
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
