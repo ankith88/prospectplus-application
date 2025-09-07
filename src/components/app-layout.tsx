@@ -82,8 +82,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/leads" className="flex items-center gap-2">
             <Image
               src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={40}
-              height={40}
+              width={100}
+              height={100}
               alt="MailPlus CRM Logo"
               data-ai-hint="logo icon"
             />
@@ -145,6 +145,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarInset>
          <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6 sticky top-0 z-30">
           <SidebarTrigger />
+          <h1 className="text-lg font-semibold">ProspectPlus</h1>
           <div className="flex w-full items-center gap-4">
             <div className="flex-1">
                 
