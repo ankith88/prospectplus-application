@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -33,11 +33,11 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-import { getLeadNotes } from '@/services/firebase'
+import { getAllActivities, getAllNotes } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 
-type LeadWithDetails = Lead & { notes?: Note[] };
+type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'discoveryScore';
 
@@ -47,7 +47,7 @@ export default function ArchivedLeadsPage() {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -67,14 +67,33 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        const fetchedLeads = await getLeadsTool({ summary: false }); // Fetch full data
+        const [fetchedLeads, allNotes, allActivities] = await Promise.all([
+            getLeadsTool({ summary: false }), // Fetch full data
+            getAllNotes(),
+            getAllActivities()
+        ]);
         
-        const leadsWithDetails = await Promise.all(
-          fetchedLeads.map(async (lead) => {
-            const notes = await getLeadNotes(lead.id);
-            return { ...lead, notes };
-          })
-        );
+        const notesByLead = new Map<string, Note[]>();
+        allNotes.forEach(note => {
+            if (!notesByLead.has(note.leadId)) {
+                notesByLead.set(note.leadId, []);
+            }
+            notesByLead.get(note.leadId)!.push(note);
+        });
+
+        const activitiesByLead = new Map<string, Activity[]>();
+        allActivities.forEach(activity => {
+            if (!activitiesByLead.has(activity.leadId)) {
+                activitiesByLead.set(activity.leadId, []);
+            }
+            activitiesByLead.get(activity.leadId)!.push(activity);
+        });
+
+        const leadsWithDetails = fetchedLeads.map(lead => ({
+          ...lead,
+          notes: notesByLead.get(lead.id) || [],
+          activity: activitiesByLead.get(lead.id) || [],
+        }));
         
         setAllLeads(leadsWithDetails);
       } catch (error) {
@@ -167,6 +186,126 @@ export default function ArchivedLeadsPage() {
     if (!address) return 'N/A';
     return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
   }
+
+    const escapeCsvCell = (cellData: any) => {
+        if (cellData === null || cellData === undefined) {
+            return '';
+        }
+        const stringData = String(cellData);
+        if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+            return `"${stringData.replace(/"/g, '""')}"`;
+        }
+        return stringData;
+    };
+
+
+    const handleExport = () => {
+        const headers = [
+            'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+            'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
+            'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone',
+            'Activity Type', 'Activity Date', 'Activity Notes', 'Activity Author',
+            'Note Date', 'Note Author', 'Note Content'
+        ];
+
+        const rows: string[][] = [];
+
+        sortedLeads.forEach(lead => {
+            const baseRow = [
+                escapeCsvCell(lead.id),
+                escapeCsvCell(lead.companyName),
+                escapeCsvCell(lead.status),
+                escapeCsvCell(lead.statusReason),
+                escapeCsvCell(lead.franchisee),
+                escapeCsvCell(lead.dialerAssigned),
+                escapeCsvCell(lead.salesRepAssigned),
+                escapeCsvCell(lead.websiteUrl),
+                escapeCsvCell(lead.industryCategory),
+                escapeCsvCell(lead.industrySubCategory),
+                escapeCsvCell(lead.customerServiceEmail),
+                escapeCsvCell(lead.customerPhone),
+                escapeCsvCell(lead.address?.street),
+                escapeCsvCell(lead.address?.city),
+                escapeCsvCell(lead.address?.state),
+                escapeCsvCell(lead.address?.zip),
+                escapeCsvCell(lead.address?.country),
+                escapeCsvCell(lead.aiScore),
+                escapeCsvCell(lead.aiReason),
+                escapeCsvCell(lead.discoveryData?.score),
+                escapeCsvCell(lead.discoveryData?.routingTag),
+                escapeCsvCell(lead.discoveryData?.postOfficeRelationship),
+                escapeCsvCell(lead.discoveryData?.logisticsSetup),
+                escapeCsvCell(lead.discoveryData?.shippingVolume),
+                escapeCsvCell(lead.discoveryData?.expressVsStandard),
+                escapeCsvCell(lead.discoveryData?.packageType?.join('; ')),
+                escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
+                escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
+                escapeCsvCell(lead.discoveryData?.sameDayCourier),
+                escapeCsvCell(lead.discoveryData?.decisionMaker),
+                escapeCsvCell(lead.discoveryData?.painPoints),
+            ];
+
+            let leadDataHasBeenAdded = false;
+
+            const addRow = (additionalData: (string | number | undefined)[]) => {
+                if (!leadDataHasBeenAdded) {
+                    rows.push([...baseRow, ...additionalData]);
+                    leadDataHasBeenAdded = true;
+                } else {
+                    const emptyBase = Array(baseRow.length).fill('');
+                    rows.push([...emptyBase, ...additionalData]);
+                }
+            };
+            
+            const maxSubItems = Math.max(lead.contacts?.length || 0, lead.activity?.length || 0, lead.notes?.length || 0);
+
+            if (maxSubItems === 0) {
+                 rows.push(baseRow);
+                 return;
+            }
+
+            for (let i = 0; i < maxSubItems; i++) {
+                const contact = lead.contacts?.[i];
+                const activity = lead.activity?.[i];
+                const note = lead.notes?.[i];
+
+                const rowData = [
+                    ...baseRow,
+                    escapeCsvCell(contact?.name),
+                    escapeCsvCell(contact?.title),
+                    escapeCsvCell(contact?.email),
+                    escapeCsvCell(contact?.phone),
+                    escapeCsvCell(activity?.type),
+                    escapeCsvCell(activity ? new Date(activity.date).toLocaleString() : ''),
+                    escapeCsvCell(activity?.notes),
+                    escapeCsvCell(activity?.author),
+                    escapeCsvCell(note ? new Date(note.date).toLocaleString() : ''),
+                    escapeCsvCell(note?.author),
+                    escapeCsvCell(note?.content),
+                ];
+                
+                if (i === 0) {
+                   rows.push(rowData);
+                } else {
+                   const emptyBase = Array(baseRow.length).fill('');
+                   rows.push([...emptyBase, ...rowData.slice(baseRow.length)]);
+                }
+            }
+        });
+
+        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.href) {
+            URL.revokeObjectURL(link.href);
+        }
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute('download', `processed_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
   if (loading || authLoading) {
     return (
@@ -287,11 +426,17 @@ export default function ArchivedLeadsPage() {
         </Collapsible>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <span>Processed Leads</span>
             <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
           </CardTitle>
+           {userProfile?.role === 'admin' && (
+              <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Export All
+              </Button>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -411,3 +556,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    
