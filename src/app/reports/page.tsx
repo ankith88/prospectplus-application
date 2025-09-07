@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
 import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,6 +36,53 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
 };
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
+const renderActiveShape = (props: any) => {
+  const RADIAN = Math.PI / 180;
+  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const sx = cx + (outerRadius + 10) * cos;
+  const sy = cy + (outerRadius + 10) * sin;
+  const mx = cx + (outerRadius + 30) * cos;
+  const my = cy + (outerRadius + 30) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
+  return (
+    <g>
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill}>
+        {payload.name}
+      </text>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={outerRadius + 6}
+        outerRadius={outerRadius + 10}
+        fill={fill}
+      />
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
+      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333">{`${value} leads`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999">
+        {`(Rate ${(percent * 100).toFixed(2)}%)`}
+      </text>
+    </g>
+  );
+};
+
+
 export default function ReportsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -44,6 +91,8 @@ export default function ReportsPage() {
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [activeIndex, setActiveIndex] = useState(0);
+
 
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
@@ -51,6 +100,11 @@ export default function ReportsPage() {
     duration: 'all',
     dialerAssigned: 'all',
   });
+  
+  const onPieEnter = (_: any, index: number) => {
+    setActiveIndex(index);
+  };
+
 
   useEffect(() => {
     async function getData() {
@@ -330,46 +384,92 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
-            <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCalls}</div>
-          </CardContent>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+        <Card className="lg:col-span-2">
+            <CardHeader>
+                <CardTitle>Leads by Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+            {stats.leadsByStatus.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                    <defs>
+                        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
+                        </filter>
+                    </defs>
+                    <Pie
+                        activeIndex={activeIndex}
+                        activeShape={renderActiveShape}
+                        data={stats.leadsByStatus}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onMouseEnter={onPieEnter}
+                        isAnimationActive={true}
+                        animationDuration={500}
+                        style={{ filter: 'url(#shadow)' }}
+                    >
+                    {stats.leadsByStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
+                    ))}
+                    </Pie>
+                    <Legend iconSize={12} />
+                </PieChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                No lead status data to display for the selected filters.
+                </div>
+            )}
+            </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Leads Contacted</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.leadsContacted}</div>
-            <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Leads in Queue</CardTitle>
-            <UserX className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
-            <p className="text-xs text-muted-foreground">New, assigned leads</p>
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
-             <p className="text-xs text-muted-foreground">Matching current filters</p>
-          </CardContent>
-        </Card>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2">
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
+                <Phone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{stats.totalCalls}</div>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Leads Contacted</CardTitle>
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{stats.leadsContacted}</div>
+                <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Leads in Queue</CardTitle>
+                <UserX className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
+                <p className="text-xs text-muted-foreground">New, assigned leads</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
+                <p className="text-xs text-muted-foreground">Matching current filters</p>
+            </CardContent>
+            </Card>
+        </div>
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
@@ -377,6 +477,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
+            <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
           </CardContent>
         </Card>
          <Card>
@@ -386,61 +487,11 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">% Calls 30s-2min</CardTitle>
-            <Percent className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.ratio30sTo2min.toFixed(1)}%</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">% Calls &gt; 2min</CardTitle>
-            <Percent className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.ratioOver2Min.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Leads by Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {stats.leadsByStatus.length > 0 ? (
-            <ResponsiveContainer width="100%" height={400}>
-              <PieChart>
-                <Pie
-                  data={stats.leadsByStatus}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={150}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {stats.leadsByStatus.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex h-[400px] items-center justify-center text-muted-foreground">
-              No lead status data to display for the selected filters.
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
