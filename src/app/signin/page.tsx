@@ -65,7 +65,7 @@ export default function SignInPage() {
     <>
     {(isSigningIn) && <FullScreenLoader message="Signing in..." />}
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="flex flex-col items-center text-center">
             <Image
               src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
