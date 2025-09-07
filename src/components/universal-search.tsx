@@ -143,7 +143,7 @@ export function UniversalSearch() {
         onClick={() => setOpen(true)}
         className="text-sidebar-accent hover:text-sidebar-hover-foreground"
       >
-        <Search className="h-6 w-6" strokeWidth={2.5} />
+        <Search className="h-6 w-6" strokeWidth={3} />
         <span className="sr-only">Search</span>
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
