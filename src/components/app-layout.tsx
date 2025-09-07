@@ -78,7 +78,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar collapsible="icon">
-        <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b">
+        <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b border-sidebar-border">
           <Link href="/leads" className="flex items-center gap-2">
             <Image
               src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
@@ -143,7 +143,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-         <header className="flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6 sticky top-0 z-30">
+         <header className="flex h-14 items-center justify-between gap-4 border-b bg-sidebar text-sidebar-foreground px-4 sm:px-6 sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
           </div>
@@ -156,12 +156,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
            <TaskReminderBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2">
+              <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent">
                  <User className="h-5 w-5" />
                  <div className="flex flex-col items-start">
                    <span className="font-medium text-sm truncate">{user?.displayName}</span>
                  </div>
-                 <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+                 <ChevronsUpDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
