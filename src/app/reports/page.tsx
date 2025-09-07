@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -21,7 +20,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { getAllCallActivities, getAllLeadsForReport } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { askReportingAssistant } from '@/ai/flows/reporting-assistant-flow';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
@@ -103,9 +101,6 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
   const [routingTagActiveIndex, setRoutingTagActiveIndex] = useState(0);
-  const [aiQuery, setAiQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [isAskingAI, setIsAskingAI] = useState(false);
 
 
   const [filters, setFilters] = useState({
@@ -279,20 +274,6 @@ export default function ReportsPage() {
     };
   }, [filteredCalls, filteredLeads]);
   
-  const handleAskAI = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiQuery) return;
-    setIsAskingAI(true);
-    setAiResponse(null);
-    try {
-        const result = await askReportingAssistant({ query: aiQuery });
-        setAiResponse(result.answer);
-    } catch (error: any) {
-        setAiResponse(`An error occurred: ${error.message}`);
-    } finally {
-        setIsAskingAI(false);
-    }
-  };
 
   const hasActiveFilters = 
     (filters.dialerAssigned !== 'all' && userProfile?.role === 'admin') || 
@@ -428,43 +409,6 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            AI Reporting Assistant
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAskAI} className="flex items-center gap-2 mb-4">
-            <Input
-              placeholder="Ask a question about your leads or activities..."
-              value={aiQuery}
-              onChange={(e) => setAiQuery(e.target.value)}
-              disabled={isAskingAI}
-            />
-            <Button type="submit" disabled={isAskingAI}>
-              {isAskingAI ? <Loader /> : <Send />}
-            </Button>
-          </form>
-          {isAskingAI && (
-            <div className="flex justify-center items-center p-4">
-              <Loader />
-              <p className="ml-2 text-muted-foreground">The AI is thinking...</p>
-            </div>
-          )}
-          {aiResponse && (
-            <Alert>
-              <Sparkles className="h-4 w-4" />
-              <AlertTitle>AI Response</AlertTitle>
-              <AlertDescription>
-                {aiResponse}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
         <Card>
             <CardHeader>
@@ -622,4 +566,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
