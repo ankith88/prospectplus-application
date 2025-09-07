@@ -123,6 +123,7 @@ export interface UserProfile {
     email: string;
     firstName: string;
     lastName: string;
+    displayName?: string;
     phoneNumber: string;
     aircallUserId?: string;
     role?: 'user' | 'admin';

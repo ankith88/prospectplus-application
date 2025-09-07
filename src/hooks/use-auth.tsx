@@ -73,15 +73,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const userDocRef = doc(firestore, "users", user.uid);
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
-                        const profileData = userDoc.data() as Omit<UserProfile, 'uid'>;
-                        const fullProfile = { uid: user.uid, ...profileData };
+                        const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+                        const displayName = `${profileData.firstName} ${profileData.lastName}`;
+                        const fullProfile: UserProfile = { 
+                            uid: user.uid, 
+                            displayName,
+                            ...profileData 
+                        };
                         setUserProfile(fullProfile);
 
-                        const displayName = `${fullProfile.firstName} ${fullProfile.lastName}`;
                         if (user.displayName !== displayName) {
                             await updateProfile(user, { displayName });
-                            await user.reload();
-                            setUser(authInstance.currentUser); 
+                            // After updating the profile, the auth state listener will
+                            // fire again with the updated user object. We don't need to reload manually.
                         }
                     } else {
                         setUserProfile(null);
@@ -116,7 +120,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const userDocRef = doc(firestore, "users", loggedInUser.uid);
                 const userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
-                    setUserProfile({ uid: loggedInUser.uid, ...userDoc.data() } as UserProfile);
+                    const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+                    const displayName = `${profileData.firstName} ${profileData.lastName}`;
+                    setUserProfile({ uid: loggedInUser.uid, displayName, ...profileData });
                 }
             }
              return userCredential;
