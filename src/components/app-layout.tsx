@@ -182,9 +182,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
           </div>
         </header>
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div className="p-4 sm:p-6 lg:p-8 flex-grow">
             {children}
         </div>
+        <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
+          2025 MailPlus Pty. Ltd. All rights reserved.
+        </footer>
       </SidebarInset>
     </>
   )
