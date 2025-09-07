@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -6,8 +7,8 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -41,6 +42,9 @@ const ROUTING_TAG_COLORS: { [key: string]: string } = {
   'Service & Product': '#45B7D1',
   'Untagged': '#C7C7C7',
 };
+
+const SCORE_RANGE_COLORS: string[] = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042'];
+
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
@@ -258,6 +262,20 @@ export default function ReportsPage() {
       }
       return acc;
     }, [] as { name: string; value: number }[]);
+    
+    const leadsByDiscoveryScore = filteredLeads.reduce((acc, lead) => {
+      const score = lead.discoveryData?.score;
+      if (typeof score === 'number') {
+        if (score <= 25) acc['0-25'] += 1;
+        else if (score <= 50) acc['26-50'] += 1;
+        else if (score <= 75) acc['51-75'] += 1;
+        else acc['76-100'] += 1;
+      }
+      return acc;
+    }, { '0-25': 0, '26-50': 0, '51-75': 0, '76-100': 0 });
+    
+    const scoreChartData = Object.entries(leadsByDiscoveryScore).map(([name, value]) => ({ name, 'Number of Leads': value }));
+
 
     return {
       totalCalls,
@@ -265,6 +283,7 @@ export default function ReportsPage() {
       leadsInQueue,
       leadsByStatus,
       leadsByRoutingTag,
+      scoreChartData,
       totalAssignedLeads,
       callsOver2Min,
       calls30sTo2min,
@@ -409,8 +428,8 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <Card className="xl:col-span-1">
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
             </CardHeader>
@@ -453,7 +472,7 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
         
-        <Card>
+        <Card className="xl:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Route className="h-5 w-5 text-muted-foreground" />
@@ -498,8 +517,40 @@ export default function ReportsPage() {
             )}
             </CardContent>
         </Card>
+        
+        <Card className="xl:col-span-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-muted-foreground" />
+                Leads by Discovery Score
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats.scoreChartData.some(d => d['Number of Leads'] > 0) ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={stats.scoreChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="Number of Leads" name="Number of Leads">
+                    {stats.scoreChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={SCORE_RANGE_COLORS[index % SCORE_RANGE_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                No discovery score data to display for the selected filters.
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2 xl:col-span-3">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
@@ -539,30 +590,32 @@ export default function ReportsPage() {
                 <p className="text-xs text-muted-foreground">Matching current filters</p>
             </CardContent>
             </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
+                <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
+              </CardContent>
+            </Card>
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Calls > 2min</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
+                <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
+              </CardContent>
+            </Card>
         </div>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
-            <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Calls &gt; 2min</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
-            <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
-          </CardContent>
-        </Card>
       </div>
 
     </div>
   );
 }
+
+    
