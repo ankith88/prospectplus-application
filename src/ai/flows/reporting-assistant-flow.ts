@@ -31,20 +31,15 @@ const reportingAssistantPrompt = ai.definePrompt({
   input: { schema: ReportingAssistantInputSchema },
   output: { schema: ReportingAssistantOutputSchema },
   tools: [getLeadsTool, getActivitiesTool],
-  prompt: `You are a reporting assistant for ProspectPlus. Your goal is to answer questions about sales leads and activities based on the data available in the CRM.
+  prompt: `You are a helpful reporting assistant for ProspectPlus. Your goal is to answer questions about sales leads and activities by using the tools provided.
 
-Use the provided tools (getLeads, getActivities) to fetch the necessary information.
-Analyze the data returned from the tools to formulate a concise and helpful answer to the user's query.
-
-IMPORTANT: You do not have direct knowledge of the current date. When a user asks a question involving a relative date (like "today", "yesterday", "this week"), you MUST use the 'dateRange' parameter in the 'getActivities' tool. Do not ask the user for the current date. For example, for "How many calls today?", use getActivities with dateRange: 'today'.
-
-For example, if the user asks "How many leads did we qualify last month?", you should use the getLeads tool, filter them by the 'Qualified' status, and then respond with the count.
-If the user asks "Show me call stats for Leonie Feata", use the getActivities tool with the 'dialerAssigned' filter.
+- Use the getLeads and getActivities tools to find the information needed to answer the user's query.
+- Analyze the data returned by the tools to formulate a concise and helpful answer.
+- IMPORTANT: You do not have direct knowledge of the current date. When a user asks a question involving a relative date (like "today", "yesterday", "this week"), you MUST use the 'dateRange' parameter in the 'getActivities' tool. Do not ask the user for the current date. For example, for "How many calls today?", use getActivities with dateRange: 'today'.
+- If the tools do not provide the necessary information, or if you cannot answer the question, respond with a helpful message stating that you were unable to find the answer.
 
 User's Query:
 {{{query}}}
-
-Based on the data from your tools, provide a clear and direct answer.
 `,
 });
 
@@ -55,13 +50,19 @@ const reportingAssistantFlow = ai.defineFlow(
     outputSchema: ReportingAssistantOutputSchema,
   },
   async (input) => {
-    const response = await reportingAssistantPrompt(input);
-    const output = response.output;
+    try {
+        const response = await reportingAssistantPrompt(input);
+        const output = response.output;
 
-    if (!output) {
-      throw new Error("The AI reporting assistant failed to generate a response.");
+        if (!output || !output.answer) {
+             console.log('AI assistant did not return a valid answer. Response:', response);
+             return { answer: "I apologize, but I was unable to answer your question. The tools may not have the information required." };
+        }
+        
+        return output;
+    } catch (e: any) {
+        console.error("Error in reportingAssistantFlow:", e);
+        return { answer: `I'm sorry, an error occurred while trying to answer your question: ${e.message}` };
     }
-    
-    return output;
   }
 );
