@@ -111,6 +111,13 @@ export default function SignInPage() {
         </CardContent>
         <CardFooter className="flex flex-col items-center text-center gap-4 text-sm text-muted-foreground">
            <div>By signing in, you agree to our terms of service.</div>
+           <div>
+            Need access or want to sign up? Contact{" "}
+            <Link href="mailto:ankith.ravindran@mailplus.com.au" className="underline text-primary font-medium">
+                Ankith Ravindran
+            </Link>
+            .
+           </div>
         </CardFooter>
       </Card>
     </div>
