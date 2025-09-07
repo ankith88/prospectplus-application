@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -35,10 +35,11 @@ import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subM
 import type { DateRange } from 'react-day-picker'
 import { getLeadNotes } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
+import { ScoreIndicator } from '@/components/score-indicator'
 
 type LeadWithDetails = Lead & { notes?: Note[] };
 
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'aiScore';
 
 export default function ArchivedLeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -124,8 +125,9 @@ export default function ArchivedLeadsPage() {
     let sortableItems = [...archivedLeads];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key] || '';
-        const bValue = b[sortConfig.key] || '';
+        const aValue = a[sortConfig.key] ?? (sortConfig.key === 'aiScore' ? -1 : '');
+        const bValue = b[sortConfig.key] ?? (sortConfig.key === 'aiScore' ? -1 : '');
+        
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
@@ -300,6 +302,12 @@ export default function ArchivedLeadsPage() {
                       {getSortIndicator('status')}
                     </Button>
                   </TableHead>
+                   <TableHead>
+                     <Button variant="ghost" onClick={() => requestSort('aiScore')} className="group -ml-4">
+                       Score
+                       {getSortIndicator('aiScore')}
+                     </Button>
+                   </TableHead>
                   <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
                       Franchisee
@@ -325,7 +333,7 @@ export default function ArchivedLeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedLeads.length > 0 ? (
                   sortedLeads.map((lead) => {
@@ -343,6 +351,11 @@ export default function ArchivedLeadsPage() {
                       <TableCell>
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
+                       <TableCell>
+                        {typeof lead.aiScore === 'number' ? (
+                          <ScoreIndicator score={lead.aiScore} />
+                        ) : 'N/A'}
+                       </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                       <TableCell>{lead.dialerAssigned ?? 'N/A'}</TableCell>
                       <TableCell>
@@ -371,7 +384,7 @@ export default function ArchivedLeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
@@ -390,5 +403,3 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
-
-    
