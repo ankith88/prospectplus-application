@@ -143,42 +143,43 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-         <header className="flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6 sticky top-0 z-30">
-          <SidebarTrigger />
-          <h1 className="text-lg font-semibold">ProspectPlus</h1>
-          <div className="flex w-full items-center gap-4">
-            <div className="flex-1">
-                
-            </div>
-            <div className="flex items-center gap-2 lg:gap-4 ml-auto">
-             <TaskReminderBell />
-             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
-                   <User className="h-5 w-5" />
-                   <div className="flex flex-col items-start">
-                     <span className="font-medium text-sm truncate">{user?.displayName}</span>
-                   </div>
-                   <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
-                    <div className="flex flex-col">
-                        <span className="font-medium text-sm truncate">{user?.displayName}</span>
-                        <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
-                    </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </div>
+         <header className="flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:px-6 sticky top-0 z-30">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger />
+          </div>
+          
+          <div className="flex-1 flex justify-center">
+             <h1 className="text-lg font-semibold">ProspectPlus</h1>
+          </div>
+
+          <div className="flex items-center gap-2 lg:gap-4">
+           <TaskReminderBell />
+           <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2">
+                 <User className="h-5 w-5" />
+                 <div className="flex flex-col items-start">
+                   <span className="font-medium text-sm truncate">{user?.displayName}</span>
+                 </div>
+                 <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled>
+                  <div className="flex flex-col">
+                      <span className="font-medium text-sm truncate">{user?.displayName}</span>
+                      <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+                  </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           </div>
         </header>
         <div className="p-4 sm:p-6 lg:p-8">
