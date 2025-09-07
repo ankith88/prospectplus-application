@@ -55,6 +55,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, isAuthPage]);
   
+  const formatAustralianPhoneNumber = (phoneNumber: string) => {
+    if (!phoneNumber) return '';
+    
+    // Remove all non-digit characters
+    const digits = phoneNumber.replace(/\D/g, '');
+
+    // Handle numbers that already include the country code
+    if (digits.startsWith('61')) {
+        const localPart = digits.substring(2);
+        if (localPart.length === 9) { // Mobile format 04xx xxx xxx
+            return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
+        }
+        if (localPart.length === 10) { // Landline with area code
+            return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
+        }
+        return `+${digits}`; // Fallback for other lengths
+    }
+
+    // Handle local numbers (assume they are Australian)
+    if (digits.startsWith('0')) {
+        const localPart = digits.substring(1);
+        if (localPart.length === 9) { // Mobile format 04xx xxx xxx
+            return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
+        }
+         if (localPart.length === 10) { // Landline with area code
+            return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
+        }
+    }
+    
+    // Fallback for numbers that don't fit the pattern
+    return phoneNumber;
+  };
+
+
   if (isSigningOut) {
       return <FullScreenLoader message="Signing out..." />;
   }
@@ -161,7 +195,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                  <div className="flex flex-col items-start">
                    <span className="font-medium text-sm truncate">{user?.displayName}</span>
                    {userProfile?.phoneNumber && (
-                    <span className="text-xs text-sidebar-foreground/70">{userProfile.phoneNumber}</span>
+                    <span className="text-xs text-sidebar-foreground/70">{formatAustralianPhoneNumber(userProfile.phoneNumber)}</span>
                    )}
                  </div>
                  <ChevronsUpDown className="h-4 w-4" />
