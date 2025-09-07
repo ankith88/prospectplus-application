@@ -124,18 +124,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
-                <Link href="/leads/archive">
-                  <Archive />
-                  <span>Archived Leads</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Reports">
                 <Link href="/reports">
                   <BarChart2 />
                   <span>Reports</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
+                <Link href="/leads/archive">
+                  <Archive />
+                  <span>Archived Leads</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
