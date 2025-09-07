@@ -8,7 +8,7 @@ import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -36,6 +36,14 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
 };
+
+const ROUTING_TAG_COLORS: { [key: string]: string } = {
+  'Service': '#FF6B6B',
+  'Product': '#4ECDC4',
+  'Service & Product': '#45B7D1',
+  'Untagged': '#C7C7C7',
+};
+
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 const renderActiveShape = (props: any) => {
@@ -93,7 +101,8 @@ export default function ReportsPage() {
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [statusActiveIndex, setStatusActiveIndex] = useState(0);
+  const [routingTagActiveIndex, setRoutingTagActiveIndex] = useState(0);
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [isAskingAI, setIsAskingAI] = useState(false);
@@ -106,8 +115,11 @@ export default function ReportsPage() {
     dialerAssigned: 'all',
   });
   
-  const onPieEnter = (_: any, index: number) => {
-    setActiveIndex(index);
+  const onStatusPieEnter = (_: any, index: number) => {
+    setStatusActiveIndex(index);
+  };
+  const onRoutingTagPieEnter = (_: any, index: number) => {
+    setRoutingTagActiveIndex(index);
   };
 
 
@@ -241,11 +253,23 @@ export default function ReportsPage() {
       return acc;
     }, [] as { name: LeadStatus; value: number }[]);
 
+    const leadsByRoutingTag = filteredLeads.reduce((acc, lead) => {
+      const tag = lead.discoveryData?.routingTag || 'Untagged';
+      const existingEntry = acc.find(item => item.name === tag);
+      if (existingEntry) {
+        existingEntry.value += 1;
+      } else {
+        acc.push({ name: tag, value: 1 });
+      }
+      return acc;
+    }, [] as { name: string; value: number }[]);
+
     return {
       totalCalls,
       leadsContacted: leadsContactedIds.size,
       leadsInQueue,
       leadsByStatus,
+      leadsByRoutingTag,
       totalAssignedLeads,
       callsOver2Min,
       calls30sTo2min,
@@ -442,7 +466,7 @@ export default function ReportsPage() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-        <Card className="lg:col-span-2">
+        <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
             </CardHeader>
@@ -456,7 +480,7 @@ export default function ReportsPage() {
                         </filter>
                     </defs>
                     <Pie
-                        activeIndex={activeIndex}
+                        activeIndex={statusActiveIndex}
                         activeShape={renderActiveShape}
                         data={stats.leadsByStatus}
                         cx="50%"
@@ -465,7 +489,7 @@ export default function ReportsPage() {
                         outerRadius={120}
                         fill="#8884d8"
                         dataKey="value"
-                        onMouseEnter={onPieEnter}
+                        onMouseEnter={onStatusPieEnter}
                         isAnimationActive={true}
                         animationDuration={500}
                         style={{ filter: 'url(#shadow)' }}
@@ -480,6 +504,52 @@ export default function ReportsPage() {
             ) : (
                 <div className="flex h-[400px] items-center justify-center text-muted-foreground">
                 No lead status data to display for the selected filters.
+                </div>
+            )}
+            </CardContent>
+        </Card>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Route className="h-5 w-5 text-muted-foreground" />
+                    Leads by Routing Tag
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+            {stats.leadsByRoutingTag.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                    <defs>
+                        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
+                        </filter>
+                    </defs>
+                    <Pie
+                        activeIndex={routingTagActiveIndex}
+                        activeShape={renderActiveShape}
+                        data={stats.leadsByRoutingTag}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onMouseEnter={onRoutingTagPieEnter}
+                        isAnimationActive={true}
+                        animationDuration={500}
+                        style={{ filter: 'url(#shadow)' }}
+                    >
+                    {stats.leadsByRoutingTag.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={ROUTING_TAG_COLORS[entry.name]} />
+                    ))}
+                    </Pie>
+                    <Legend iconSize={12} />
+                </PieChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                No routing tag data to display for the selected filters.
                 </div>
             )}
             </CardContent>
@@ -552,3 +622,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
