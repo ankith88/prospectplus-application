@@ -184,10 +184,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex-1 flex justify-center">
-             <UniversalSearch />
+             <h2 className="text-xl font-bold">ProspectPlus</h2>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+           <UniversalSearch />
            <TaskReminderBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
