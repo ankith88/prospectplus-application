@@ -149,7 +149,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex-1 flex justify-center">
-             <h1 className="text-lg font-semibold">ProspectPlus</h1>
+             <h1 className="text-xl font-bold">ProspectPlus</h1>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
