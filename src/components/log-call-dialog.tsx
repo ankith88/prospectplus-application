@@ -63,6 +63,7 @@ export function LogCallDialog({ lead, onCallLogged, children, isOpen, onOpenChan
     'Leonie Feata': 'https://calendly.com/leonie-feata-mailplus/mailplus-intro-call-leonie',
     'Luke Forbes': 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke',
     'Lee Russell': 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee',
+    'Kerina Helliwell': 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina',
     'Default': 'https://calendly.com/mailplus-default/meeting',
   };
 
