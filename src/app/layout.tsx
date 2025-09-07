@@ -1,5 +1,6 @@
 
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import './globals.css'
 import { AppLayout } from '@/components/app-layout'
 import { Toaster } from '@/components/ui/toaster'
@@ -22,9 +23,29 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <Script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-ECGD82STP1"
+        ></Script>
+        <Script id="google-analytics">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-ECGD82STP1');
+          `}
+        </Script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Object+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Object+Sans:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="font-body antialiased" suppressHydrationWarning>
         <AuthProvider>
