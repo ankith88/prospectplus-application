@@ -8,7 +8,7 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 111 20% 84%;
     --foreground: 196 60% 14%;
     --card: 124 20% 84%;
     --card-foreground: 196 60% 14%;
@@ -79,7 +79,7 @@ body {
   }
 
   body.logged-in {
-    --background: 124 20% 84%; /* #cfe0ce */
+    --background: 111 20% 84%; /* #d0dfcd */
     --card: 0 0% 100%; /* white */
   }
 }

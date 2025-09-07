@@ -69,8 +69,8 @@ export default function SignInPage() {
         <CardHeader className="flex flex-col items-center text-center">
             <Image
               src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={280}
-              height={80}
+              width={100}
+              height={100}
               alt="MailPlus CRM Logo"
               data-ai-hint="logo"
             />
