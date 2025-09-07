@@ -39,7 +39,7 @@ import { ScoreIndicator } from '@/components/score-indicator'
 
 type LeadWithDetails = Lead & { notes?: Note[] };
 
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'aiScore';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'discoveryScore';
 
 export default function ArchivedLeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -125,8 +125,16 @@ export default function ArchivedLeadsPage() {
     let sortableItems = [...archivedLeads];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key] ?? (sortConfig.key === 'aiScore' ? -1 : '');
-        const bValue = b[sortConfig.key] ?? (sortConfig.key === 'aiScore' ? -1 : '');
+        let aValue: string | number | undefined;
+        let bValue: string | number | undefined;
+
+        if (sortConfig.key === 'discoveryScore') {
+          aValue = a.discoveryData?.score ?? -1;
+          bValue = b.discoveryData?.score ?? -1;
+        } else {
+          aValue = a[sortConfig.key] ?? '';
+          bValue = b[sortConfig.key] ?? '';
+        }
         
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -303,9 +311,9 @@ export default function ArchivedLeadsPage() {
                     </Button>
                   </TableHead>
                    <TableHead>
-                     <Button variant="ghost" onClick={() => requestSort('aiScore')} className="group -ml-4">
+                     <Button variant="ghost" onClick={() => requestSort('discoveryScore')} className="group -ml-4">
                        Score
-                       {getSortIndicator('aiScore')}
+                       {getSortIndicator('discoveryScore')}
                      </Button>
                    </TableHead>
                   <TableHead>
@@ -352,8 +360,8 @@ export default function ArchivedLeadsPage() {
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
                        <TableCell>
-                        {typeof lead.aiScore === 'number' ? (
-                          <ScoreIndicator score={lead.aiScore} />
+                        {typeof lead.discoveryData?.score === 'number' ? (
+                          <ScoreIndicator score={lead.discoveryData.score} />
                         ) : 'N/A'}
                        </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
