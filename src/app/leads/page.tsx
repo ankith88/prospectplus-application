@@ -190,8 +190,8 @@ export default function LeadsPage() {
   }, [allAssignedLeads]);
 
   const unassignedLeads = useMemo(() => {
-    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'LPO Review', 'Pre Qualified'];
-    return filteredLeads.filter(lead => !lead.dialerAssigned && !nonActionableStatuses.includes(lead.status));
+    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
+    return filteredLeads.filter(lead => !lead.dialerAssigned && actionableStatuses.includes(lead.status));
   }, [filteredLeads]);
 
 
