@@ -106,7 +106,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
   };
 
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Disqualified - Not a Fit'];
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Disqualified - Not a Fit', 'Email Interested'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     onSubmitProp(values.outcome, values.notes || '');
