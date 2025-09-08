@@ -190,7 +190,7 @@ export default function LeadsPage() {
   }, [allAssignedLeads]);
 
   const unassignedLeads = useMemo(() => {
-    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'LPO Review'];
+    const nonActionableStatuses: LeadStatus[] = ['Lost', 'Won', 'Qualified', 'LPO Review', 'Pre Qualified'];
     return filteredLeads.filter(lead => !lead.dialerAssigned && !nonActionableStatuses.includes(lead.status));
   }, [filteredLeads]);
 
@@ -356,7 +356,7 @@ export default function LeadsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>

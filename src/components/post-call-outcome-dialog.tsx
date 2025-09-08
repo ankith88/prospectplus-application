@@ -56,7 +56,8 @@ const callOutcomes = [
     'Call Back/Follow-up',
     'Gatekeeper',
     'Disconnected',
-    'Interested',
+    'Appointment Booked',
+    'Email Interested',
     'No Answer',
     'Not Interested',
     'Voicemail',
@@ -76,14 +77,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const { toast } = useToast()
   const router = useRouter();
   const outcome = form.watch('outcome');
-
-    // Mock Calendly links for sales reps
-  const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
-    'Leonie Feata': 'https://calendly.com/leonie-feata-mock/meeting',
-    'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
-    'Kerina Helliwell': "https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina",
-    'Default': 'https://calendly.com/mailplus-default/meeting',
-  };
   
   useEffect(() => {
     if (isOpen) {
@@ -103,7 +96,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'No Answer': { status: 'In Progress' },
       'Busy': { status: 'In Progress' },
       'Disqualified - Not a Fit': { status: 'Lost', reason: 'Not Interested' },
-      'Interested': { status: 'Qualified' },
+      'Appointment Booked': { status: 'Qualified' },
+      'Email Interested': { status: 'Pre Qualified' },
       'Not Interested': { status: 'Lost', reason: 'Not Interested' },
       'Gatekeeper': { status: 'Connected' },
       'Call Back/Follow-up': { status: 'High Touch' },
@@ -113,88 +107,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   };
 
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Disqualified - Not a Fit'];
-
-  async function handleNextStep(action: 'lpo' | 'appointment') {
-    const values = form.getValues();
-
-    if (action === 'lpo') {
-      if (!values.contactName || !values.contactEmail || !values.contactPhone || !values.contactTitle) {
-        toast({
-          variant: 'destructive',
-          title: 'Missing Information',
-          description: 'Contact Name, Title, Email, and Phone are required to refer to an LPO.',
-        });
-        return;
-      }
-    }
-    
-    // Save contact if new
-    const newContactData = {
-        name: values.contactName!,
-        email: values.contactEmail!,
-        phone: values.contactPhone!,
-        title: values.contactTitle!,
-    };
-
-    if (newContactData.name && newContactData.email) {
-        const existingContact = lead.contacts?.find(c => c.email === newContactData.email);
-        if (!existingContact) {
-            await addContactToLead(lead.id, newContactData);
-        }
-    }
-    
-    // Log the base activity
-    onSubmitProp(values.outcome, values.notes || '', newContactData);
-
-
-    if (action === 'lpo') {
-       try {
-            await updateLeadStatus(lead.id, 'LPO Review');
-            
-            await sendToNetSuiteForOutcome({
-                leadId: lead.id,
-                outcome: values.outcome,
-                reason: 'LPO Referral',
-                dialerAssigned: lead.dialerAssigned || '',
-                notes: values.notes || '',
-                salesRecordInternalId: lead.salesRecordInternalId || '',
-            });
-
-            toast({
-                title: 'Success',
-                description: 'Lead has been referred to LPO and status updated to "LPO Review".',
-            });
-       } catch(e) {
-            console.error('Failed to refer lead to LPO:', e);
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to refer lead to LPO.' });
-       }
-    } else if (action === 'appointment') {
-        const salesRep = lead.salesRepAssigned || 'Default';
-        const calendlyLink = MOCKED_CALENDLY_LINKS[salesRep] || MOCKED_CALENDLY_LINKS['Default'];
-        
-        const primaryContact = lead.contacts?.[0];
-        const contactName = primaryContact?.name || lead.companyName;
-        const contactEmail = primaryContact?.email || lead.customerServiceEmail;
-
-        let prefilledUrl = calendlyLink;
-        if (contactName && contactEmail) {
-           prefilledUrl = `${calendlyLink}?name=${encodeURIComponent(contactName)}&email=${encodeURIComponent(contactEmail)}`;
-        }
-        
-        await updateLeadStatus(lead.id, 'Qualified');
-        
-        toast({
-            title: 'Redirecting to Calendly...',
-            description: 'Please book the appointment for the lead. Status has been updated to Qualified.',
-        });
-
-        window.open(prefilledUrl, '_blank');
-    }
-
-    onClose();
-    router.push('/');
-  }
-
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     onSubmitProp(values.outcome, values.notes || '');
@@ -233,7 +145,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     }
 
     onClose();
-    router.push('/');
+    router.push('/leads');
   }
 
   return (

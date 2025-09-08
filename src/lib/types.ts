@@ -11,6 +11,7 @@ export type LeadStatus =
   | 'In Progress'
   | 'Connected'
   | 'High Touch'
+  | 'Pre Qualified'
 
 export interface Activity {
   id: string

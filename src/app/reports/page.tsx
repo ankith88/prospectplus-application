@@ -30,6 +30,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Connected': '#0088FE', // Blue
   'High Touch': '#8884d8', // Purple
   'Qualified': '#00C49F', // Teal Green
+  'Pre Qualified': '#F59E0B', // Amber
   'Won': '#22C55E', // Strong Green
   'Unqualified': '#D1D5DB', // Light Gray
   'Lost': '#EF4444', // Red
@@ -355,7 +356,7 @@ export default function ReportsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -617,5 +618,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
