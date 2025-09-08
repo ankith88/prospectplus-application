@@ -603,6 +603,13 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
               Log a Note
             </Button>
           </LogNoteDialog>
+           <Button
+              variant="outline"
+              onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}
+            >
+              <BookText className="mr-2 h-4 w-4" />
+              View Script
+            </Button>
         </div>
       </header>
 
