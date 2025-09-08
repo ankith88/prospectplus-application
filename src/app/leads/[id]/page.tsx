@@ -1,7 +1,7 @@
 
 
 import { notFound } from 'next/navigation'
-import { getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts } from '@/services/firebase'
+import { getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, getLeadContacts } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
 import type { Lead, Contact, Activity, Note, Transcript } from '@/lib/types'
 
@@ -19,7 +19,7 @@ export default async function LeadProfilePage({
 
   // Fetch sub-collections on the server to pass as initial data
   const [contacts, activity, notes, transcripts] = await Promise.all([
-    getLeadSubCollection<Contact>(id, 'contacts'),
+    getLeadContacts(id),
     getLeadSubCollection<Activity>(id, 'activity'),
     getLeadNotes(id),
     getLeadTranscripts(id),

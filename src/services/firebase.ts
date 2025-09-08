@@ -183,7 +183,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-          transformedLead.contacts = await getLeadSubCollection<Contact>(docSnapshot.id, 'contacts');
+          transformedLead.contacts = await getLeadContacts(docSnapshot.id);
           transformedLead.activity = await getLeadActivity(docSnapshot.id);
           transformedLead.contactCount = transformedLead.contacts.length;
         }
@@ -255,7 +255,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         };
         
         if (!summary) {
-            transformedLead.contacts = await getLeadSubCollection<Contact>(data.id, 'contacts');
+            transformedLead.contacts = await getLeadContacts(data.id);
             transformedLead.activity = await getLeadActivity(data.id);
             transformedLead.contactCount = transformedLead.contacts.length;
         }
@@ -295,7 +295,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
 }
 
 
-async function getLeadSubCollection<T extends Contact | Activity>(leadId: string, collectionName: 'contacts' | 'activity'): Promise<T[]> {
+async function getLeadSubCollection<T extends Activity>(leadId: string, collectionName: 'activity'): Promise<T[]> {
   try {
     const ref = collection(firestore, 'leads', leadId, collectionName);
     const q = query(ref, orderBy('date', 'desc'));
@@ -310,6 +310,22 @@ async function getLeadSubCollection<T extends Contact | Activity>(leadId: string
     return [];
   }
 }
+
+async function getLeadContacts(leadId: string): Promise<Contact[]> {
+  try {
+    const ref = collection(firestore, 'leads', leadId, 'contacts');
+    const snapshot = await getDocs(ref);
+    const items = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Contact));
+    return items;
+  } catch (error) {
+    console.error(`Failed to fetch contacts for lead ${leadId}:`, error);
+    return [];
+  }
+}
+
 
 async function getLeadActivity(leadId: string): Promise<Activity[]> {
     return getLeadSubCollection<Activity>(leadId, 'activity');
@@ -882,6 +898,7 @@ export {
     logActivity,
     getLeadFromFirebase,
     getLeadSubCollection,
+    getLeadContacts,
     getLeadActivity,
     getLeadNotes,
     getAllNotes,
