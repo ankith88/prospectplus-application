@@ -25,7 +25,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -139,6 +139,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link href="/tasks">
                   <ListTodo />
                   <span>My Tasks</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
+                <Link href="/appointments">
+                  <Calendar />
+                  <span>All Appointments</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

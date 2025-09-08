@@ -482,6 +482,30 @@ async function getAllTranscripts(): Promise<Transcript[]> {
     }
 }
 
+async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string }>> {
+    try {
+        const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
+        const allAppointments = await Promise.all(appointmentsSnapshot.docs.map(async (appointmentDoc) => {
+            const appointmentData = appointmentDoc.data() as Appointment;
+            const leadId = appointmentDoc.ref.parent.parent!.id;
+            const leadDoc = await getDoc(doc(firestore, 'leads', leadId));
+            const leadName = leadDoc.exists() ? leadDoc.data().companyName : 'Unknown Lead';
+            
+            return {
+                ...appointmentData,
+                id: appointmentDoc.id,
+                leadId: leadId,
+                leadName: leadName,
+            };
+        }));
+        allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
+        return allAppointments;
+    } catch (error) {
+        console.error('Failed to fetch all appointments:', error);
+        return [];
+    }
+}
+
 async function getLeadTranscripts(leadId: string): Promise<Transcript[]> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'transcripts');
@@ -947,6 +971,7 @@ export {
     getLeadAppointments,
     getAllNotes,
     getAllActivities,
+    getAllAppointments,
     getAllLeadsForReport,
     getLeadTranscripts,
     updateLeadAvatar,
