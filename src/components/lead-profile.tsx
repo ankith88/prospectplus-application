@@ -921,11 +921,37 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <PhoneCall className="w-5 h-5 text-muted-foreground" />
                   Call History
                 </CardTitle>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateFilter?.from ? (
+                              dateFilter.to ? (
+                                <>
+                                  {format(dateFilter.from, "LLL d")} - {format(dateFilter.to, "LLL d")}
+                                </>
+                              ) : (
+                                format(dateFilter.from, "LLL d, y")
+                              )
+                            ) : (
+                              <span>Filter by date...</span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                        <CalendarPicker
+                            mode="range"
+                            selected={dateFilter}
+                            onSelect={setDateFilter}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
             </CardHeader>
             <CardContent>
               {loading ? (
