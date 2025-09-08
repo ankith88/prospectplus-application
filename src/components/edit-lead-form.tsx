@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
+import { sendLeadUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead } from "@/lib/types"
 
 const formSchema = z.object({
@@ -49,6 +50,28 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         description: "Lead details updated successfully.",
       })
       onLeadUpdated(values);
+
+      // Call NetSuite
+      const nsResult = await sendLeadUpdateToNetSuite({
+        leadId: lead.id,
+        companyName: values.companyName,
+        email: values.customerServiceEmail,
+        phone: values.customerPhone,
+      });
+
+      if (nsResult.success) {
+        toast({
+          title: "NetSuite Updated",
+          description: "Lead details sent to NetSuite.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "NetSuite Sync Failed",
+          description: nsResult.message,
+        });
+      }
+
     } catch (error) {
       console.error("Failed to update lead details:", error)
       toast({

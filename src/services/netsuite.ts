@@ -337,3 +337,61 @@ export async function sendActivityToNetSuite(payload: NetSuiteActivityPayload): 
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
+
+interface NetSuiteLeadUpdatePayload {
+    leadId: string;
+    companyName: string;
+    email: string;
+    phone: string;
+}
+
+/**
+ * Sends updated lead details to a NetSuite scriptlet.
+ * @param payload The lead update data to send.
+ * @returns A promise that resolves with the result of the API call.
+ */
+export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayload): Promise<{ success: boolean, message: string }> {
+    const { leadId, companyName, email, phone } = payload;
+    
+    if (!leadId) {
+        const errorMsg = 'Invalid payload: leadId is required.';
+        console.error(`[NetSuite Lead Update Service Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+    const params = new URLSearchParams({
+        script: "2165",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQjAoBac5NMovu7TgzYYUBTkw80-MtaJaID2gsRUcr0hs",
+        leadID: leadId,
+        companyname: companyName,
+        email: email,
+        phone: phone,
+    });
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite Lead Update Service] Sending update for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite Lead Update Service] Final Request URL being called: ${url}`);
+
+    try {
+        const response = await fetch(url, { method: 'GET' });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite Lead Update Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite Lead Update Service] Successfully sent update for lead ${leadId}. Response: ${responseBody}`);
+        return { success: true, message: 'Lead details sent to NetSuite.' };
+    } catch (error: any) {
+        console.error("[NetSuite Lead Update Service] A fatal error occurred during fetch:", error);
+        console.error(`[NetSuite Lead Update Service] Failed URL: ${url}`);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
