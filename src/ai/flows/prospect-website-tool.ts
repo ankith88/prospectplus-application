@@ -6,6 +6,7 @@
 
 import { ai } from '@/ai/genkit';
 import { addContactToLead, getLeadFromFirebase } from '@/services/firebase';
+import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
 
@@ -20,6 +21,7 @@ const ContactSchema = z.object({
   name: z.string().optional(),
   title: z.string().optional(),
   email: z.string().optional(),
+  phone: z.string().optional(),
 });
 
 const ProspectWebsiteOutputSchema = z.object({
@@ -64,7 +66,7 @@ function extractNameFromEmail(email: string): string {
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API.',
+    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Saves new contacts to Firebase and syncs to NetSuite.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
@@ -114,8 +116,7 @@ export const prospectWebsiteTool = ai.defineTool(
       const lead = await getLeadFromFirebase(leadId, true);
       const getContactKey = (contact: {email?: string | null, phone?: string | null}) => {
           const email = (contact.email || '').toLowerCase();
-          const phone = (contact.phone && contact.phone !== 'N/A') ? contact.phone : '';
-          return `${email}:${phone}`;
+          return email;
       };
       
       const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
@@ -128,21 +129,24 @@ export const prospectWebsiteTool = ai.defineTool(
       
       console.log(`Found ${newContacts.length} new unique contacts to add.`);
 
-      // Save new contacts to Firebase
+      // Save new contacts to Firebase and sync to NetSuite
       for (const contact of newContacts) {
         if (contact.email) {
-          await addContactToLead(leadId, {
+          const contactData = {
             name: contact.name,
             title: contact.title || 'N/A',
             email: contact.email,
             phone: contact.phone || 'N/A',
-          });
+          };
+          const contactId = await addContactToLead(leadId, contactData);
+          await sendContactToNetSuite({ leadId, contact: { ...contactData, id: contactId } });
         }
       }
 
       return {
+        logoUrl: hunterData?.data?.logo_url,
         contacts: newContacts,
-        siteAnalysis: `Found ${newContacts.length} new contacts via Hunter.io.`,
+        siteAnalysis: `Found and saved ${newContacts.length} new contacts via Hunter.io.`,
       };
     } catch (error) {
       console.error('Error during website prospecting with Hunter.io:', error);

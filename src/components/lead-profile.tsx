@@ -46,7 +46,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -204,6 +204,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     setTasks(fetchedTasks);
   }
 
+  const fetchLeadContacts = async () => {
+    if (!lead) return;
+    const freshLead = await getLeadFromFirebase(lead.id, true);
+    if(freshLead) {
+      setLead(freshLead);
+    }
+  }
+
   useEffect(() => {
     fetchTasks();
   }, [lead?.id]);
@@ -289,35 +297,16 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
           toast({ title: "Logo Found!", description: "Company logo has been updated." });
         }
-
+        
         if (result.contacts && result.contacts.length > 0) {
-            let newContactsAdded = 0;
-            setLead(prev => {
-                if (!prev) return null;
-                const existingEmails = new Set((prev.contacts || []).map(c => c.email));
-                const uniqueNewContacts = result.contacts!.filter(
-                    (newContact: any) => newContact.email && !existingEmails.has(newContact.email)
-                );
-                
-                newContactsAdded = uniqueNewContacts.length;
-
-                return { ...prev, contacts: [...(prev.contacts || []), ...uniqueNewContacts] };
-            });
-
-            setScoringResult(prev => ({
-                ...prev!,
-                prospectedContacts: result.contacts || [],
-            }));
-            
-            if (newContactsAdded > 0) {
-                toast({ title: "Success", description: `${newContactsAdded} new contact(s) found and added.` });
-            } else {
-                toast({ title: "No New Contacts", description: "Prospecting found contacts that are already in your list." });
-            }
-
+            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
-            toast({ title: "No Contacts Found", description: "No contacts were found on the website." });
+            toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
         }
+        
+        // Always refetch contacts to get the latest state
+        await fetchLeadContacts();
+
     } catch (error) {
         console.error("Failed to prospect website:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
