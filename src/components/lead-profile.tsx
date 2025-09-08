@@ -1029,44 +1029,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
               )}
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                Appointments
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {loading ? (
-                    <div className="py-4 space-y-4">
-                      <Skeleton className="h-12 w-full" />
-                    </div>
-                ) : appointments.length > 0 ? (
-                  appointments.map(appointment => (
-                    <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                      <div className="flex items-center gap-4">
-                          <div className="text-center">
-                              <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
-                              <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
-                          </div>
-                          <div>
-                              <p className="text-sm font-medium">
-                                  Appointment with {appointment.assignedTo}
-                              </p>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                              </p>
-                          </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                    <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
-                )}
-            </CardContent>
-          </Card>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -1264,39 +1226,43 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          {/*
-           <Card>
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                AI Lead Score
+                <Calendar className="w-5 h-5 text-muted-foreground" />
+                Appointments
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center text-center gap-4">
-              {scoringLoading ? (
-                <Loader />
-              ) : scoringResult ? (
-                <>
-                  <ScoreIndicator score={scoringResult.score} size="lg" />
-                  <p className="text-sm text-muted-foreground">{scoringResult.reason}</p>
-                </>
-              ) : (
-                <div className="flex flex-col items-center text-center gap-4 p-4 border-2 border-dashed rounded-lg">
-                    <div className="flex items-start text-left text-sm text-muted-foreground bg-gray-50 p-3 rounded-md">
-                        <Info className="h-4 w-4 mr-2 mt-0.5 shrink-0"/>
-                        <div>
-                        The AI score (0-100) indicates how well this lead fits our target profile: businesses shipping parcels (1-20kg) within Australia. The AI analyzes the lead's profile, website, and activity to make its assessment. Higher scores mean a better potential match.
-                        </div>
+            <CardContent className="space-y-4">
+                {loading ? (
+                    <div className="py-4 space-y-4">
+                      <Skeleton className="h-12 w-full" />
                     </div>
-                    <Button onClick={handleCalculateScore} disabled={scoringLoading}>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Calculate AI Score
-                    </Button>
-                </div>
-              )}
+                ) : appointments.length > 0 ? (
+                  appointments.map(appointment => (
+                    <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                      <div className="flex items-center gap-4">
+                          <div className="text-center">
+                              <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
+                              <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
+                          </div>
+                          <div>
+                              <p className="text-sm font-medium">
+                                  Appointment with {appointment.assignedTo}
+                              </p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                              </p>
+                          </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                    <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
+                )}
             </CardContent>
           </Card>
-          */}
           
            <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
