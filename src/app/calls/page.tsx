@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
@@ -137,6 +137,42 @@ export default function AllCallsPage() {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
       return Array.from(users as string[]);
   }, [allCalls]);
+
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleExport = () => {
+    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes'];
+    const rows = filteredCalls.map(call => [
+        escapeCsvCell(call.leadName),
+        escapeCsvCell(call.dialerAssigned || 'Unassigned'),
+        escapeCsvCell(call.leadStatus),
+        escapeCsvCell(call.callId),
+        escapeCsvCell(new Date(call.date).toLocaleDateString()),
+        escapeCsvCell(new Date(call.date).toLocaleTimeString()),
+        escapeCsvCell(call.duration || 'N/A'),
+        escapeCsvCell(call.notes),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `calls_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   if (loading || authLoading) {
     return (
@@ -259,8 +295,16 @@ export default function AllCallsPage() {
       </Collapsible>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Call History</CardTitle>
-          <Badge variant="secondary">{filteredCalls.length} call(s)</Badge>
+            <div className="flex items-center gap-4">
+                <CardTitle>Call History</CardTitle>
+                <Badge variant="secondary">{filteredCalls.length} call(s)</Badge>
+            </div>
+            {userProfile?.role === 'admin' && (
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredCalls.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

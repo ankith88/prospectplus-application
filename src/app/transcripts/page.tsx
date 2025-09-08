@@ -1,3 +1,4 @@
+
 "use client"
 
 import {
@@ -20,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User, Voicemail } from 'lucide-react'
+import { Phone, Calendar, Clock, FileText, DownloadCloud, Hash, X, Filter, SlidersHorizontal, User, Voicemail, Download } from 'lucide-react'
 import { getUserCallTranscripts } from '@/ai/flows/get-user-call-transcripts-flow'
 import { useToast } from '@/hooks/use-toast'
 import { getAllTranscripts } from '@/services/firebase'
@@ -40,6 +41,7 @@ import {
 } from '@/components/ui/dialog'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Badge } from '@/components/ui/badge'
 
 export default function TranscriptsPage() {
   const [allTranscripts, setAllTranscripts] = useState<Transcript[]>([]);
@@ -151,6 +153,55 @@ export default function TranscriptsPage() {
     }
   }
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const formatTranscriptContent = (content: string): string => {
+    try {
+        const utterances = JSON.parse(content);
+        if (Array.isArray(utterances)) {
+            return utterances.map(u => `${u.speaker || u.participant_type}: ${u.text}`).join('\n');
+        }
+        return content;
+    } catch (e) {
+        return content; // Return as is if not a valid JSON
+    }
+  };
+
+  const handleExport = () => {
+    const headers = ['Lead Name', 'Phone Number', 'User', 'Call ID', 'Date', 'Time', 'Transcript'];
+    const rows = filteredTranscripts.map(transcript => {
+        const lead = getLeadByPhoneNumber(transcript.phoneNumber || '');
+        return [
+            escapeCsvCell(lead?.companyName || 'Unknown'),
+            escapeCsvCell(transcript.phoneNumber),
+            escapeCsvCell(transcript.author),
+            escapeCsvCell(transcript.callId),
+            escapeCsvCell(new Date(transcript.date).toLocaleDateString()),
+            escapeCsvCell(new Date(transcript.date).toLocaleTimeString()),
+            escapeCsvCell(formatTranscriptContent(transcript.content)),
+        ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `transcripts_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -258,8 +309,17 @@ export default function TranscriptsPage() {
       </Collapsible>
       
       <Card>
-        <CardHeader>
-          <CardTitle>Call History</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-4">
+              <CardTitle>Call History</CardTitle>
+              <Badge variant="secondary">{filteredTranscripts.length} transcript(s)</Badge>
+            </div>
+            {userProfile?.role === 'admin' && (
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredTranscripts.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
