@@ -45,7 +45,7 @@ const formSchema = z.object({
 
 interface PostCallOutcomeDialogProps {
   lead: Lead
-  callActivity: Activity
+  callActivity?: Activity | null // Make optional for manual logging
   isOpen: boolean
   onClose: () => void
   onSubmit: (outcome: string, notes: string, contact?: Partial<Contact>) => void
@@ -70,7 +70,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     resolver: zodResolver(formSchema),
     defaultValues: {
       outcome: '',
-      notes: callActivity?.notes || '',
+      notes: '',
     },
   })
   const { toast } = useToast()

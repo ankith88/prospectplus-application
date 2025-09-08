@@ -79,7 +79,6 @@ import {
 } from "@/components/ui/dialog"
 import { AddContactForm } from '@/components/add-contact-form'
 import { EditContactForm } from '@/components/edit-contact-form'
-import { LogCallDialog } from '@/components/log-call-dialog'
 import { LogNoteDialog } from '@/components/log-note-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
@@ -120,8 +119,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
-  const [isChainedFlow, setIsChainedFlow] = useState(false);
-  const [isLogCallOpen, setIsLogCallOpen] = useState(false);
+  const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
@@ -209,8 +207,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   }, [lead?.id]);
 
 
-  const handlePostCallSubmit = async (outcome: string, notes: string, contact?: any) => {
-      if (!lead || !lastCallActivity || !lastCallActivity.callId) return;
+  const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
+      if (!lead || !user?.displayName) return;
 
       const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
           'Busy': { status: 'In Progress' },
@@ -225,25 +223,26 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           'Disqualified - Not a Fit': { status: 'Unqualified' },
           'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
       };
+      
+      let activityNotes = `Call logged manually. Outcome: ${outcome}. Notes: ${notes}`;
+      await logActivity(lead.id, {
+          type: 'Call',
+          notes: activityNotes,
+          author: user.displayName
+      });
+      fetchNotes(); // Refresh notes & activity
 
       const { status, reason } = outcomeStatusMap[outcome] || {};
-
       if (status) {
           await updateLeadStatus(lead.id, status, reason);
           setLead(prev => prev ? { ...prev, status } : null);
           toast({ title: 'Status Updated', description: `Lead status changed to ${status}.` });
       }
-
-      const activityNote = `Call Outcome: ${outcome}. Notes: ${notes}`;
-      await logNoteActivity(lead.id, {
-          content: activityNote,
-          author: user?.displayName || 'System'
-      });
-      fetchNotes(); // Refresh notes
       
-      toast({ title: "Transcript Pending", description: "The transcript will be automatically fetched when available." });
+      toast({ title: "Success", description: "Call outcome logged successfully." });
 
       setShowPostCallDialog(false);
+      setIsLogOutcomeOpen(false);
       setLastCallActivity(null);
   };
 
@@ -388,10 +387,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     }
   };
 
-  const handleCallLogged = (updatedLead: Lead) => {
-    setLead(updatedLead);
-  }
-
   const handleInitiateCall = (phoneNumber: string) => {
     if (!lead) return;
     window.open(`aircall:${phoneNumber}`);
@@ -524,22 +519,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         toast({ variant: "destructive", title: "Firebase Error", description: `Failed to save discovery data: ${error.message}` });
     } finally {
         setIsDiscoveryQuestionsOpen(false);
-        if (isChainedFlow) {
-            setIsLogCallOpen(true);
-        }
     }
   };
 
   const handleDiscoveryClose = (open: boolean) => {
-    if (!open) { // Dialog is closing
-        setIsDiscoveryQuestionsOpen(false);
-        if (isChainedFlow) {
-            setIsLogCallOpen(true);
-            setIsChainedFlow(false); // Reset the flow
-        }
-    } else { // Dialog is opening
-        setIsDiscoveryQuestionsOpen(true);
-    }
+    setIsDiscoveryQuestionsOpen(open);
   }
 
 
@@ -564,11 +548,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   return (
     <>
     <PostCallOutcomeDialog
-        isOpen={showPostCallDialog}
-        onClose={() => setShowPostCallDialog(false)}
+        isOpen={showPostCallDialog || isLogOutcomeOpen}
+        onClose={() => {
+            setShowPostCallDialog(false);
+            setIsLogOutcomeOpen(false);
+        }}
         lead={lead}
-        callActivity={lastCallActivity!}
-        onSubmit={handlePostCallSubmit}
+        callActivity={lastCallActivity} // Pass null for manual logging
+        onSubmit={handleCallLogged}
     />
     <div className="flex flex-col gap-6">
       <div>
@@ -591,12 +578,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <LogCallDialog lead={lead} onCallLogged={handleCallLogged} isOpen={isLogCallOpen} onOpenChange={setIsLogCallOpen}>
-                <Button variant="outline" onClick={() => { setIsChainedFlow(false); }}>
-                    <PhoneCall className="mr-2 h-4 w-4" />
-                    Log a Call
-                </Button>
-            </LogCallDialog>
+           <Button variant="outline" onClick={() => setIsLogOutcomeOpen(true)}>
+              <PhoneCall className="mr-2 h-4 w-4" />
+              Log a Call
+            </Button>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
               <ClipboardEdit className="mr-2 h-4 w-4" />
@@ -1162,7 +1147,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                         <Route className="w-5 h-5 text-muted-foreground" />
                         Discovery & Routing
                     </CardTitle>
-                     <Button variant="outline" size="sm" onClick={() => { setIsChainedFlow(false); setIsDiscoveryQuestionsOpen(true); }}>
+                     <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)}>
                         <FileQuestion className="mr-2 h-4 w-4" />
                         Open Form
                     </Button>
