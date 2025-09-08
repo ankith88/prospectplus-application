@@ -9,6 +9,7 @@ import { addContactToLead, getLeadFromFirebase } from '@/services/firebase';
 import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
+import type { Contact } from '@/lib/types';
 
 const SocialLinksSchema = z.object({
   linkedIn: z.string().optional(),
@@ -18,6 +19,7 @@ const SocialLinksSchema = z.object({
 });
 
 const ContactSchema = z.object({
+  id: z.string(),
   name: z.string().optional(),
   title: z.string().optional(),
   email: z.string().optional(),
@@ -121,16 +123,18 @@ export const prospectWebsiteTool = ai.defineTool(
       
       const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
       
-      const newContacts = foundContacts.filter((contact: any) => {
+      const uniqueNewContacts = foundContacts.filter((contact: any) => {
         if (!contact.email) return false;
         const contactKey = getContactKey(contact);
         return !existingContacts.has(contactKey);
       });
       
-      console.log(`Found ${newContacts.length} new unique contacts to add.`);
+      console.log(`Found ${uniqueNewContacts.length} new unique contacts to add.`);
+      
+      const savedContacts: Contact[] = [];
 
       // Save new contacts to Firebase and sync to NetSuite
-      for (const contact of newContacts) {
+      for (const contact of uniqueNewContacts) {
         if (contact.email) {
           const contactData = {
             name: contact.name,
@@ -139,14 +143,16 @@ export const prospectWebsiteTool = ai.defineTool(
             phone: contact.phone || 'N/A',
           };
           const contactId = await addContactToLead(leadId, contactData);
-          await sendContactToNetSuite({ leadId, contact: { ...contactData, id: contactId } });
+          const newContactWithId: Contact = { ...contactData, id: contactId };
+          savedContacts.push(newContactWithId);
+          await sendContactToNetSuite({ leadId, contact: newContactWithId });
         }
       }
 
       return {
         logoUrl: hunterData?.data?.logo_url,
-        contacts: newContacts,
-        siteAnalysis: `Found and saved ${newContacts.length} new contacts via Hunter.io.`,
+        contacts: savedContacts,
+        siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
       };
     } catch (error) {
       console.error('Error during website prospecting with Hunter.io:', error);

@@ -204,14 +204,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     setTasks(fetchedTasks);
   }
 
-  const fetchLeadContacts = async () => {
-    if (!lead) return;
-    const freshLead = await getLeadFromFirebase(lead.id, true);
-    if(freshLead) {
-      setLead(freshLead);
-    }
-  }
-
   useEffect(() => {
     fetchTasks();
   }, [lead?.id]);
@@ -299,13 +291,16 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         }
         
         if (result.contacts && result.contacts.length > 0) {
+            setLead(prevLead => {
+                if (!prevLead) return null;
+                const existingContacts = prevLead.contacts || [];
+                const newContacts = [...existingContacts, ...result.contacts!];
+                return { ...prevLead, contacts: newContacts };
+            });
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
         }
-        
-        // Always refetch contacts to get the latest state
-        await fetchLeadContacts();
 
     } catch (error) {
         console.error("Failed to prospect website:", error);
