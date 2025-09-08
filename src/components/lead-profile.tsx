@@ -538,6 +538,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 5);
   const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 5);
   const displayedNotes = isNotesExpanded ? notes : notes.slice(0, 5);
+  
+  const contactAttempts = useMemo(() => {
+    if (!lead?.activity) return 0;
+    return lead.activity.filter(a => ['Call', 'Email', 'Meeting'].includes(a.type)).length;
+  }, [lead?.activity]);
 
 
   return (
@@ -566,9 +571,16 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         <div className="flex items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={lead.status} />
-               {loading ? <Skeleton className="h-4 w-20" /> : <p className="text-muted-foreground">&bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>}
+              {loading ? (
+                <Skeleton className="h-4 w-48" />
+              ) : (
+                <>
+                  <p className="text-muted-foreground">&bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
+                  <p className="text-muted-foreground">&bull; Contacted {contactAttempts} {contactAttempts === 1 ? 'time' : 'times'}</p>
+                </>
+              )}
             </div>
           </div>
         </div>
