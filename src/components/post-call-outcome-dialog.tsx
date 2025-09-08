@@ -81,6 +81,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const MOCKED_CALENDLY_LINKS: { [key: string]: string } = {
     'Leonie Feata': 'https://calendly.com/leonie-feata-mock/meeting',
     'Luke Forbes': 'https://calendly.com/luke-forbes-mock/meeting',
+    'Kerina Helliwell': "https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina",
     'Default': 'https://calendly.com/mailplus-default/meeting',
   };
   
@@ -285,15 +286,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                 </DialogClose>
-                {outcome === 'Interested' ? (
-                    <div className="flex gap-2">
-                        <Button type="button" onClick={() => handleNextStep('appointment')}>Set Appointment</Button>
-                    </div>
-                ) : (
-                    <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
-                        {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
-                    </Button>
-                )}
+                <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
+                    {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
+                </Button>
             </DialogFooter>
           </form>
         </Form>
