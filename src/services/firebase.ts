@@ -482,20 +482,22 @@ async function getAllTranscripts(): Promise<Transcript[]> {
     }
 }
 
-async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string }>> {
+async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string }>> {
     try {
         const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
         const allAppointments = await Promise.all(appointmentsSnapshot.docs.map(async (appointmentDoc) => {
             const appointmentData = appointmentDoc.data() as Appointment;
             const leadId = appointmentDoc.ref.parent.parent!.id;
             const leadDoc = await getDoc(doc(firestore, 'leads', leadId));
-            const leadName = leadDoc.exists() ? leadDoc.data().companyName : 'Unknown Lead';
+            const leadData = leadDoc.exists() ? leadDoc.data() : {};
+            const leadName = leadData?.companyName || 'Unknown Lead';
             
             return {
                 ...appointmentData,
                 id: appointmentDoc.id,
                 leadId: leadId,
                 leadName: leadName,
+                dialerAssigned: leadData?.dialerAssigned,
             };
         }));
         allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());

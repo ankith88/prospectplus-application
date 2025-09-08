@@ -35,7 +35,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
 
 export default function AllAppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
@@ -86,7 +86,7 @@ export default function AllAppointmentsPage() {
     let appointmentsToFilter = allAppointments;
 
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
-        appointmentsToFilter = allAppointments.filter(c => c.assignedTo === userProfile.displayName);
+        appointmentsToFilter = allAppointments.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
     return appointmentsToFilter.filter(appointment => {
@@ -153,7 +153,7 @@ export default function AllAppointmentsPage() {
                     </div>
                     {userProfile?.role === 'admin' && (
                         <div className="space-y-2">
-                            <Label htmlFor="user">Assigned To</Label>
+                            <Label htmlFor="user">Assigned To (Appointment)</Label>
                              <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
                                 <SelectTrigger id="user">
                                     <SelectValue placeholder="Select user" />
@@ -231,7 +231,8 @@ export default function AllAppointmentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead</TableHead>
-                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Assigned To (Lead)</TableHead>
+                  <TableHead>Assigned To (Appointment)</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Time</TableHead>
                 </TableRow>
@@ -239,7 +240,7 @@ export default function AllAppointmentsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredAppointments.length > 0 ? (
                   filteredAppointments.map((appointment) => {
@@ -250,6 +251,12 @@ export default function AllAppointmentsPage() {
                             <Briefcase className="h-4 w-4" />
                             {appointment.leadName}
                         </Button>
+                      </TableCell>
+                       <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          {appointment.dialerAssigned || 'Unassigned'}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -273,7 +280,7 @@ export default function AllAppointmentsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>
