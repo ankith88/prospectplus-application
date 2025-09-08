@@ -215,7 +215,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           'Call Back/Follow-up': { status: 'High Touch' },
           'Gatekeeper': { status: 'Connected' },
           'Disconnected': { status: 'In Progress' },
-          'Interested': { status: 'Qualified' },
+          'Appointment Booked': { status: 'Qualified' },
+          'Email Interested': { status: 'Pre Qualified' },
           'No Answer': { status: 'In Progress' },
           'Not Interested': { status: 'Lost', reason: 'Not Interested' },
           'Voicemail': { status: 'In Progress' },
@@ -290,12 +291,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            setLead(prevLead => {
-                if (!prevLead) return null;
-                const existingContacts = prevLead.contacts || [];
-                const newContacts = [...existingContacts, ...result.contacts!];
-                return { ...prevLead, contacts: newContacts };
-            });
+            const updatedContacts = await getLeadContacts(lead.id);
+            setLead(prev => prev ? { ...prev, contacts: updatedContacts } : null);
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -541,6 +538,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
   const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
 
+  const callHistory = lead.activity?.filter(a => a.type === 'Call' && a.callId) || [];
   const displayedActivities = isActivityExpanded ? lead.activity : lead.activity?.slice(0, 5);
   const displayedNotes = isNotesExpanded ? notes : notes.slice(0, 5);
 
@@ -905,6 +903,73 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
             </Card>
           </div>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PhoneCall className="w-5 h-5 text-muted-foreground" />
+                Call History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : callHistory.length > 0 ? (
+                <ul className="space-y-4">
+                  {callHistory.map((item, index) => {
+                    const hasTranscript = transcripts.some(t => t.callId === item.callId);
+                    return (
+                      <li key={item.id} className="flex gap-4 group">
+                        <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
+                            <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                          </div>
+                          <div className="text-sm text-muted-foreground break-words">
+                            {item.notes}
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                              <Hash className="w-3 h-3 flex-shrink-0" />
+                              <span>Call ID: {item.callId}</span>
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                    <Clipboard className="w-2.5 h-2.5" />
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!hasTranscript && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                    disabled={fetchingTranscriptId === item.callId}
+                                  >
+                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                  <Voicemail className="mr-2 h-4 w-4" />
+                                  Recording
+                                </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-center text-muted-foreground py-4">
+                  No AirCall call history found.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -920,7 +985,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 ) : (
                 <ul className="space-y-4">
                   {displayedActivities && displayedActivities.map((item, index) => {
-                    const hasTranscript = transcripts.some(t => t.callId === item.callId);
                     return (
                       <li key={item.id} className="flex gap-4 group">
                         <div className="flex flex-col items-center">
@@ -942,36 +1006,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                           <div className="text-sm text-muted-foreground break-words">
                             {item.notes}
                           </div>
-                          {item.type === 'Call' && item.callId && (
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                              <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
-                                <Hash className="w-3 h-3 flex-shrink-0" />
-                                <span>Call ID: {item.callId}</span>
-                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                      <Clipboard className="w-2.5 h-2.5" />
-                                  </Button>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                  {!hasTranscript && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                      disabled={fetchingTranscriptId === item.callId}
-                                    >
-                                      {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
-                                    </Button>
-                                  )}
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                    <Voicemail className="mr-2 h-4 w-4" />
-                                    Recording
-                                  </Button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </li>
                     )
