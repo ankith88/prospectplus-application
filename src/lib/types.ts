@@ -108,6 +108,7 @@ export interface Lead {
   industryCategory?: string
   industrySubCategory?: string
   salesRepAssigned?: string
+  salesRepAssignedCalendlyLink?: string
   dialerAssigned?: string
   campaign?: string
   customerServiceEmail?: string

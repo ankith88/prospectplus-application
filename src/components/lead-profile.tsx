@@ -770,7 +770,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                     <User className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Sales Rep Assigned</p>
-                      <p className="font-medium">{lead.salesRepAssigned ?? 'N/A'}</p>
+                      {lead.salesRepAssigned ? (
+                        lead.salesRepAssignedCalendlyLink ? (
+                          <a href={lead.salesRepAssignedCalendlyLink} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
+                            <span>{lead.salesRepAssigned}</span>
+                            <LinkIcon className="w-3 h-3 shrink-0" />
+                          </a>
+                        ) : (
+                          <p className="font-medium">{lead.salesRepAssigned}</p>
+                        )
+                      ) : (
+                        <p className="font-medium">N/A</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
