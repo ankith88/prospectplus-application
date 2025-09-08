@@ -156,32 +156,13 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const activities: Activity[] = [];
-      let latestCall: Activity | null = null;
-      let latestCallTime = 0;
-
       querySnapshot.forEach((doc) => {
         const activity = { id: doc.id, ...doc.data() } as Activity;
         activities.push(activity);
-        if (activity.type === 'Call') {
-            const callTime = new Date(activity.date).getTime();
-            if (callTime > latestCallTime) {
-                latestCallTime = callTime;
-                latestCall = activity;
-            }
-        }
       });
       
       setLead(prevLead => prevLead ? {...prevLead, activity: activities} : null);
 
-      if (latestCall && latestCall.callId && querySnapshot.docChanges().some(change => change.type === 'added' && change.doc.id === latestCall!.id)) {
-         // This is a naive check. A better approach might involve checking a flag on the activity
-         // to see if it's already been processed by the UI.
-         const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-         if (new Date(latestCall.date).getTime() > fiveMinutesAgo) {
-            setLastCallActivity(latestCall);
-            setShowPostCallDialog(true);
-         }
-      }
     });
 
     return () => unsubscribe();
