@@ -66,7 +66,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch'];
+    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified'];
     if (typeof status === 'string') {
         let cleanStatus = status.replace('SUSPECT-', '');
 
@@ -884,6 +884,33 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
     }
 }
 
+async function addScorecard(leadId: string, data: any): Promise<any> {
+    try {
+        const scorecardsRef = collection(firestore, 'leads', leadId, 'scorecards');
+        const docRef = await addDoc(scorecardsRef, {
+            ...data,
+            createdAt: new Date().toISOString(),
+        });
+        const savedData = await getDoc(docRef);
+        console.log(`Scorecard added with ID: ${docRef.id} to lead ${leadId}`);
+        return { id: docRef.id, ...savedData.data() };
+    } catch (error) {
+        console.error(`Failed to add scorecard to lead ${leadId}:`, error);
+        throw new Error('Failed to add scorecard in Firebase');
+    }
+}
+
+async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: ScorecardAnalysis): Promise<void> {
+    try {
+        const scorecardRef = doc(firestore, 'leads', leadId, 'scorecards', scorecardId);
+        await updateDoc(scorecardRef, { analysis });
+        console.log(`Scorecard ${scorecardId} analysis updated for lead ${leadId}`);
+    } catch (error) {
+        console.error(`Failed to update scorecard analysis for lead ${leadId}:`, error);
+        throw new Error('Failed to update scorecard analysis in Firebase');
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -922,4 +949,6 @@ export {
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
+    addScorecard,
+    updateScorecardAnalysis,
 };
