@@ -40,7 +40,7 @@ import {
   FileQuestion,
   Route,
 } from 'lucide-react'
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
@@ -96,7 +96,8 @@ import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, startOfDay, endOfDay } from 'date-fns'
+import type { DateRange } from 'react-day-picker'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { sendDiscoveryDataToNetSuite } from '@/services/netsuite'
@@ -128,6 +129,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
   const [isActivityExpanded, setIsActivityExpanded] = useState(false);
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  const [isCallHistoryExpanded, setIsCallHistoryExpanded] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
 
 
   const router = useRouter();
@@ -537,9 +540,23 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     : 'No address available';
 
   const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+  
+  const filteredActivities = useMemo(() => {
+    if (!dateFilter?.from) return lead.activity || [];
+    const fromDate = startOfDay(dateFilter.from);
+    const toDate = dateFilter.to ? endOfDay(dateFilter.to) : endOfDay(dateFilter.from);
+    return (lead.activity || []).filter(a => {
+        const activityDate = new Date(a.date);
+        return activityDate >= fromDate && activityDate <= toDate;
+    });
+  }, [lead.activity, dateFilter]);
 
-  const callHistory = lead.activity?.filter(a => a.type === 'Call' && a.callId) || [];
-  const displayedActivities = isActivityExpanded ? lead.activity : lead.activity?.slice(0, 5);
+  const callHistory = useMemo(() => {
+    return filteredActivities.filter(a => a.type === 'Call' && a.callId);
+  }, [filteredActivities]);
+
+  const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 5);
+  const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 5);
   const displayedNotes = isNotesExpanded ? notes : notes.slice(0, 5);
 
 
@@ -904,20 +921,46 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PhoneCall className="w-5 h-5 text-muted-foreground" />
-                Call History
-              </CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <PhoneCall className="w-5 h-5 text-muted-foreground" />
+                  Call History
+                </CardTitle>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateFilter?.from ? (
+                              dateFilter.to ? (
+                                <>
+                                  {format(dateFilter.from, "LLL d")} - {format(dateFilter.to, "LLL d")}
+                                </>
+                              ) : (
+                                format(dateFilter.from, "LLL d, y")
+                              )
+                            ) : (
+                              <span>Filter by date...</span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                        <CalendarPicker
+                            mode="range"
+                            selected={dateFilter}
+                            onSelect={setDateFilter}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="space-y-4">
                   <Skeleton className="h-16 w-full" />
                 </div>
-              ) : callHistory.length > 0 ? (
+              ) : displayedCallHistory.length > 0 ? (
                 <ul className="space-y-4">
-                  {callHistory.map((item, index) => {
+                  {displayedCallHistory.map((item, index) => {
                     const hasTranscript = transcripts.some(t => t.callId === item.callId);
                     return (
                       <li key={item.id} className="flex gap-4 group">
@@ -964,10 +1007,21 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 </ul>
               ) : (
                 <p className="text-sm text-center text-muted-foreground py-4">
-                  No AirCall call history found.
+                  No AirCall call history found for the selected period.
                 </p>
               )}
             </CardContent>
+             {callHistory.length > 5 && (
+                <CardFooter>
+                  <Button
+                    variant="link"
+                    className="w-full"
+                    onClick={() => setIsCallHistoryExpanded(!isCallHistoryExpanded)}
+                  >
+                    {isCallHistoryExpanded ? 'Show less' : `Show all ${callHistory.length} calls`}
+                  </Button>
+                </CardFooter>
+              )}
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1013,14 +1067,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                 </ul>
                 )}
               </CardContent>
-              {lead.activity && lead.activity.length > 5 && (
+              {filteredActivities.length > 5 && (
                 <CardFooter>
                   <Button
                     variant="link"
                     className="w-full"
                     onClick={() => setIsActivityExpanded(!isActivityExpanded)}
                   >
-                    {isActivityExpanded ? 'Show less' : 'Show all activity'}
+                    {isActivityExpanded ? 'Show less' : `Show all ${filteredActivities.length} activities`}
                   </Button>
                 </CardFooter>
               )}
