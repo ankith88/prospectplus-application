@@ -4,11 +4,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
+import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -18,7 +18,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getAllCallActivities, getAllLeadsForReport } from '@/services/firebase';
+import { getAllCallActivities, getAllLeadsForReport, getAllAppointments } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -48,6 +48,8 @@ const SCORE_RANGE_COLORS: string[] = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042'
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
+
 
 const renderActiveShape = (props: any) => {
   const RADIAN = Math.PI / 180;
@@ -99,6 +101,7 @@ const renderActiveShape = (props: any) => {
 export default function ReportsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -135,9 +138,10 @@ export default function ReportsPage() {
 
       try {
         setLoading(true);
-        const [fetchedCalls, fetchedLeads] = await Promise.all([
+        const [fetchedCalls, fetchedLeads, fetchedAppointments] = await Promise.all([
             getAllCallActivities(),
-            getAllLeadsForReport()
+            getAllLeadsForReport(),
+            getAllAppointments()
         ]);
         
         const dialerSet = new Set(fetchedLeads.map(l => l.dialerAssigned).filter(Boolean));
@@ -148,6 +152,7 @@ export default function ReportsPage() {
         
         setAllCalls(fetchedCalls);
         setAllLeads(fetchedLeads);
+        setAllAppointments(fetchedAppointments);
         
         if (userProfile.role !== 'admin' && userProfile.displayName) {
           console.log(`[Reports Page] Defaulting filter to non-admin user: ${userProfile.displayName}`);
@@ -222,6 +227,23 @@ export default function ReportsPage() {
         return dialerMatch && statusMatch && dateMatch && durationMatch();
     });
   }, [allCalls, filters]);
+  
+  const filteredAppointments = useMemo(() => {
+    return allAppointments.filter(appointment => {
+        const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
+        
+        let dateMatch = true;
+        if (filters.date?.from) {
+          const appointmentDate = new Date(appointment.duedate);
+          const fromDate = startOfDay(filters.date.from);
+          const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+          dateMatch = appointmentDate >= fromDate && appointmentDate <= toDate;
+        }
+
+        return dialerMatch && dateMatch;
+    });
+  }, [allAppointments, filters]);
+
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -291,8 +313,9 @@ export default function ReportsPage() {
       ratioOver2Min,
       ratio30sTo2min,
       totalLeadsInFilter,
+      totalAppointments: filteredAppointments.length,
     };
-  }, [filteredCalls, filteredLeads]);
+  }, [filteredCalls, filteredLeads, filteredAppointments]);
   
 
   const hasActiveFilters = 
@@ -361,7 +384,7 @@ export default function ReportsPage() {
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Call Date</Label>
+                        <Label htmlFor="date">Call/Appt. Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -551,7 +574,7 @@ export default function ReportsPage() {
         </Card>
 
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2 xl:col-span-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:col-span-2 xl:col-span-3">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
@@ -559,6 +582,18 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-bold">{stats.totalCalls}</div>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
+                <CalendarIconLucide className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{stats.totalAppointments}</div>
+                <p className="text-xs text-muted-foreground">
+                    {filters.date ? 'in selected period' : 'across all time'}
+                </p>
             </CardContent>
             </Card>
             <Card>
