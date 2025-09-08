@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
@@ -391,6 +391,22 @@ async function getLeadNotes(leadId: string): Promise<Note[]> {
         return items;
     } catch (error) {
         console.error(`Failed to fetch notes for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
+async function getLeadAppointments(leadId: string): Promise<Appointment[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'appointments');
+        const q = query(ref, orderBy('duedate', 'desc'));
+        const snapshot = await getDocs(q);
+        const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Appointment));
+        return items;
+    } catch (error) {
+        console.error(`Failed to fetch appointments for lead ${leadId}:`, error);
         return [];
     }
 }
@@ -928,6 +944,7 @@ export {
     getLeadContacts,
     getLeadActivity,
     getLeadNotes,
+    getLeadAppointments,
     getAllNotes,
     getAllActivities,
     getAllLeadsForReport,

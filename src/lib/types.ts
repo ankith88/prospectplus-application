@@ -40,6 +40,13 @@ export interface Task {
     author: string;
 }
 
+export interface Appointment {
+  id: string;
+  duedate: string;
+  starttime: string;
+  assignedTo: string;
+}
+
 export interface TranscriptAnalysis {
   summary: string;
   sentiment: 'Positive' | 'Negative' | 'Neutral';

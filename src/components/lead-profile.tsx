@@ -39,14 +39,15 @@ import {
   ListTodo,
   FileQuestion,
   Route,
+  Clock,
 } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -104,10 +105,11 @@ import { sendDiscoveryDataToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 
 
-export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[] }) {
+export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialAppointments }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[], initialAppointments: Appointment[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
+  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
@@ -186,8 +188,15 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     setTasks(fetchedTasks);
   }
 
+  const fetchAppointments = async () => {
+    if (!lead) return;
+    const fetchedAppointments = await getLeadAppointments(lead.id);
+    setAppointments(fetchedAppointments);
+  }
+
   useEffect(() => {
     fetchTasks();
+    fetchAppointments();
   }, [lead?.id]);
 
 
@@ -1019,6 +1028,44 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                   </Button>
                 </CardFooter>
               )}
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-muted-foreground" />
+                Appointments
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {loading ? (
+                    <div className="py-4 space-y-4">
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                ) : appointments.length > 0 ? (
+                  appointments.map(appointment => (
+                    <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                      <div className="flex items-center gap-4">
+                          <div className="text-center">
+                              <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
+                              <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
+                          </div>
+                          <div>
+                              <p className="text-sm font-medium">
+                                  Appointment with {appointment.assignedTo}
+                              </p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {appointment.starttime}
+                              </p>
+                          </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                    <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
+                )}
+            </CardContent>
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
