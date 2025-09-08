@@ -541,7 +541,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
   
   const contactAttempts = useMemo(() => {
     if (!lead?.activity) return 0;
-    return lead.activity.filter(a => ['Call', 'Email', 'Meeting'].includes(a.type)).length;
+    return lead.activity.filter(a => a.type === 'Call' && a.callId).length;
   }, [lead?.activity]);
 
 
