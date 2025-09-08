@@ -641,6 +641,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
                      <p className="text-muted-foreground">Customer ID</p>
                      <div className="flex items-center gap-1">
                         <p className="font-medium break-all">{lead.entityId ?? 'N/A'}</p>
+                        {lead.entityId && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
+                                <Clipboard className="w-3 h-3" />
+                            </Button>
+                        )}
                      </div>
                    </div>
                  </div>
