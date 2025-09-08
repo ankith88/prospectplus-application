@@ -557,10 +557,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   return (
     <>
     <PostCallOutcomeDialog
-        isOpen={showPostCallDialog || isLogOutcomeOpen}
+        isOpen={showPostCallDialog}
         onClose={() => {
             setShowPostCallDialog(false);
-            setIsLogOutcomeOpen(false);
         }}
         lead={lead}
         callActivity={lastCallActivity} // Pass null for manual logging
@@ -1056,7 +1055,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                               </p>
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
-                                  {appointment.starttime}
+                                  {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                               </p>
                           </div>
                       </div>
