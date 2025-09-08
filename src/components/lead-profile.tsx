@@ -46,7 +46,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -332,21 +332,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     })
   }
   
-  const handleContactAdded = (newContact: any) => {
-    if (lead) {
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newContactWithId = { ...newContact, id: tempId, name: `${newContact.firstName} ${newContact.lastName}` };
-      const updatedLead = {
-        ...lead,
-        contacts: [...(lead.contacts || []), newContactWithId],
-      };
-      setLead(updatedLead);
-       addActivity({
-          type: 'Update',
-          date: new Date().toISOString(),
-          notes: `New contact added: ${newContactWithId.name}`,
-       });
-    }
+  const handleContactAdded = async () => {
+    if (!lead) return;
+    const updatedContacts = await getLeadContacts(lead.id);
+    setLead(prev => prev ? { ...prev, contacts: updatedContacts } : null);
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
@@ -392,11 +381,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts }: {
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
       setLead(prev => prev ? { ...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id) } : null);
-      addActivity({
-        type: 'Update',
-        date: new Date().toISOString(),
-        notes: `Contact ${contact.name} deleted.`,
-      });
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
