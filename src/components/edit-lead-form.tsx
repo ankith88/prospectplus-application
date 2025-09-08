@@ -27,7 +27,7 @@ const formSchema = z.object({
 
 interface EditLeadFormProps {
   lead: Lead
-  onLeadUpdated: (lead: Partial<Lead>) => void
+  onLeadUpdated: (lead: Partial<Lead>, oldLead: Lead) => void
 }
 
 export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
@@ -47,9 +47,9 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       await updateLeadDetails(lead.id, lead, values);
       toast({
         title: "Success",
-        description: "Lead details updated successfully.",
+        description: "Lead details updated successfully in Firebase.",
       })
-      onLeadUpdated(values);
+      onLeadUpdated(values, lead);
 
       // Call NetSuite
       const nsResult = await sendLeadUpdateToNetSuite({

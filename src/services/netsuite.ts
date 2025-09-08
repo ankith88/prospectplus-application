@@ -367,10 +367,12 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
         compid: "1048144",
         "ns-at": "AAEJ7tMQjAoBac5NMovu7TgzYYUBTkw80-MtaJaID2gsRUcr0hs",
         leadID: leadId,
-        companyname: companyName,
-        email: email,
-        phone: phone,
     });
+
+    if (companyName) params.append('companyname', companyName);
+    if (email) params.append('email', email);
+    if (phone) params.append('phone', phone);
+
 
     const url = `${baseUrl}?${params.toString()}`;
 

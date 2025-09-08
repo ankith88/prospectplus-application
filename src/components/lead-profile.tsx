@@ -342,24 +342,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
 
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
     if (lead) {
-        const changes: string[] = [];
-        if (updatedLeadData.companyName && updatedLeadData.companyName !== oldLead.companyName) {
-            changes.push(`Company name to "${updatedLeadData.companyName}".`);
-        }
-        if (updatedLeadData.customerServiceEmail && updatedLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
-            changes.push(`Email to "${updatedLeadData.customerServiceEmail}".`);
-        }
-        if (updatedLeadData.customerPhone && updatedLeadData.customerPhone !== oldLead.customerPhone) {
-            changes.push(`Phone to "${updatedLeadData.customerPhone}".`);
-        }
-
-        if (changes.length > 0) {
-           addActivity({
-              type: 'Update',
-              date: new Date().toISOString(),
-              notes: `Lead details updated: ${changes.join(' ')}`,
-           });
-        }
       setLead({ ...lead, ...updatedLeadData });
     }
     setIsEditLeadDialogOpen(false);
@@ -380,7 +362,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   const handleInitiateCall = (phoneNumber: string) => {
     if (!lead) return;
     window.open(`aircall:${phoneNumber}`);
-    addActivity({ type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    logActivity(lead.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
     toast({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
@@ -643,7 +625,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                         <DialogHeader>
                           <DialogTitle>Edit Lead Details</DialogTitle>
                         </DialogHeader>
-                        <EditLeadForm lead={lead} onLeadUpdated={(updatedData) => handleLeadUpdated(updatedData, lead)} />
+                        <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
                       </DialogContent>
                     </Dialog>
                 </div>
@@ -1000,7 +982,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                     onClick={() => handleGetTranscriptForCall(item.callId!)}
                                     disabled={fetchingTranscriptId === item.callId}
                                   >
-                                    {fetchingTranscriptId === item.callId ? <Loader/> : 'Fetch Transcript'}
+                                    {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
                                   </Button>
                                 )}
                                 <Button 
