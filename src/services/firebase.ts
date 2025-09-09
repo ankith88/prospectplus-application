@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -148,8 +147,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.street || data.city || data.state || data.zip || data.country) {
-          address = {
+        if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
+          address = data.address || {
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -219,8 +218,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.street || data.city || data.state || data.zip || data.country) {
-          address = {
+        if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
+          address = data.address || {
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -731,10 +730,27 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
   }
 }
 
-async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone'>>): Promise<void> {
+async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone' | 'address'>>): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, newLeadData);
+        
+        const updatePayload: { [key: string]: any } = {};
+        if (newLeadData.companyName !== undefined) updatePayload.companyName = newLeadData.companyName;
+        if (newLeadData.customerServiceEmail !== undefined) updatePayload.customerServiceEmail = newLeadData.customerServiceEmail;
+        if (newLeadData.customerPhone !== undefined) updatePayload.customerPhone = newLeadData.customerPhone;
+        if (newLeadData.address) {
+            updatePayload.address = {
+                street: newLeadData.address.street || '',
+                city: newLeadData.address.city || '',
+                state: newLeadData.address.state || '',
+                zip: newLeadData.address.zip || '',
+                country: newLeadData.address.country || '',
+            };
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+            await updateDoc(leadRef, updatePayload);
+        }
 
         const changes: string[] = [];
         if (newLeadData.companyName && newLeadData.companyName !== oldLead.companyName) {
@@ -745,6 +761,9 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
         }
         if (newLeadData.customerPhone && newLeadData.customerPhone !== oldLead.customerPhone) {
             changes.push(`Phone changed from "${oldLead.customerPhone || 'N/A'}" to "${newLeadData.customerPhone}".`);
+        }
+        if (newLeadData.address) {
+            changes.push('Address updated.');
         }
 
         if (changes.length > 0) {

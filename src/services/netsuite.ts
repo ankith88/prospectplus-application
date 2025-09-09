@@ -1,7 +1,7 @@
 
 'use server'
 
-import type { DiscoveryData, Lead, Contact, Note, Activity } from "@/lib/types";
+import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -340,9 +340,10 @@ export async function sendActivityToNetSuite(payload: NetSuiteActivityPayload): 
 
 interface NetSuiteLeadUpdatePayload {
     leadId: string;
-    companyName: string;
-    email: string;
-    phone: string;
+    companyName?: string;
+    email?: string;
+    phone?: string;
+    address?: Partial<Address>;
 }
 
 /**
@@ -351,7 +352,7 @@ interface NetSuiteLeadUpdatePayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayload): Promise<{ success: boolean, message: string }> {
-    const { leadId, companyName, email, phone } = payload;
+    const { leadId, companyName, email, phone, address } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -372,6 +373,13 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
     if (companyName) params.append('companyname', companyName);
     if (email) params.append('email', email);
     if (phone) params.append('phone', phone);
+    if (address) {
+        if (address.street) params.append('addr1', address.street);
+        if (address.city) params.append('city', address.city);
+        if (address.state) params.append('state', address.state);
+        if (address.zip) params.append('zip', address.zip);
+        if (address.country) params.append('country', address.country);
+    }
 
 
     const url = `${baseUrl}?${params.toString()}`;

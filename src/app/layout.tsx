@@ -36,6 +36,10 @@ export default function RootLayout({
             gtag('config', 'G-ECGD82STP1');
           `}
         </Script>
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&callback=Function.prototype`}
+          async
+        ></Script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
