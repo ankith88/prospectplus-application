@@ -497,7 +497,7 @@ export default function LeadsPage() {
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full" defaultValue={leadsByStatus.map(s => s[0])}>
+             <Accordion type="multiple" className="w-full">
                 {leadsByStatus.map(([status, leads]) => (
                   <AccordionItem value={status} key={status}>
                     <AccordionTrigger>
@@ -601,7 +601,7 @@ export default function LeadsPage() {
           {loading ? (
              <div className="text-center"><Loader /></div>
            ) : allAssignedLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full" defaultValue={leadsByUser.map(u=>u[0])}>
+             <Accordion type="multiple" className="w-full">
                 {leadsByUser.map(([user, leads]) => (
                   <AccordionItem value={user} key={user}>
                     <AccordionTrigger>
