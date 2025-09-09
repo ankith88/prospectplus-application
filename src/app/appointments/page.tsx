@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllAppointments } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
@@ -125,6 +125,39 @@ export default function AllAppointmentsPage() {
       const users = new Set(allAppointments.map(c => c.dialerAssigned).filter(Boolean));
       return Array.from(users as string[]);
   }, [allAppointments]);
+
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleExport = () => {
+    const headers = ['Lead Name', 'Lead Status', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
+    const rows = filteredAppointments.map(appt => [
+        escapeCsvCell(appt.leadName),
+        escapeCsvCell(appt.leadStatus),
+        escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
+        escapeCsvCell(appt.assignedTo || 'Unassigned'),
+        escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
+        escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `appointments_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
 
   if (loading || authLoading) {
@@ -258,11 +291,17 @@ export default function AllAppointmentsPage() {
           </Card>
       </Collapsible>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Appointment Schedule</CardTitle>
                 <Badge variant="secondary">{filteredAppointments.length} appointment(s)</Badge>
             </div>
+             {userProfile?.role === 'admin' && (
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredAppointments.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
