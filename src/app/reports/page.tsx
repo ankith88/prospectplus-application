@@ -452,8 +452,8 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        <Card className="xl:col-span-1">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
             </CardHeader>
@@ -496,7 +496,7 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
         
-        <Card className="xl:col-span-1">
+        <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Route className="h-5 w-5 text-muted-foreground" />
@@ -542,7 +542,7 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
         
-        <Card className="xl:col-span-1">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-muted-foreground" />
@@ -574,7 +574,7 @@ export default function ReportsPage() {
         </Card>
 
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:col-span-2 xl:col-span-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
