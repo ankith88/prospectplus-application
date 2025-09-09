@@ -942,7 +942,7 @@ async function addScorecard(leadId: string, data: any): Promise<any> {
     }
 }
 
-async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: ScorecardAnalysis): Promise<void> {
+async function updateScorecardAnalysis(leadId: string, scorecardId: string, analysis: TranscriptAnalysis): Promise<void> {
     try {
         const scorecardRef = doc(firestore, 'leads', leadId, 'scorecards', scorecardId);
         await updateDoc(scorecardRef, { analysis });
@@ -967,25 +967,31 @@ async function getAllUsers(): Promise<UserProfile[]> {
     }
 }
 
-async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerRep: string): Promise<void> {
+async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: string[]): Promise<void> {
+    if (newDialerReps.length === 0) {
+        throw new Error("No users selected for reassignment.");
+    }
     try {
         const batch = writeBatch(firestore);
         
         for (const leadId of leadIds) {
             const leadRef = doc(firestore, 'leads', leadId);
-            batch.update(leadRef, { dialerAssigned: newDialerRep });
+            // Randomly select one of the new dialer reps
+            const randomRep = newDialerReps[Math.floor(Math.random() * newDialerReps.length)];
+            
+            batch.update(leadRef, { dialerAssigned: randomRep });
 
             const activityRef = collection(leadRef, 'activity');
-            const newActivityRef = doc(activityRef); // Create a new doc ref in the subcollection
+            const newActivityRef = doc(activityRef);
             batch.set(newActivityRef, {
                 type: 'Update',
                 date: new Date().toISOString(),
-                notes: `Lead reassigned to ${newDialerRep}.`
+                notes: `Lead reassigned to ${randomRep}.`
             });
         }
         
         await batch.commit();
-        console.log(`Successfully reassigned ${leadIds.length} leads to ${newDialerRep}`);
+        console.log(`Successfully reassigned ${leadIds.length} leads randomly among ${newDialerReps.length} users.`);
     } catch (error) {
         console.error('Failed to bulk update lead dialer reps:', error);
         throw new Error('Failed to bulk update leads in Firebase');

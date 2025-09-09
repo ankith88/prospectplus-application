@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -37,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -50,7 +52,7 @@ export default function LeadsPage() {
   const [selectedForReassignment, setSelectedForReassignment] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
-  const [reassignToUser, setReassignToUser] = useState<string | null>(null);
+  const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -239,20 +241,29 @@ export default function LeadsPage() {
   };
   
   const handleBulkReassign = async () => {
-    if (selectedForReassignment.length === 0 || !reassignToUser) return;
+    if (selectedForReassignment.length === 0 || reassignToUsers.length === 0) return;
     try {
-        await bulkUpdateLeadDialerRep(selectedForReassignment, reassignToUser);
+        await bulkUpdateLeadDialerRep(selectedForReassignment, reassignToUsers);
+        
+        // Optimistically update the UI
+        const assignedLeadsMap = new Map<string, string>();
+        selectedForReassignment.forEach(leadId => {
+            const randomUser = reassignToUsers[Math.floor(Math.random() * reassignToUsers.length)];
+            assignedLeadsMap.set(leadId, randomUser);
+        });
+
         const updatedLeads = allLeads.map(lead =>
-            selectedForReassignment.includes(lead.id) ? { ...lead, dialerAssigned: reassignToUser } : lead
+            assignedLeadsMap.has(lead.id) ? { ...lead, dialerAssigned: assignedLeadsMap.get(lead.id) } : lead
         );
         setAllLeads(updatedLeads);
-        toast({ title: "Success", description: `${selectedForReassignment.length} lead(s) reassigned to ${reassignToUser}.` });
+
+        toast({ title: "Success", description: `${selectedForReassignment.length} lead(s) randomly reassigned to ${reassignToUsers.length} user(s).` });
     } catch (error) {
         console.error("Failed to bulk reassign leads:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to reassign leads." });
     } finally {
         setSelectedForReassignment([]);
-        setReassignToUser(null);
+        setReassignToUsers([]);
         setIsReassignDialogOpen(false);
     }
   };
@@ -347,6 +358,13 @@ export default function LeadsPage() {
         description: `Attempting to dial ${phoneNumber}...`,
     });
   };
+  
+  const handleReassignUserSelect = (checked: boolean, userId: string) => {
+    setReassignToUsers(prev => 
+        checked ? [...prev, userId] : prev.filter(id => id !== userId)
+    );
+  };
+
 
   if (loading || authLoading) {
     return (
@@ -794,37 +812,48 @@ export default function LeadsPage() {
         onClose={() => setSelectedAddress(null)}
         address={selectedAddress || ''}
       />
-      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
+    <Dialog open={isReassignDialogOpen} onOpenChange={(open) => {
+        setIsReassignDialogOpen(open);
+        if (!open) {
+            setReassignToUsers([]);
+        }
+    }}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Reassign Leads</DialogTitle>
                 <DialogDescription>
-                    You are about to reassign {selectedForReassignment.length} lead(s). Select a new user to assign them to.
+                    You are about to reassign {selectedForReassignment.length} lead(s). Select one or more users to randomly distribute the leads to.
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-                <Label htmlFor="reassignUser">Assign to</Label>
-                <Select onValueChange={setReassignToUser}>
-                    <SelectTrigger id="reassignUser">
-                        <SelectValue placeholder="Select a user" />
-                    </SelectTrigger>
-                    <SelectContent>
+                <Label>Assign to</Label>
+                <ScrollArea className="h-48 mt-2 border rounded-md p-2">
+                    <div className="space-y-2">
                         {allUsers.map(u => (
-                            <SelectItem key={u.uid} value={u.displayName!}>{u.displayName}</SelectItem>
+                            <div key={u.uid} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`reassign-${u.uid}`}
+                                    checked={reassignToUsers.includes(u.displayName!)}
+                                    onCheckedChange={(checked) => handleReassignUserSelect(!!checked, u.displayName!)}
+                                />
+                                <Label htmlFor={`reassign-${u.uid}`} className="font-normal">
+                                    {u.displayName}
+                                </Label>
+                            </div>
                         ))}
-                    </SelectContent>
-                </Select>
+                    </div>
+                </ScrollArea>
             </div>
             <DialogFooter>
                 <DialogClose asChild>
                     <Button variant="outline">Cancel</Button>
                 </DialogClose>
-                <Button onClick={handleBulkReassign} disabled={!reassignToUser}>
+                <Button onClick={handleBulkReassign} disabled={reassignToUsers.length === 0}>
                     Confirm Reassignment
                 </Button>
             </DialogFooter>
         </DialogContent>
-      </Dialog>
+    </Dialog>
     </>
   )
 }
