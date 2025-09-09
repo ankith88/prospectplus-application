@@ -62,7 +62,7 @@ const callOutcomes = [
     'Not Interested',
     'Voicemail',
     'Wrong Number',
-    'Disqualified - Not a Fit',
+    'Not a Fit',
     'DNC - Stop List',
 ];
 
@@ -95,7 +95,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'Voicemail': { status: 'In Progress' },
       'No Answer': { status: 'In Progress' },
       'Busy': { status: 'In Progress' },
-      'Disqualified - Not a Fit': { status: 'Lost', reason: 'Not Interested' },
+      'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
       'Appointment Booked': { status: 'Qualified' },
       'Email Interested': { status: 'Pre Qualified' },
       'Not Interested': { status: 'Lost', reason: 'Not Interested' },
@@ -106,7 +106,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
   };
 
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Disqualified - Not a Fit', 'Email Interested'];
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     onSubmitProp(values.outcome, values.notes || '');
