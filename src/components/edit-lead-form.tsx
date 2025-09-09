@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -18,19 +19,11 @@ import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
 import { sendLeadUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
-import { AddressAutocomplete } from './address-autocomplete'
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   customerServiceEmail: z.string().email("Invalid email address"),
   customerPhone: z.string().min(1, "Phone number is required"),
-  address: z.object({
-    street: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-    country: z.string().optional(),
-  }).optional(),
 })
 
 interface EditLeadFormProps {
@@ -47,7 +40,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       companyName: lead.companyName,
       customerServiceEmail: lead.customerServiceEmail ?? '',
       customerPhone: lead.customerPhone ?? '',
-      address: lead.address,
     },
   })
 
@@ -66,7 +58,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         companyName: values.companyName,
         email: values.customerServiceEmail,
         phone: values.customerPhone,
-        address: values.address,
       });
 
       if (nsResult.success) {
@@ -131,22 +122,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
                 <Input placeholder="(123) 456-7890" {...field} />
               </FormControl>
               <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="address"
-          render={({ field }) => (
-            <FormItem>
-                <FormLabel>Address</FormLabel>
-                <FormControl>
-                   <AddressAutocomplete 
-                     defaultValue={field.value}
-                     onAddressSelect={(address) => form.setValue('address', address)} 
-                   />
-                </FormControl>
-                <FormMessage />
             </FormItem>
           )}
         />

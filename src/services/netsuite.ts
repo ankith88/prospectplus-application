@@ -1,4 +1,5 @@
 
+
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
@@ -374,6 +375,7 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
     if (email) params.append('email', email);
     if (phone) params.append('phone', phone);
     if (address) {
+        if (address.address1) params.append('address1', address.address1);
         if (address.street) params.append('addr1', address.street);
         if (address.city) params.append('city', address.city);
         if (address.state) params.append('state', address.state);

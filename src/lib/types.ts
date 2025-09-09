@@ -81,6 +81,7 @@ export interface Contact {
 }
 
 export interface Address {
+  address1?: string; // For Suite/Level/Unit
   street: string
   city: string
   state: string
@@ -93,7 +94,7 @@ export interface DiscoveryData {
     logisticsSetup?: 'Drop-off' | 'Routine collection' | 'Ad-hoc';
     servicePayment?: 'Yes' | 'No';
     shippingVolume?: '<5' | '<20' | '20-100' | '100+';
-    expressVsStandard?: 'Mostly Standard (≥80%)' | 'Balanced Mix (20-79% Express)' | 'Mostly Express (≥80%)';
+    expressVsStandard?: 'Mostly Standard (>=80%)' | 'Balanced Mix (20-79% Express)' | 'Mostly Express (>=80%)';
     packageType?: Array<string>;
     currentProvider?: Array<string>;
     otherProvider?: string;

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -149,6 +150,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         let address: Address | undefined;
         if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
           address = data.address || {
+            address1: data.address1,
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -220,6 +222,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         let address: Address | undefined;
         if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
           address = data.address || {
+            address1: data.address1,
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -740,6 +743,7 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
         if (newLeadData.customerPhone !== undefined) updatePayload.customerPhone = newLeadData.customerPhone;
         if (newLeadData.address) {
             updatePayload.address = {
+                address1: newLeadData.address.address1 || '',
                 street: newLeadData.address.street || '',
                 city: newLeadData.address.city || '',
                 state: newLeadData.address.state || '',
