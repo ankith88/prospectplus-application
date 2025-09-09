@@ -529,7 +529,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   }
 
   const fullAddress = lead.address
-    ? [lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
+    ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
   const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
@@ -1409,5 +1409,3 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
-
-    

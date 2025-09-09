@@ -148,7 +148,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.address) {
+        if (data.address && typeof data.address === 'object') {
             address = data.address;
         } else if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
@@ -222,7 +222,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.address) {
+        if (data.address && typeof data.address === 'object') {
             address = data.address;
         } else if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
@@ -1088,4 +1088,3 @@ export {
     bulkUpdateLeadDialerRep,
     addCallReview,
 };
-

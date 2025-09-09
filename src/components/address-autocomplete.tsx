@@ -111,7 +111,7 @@ export function AddressAutocomplete({ onAddressSelect, defaultValue }: AddressAu
                  )}/>
 
                 <div className="flex justify-end">
-                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                    <Button type="submit" disabled={!form.formState.isDirty && !form.formState.isValid}>
                         {form.formState.isSubmitting ? 'Saving...' : 'Save Address'}
                     </Button>
                 </div>
