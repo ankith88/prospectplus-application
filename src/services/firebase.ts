@@ -148,8 +148,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
-          address = data.address || {
+        if (data.address) {
+            address = data.address;
+        } else if (data.street || data.city || data.state || data.zip || data.country) {
+          address = {
             address1: data.address1,
             street: data.street || '',
             city: data.city || '',
@@ -220,8 +222,10 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
-        if (data.address || (data.street || data.city || data.state || data.zip || data.country)) {
-          address = data.address || {
+        if (data.address) {
+            address = data.address;
+        } else if (data.street || data.city || data.state || data.zip || data.country) {
+          address = {
             address1: data.address1,
             street: data.street || '',
             city: data.city || '',
@@ -1084,3 +1088,4 @@ export {
     bulkUpdateLeadDialerRep,
     addCallReview,
 };
+
