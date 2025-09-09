@@ -26,7 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, getAllNotes, getAllActivities, bulkUpdateLeadDialerRep, getAllUsers } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -138,15 +138,15 @@ export default function LeadsPage() {
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
-      return companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
+      const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status);
+      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
     });
   }, [allLeads, filters]);
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
-      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
       return filteredLeads.filter(lead => 
-        lead.dialerAssigned === user.displayName && actionableStatuses.includes(lead.status)
+        lead.dialerAssigned === user.displayName
       );
     }
     return [];
@@ -168,20 +168,17 @@ export default function LeadsPage() {
         const indexA = preferredOrder.indexOf(statusA as LeadStatus);
         const indexB = preferredOrder.indexOf(statusB as LeadStatus);
 
-        if (indexA === -1 && indexB === -1) return statusA.localeCompare(statusB); // Sort alphabetically if both are not in preferred order
-        if (indexA === -1) return 1; // Put statusA at the end
-        if (indexB === -1) return -1; // Put statusB at the end
+        if (indexA === -1 && indexB === -1) return statusA.localeCompare(statusB);
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
         
-        return indexA - indexB; // Sort based on preferred order
+        return indexA - indexB;
     });
 
   }, [myLeads]);
   
   const allAssignedLeads = useMemo(() => {
-    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
-    return filteredLeads.filter(lead => 
-      !!lead.dialerAssigned && actionableStatuses.includes(lead.status)
-    );
+    return filteredLeads.filter(lead => !!lead.dialerAssigned);
   }, [filteredLeads]);
   
   const leadsByUser = useMemo(() => {
@@ -200,9 +197,49 @@ export default function LeadsPage() {
   }, [allAssignedLeads]);
 
   const unassignedLeads = useMemo(() => {
-    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
-    return filteredLeads.filter(lead => !lead.dialerAssigned && actionableStatuses.includes(lead.status));
+    return filteredLeads.filter(lead => !lead.dialerAssigned);
   }, [filteredLeads]);
+
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const exportLeadsToCsv = (leads: LeadWithDetails[], filename: string) => {
+    const headers = ['Lead ID', 'Company Name', 'Dialer Assigned', 'Status', 'Phone', 'Industry', 'Last Activity Note', 'Last Activity Date', 'Last Note Content', 'Last Note Date', 'Last Note Author'];
+    const rows = leads.map(lead => {
+        const lastActivity = lead.activity?.[0];
+        const lastNote = lead.notes?.[0];
+        return [
+            escapeCsvCell(lead.id),
+            escapeCsvCell(lead.companyName),
+            escapeCsvCell(lead.dialerAssigned),
+            escapeCsvCell(lead.status),
+            escapeCsvCell(lead.customerPhone),
+            escapeCsvCell(lead.industryCategory),
+            escapeCsvCell(lastActivity?.notes),
+            escapeCsvCell(lastActivity ? new Date(lastActivity.date).toLocaleString() : ''),
+            escapeCsvCell(lastNote?.content),
+            escapeCsvCell(lastNote ? new Date(lastNote.date).toLocaleString() : ''),
+            escapeCsvCell(lastNote?.author),
+        ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
 
   const handleBulkUnassign = async () => {
@@ -246,7 +283,6 @@ export default function LeadsPage() {
     try {
         await bulkUpdateLeadDialerRep(selectedForReassignment, reassignToUsers);
         
-        // Optimistically update the UI
         const assignedLeadsMap = new Map<string, string>();
         selectedForReassignment.forEach((leadId, index) => {
             const userToAssign = reassignToUsers[index % reassignToUsers.length];
@@ -417,7 +453,7 @@ export default function LeadsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -444,18 +480,24 @@ export default function LeadsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>My Assigned Leads</CardTitle>
-          {userProfile?.role === 'admin' && selectedMyLeads.length > 0 && (
-              <Button onClick={handleBulkUnassign} variant="outline">
-              <UserX className="mr-2 h-4 w-4" />
-              Unassign {selectedMyLeads.length} Lead(s)
+          <div className="flex items-center gap-2">
+            {selectedMyLeads.length > 0 && (
+              <Button onClick={handleBulkUnassign} variant="outline" size="sm">
+                <UserX className="mr-2 h-4 w-4" />
+                Unassign ({selectedMyLeads.length})
               </Button>
-          )}
+            )}
+             <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Export My Leads
+              </Button>
+          </div>
         </CardHeader>
         <CardContent>
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full">
+             <Accordion type="multiple" className="w-full" defaultValue={leadsByStatus.map(s => s[0])}>
                 {leadsByStatus.map(([status, leads]) => (
                   <AccordionItem value={status} key={status}>
                     <AccordionTrigger>
@@ -474,9 +516,6 @@ export default function LeadsPage() {
                               <TableHead>Industry</TableHead>
                               <TableHead>Last Activity</TableHead>
                               <TableHead>Last Note</TableHead>
-                              {userProfile?.role === 'admin' && (
-                                <TableHead className="w-[50px] text-right">Actions</TableHead>
-                              )}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -496,7 +535,7 @@ export default function LeadsPage() {
                                     {lead.customerPhone ? (
                                       <div className="flex items-center gap-1">
                                           <span className="font-medium break-all">{lead.customerPhone}</span>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
                                               <PhoneCall className="w-3 h-3" />
                                           </Button>
                                       </div>
@@ -521,23 +560,6 @@ export default function LeadsPage() {
                                         </div>
                                     ) : 'N/A'}
                                   </TableCell>
-                                  {userProfile?.role === 'admin' && (
-                                    <TableCell className="text-right">
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                            <UserX className="mr-2 h-4 w-4" />
-                                            Unassign
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </TableCell>
-                                  )}
                                 </TableRow>
                               )
                             })}
@@ -562,18 +584,24 @@ export default function LeadsPage() {
                 <span>All Assigned Leads</span>
                 <Badge variant="secondary">{allAssignedLeads.length} lead(s)</Badge>
             </CardTitle>
-            {selectedForReassignment.length > 0 && (
-                <Button variant="outline" onClick={() => setIsReassignDialogOpen(true)}>
-                    <UserCog className="mr-2 h-4 w-4" />
-                    Reassign {selectedForReassignment.length} Lead(s)
+            <div className="flex items-center gap-2">
+                {selectedForReassignment.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
+                        <UserCog className="mr-2 h-4 w-4" />
+                        Reassign ({selectedForReassignment.length})
+                    </Button>
+                )}
+                <Button onClick={() => exportLeadsToCsv(allAssignedLeads, `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={allAssignedLeads.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export All Assigned
                 </Button>
-            )}
+            </div>
         </CardHeader>
         <CardContent>
           {loading ? (
              <div className="text-center"><Loader /></div>
            ) : allAssignedLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full">
+             <Accordion type="multiple" className="w-full" defaultValue={leadsByUser.map(u=>u[0])}>
                 {leadsByUser.map(([user, leads]) => (
                   <AccordionItem value={user} key={user}>
                     <AccordionTrigger>
@@ -595,17 +623,16 @@ export default function LeadsPage() {
                                 />
                                 </TableHead>
                               <TableHead>Company</TableHead>
-                              <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
                               <TableHead>Status</TableHead>
-                              <TableHead>Franchisee</TableHead>
-                              <TableHead>Industry</TableHead>
+                              <TableHead>Last Activity</TableHead>
                               <TableHead className="w-[50px] text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {leads.map((lead) => {
                                const addressString = formatAddress(lead.address);
+                               const lastActivity = lead.activity?.[0];
                                return (
                                 <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
                                   <TableCell>
@@ -623,23 +650,10 @@ export default function LeadsPage() {
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                                        disabled={addressString === 'N/A'}
-                                        className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="View on map"
-                                      >
-                                        <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                      </button>
-                                      <span>{addressString}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
                                     {lead.customerPhone ? (
                                       <div className="flex items-center gap-1">
                                           <span className="font-medium break-all">{lead.customerPhone}</span>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
                                               <PhoneCall className="w-3 h-3" />
                                           </Button>
                                       </div>
@@ -648,9 +662,15 @@ export default function LeadsPage() {
                                   <TableCell>
                                     <LeadStatusBadge status={lead.status} />
                                   </TableCell>
-                                  <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                                  <TableCell>
-                                    {lead.industryCategory}
+                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
+                                    {lastActivity ? (
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{lastActivity.notes}</span>
+                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
+                                      </div>
+                                    ) : (
+                                      'N/A'
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <DropdownMenu>
@@ -685,7 +705,7 @@ export default function LeadsPage() {
       </Card>
       )}
 
-      {!showUnassigned && userProfile?.role === 'admin' && (
+      {userProfile?.role === 'admin' && (
        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -714,7 +734,6 @@ export default function LeadsPage() {
                     />
                   </TableHead>
                   <TableHead>Company</TableHead>
-                  <TableHead>Address</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
@@ -725,11 +744,10 @@ export default function LeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                      <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                      <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : unassignedLeads.length > 0 ? (
                   unassignedLeads.map((lead) => {
-                    const addressString = formatAddress(lead.address);
                     return (
                     <TableRow key={lead.id} data-state={selectedAllLeads.includes(lead.id) && "selected"}>
                       <TableCell>
@@ -746,24 +764,11 @@ export default function LeadsPage() {
                           </div>
                         </div>
                       </TableCell>
-                       <TableCell>
-                        <div className="flex items-center gap-2">
-                           <button
-                            onClick={() => addressString !== 'N/A' && setSelectedAddress(addressString)}
-                            disabled={addressString === 'N/A'}
-                            className="p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="View on map"
-                          >
-                            <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                          </button>
-                          <span>{addressString}</span>
-                        </div>
-                      </TableCell>
                       <TableCell>
                         {lead.customerPhone ? (
                            <div className="flex items-center gap-1">
                                <span className="font-medium break-all">{lead.customerPhone}</span>
-                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
                                    <PhoneCall className="w-3 h-3" />
                                </Button>
                            </div>
@@ -796,7 +801,7 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No unassigned leads found.
                       </TableCell>
                   </TableRow>

@@ -128,7 +128,7 @@ export default function ArchivedLeadsPage() {
         const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
         const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
 
-        const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified'].includes(lead.status);
+        const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status);
         
         let dateMatch = true;
         if (filters.date?.from && lead.activity?.length) {
@@ -361,6 +361,7 @@ export default function ArchivedLeadsPage() {
                                     <SelectItem value="Won">Won</SelectItem>
                                     <SelectItem value="Lost">Lost</SelectItem>
                                     <SelectItem value="LPO Review">LPO Review</SelectItem>
+                                    <SelectItem value="Unqualified">Unqualified</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
