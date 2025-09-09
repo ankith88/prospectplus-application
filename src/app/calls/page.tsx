@@ -15,15 +15,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Activity, LeadStatus, Transcript } from '@/lib/types'
+import type { Activity, LeadStatus, Transcript, Review } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllCallActivities, getAllTranscripts } from '@/services/firebase'
+import { getAllCallActivities, getAllTranscripts, addCallReview } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,11 +37,15 @@ import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { TranscriptViewer } from '@/components/transcript-viewer'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
 
 
@@ -54,6 +58,11 @@ export default function AllCallsPage() {
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
+  const [reviewingCall, setReviewingCall] = useState<CallActivity | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [viewingReview, setViewingReview] = useState<Review | null>(null);
+
   const [filters, setFilters] = useState({
     user: 'all',
     date: undefined as DateRange | undefined,
@@ -225,6 +234,30 @@ export default function AllCallsPage() {
         setFetchingTranscriptId(null);
     }
   }
+
+  const handleSubmitReview = async () => {
+    if (!reviewingCall || !reviewNotes || !user?.displayName) return;
+    setIsSubmittingReview(true);
+    try {
+      await addCallReview(reviewingCall.leadId, reviewingCall.id, {
+        reviewer: user.displayName,
+        notes: reviewNotes,
+      });
+      toast({ title: "Success", description: "Review submitted successfully." });
+      // Optimistically update UI
+      setAllCalls(prev => prev.map(c => 
+        c.id === reviewingCall.id 
+        ? { ...c, isReviewed: true, review: { id: '', date: new Date().toISOString(), reviewer: user.displayName!, notes: reviewNotes } } 
+        : c
+      ));
+      setReviewingCall(null);
+      setReviewNotes("");
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to submit review." });
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
 
   if (loading || authLoading) {
@@ -461,6 +494,18 @@ export default function AllCallsPage() {
                                     </Button>
                                 )
                             )}
+                             {call.review && (
+                              <Button variant="secondary" size="sm" onClick={() => setViewingReview(call.review!)}>
+                                <MessageSquare className="mr-2 h-4 w-4" />
+                                View Review
+                              </Button>
+                            )}
+                             {userProfile?.role === 'admin' && (
+                                <Button variant="outline" size="sm" onClick={() => setReviewingCall(call)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    {call.isReviewed ? 'Edit Review' : 'Add Review'}
+                                </Button>
+                            )}
                          </div>
                         </TableCell>
                     </TableRow>
@@ -500,8 +545,57 @@ export default function AllCallsPage() {
             )}
         </DialogContent>
     </Dialog>
+
+    <Dialog open={!!reviewingCall} onOpenChange={(open) => { if(!open) setReviewingCall(null); }}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Review Call</DialogTitle>
+                <DialogDescription>Add feedback for the call with {reviewingCall?.leadName}.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label htmlFor="review-notes">Review Notes</Label>
+                <Textarea 
+                    id="review-notes"
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    placeholder="Enter your feedback here..."
+                    rows={5}
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setReviewingCall(null)}>Cancel</Button>
+                <Button onClick={handleSubmitReview} disabled={isSubmittingReview || !reviewNotes}>
+                    {isSubmittingReview ? <Loader/> : 'Submit Review'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+     <Dialog open={!!viewingReview} onOpenChange={(open) => { if(!open) setViewingReview(null); }}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Call Review</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+               <div>
+                 <p className="text-sm font-semibold">Reviewer</p>
+                 <p className="text-sm text-muted-foreground">{viewingReview?.reviewer}</p>
+               </div>
+                <div>
+                 <p className="text-sm font-semibold">Date</p>
+                 <p className="text-sm text-muted-foreground">{viewingReview ? new Date(viewingReview.date).toLocaleString() : ''}</p>
+               </div>
+               <div>
+                 <p className="text-sm font-semibold">Notes</p>
+                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{viewingReview?.notes}</p>
+               </div>
+            </div>
+            <DialogFooter>
+                <Button onClick={() => setViewingReview(null)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
     </>
   )
 }
-
-    

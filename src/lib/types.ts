@@ -13,6 +13,13 @@ export type LeadStatus =
   | 'High Touch'
   | 'Pre Qualified'
 
+export interface Review {
+  id: string;
+  reviewer: string;
+  date: string;
+  notes: string;
+}
+
 export interface Activity {
   id: string
   type: 'Call' | 'Email' | 'Meeting' | 'Update'
@@ -21,6 +28,8 @@ export interface Activity {
   notes: string
   callId?: string
   author?: string
+  review?: Review;
+  isReviewed?: boolean;
 }
 
 export interface Note {
