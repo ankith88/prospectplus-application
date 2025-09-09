@@ -259,6 +259,13 @@ export default function ReportsPage() {
     const ratioOver2Min = totalCalls > 0 ? (callsOver2Min / totalCalls) * 100 : 0;
     const ratio30sTo2min = totalCalls > 0 ? (calls30sTo2min / totalCalls) * 100 : 0;
     
+    const callsWithDuration = uniqueCallsArray.filter(c => c.duration);
+    const totalDuration = callsWithDuration.reduce((sum, call) => sum + parseDuration(call.duration), 0);
+    const averageDuration = callsWithDuration.length > 0 ? totalDuration / callsWithDuration.length : 0;
+    const avgMinutes = Math.floor(averageDuration / 60);
+    const avgSeconds = Math.round(averageDuration % 60);
+    const averageDurationFormatted = `${avgMinutes}m ${avgSeconds}s`;
+
     const leadsByStatus = filteredLeads.reduce((acc, lead) => {
       const status = lead.status;
       const existingEntry = acc.find(item => item.name === status);
@@ -282,6 +289,7 @@ export default function ReportsPage() {
       ratio30sTo2min,
       totalLeadsInFilter,
       totalAppointments: filteredAppointments.length,
+      averageDurationFormatted,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments]);
   
@@ -534,6 +542,16 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
                 <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Average Call Duration</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.averageDurationFormatted}</div>
+                <p className="text-xs text-muted-foreground">Based on unique calls</p>
               </CardContent>
             </Card>
         </div>
