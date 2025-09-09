@@ -231,8 +231,8 @@ export default function ReportsPage() {
 
   const stats = useMemo(() => {
     const validCalls = filteredCalls.filter(c => c.callId);
-
-    const totalCalls = validCalls.length;
+    const uniqueCallIds = new Set(validCalls.map(c => c.callId));
+    const totalCalls = uniqueCallIds.size;
     const leadsContactedIds = new Set(validCalls.map(c => c.leadId));
 
     const totalLeadsInFilter = filteredLeads.length;
@@ -241,8 +241,17 @@ export default function ReportsPage() {
 
     const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
     
-    const callsOver2Min = validCalls.filter(c => parseDuration(c.duration) >= 120).length;
-    const calls30sTo2min = validCalls.filter(c => {
+    // To calculate duration stats correctly, we should also only use unique calls
+    const uniqueCallsMap = new Map<string, CallActivity>();
+    validCalls.forEach(call => {
+      if (call.callId && !uniqueCallsMap.has(call.callId)) {
+        uniqueCallsMap.set(call.callId, call);
+      }
+    });
+    const uniqueCallsArray = Array.from(uniqueCallsMap.values());
+
+    const callsOver2Min = uniqueCallsArray.filter(c => parseDuration(c.duration) >= 120).length;
+    const calls30sTo2min = uniqueCallsArray.filter(c => {
         const duration = parseDuration(c.duration);
         return duration >= 30 && duration < 120;
     }).length;
