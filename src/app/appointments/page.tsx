@@ -44,6 +44,7 @@ export default function AllAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     user: 'all',
+    leadAssignedTo: 'all',
     date: undefined as DateRange | undefined,
     leadName: '',
     status: 'all' as LeadStatus | 'all',
@@ -82,7 +83,7 @@ export default function AllAppointmentsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, leadName: '', status: 'all' });
+    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, leadName: '', status: 'all' });
   };
 
   const filteredAppointments = useMemo(() => {
@@ -93,7 +94,8 @@ export default function AllAppointmentsPage() {
     }
 
     return appointmentsToFilter.filter(appointment => {
-        const userMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
+        const appointmentUserMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
+        const leadUserMatch = filters.leadAssignedTo === 'all' || appointment.dialerAssigned === filters.leadAssignedTo;
         
         let dateMatch = true;
         if (filters.date?.from) {
@@ -105,16 +107,22 @@ export default function AllAppointmentsPage() {
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
-        const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
+        const finalAppointmentUserMatch = userProfile?.role === 'admin' ? appointmentUserMatch : true;
+        const finalLeadUserMatch = userProfile?.role === 'admin' ? leadUserMatch : true;
 
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
 
-        return finalUserMatch && dateMatch && leadNameMatch && statusMatch;
+        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && leadNameMatch && statusMatch;
     });
   }, [allAppointments, filters, userProfile]);
   
   const allUsers = useMemo(() => {
       const users = new Set(allAppointments.map(c => c.assignedTo).filter(Boolean));
+      return Array.from(users as string[]);
+  }, [allAppointments]);
+  
+  const allLeadUsers = useMemo(() => {
+      const users = new Set(allAppointments.map(c => c.dialerAssigned).filter(Boolean));
       return Array.from(users as string[]);
   }, [allAppointments]);
 
@@ -151,12 +159,25 @@ export default function AllAppointmentsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
                     {userProfile?.role === 'admin' && (
+                       <>
+                        <div className="space-y-2">
+                            <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>
+                             <Select value={filters.leadAssignedTo} onValueChange={(value) => handleFilterChange('leadAssignedTo', value)}>
+                                <SelectTrigger id="leadAssignedTo">
+                                    <SelectValue placeholder="Select user" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Users</SelectItem>
+                                    {allLeadUsers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="user">Assigned To (Appointment)</Label>
                              <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
@@ -169,6 +190,7 @@ export default function AllAppointmentsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                       </>
                     )}
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
