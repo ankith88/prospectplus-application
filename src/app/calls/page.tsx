@@ -69,6 +69,7 @@ export default function AllCallsPage() {
     duration: 'all',
     leadName: '',
     status: 'all' as LeadStatus | 'all',
+    reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
   });
 
   const router = useRouter();
@@ -108,7 +109,7 @@ export default function AllCallsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all' });
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -121,14 +122,25 @@ export default function AllCallsPage() {
   };
 
   const filteredCalls = useMemo(() => {
-    // Start with calls that have a callId, as this is the base requirement
-    let callsToFilter = allCalls.filter(call => !!call.callId);
+    // Group calls by callId to ensure uniqueness
+    const uniqueCallsMap = new Map<string, CallActivity>();
+    allCalls.forEach(call => {
+        if (call.callId) {
+            // Keep the most recent record for a given callId if duplicates exist
+            const existing = uniqueCallsMap.get(call.callId);
+            if (!existing || new Date(call.date) > new Date(existing.date)) {
+                uniqueCallsMap.set(call.callId, call);
+            }
+        }
+    });
 
+    let callsToFilter = Array.from(uniqueCallsMap.values());
+    
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
-    return callsToFilter.filter(call => {
+    const finalFiltered = callsToFilter.filter(call => {
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
         let dateMatch = true;
@@ -140,7 +152,6 @@ export default function AllCallsPage() {
         }
         
         const durationInSeconds = parseDuration(call.duration);
-
         const durationMatch = () => {
             switch (filters.duration) {
                 case 'under30s': return durationInSeconds < 30;
@@ -152,13 +163,33 @@ export default function AllCallsPage() {
         };
 
         const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
-        
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
+        
+        const reviewedMatch = filters.reviewed === 'all' || 
+                              (filters.reviewed === 'reviewed' && !!call.review) ||
+                              (filters.reviewed === 'not_reviewed' && !call.review);
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch;
     });
+
+    // Sort the final list
+    return finalFiltered.sort((a, b) => {
+        // 1. Date & Time descending
+        const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateComparison !== 0) return dateComparison;
+
+        // 2. Lead Name ascending
+        const nameComparison = a.leadName.localeCompare(b.leadName);
+        if (nameComparison !== 0) return nameComparison;
+
+        // 3. User ascending
+        const userA = a.dialerAssigned || '';
+        const userB = b.dialerAssigned || '';
+        return userA.localeCompare(userB);
+    });
+
   }, [allCalls, filters, userProfile]);
   
   const allUsers = useMemo(() => {
@@ -292,7 +323,7 @@ export default function AllCallsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
@@ -320,6 +351,19 @@ export default function AllCallsPage() {
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
                                 {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="reviewed">Review Status</Label>
+                        <Select value={filters.reviewed} onValueChange={(value) => handleFilterChange('reviewed', value)}>
+                            <SelectTrigger id="reviewed">
+                                <SelectValue placeholder="Select review status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="reviewed">Reviewed</SelectItem>
+                                <SelectItem value="not_reviewed">Not Reviewed</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
