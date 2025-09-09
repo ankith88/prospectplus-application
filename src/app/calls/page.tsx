@@ -94,15 +94,14 @@ export default function AllCallsPage() {
   };
 
   const filteredCalls = useMemo(() => {
-    let callsToFilter = allCalls;
+    // Start with calls that have a callId, as this is the base requirement
+    let callsToFilter = allCalls.filter(call => !!call.callId);
 
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
-        callsToFilter = allCalls.filter(c => c.dialerAssigned === userProfile.displayName);
+        callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
     return callsToFilter.filter(call => {
-        if (!call.callId) return false;
-
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
         let dateMatch = true;

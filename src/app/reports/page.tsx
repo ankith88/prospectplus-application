@@ -230,8 +230,10 @@ export default function ReportsPage() {
 
 
   const stats = useMemo(() => {
-    const totalCalls = filteredCalls.length;
-    const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
+    const validCalls = filteredCalls.filter(c => !!c.callId);
+
+    const totalCalls = validCalls.length;
+    const leadsContactedIds = new Set(validCalls.map(c => c.leadId));
 
     const totalLeadsInFilter = filteredLeads.length;
     const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
@@ -239,8 +241,8 @@ export default function ReportsPage() {
 
     const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
     
-    const callsOver2Min = filteredCalls.filter(c => parseDuration(c.duration) >= 120).length;
-    const calls30sTo2min = filteredCalls.filter(c => {
+    const callsOver2Min = validCalls.filter(c => parseDuration(c.duration) >= 120).length;
+    const calls30sTo2min = validCalls.filter(c => {
         const duration = parseDuration(c.duration);
         return duration >= 30 && duration < 120;
     }).length;
