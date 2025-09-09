@@ -42,12 +42,12 @@ import {
   Clock,
 } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -101,9 +101,9 @@ import { format, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { sendDiscoveryDataToNetSuite } from '@/services/netsuite'
+import { sendDiscoveryDataToNetSuite, sendLeadUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
-
+import { AddressAutocomplete } from './address-autocomplete'
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialAppointments }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[], initialAppointments: Appointment[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -120,6 +120,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
+  const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
   const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
@@ -497,6 +498,27 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     setIsDiscoveryQuestionsOpen(open);
   }
 
+  const handleAddressSave = async (newAddress: Address) => {
+    if (!lead) return;
+    try {
+      await updateLeadDetails(lead.id, lead, { address: newAddress });
+      setLead(prev => prev ? { ...prev, address: newAddress } : null);
+      toast({ title: "Success", description: "Address updated successfully." });
+      
+      const nsResult = await sendLeadUpdateToNetSuite({ leadId: lead.id, address: newAddress });
+      if (nsResult.success) {
+          toast({ title: "NetSuite Updated", description: "Address sent to NetSuite." });
+      } else {
+          toast({ variant: "destructive", title: "NetSuite Sync Failed", description: nsResult.message });
+      }
+    } catch (error) {
+      console.error("Failed to update address:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update address." });
+    } finally {
+      setIsEditAddressDialogOpen(false);
+    }
+  }
+
 
   if (!lead || !user) {
     return (
@@ -618,7 +640,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                       <DialogTrigger asChild>
                          <Button variant="outline" size="sm">
                            <Edit className="mr-2 h-4 w-4" />
-                           Edit
+                           Edit Details
                          </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -876,12 +898,29 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
               </CardContent>
             </Card>
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-muted-foreground" />
-                    Address
-                </CardTitle>
-              </CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                        Address
+                    </CardTitle>
+                    <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Address
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Edit Address</DialogTitle>
+                            </DialogHeader>
+                            <AddressAutocomplete
+                                defaultValue={lead.address}
+                                onAddressSelect={handleAddressSave}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-start gap-2">
                   <button
@@ -1370,3 +1409,5 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
+
+    

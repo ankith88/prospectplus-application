@@ -4,15 +4,17 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Input } from './ui/input';
 import type { Address } from '@/lib/types';
+import { Button } from './ui/button';
 
 interface AddressAutocompleteProps {
     onAddressSelect: (address: Address) => void;
-    defaultValue?: Address;
+    defaultValue?: Address | null;
 }
 
 export function AddressAutocomplete({ onAddressSelect, defaultValue }: AddressAutocompleteProps) {
     const autocompleteInputRef = useRef<HTMLInputElement>(null);
     const [search, setSearch] = useState('');
+    const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
 
     useEffect(() => {
         if (defaultValue) {
@@ -44,16 +46,31 @@ export function AddressAutocomplete({ onAddressSelect, defaultValue }: AddressAu
             };
             
             setSearch(place.formatted_address || '');
-            onAddressSelect(newAddress);
+            setSelectedAddress(newAddress);
         });
     }, []);
 
+    const handleSave = () => {
+        if (selectedAddress) {
+            onAddressSelect(selectedAddress);
+        }
+    }
+
     return (
-        <Input
-            ref={autocompleteInputRef}
-            placeholder="Start typing an address..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="space-y-4">
+            <Input
+                ref={autocompleteInputRef}
+                placeholder="Start typing an address..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="flex justify-end">
+                <Button onClick={handleSave} disabled={!selectedAddress}>
+                    Save Address
+                </Button>
+            </div>
+        </div>
     );
 }
+
+    
