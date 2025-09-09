@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -34,8 +35,9 @@ import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { LeadStatusBadge } from '@/components/lead-status-badge'
 
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
 
 export default function AllAppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
@@ -44,6 +46,7 @@ export default function AllAppointmentsPage() {
     user: 'all',
     date: undefined as DateRange | undefined,
     leadName: '',
+    status: 'all' as LeadStatus | 'all',
   });
 
   const router = useRouter();
@@ -79,7 +82,7 @@ export default function AllAppointmentsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, leadName: '' });
+    setFilters({ user: 'all', date: undefined, leadName: '', status: 'all' });
   };
 
   const filteredAppointments = useMemo(() => {
@@ -104,7 +107,9 @@ export default function AllAppointmentsPage() {
         
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && leadNameMatch;
+        const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
+
+        return finalUserMatch && dateMatch && leadNameMatch && statusMatch;
     });
   }, [allAppointments, filters, userProfile]);
   
@@ -146,7 +151,7 @@ export default function AllAppointmentsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
@@ -165,6 +170,18 @@ export default function AllAppointmentsPage() {
                             </Select>
                         </div>
                     )}
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Lead Status</Label>
+                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                            <SelectTrigger id="status">
+                                <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="date">Appointment Date</Label>
                         <Popover>
@@ -208,7 +225,7 @@ export default function AllAppointmentsPage() {
                         </Popover>
                     </div>
                      {hasActiveFilters && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
                                 <X className="mr-2 h-4 w-4" /> Clear Filters
                             </Button>
@@ -231,6 +248,7 @@ export default function AllAppointmentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead</TableHead>
+                  <TableHead>Lead Status</TableHead>
                   <TableHead>Assigned To (Lead)</TableHead>
                   <TableHead>Assigned To (Appointment)</TableHead>
                   <TableHead>Date</TableHead>
@@ -240,7 +258,7 @@ export default function AllAppointmentsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredAppointments.length > 0 ? (
                   filteredAppointments.map((appointment) => {
@@ -251,6 +269,9 @@ export default function AllAppointmentsPage() {
                             <Briefcase className="h-4 w-4" />
                             {appointment.leadName}
                         </Button>
+                      </TableCell>
+                      <TableCell>
+                        <LeadStatusBadge status={appointment.leadStatus} />
                       </TableCell>
                        <TableCell>
                         <div className="flex items-center gap-2">
@@ -280,7 +301,7 @@ export default function AllAppointmentsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>

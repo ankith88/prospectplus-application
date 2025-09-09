@@ -482,7 +482,7 @@ async function getAllTranscripts(): Promise<Transcript[]> {
     }
 }
 
-async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string }>> {
+async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus }>> {
     try {
         const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
         const allAppointments = await Promise.all(appointmentsSnapshot.docs.map(async (appointmentDoc) => {
@@ -498,6 +498,7 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
                 leadId: leadId,
                 leadName: leadName,
                 dialerAssigned: leadData?.dialerAssigned,
+                leadStatus: safeGetStatus(leadData.customerStatus),
             };
         }));
         allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
