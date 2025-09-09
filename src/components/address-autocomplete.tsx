@@ -14,11 +14,12 @@ interface AddressAutocompleteProps {
 export function AddressAutocomplete({ onAddressSelect, defaultValue }: AddressAutocompleteProps) {
     const autocompleteInputRef = useRef<HTMLInputElement>(null);
     const [search, setSearch] = useState('');
-    const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+    const [selectedAddress, setSelectedAddress] = useState<Address | null>(defaultValue || null);
 
     useEffect(() => {
         if (defaultValue) {
              setSearch([defaultValue.street, defaultValue.city, defaultValue.state, defaultValue.zip, defaultValue.country].filter(Boolean).join(', '));
+             setSelectedAddress(defaultValue);
         }
     }, [defaultValue]);
 
