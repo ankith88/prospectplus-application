@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
 import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,16 +36,6 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
 };
-
-const ROUTING_TAG_COLORS: { [key: string]: string } = {
-  'Service': '#FF6B6B',
-  'Product': '#4ECDC4',
-  'Service & Product': '#45B7D1',
-  'Untagged': '#C7C7C7',
-};
-
-const SCORE_RANGE_COLORS: string[] = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042'];
-
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
@@ -108,8 +98,6 @@ export default function ReportsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
-  const [routingTagActiveIndex, setRoutingTagActiveIndex] = useState(0);
-
 
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
@@ -121,10 +109,6 @@ export default function ReportsPage() {
   const onStatusPieEnter = (_: any, index: number) => {
     setStatusActiveIndex(index);
   };
-  const onRoutingTagPieEnter = (_: any, index: number) => {
-    setRoutingTagActiveIndex(index);
-  };
-
 
   useEffect(() => {
     async function getData() {
@@ -275,38 +259,11 @@ export default function ReportsPage() {
       return acc;
     }, [] as { name: LeadStatus; value: number }[]);
 
-    const leadsByRoutingTag = filteredLeads.reduce((acc, lead) => {
-      const tag = lead.discoveryData?.routingTag || 'Untagged';
-      const existingEntry = acc.find(item => item.name === tag);
-      if (existingEntry) {
-        existingEntry.value += 1;
-      } else {
-        acc.push({ name: tag, value: 1 });
-      }
-      return acc;
-    }, [] as { name: string; value: number }[]);
-    
-    const leadsByDiscoveryScore = filteredLeads.reduce((acc, lead) => {
-      const score = lead.discoveryData?.score;
-      if (typeof score === 'number') {
-        if (score <= 25) acc['0-25'] += 1;
-        else if (score <= 50) acc['26-50'] += 1;
-        else if (score <= 75) acc['51-75'] += 1;
-        else acc['76-100'] += 1;
-      }
-      return acc;
-    }, { '0-25': 0, '26-50': 0, '51-75': 0, '76-100': 0 });
-    
-    const scoreChartData = Object.entries(leadsByDiscoveryScore).map(([name, value]) => ({ name, 'Number of Leads': value }));
-
-
     return {
       totalCalls,
       leadsContacted: leadsContactedIds.size,
       leadsInQueue,
       leadsByStatus,
-      leadsByRoutingTag,
-      scoreChartData,
       totalAssignedLeads,
       callsOver2Min,
       calls30sTo2min,
@@ -496,84 +453,6 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
         
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Route className="h-5 w-5 text-muted-foreground" />
-                    Leads by Routing Tag
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-            {stats.leadsByRoutingTag.length > 0 ? (
-                <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                    <defs>
-                        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
-                        </filter>
-                    </defs>
-                    <Pie
-                        activeIndex={routingTagActiveIndex}
-                        activeShape={renderActiveShape}
-                        data={stats.leadsByRoutingTag}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={80}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={onRoutingTagPieEnter}
-                        isAnimationActive={true}
-                        animationDuration={500}
-                        style={{ filter: 'url(#shadow)' }}
-                    >
-                    {stats.leadsByRoutingTag.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={ROUTING_TAG_COLORS[entry.name]} />
-                    ))}
-                    </Pie>
-                    <Legend iconSize={12} />
-                </PieChart>
-                </ResponsiveContainer>
-            ) : (
-                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
-                No routing tag data to display for the selected filters.
-                </div>
-            )}
-            </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-muted-foreground" />
-                Leads by Discovery Score
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.scoreChartData.some(d => d['Number of Leads'] > 0) ? (
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={stats.scoreChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="Number of Leads" name="Number of Leads">
-                    {stats.scoreChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={SCORE_RANGE_COLORS[index % SCORE_RANGE_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-[400px] items-center justify-center text-muted-foreground">
-                No discovery score data to display for the selected filters.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
