@@ -74,7 +74,7 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
 
         for (const utt of utterances) {
             const isInternal = utt.participant_type === 'internal';
-            const speakerName = isInternal ? transcript.author : leadName;
+            const speakerName = isInternal ? (utt.speaker || transcript.author) : leadName;
 
             if (currentGroup && currentGroup.speakerName === speakerName) {
                 currentGroup.texts.push(utt.text);
