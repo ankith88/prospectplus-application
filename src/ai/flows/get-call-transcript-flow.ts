@@ -43,8 +43,8 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
-    console.log(`[Flow] Fetching from AirCall URL: ${url}`);
+    const url = `https://api.aircall.io/v1/calls/${callId}`;
+    console.log(`[Flow] Fetching call data from AirCall URL: ${url}`);
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
     const maxRetries = 5;
@@ -84,17 +84,19 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             return { transcriptFound: false, error: errorMsg };
         }
 
-        const transcriptionData = JSON.parse(responseText) as any;
-        console.log('[Flow] Parsed AirCall response data:', JSON.stringify(transcriptionData, null, 2));
+        const callData = JSON.parse(responseText) as any;
+        console.log('[Flow] Parsed AirCall call data:', JSON.stringify(callData, null, 2));
         
-        const utterances = transcriptionData?.transcription?.content?.utterances;
+        const utterances = callData?.call?.transcription?.content?.utterances;
+        const phoneNumber = callData?.call?.raw_digits;
 
         if (utterances && Array.isArray(utterances) && utterances.length > 0) {
           console.log(`[Flow Success] Transcript found for call ID: ${callId}. Logging to Firebase...`);
           await logTranscriptActivity(leadId, {
-            content: JSON.stringify(utterances),
+            content: JSON.stringify({ utterances }), // Ensure content is a JSON string of an object with utterances
             author: leadAuthor,
             callId: callId,
+            phoneNumber: phoneNumber
           });
           console.log('[Flow Success] Transcript logged to Firebase.');
           return { transcriptFound: true };

@@ -15,15 +15,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Activity, LeadStatus } from '@/lib/types'
+import type { Activity, LeadStatus, Transcript } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllCallActivities } from '@/services/firebase'
+import { getAllCallActivities, getAllTranscripts, getCallTranscriptByCallId } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -35,31 +35,48 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { TranscriptViewer } from '@/components/transcript-viewer'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 export default function AllCallsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
+  const [allTranscripts, setAllTranscripts] = useState<Transcript[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     user: 'all',
     date: undefined as DateRange | undefined,
     duration: 'all',
     leadName: '',
+    status: 'all' as LeadStatus | 'all',
   });
 
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const fetchCalls = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const fetchedCalls = await getAllCallActivities();
+      const [fetchedCalls, fetchedTranscripts] = await Promise.all([
+        getAllCallActivities(),
+        getAllTranscripts()
+      ]);
       setAllCalls(fetchedCalls);
+      setAllTranscripts(fetchedTranscripts);
     } catch (error) {
-      console.error("Failed to fetch calls:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls.' });
+      console.error("Failed to fetch data:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls or transcripts.' });
     } finally {
       setLoading(false);
     }
@@ -72,7 +89,7 @@ export default function AllCallsPage() {
     }
     if (authLoading) return;
     
-    fetchCalls();
+    fetchData();
 
   }, [user, authLoading, router]);
 
@@ -81,7 +98,7 @@ export default function AllCallsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all' });
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -126,9 +143,11 @@ export default function AllCallsPage() {
 
         const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
+        const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
+
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch;
     });
   }, [allCalls, filters, userProfile]);
   
@@ -136,6 +155,16 @@ export default function AllCallsPage() {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
       return Array.from(users as string[]);
   }, [allCalls]);
+
+  const transcriptsByCallId = useMemo(() => {
+    return allTranscripts.reduce((acc, transcript) => {
+        if (transcript.callId) {
+            acc[transcript.callId] = transcript;
+        }
+        return acc;
+    }, {} as Record<string, Transcript>);
+  }, [allTranscripts]);
+
 
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
@@ -172,6 +201,30 @@ export default function AllCallsPage() {
     document.body.removeChild(link);
   };
 
+  const handleGetTranscriptForCall = async (call: CallActivity) => {
+    if (!call.callId || !user?.displayName) return;
+    setFetchingTranscriptId(call.callId);
+    try {
+        const result = await getCallTranscriptByCallId({
+            callId: call.callId,
+            leadId: call.leadId,
+            leadAuthor: user.displayName
+        });
+
+        if (result.transcriptFound) {
+            toast({ title: "Success", description: "Transcript fetched and will appear shortly." });
+            fetchData(); // Refetch all data to get the new transcript
+        } else {
+            toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+        }
+    } catch (error: any) {
+        console.error("Error fetching transcript:", error);
+        toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+        setFetchingTranscriptId(null);
+    }
+  }
+
 
   if (loading || authLoading) {
     return (
@@ -205,7 +258,7 @@ export default function AllCallsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
@@ -224,6 +277,18 @@ export default function AllCallsPage() {
                             </Select>
                         </div>
                     )}
+                     <div className="space-y-2">
+                        <Label htmlFor="status">Lead Status</Label>
+                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                            <SelectTrigger id="status">
+                                <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="date">Date</Label>
                         <Popover>
@@ -282,7 +347,7 @@ export default function AllCallsPage() {
                         </Select>
                     </div>
                      {hasActiveFilters && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
                                 <X className="mr-2 h-4 w-4" /> Clear Filters
                             </Button>
@@ -317,7 +382,7 @@ export default function AllCallsPage() {
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Notes</TableHead>
-                  <TableHead>Recording</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -327,6 +392,7 @@ export default function AllCallsPage() {
                   </TableRow>
                 ) : filteredCalls.length > 0 ? (
                   filteredCalls.map((call) => {
+                    const transcript = call.callId ? transcriptsByCallId[call.callId] : null;
                     return (
                     <TableRow key={call.id}>
                       <TableCell>
@@ -371,17 +437,30 @@ export default function AllCallsPage() {
                           {call.notes}
                        </TableCell>
                        <TableCell>
-                          {call.callId ? (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
-                              <Voicemail className="mr-2 h-4 w-4" />
-                              View Recording
-                            </Button>
-                          ) : (
-                            <span>N/A</span>
-                          )}
+                         <div className="flex flex-col sm:flex-row gap-2">
+                            {call.callId && (
+                                <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
+                                <Voicemail className="mr-2 h-4 w-4" />
+                                Recording
+                                </Button>
+                            )}
+                            {call.callId && (
+                                transcript ? (
+                                    <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Transcript
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" size="sm" onClick={() => handleGetTranscriptForCall(call)} disabled={fetchingTranscriptId === call.callId}>
+                                        {fetchingTranscriptId === call.callId ? <Loader /> : <Download className="mr-2 h-4 w-4" />}
+                                        Fetch
+                                    </Button>
+                                )
+                            )}
+                         </div>
                         </TableCell>
                     </TableRow>
                   )})
@@ -398,6 +477,28 @@ export default function AllCallsPage() {
         </CardContent>
       </Card>
     </div>
+    
+    <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Call Transcript</DialogTitle>
+            </DialogHeader>
+            {selectedTranscript && (
+                <TranscriptViewer
+                    transcript={selectedTranscript}
+                    leadId={allCalls.find(c => c.callId === selectedTranscript.callId)?.leadId || ''}
+                    leadName={allCalls.find(c => c.callId === selectedTranscript.callId)?.leadName || 'Unknown'}
+                    onAnalysisComplete={(analysis) => {
+                        // Optimistically update the UI
+                        const updatedTranscripts = allTranscripts.map(t =>
+                            t.id === selectedTranscript.id ? { ...t, analysis } : t
+                        );
+                        setAllTranscripts(updatedTranscripts);
+                    }}
+                />
+            )}
+        </DialogContent>
+    </Dialog>
     </>
   )
 }
