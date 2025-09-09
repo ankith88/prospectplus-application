@@ -80,7 +80,8 @@ export default function LeadsPage() {
           getAllActivities(),
           getAllUsers()
         ]);
-        setAllUsers(fetchedUsers);
+        const activeDialers = fetchedUsers.filter(u => u.role !== 'admin' && u.displayName);
+        setAllUsers(activeDialers);
 
         const notesByLead = new Map<string, Note[]>();
         allNotes.forEach(note => {
@@ -143,7 +144,7 @@ export default function LeadsPage() {
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
-      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
+      const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
       return filteredLeads.filter(lead => 
         lead.dialerAssigned === user.displayName && actionableStatuses.includes(lead.status)
       );
@@ -177,7 +178,7 @@ export default function LeadsPage() {
   }, [myLeads]);
   
   const allAssignedLeads = useMemo(() => {
-    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
+    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
     return filteredLeads.filter(lead => 
       !!lead.dialerAssigned && actionableStatuses.includes(lead.status)
     );
@@ -199,7 +200,7 @@ export default function LeadsPage() {
   }, [allAssignedLeads]);
 
   const unassignedLeads = useMemo(() => {
-    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Unqualified'];
+    const actionableStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'];
     return filteredLeads.filter(lead => !lead.dialerAssigned && actionableStatuses.includes(lead.status));
   }, [filteredLeads]);
 
@@ -857,5 +858,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
