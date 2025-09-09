@@ -23,7 +23,8 @@ import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllCallActivities, getAllTranscripts, getCallTranscriptByCallId } from '@/services/firebase'
+import { getAllCallActivities, getAllTranscripts } from '@/services/firebase'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -502,3 +503,5 @@ export default function AllCallsPage() {
     </>
   )
 }
+
+    
