@@ -575,7 +575,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <Button variant="outline" onClick={() => setIsLogOutcomeOpen(true)}>
+           <Button variant="outline" onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
               <PhoneCall className="mr-2 h-4 w-4" />
               Log a Call
             </Button>
