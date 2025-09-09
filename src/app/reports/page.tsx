@@ -230,7 +230,7 @@ export default function ReportsPage() {
 
 
   const stats = useMemo(() => {
-    const validCalls = filteredCalls.filter(c => !!c.callId);
+    const validCalls = filteredCalls.filter(c => c.callId);
 
     const totalCalls = validCalls.length;
     const leadsContactedIds = new Set(validCalls.map(c => c.leadId));
@@ -479,7 +479,7 @@ export default function ReportsPage() {
             </Card>
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Leads Contacted</CardTitle>
+                <CardTitle className="text-sm font-medium">Unique Leads Contacted</CardTitle>
                 <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
