@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -953,6 +953,45 @@ async function updateScorecardAnalysis(leadId: string, scorecardId: string, anal
     }
 }
 
+async function getAllUsers(): Promise<UserProfile[]> {
+    try {
+        const usersRef = collection(firestore, 'users');
+        const snapshot = await getDocs(usersRef);
+        if (snapshot.empty) {
+            return [];
+        }
+        return snapshot.docs.map(doc => doc.data() as UserProfile);
+    } catch (error) {
+        console.error('Failed to fetch all users:', error);
+        return [];
+    }
+}
+
+async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerRep: string): Promise<void> {
+    try {
+        const batch = writeBatch(firestore);
+        
+        for (const leadId of leadIds) {
+            const leadRef = doc(firestore, 'leads', leadId);
+            batch.update(leadRef, { dialerAssigned: newDialerRep });
+
+            const activityRef = collection(leadRef, 'activity');
+            const newActivityRef = doc(activityRef); // Create a new doc ref in the subcollection
+            batch.set(newActivityRef, {
+                type: 'Update',
+                date: new Date().toISOString(),
+                notes: `Lead reassigned to ${newDialerRep}.`
+            });
+        }
+        
+        await batch.commit();
+        console.log(`Successfully reassigned ${leadIds.length} leads to ${newDialerRep}`);
+    } catch (error) {
+        console.error('Failed to bulk update lead dialer reps:', error);
+        throw new Error('Failed to bulk update leads in Firebase');
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -995,4 +1034,8 @@ export {
     updateLeadDiscoveryData,
     addScorecard,
     updateScorecardAnalysis,
+    getAllUsers,
+    bulkUpdateLeadDialerRep,
 };
+
+    

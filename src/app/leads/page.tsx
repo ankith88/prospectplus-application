@@ -18,14 +18,14 @@ import {
 } from '@/components/ui/table'
 import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, getAllNotes, getAllActivities } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, getAllNotes, getAllActivities, bulkUpdateLeadDialerRep, getAllUsers } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -36,15 +36,21 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
+
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAllLeads, setSelectedAllLeads] = useState<string[]>([]);
+  const [selectedForReassignment, setSelectedForReassignment] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [reassignToUser, setReassignToUser] = useState<string | null>(null);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -55,7 +61,6 @@ export default function LeadsPage() {
     industryCategory: '',
     phoneNumber: '',
   });
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
     async function getLeads() {
@@ -67,11 +72,13 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        const [fetchedLeads, allNotes, allActivities] = await Promise.all([
+        const [fetchedLeads, allNotes, allActivities, fetchedUsers] = await Promise.all([
           getLeadsTool({ summary: true }),
           getAllNotes(),
-          getAllActivities()
+          getAllActivities(),
+          getAllUsers()
         ]);
+        setAllUsers(fetchedUsers);
 
         const notesByLead = new Map<string, Note[]>();
         allNotes.forEach(note => {
@@ -230,6 +237,25 @@ export default function LeadsPage() {
         toast({ variant: "destructive", title: "Error", description: "Failed to assign leads." });
     }
   };
+  
+  const handleBulkReassign = async () => {
+    if (selectedForReassignment.length === 0 || !reassignToUser) return;
+    try {
+        await bulkUpdateLeadDialerRep(selectedForReassignment, reassignToUser);
+        const updatedLeads = allLeads.map(lead =>
+            selectedForReassignment.includes(lead.id) ? { ...lead, dialerAssigned: reassignToUser } : lead
+        );
+        setAllLeads(updatedLeads);
+        toast({ title: "Success", description: `${selectedForReassignment.length} lead(s) reassigned to ${reassignToUser}.` });
+    } catch (error) {
+        console.error("Failed to bulk reassign leads:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to reassign leads." });
+    } finally {
+        setSelectedForReassignment([]);
+        setReassignToUser(null);
+        setIsReassignDialogOpen(false);
+    }
+  };
 
   const handleSelectMyLead = (leadId: string, checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -246,6 +272,22 @@ export default function LeadsPage() {
       setSelectedAllLeads(prev => prev.filter(id => id !== leadId));
     }
   };
+  
+  const handleSelectForReassignment = (leadId: string, checked: boolean | 'indeterminate') => {
+    setSelectedForReassignment(prev => 
+        checked ? [...prev, leadId] : prev.filter(id => id !== leadId)
+    );
+  };
+  
+  const handleSelectAllForReassignment = (userLeads: LeadWithDetails[], checked: boolean | 'indeterminate') => {
+      const leadIds = userLeads.map(l => l.id);
+      if (checked) {
+          setSelectedForReassignment(prev => [...new Set([...prev, ...leadIds])]);
+      } else {
+          setSelectedForReassignment(prev => prev.filter(id => !leadIds.includes(id)));
+      }
+  };
+
 
   const handleSelectAllMyLeads = (checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -496,11 +538,17 @@ export default function LeadsPage() {
       
       {userProfile?.role === 'admin' && (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
                 <span>All Assigned Leads</span>
                 <Badge variant="secondary">{allAssignedLeads.length} lead(s)</Badge>
             </CardTitle>
+            {selectedForReassignment.length > 0 && (
+                <Button variant="outline" onClick={() => setIsReassignDialogOpen(true)}>
+                    <UserCog className="mr-2 h-4 w-4" />
+                    Reassign {selectedForReassignment.length} Lead(s)
+                </Button>
+            )}
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -520,6 +568,13 @@ export default function LeadsPage() {
                        <Table>
                           <TableHeader>
                             <TableRow>
+                               <TableHead className="w-8">
+                                <Checkbox
+                                    checked={leads.every(l => selectedForReassignment.includes(l.id))}
+                                    onCheckedChange={(checked) => handleSelectAllForReassignment(leads, checked)}
+                                    aria-label={`Select all leads for ${user}`}
+                                />
+                                </TableHead>
                               <TableHead>Company</TableHead>
                               <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
@@ -533,7 +588,14 @@ export default function LeadsPage() {
                             {leads.map((lead) => {
                                const addressString = formatAddress(lead.address);
                                return (
-                                <TableRow key={lead.id}>
+                                <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                  <TableCell>
+                                      <Checkbox
+                                        checked={selectedForReassignment.includes(lead.id)}
+                                        onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
+                                        aria-label={`Select lead ${lead.companyName}`}
+                                      />
+                                  </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
                                       <div className="flex flex-col">
@@ -732,6 +794,39 @@ export default function LeadsPage() {
         onClose={() => setSelectedAddress(null)}
         address={selectedAddress || ''}
       />
+      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reassign Leads</DialogTitle>
+                <DialogDescription>
+                    You are about to reassign {selectedForReassignment.length} lead(s). Select a new user to assign them to.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label htmlFor="reassignUser">Assign to</Label>
+                <Select onValueChange={setReassignToUser}>
+                    <SelectTrigger id="reassignUser">
+                        <SelectValue placeholder="Select a user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {allUsers.map(u => (
+                            <SelectItem key={u.uid} value={u.displayName!}>{u.displayName}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleBulkReassign} disabled={!reassignToUser}>
+                    Confirm Reassignment
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
+
+    
