@@ -955,7 +955,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
               ) : displayedCallHistory.length > 0 ? (
                 <ul className="space-y-4">
                   {displayedCallHistory.map((item, index) => {
-                    const hasTranscript = transcripts.some(t => t.callId === item.callId);
+                    const transcript = transcripts.find(t => t.callId === item.callId);
                     return (
                       <li key={item.id} className="flex gap-4 group">
                         <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
@@ -975,7 +975,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                 </Button>
                             </div>
                             <div className="flex items-center gap-2">
-                                {!hasTranscript && (
+                                {transcript ? (
+                                    <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        View Transcript
+                                    </Button>
+                                ) : (
                                   <Button
                                     variant="outline"
                                     size="sm"
