@@ -975,21 +975,19 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: string[
     try {
         const batch = writeBatch(firestore);
         
-        for (const leadId of leadIds) {
+        leadIds.forEach((leadId, index) => {
             const leadRef = doc(firestore, 'leads', leadId);
-            // Randomly select one of the new dialer reps
-            const randomRep = newDialerReps[Math.floor(Math.random() * newDialerReps.length)];
-            
-            batch.update(leadRef, { dialerAssigned: randomRep });
+            const userToAssign = newDialerReps[index % newDialerReps.length];
+            batch.update(leadRef, { dialerAssigned: userToAssign });
 
             const activityRef = collection(leadRef, 'activity');
             const newActivityRef = doc(activityRef);
             batch.set(newActivityRef, {
                 type: 'Update',
                 date: new Date().toISOString(),
-                notes: `Lead reassigned to ${randomRep}.`
+                notes: `Lead reassigned to ${userToAssign}.`
             });
-        }
+        });
         
         await batch.commit();
         console.log(`Successfully reassigned ${leadIds.length} leads randomly among ${newDialerReps.length} users.`);

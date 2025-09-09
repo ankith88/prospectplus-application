@@ -248,9 +248,9 @@ export default function LeadsPage() {
         
         // Optimistically update the UI
         const assignedLeadsMap = new Map<string, string>();
-        selectedForReassignment.forEach(leadId => {
-            const randomUser = reassignToUsers[Math.floor(Math.random() * reassignToUsers.length)];
-            assignedLeadsMap.set(leadId, randomUser);
+        selectedForReassignment.forEach((leadId, index) => {
+            const userToAssign = reassignToUsers[index % reassignToUsers.length];
+            assignedLeadsMap.set(leadId, userToAssign);
         });
 
         const updatedLeads = allLeads.map(lead =>
