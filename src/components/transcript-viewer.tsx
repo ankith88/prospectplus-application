@@ -1,7 +1,7 @@
 
 'use client';
 
-import type { Transcript, TranscriptAnalysis } from '@/lib/types';
+import type { Transcript, TranscriptAnalysis, UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { analyzeTranscript } from '@/ai/flows/analyze-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { getAllUsers } from '@/services/firebase';
 
 interface TranscriptViewerProps {
     transcript: Transcript;
@@ -25,6 +26,7 @@ interface Utterance {
     speaker: string;
     text: string;
     participant_type: 'internal' | 'external';
+    user_id?: string;
 }
 
 interface GroupedUtterance {
@@ -47,7 +49,22 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
     const [groupedUtterances, setGroupedUtterances] = useState<GroupedUtterance[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<TranscriptAnalysis | undefined>(transcript.analysis);
+    const [userMap, setUserMap] = useState<Map<string, string>>(new Map());
     const { toast } = useToast();
+    
+    useEffect(() => {
+        const fetchUsers = async () => {
+            const users = await getAllUsers();
+            const map = new Map<string, string>();
+            users.forEach(user => {
+                if (user.aircallUserId && user.displayName) {
+                    map.set(user.aircallUserId, user.displayName);
+                }
+            });
+            setUserMap(map);
+        };
+        fetchUsers();
+    }, []);
 
     const formattedTranscriptForAnalysis = groupedUtterances.map(g => `${g.speakerName}: ${g.texts.join(' ')}`).join('\n');
     
@@ -55,9 +72,11 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
         let utterances: Utterance[] = [];
         try {
             const parsedContent = JSON.parse(transcript.content);
-            utterances = parsedContent.utterances || parsedContent;
-            if (!Array.isArray(utterances)) {
-                utterances = [];
+            // Handle both {utterances: []} and direct array formats
+            if (Array.isArray(parsedContent)) {
+              utterances = parsedContent;
+            } else if (parsedContent && Array.isArray(parsedContent.utterances)) {
+              utterances = parsedContent.utterances;
             }
         } catch (error) {
             console.error("Failed to parse transcript content:", error);
@@ -74,7 +93,13 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
 
         for (const utt of utterances) {
             const isInternal = utt.participant_type === 'internal';
-            const speakerName = isInternal ? (utt.speaker || transcript.author) : leadName;
+            let speakerName = 'Unknown';
+            if (isInternal) {
+                // Use the userMap to find the display name from aircallUserId
+                speakerName = (utt.user_id && userMap.get(utt.user_id)) || utt.speaker || transcript.author || 'Internal Agent';
+            } else {
+                speakerName = leadName;
+            }
 
             if (currentGroup && currentGroup.speakerName === speakerName) {
                 currentGroup.texts.push(utt.text);
@@ -96,7 +121,7 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
         
         setGroupedUtterances(groups);
 
-    }, [transcript, leadName]);
+    }, [transcript, leadName, userMap]);
 
     const handleAnalyzeTranscript = async () => {
         setIsAnalyzing(true);
