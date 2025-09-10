@@ -57,8 +57,9 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
             const users = await getAllUsers();
             const map = new Map<string, string>();
             users.forEach(user => {
-                if (user.aircallUserId && user.displayName) {
-                    map.set(user.aircallUserId, user.displayName);
+                const displayName = `${user.firstName} ${user.lastName}`;
+                if (user.aircallUserId && displayName.trim()) {
+                    map.set(user.aircallUserId, displayName);
                 }
             });
             setUserMap(map);
