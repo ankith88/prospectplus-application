@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Activity, LeadStatus, Transcript, Review } from '@/lib/types'
+import type { Activity, LeadStatus, Transcript, Review, ReviewCategory } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -50,6 +50,7 @@ import {
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
+const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
 export default function AllCallsPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
@@ -60,6 +61,7 @@ export default function AllCallsPage() {
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [reviewingCall, setReviewingCall] = useState<CallActivity | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewCategory, setReviewCategory] = useState<ReviewCategory | "">("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [viewingReview, setViewingReview] = useState<Review | null>(null);
 
@@ -71,6 +73,7 @@ export default function AllCallsPage() {
     status: 'all' as LeadStatus | 'all',
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
     reviewedBy: 'all',
+    reviewCategory: 'all',
   });
 
   const router = useRouter();
@@ -110,7 +113,7 @@ export default function AllCallsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all' });
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -171,10 +174,11 @@ export default function AllCallsPage() {
                               (filters.reviewed === 'not_reviewed' && !call.review);
                               
         const reviewedByMatch = filters.reviewedBy === 'all' || call.review?.reviewer === filters.reviewedBy;
+        const reviewCategoryMatch = filters.reviewCategory === 'all' || call.review?.category === filters.reviewCategory;
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
 
     // Sort the final list
@@ -227,7 +231,7 @@ export default function AllCallsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes'];
+    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = filteredCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.dialerAssigned || 'Unassigned'),
@@ -239,6 +243,7 @@ export default function AllCallsPage() {
         escapeCsvCell(call.notes),
         escapeCsvCell(call.review?.reviewer || ''),
         escapeCsvCell(call.review?.notes || ''),
+        escapeCsvCell(call.review?.category || ''),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -277,22 +282,24 @@ export default function AllCallsPage() {
   }
 
   const handleSubmitReview = async () => {
-    if (!reviewingCall || !reviewNotes || !user?.displayName) return;
+    if (!reviewingCall || !reviewNotes || !reviewCategory || !user?.displayName) return;
     setIsSubmittingReview(true);
     try {
       await addCallReview(reviewingCall.leadId, reviewingCall.id, {
         reviewer: user.displayName,
         notes: reviewNotes,
+        category: reviewCategory
       });
       toast({ title: "Success", description: "Review submitted successfully." });
       // Optimistically update UI
       setAllCalls(prev => prev.map(c => 
         c.id === reviewingCall.id 
-        ? { ...c, isReviewed: true, review: { id: '', date: new Date().toISOString(), reviewer: user.displayName!, notes: reviewNotes } } 
+        ? { ...c, isReviewed: true, review: { id: '', date: new Date().toISOString(), reviewer: user.displayName!, notes: reviewNotes, category: reviewCategory } } 
         : c
       ));
       setReviewingCall(null);
       setReviewNotes("");
+      setReviewCategory("");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to submit review." });
     } finally {
@@ -310,6 +317,16 @@ export default function AllCallsPage() {
   }
 
   const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
+
+  const ReviewCategoryBadge = ({ category }: { category?: ReviewCategory }) => {
+    if (!category) return <span className="text-muted-foreground">N/A</span>;
+    const colorClass = {
+        'Good Example': "bg-green-100 text-green-800 border-green-200",
+        'Coaching Opportunity': "bg-yellow-100 text-yellow-800 border-yellow-200",
+        'Needs Improvement': "bg-red-100 text-red-800 border-red-200",
+    }[category];
+    return <Badge variant="outline" className={colorClass}>{category}</Badge>;
+  };
 
   return (
     <>
@@ -333,7 +350,7 @@ export default function AllCallsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
@@ -388,6 +405,18 @@ export default function AllCallsPage() {
                                 <SelectItem value="all">All</SelectItem>
                                 <SelectItem value="reviewed">Reviewed</SelectItem>
                                 <SelectItem value="not_reviewed">Not Reviewed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="reviewCategory">Review Category</Label>
+                        <Select value={filters.reviewCategory} onValueChange={(value) => handleFilterChange('reviewCategory', value)}>
+                            <SelectTrigger id="reviewCategory">
+                                <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                {reviewCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -485,13 +514,14 @@ export default function AllCallsPage() {
                   <TableHead>Duration</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Reviewed By</TableHead>
+                  <TableHead>Review Category</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCalls.length > 0 ? (
                   filteredCalls.map((call) => {
@@ -549,6 +579,9 @@ export default function AllCallsPage() {
                             <span className="text-muted-foreground">N/A</span>
                           )}
                        </TableCell>
+                        <TableCell>
+                            <ReviewCategoryBadge category={call.review?.category} />
+                        </TableCell>
                        <TableCell>
                          <div className="flex flex-col sm:flex-row gap-2">
                             {call.callId && (
@@ -580,7 +613,11 @@ export default function AllCallsPage() {
                               </Button>
                             )}
                              {userProfile?.role === 'admin' && (
-                                <Button variant="outline" size="sm" onClick={() => setReviewingCall(call)}>
+                                <Button variant="outline" size="sm" onClick={() => {
+                                    setReviewingCall(call);
+                                    setReviewNotes(call.review?.notes || "");
+                                    setReviewCategory(call.review?.category || "");
+                                }}>
                                     <Edit className="mr-2 h-4 w-4" />
                                     {call.isReviewed ? 'Edit Review' : 'Add Review'}
                                 </Button>
@@ -591,7 +628,7 @@ export default function AllCallsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>
@@ -631,19 +668,32 @@ export default function AllCallsPage() {
                 <DialogTitle>Review Call</DialogTitle>
                 <DialogDescription>Add feedback for the call with {reviewingCall?.leadName}.</DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-                <Label htmlFor="review-notes">Review Notes</Label>
-                <Textarea 
-                    id="review-notes"
-                    value={reviewNotes}
-                    onChange={(e) => setReviewNotes(e.target.value)}
-                    placeholder="Enter your feedback here..."
-                    rows={5}
-                />
+            <div className="py-4 space-y-4">
+                <div>
+                  <Label htmlFor="review-category">Category</Label>
+                  <Select value={reviewCategory} onValueChange={(value) => setReviewCategory(value as ReviewCategory)}>
+                      <SelectTrigger id="review-category">
+                          <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {reviewCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="review-notes">Review Notes</Label>
+                  <Textarea 
+                      id="review-notes"
+                      value={reviewNotes}
+                      onChange={(e) => setReviewNotes(e.target.value)}
+                      placeholder="Enter your feedback here..."
+                      rows={5}
+                  />
+                </div>
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setReviewingCall(null)}>Cancel</Button>
-                <Button onClick={handleSubmitReview} disabled={isSubmittingReview || !reviewNotes}>
+                <Button onClick={handleSubmitReview} disabled={isSubmittingReview || !reviewNotes || !reviewCategory}>
                     {isSubmittingReview ? <Loader/> : 'Submit Review'}
                 </Button>
             </DialogFooter>
@@ -663,6 +713,10 @@ export default function AllCallsPage() {
                 <div>
                  <p className="text-sm font-semibold">Date</p>
                  <p className="text-sm text-muted-foreground">{viewingReview ? new Date(viewingReview.date).toLocaleString() : ''}</p>
+               </div>
+                <div>
+                 <p className="text-sm font-semibold">Category</p>
+                 <ReviewCategoryBadge category={viewingReview?.category} />
                </div>
                <div>
                  <p className="text-sm font-semibold">Notes</p>

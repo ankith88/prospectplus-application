@@ -13,11 +13,14 @@ export type LeadStatus =
   | 'High Touch'
   | 'Pre Qualified'
 
+export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
+
 export interface Review {
   id: string;
   reviewer: string;
   date: string;
   notes: string;
+  category?: ReviewCategory;
 }
 
 export interface Activity {

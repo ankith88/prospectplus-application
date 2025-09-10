@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
@@ -1025,7 +1025,7 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: string[
 }
 
 
-async function addCallReview(leadId: string, activityId: string, reviewData: { reviewer: string; notes: string }): Promise<void> {
+async function addCallReview(leadId: string, activityId: string, reviewData: { reviewer: string; notes: string; category: ReviewCategory }): Promise<void> {
     try {
         const activityRef = doc(firestore, 'leads', leadId, 'activity', activityId);
         await updateDoc(activityRef, {
