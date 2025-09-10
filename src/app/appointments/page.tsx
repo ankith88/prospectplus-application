@@ -94,6 +94,10 @@ export default function AllAppointmentsPage() {
     }
 
     return appointmentsToFilter.filter(appointment => {
+        if (!appointment.leadName) {
+            return false;
+        }
+
         const appointmentUserMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
         const leadUserMatch = filters.leadAssignedTo === 'all' || appointment.dialerAssigned === filters.leadAssignedTo;
         
@@ -376,5 +380,3 @@ export default function AllAppointmentsPage() {
     </>
   )
 }
-
-    
