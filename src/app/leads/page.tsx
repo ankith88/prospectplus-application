@@ -45,7 +45,7 @@ type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAllLeads, setSelectedAllLeads] = useState<string[]>([]);
@@ -81,7 +81,7 @@ export default function LeadsPage() {
           getAllUsers()
         ]);
         const activeDialers = fetchedUsers.filter(u => u.role !== 'admin' && u.displayName);
-        setAllUsers(activeDialers);
+        setAllDialers(activeDialers);
 
         const notesByLead = new Map<string, Note[]>();
         allNotes.forEach(note => {
@@ -835,7 +835,7 @@ export default function LeadsPage() {
                 <Label>Assign to</Label>
                 <ScrollArea className="h-48 mt-2 border rounded-md p-2">
                     <div className="space-y-2">
-                        {allUsers.map(u => (
+                        {allDialers.map(u => (
                             <div key={u.uid} className="flex items-center space-x-2">
                                 <Checkbox
                                     id={`reassign-${u.uid}`}
