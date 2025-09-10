@@ -231,7 +231,7 @@ export const prospectWebsiteTool = ai.defineTool(
     } catch (error) {
         if (error instanceof AbortError) {
             console.error('Error during website prospecting with Hunter.io: API call timed out.');
-            throw new Error('An error occurred while prospecting the website: The request to the prospecting service timed out.');
+            throw new Error('The request to the prospecting service timed out.');
         }
         console.error('Error during website prospecting with Hunter.io:', error);
         throw new Error('An error occurred while prospecting the website.');
