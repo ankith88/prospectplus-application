@@ -104,7 +104,7 @@ export const prospectWebsiteTool = ai.defineTool(
             controller.abort();
         }, 10000); // 10-second timeout
 
-        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal as any });
+        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal });
         
         clearTimeout(timeout);
 
@@ -153,7 +153,7 @@ export const prospectWebsiteTool = ai.defineTool(
 
         let response;
         try {
-            response = await fetch(hunterUrl, { signal: controller.signal as any });
+            response = await fetch(hunterUrl, { signal: controller.signal });
         } finally {
             clearTimeout(timeout);
         }
