@@ -70,6 +70,7 @@ export default function AllCallsPage() {
     leadName: '',
     status: 'all' as LeadStatus | 'all',
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
+    reviewedBy: 'all',
   });
 
   const router = useRouter();
@@ -109,7 +110,7 @@ export default function AllCallsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all' });
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -168,10 +169,12 @@ export default function AllCallsPage() {
         const reviewedMatch = filters.reviewed === 'all' || 
                               (filters.reviewed === 'reviewed' && !!call.review) ||
                               (filters.reviewed === 'not_reviewed' && !call.review);
+                              
+        const reviewedByMatch = filters.reviewedBy === 'all' || call.review?.reviewer === filters.reviewedBy;
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch;
     });
 
     // Sort the final list
@@ -197,6 +200,11 @@ export default function AllCallsPage() {
       return Array.from(users as string[]);
   }, [allCalls]);
 
+  const allReviewers = useMemo(() => {
+      const reviewers = new Set(allCalls.map(c => c.review?.reviewer).filter(Boolean));
+      return Array.from(reviewers as string[]);
+  }, [allCalls]);
+
   const transcriptsByCallId = useMemo(() => {
     return allTranscripts.reduce((acc, transcript) => {
         if (transcript.callId) {
@@ -219,7 +227,7 @@ export default function AllCallsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes'];
+    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes'];
     const rows = filteredCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.dialerAssigned || 'Unassigned'),
@@ -229,6 +237,8 @@ export default function AllCallsPage() {
         escapeCsvCell(new Date(call.date).toLocaleTimeString()),
         escapeCsvCell(call.duration || 'N/A'),
         escapeCsvCell(call.notes),
+        escapeCsvCell(call.review?.reviewer || ''),
+        escapeCsvCell(call.review?.notes || ''),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -323,12 +333,13 @@ export default function AllCallsPage() {
               </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
                     {userProfile?.role === 'admin' && (
+                       <>
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
                              <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
@@ -341,6 +352,19 @@ export default function AllCallsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="reviewedBy">Reviewed By</Label>
+                             <Select value={filters.reviewedBy} onValueChange={(value) => handleFilterChange('reviewedBy', value)}>
+                                <SelectTrigger id="reviewedBy">
+                                    <SelectValue placeholder="Select reviewer" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Reviewers</SelectItem>
+                                    {allReviewers.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                       </>
                     )}
                      <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
@@ -460,13 +484,14 @@ export default function AllCallsPage() {
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead>Reviewed By</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCalls.length > 0 ? (
                   filteredCalls.map((call) => {
@@ -515,6 +540,16 @@ export default function AllCallsPage() {
                           {call.notes}
                        </TableCell>
                        <TableCell>
+                        {call.review?.reviewer ? (
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              {call.review.reviewer}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
+                       </TableCell>
+                       <TableCell>
                          <div className="flex flex-col sm:flex-row gap-2">
                             {call.callId && (
                                 <Button 
@@ -556,7 +591,7 @@ export default function AllCallsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>

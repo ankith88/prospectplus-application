@@ -672,7 +672,7 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
     }
 }
 
-async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
+async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
     try {
         const transcriptsRef = collection(firestore, 'leads', leadId, 'transcripts');
         

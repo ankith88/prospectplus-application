@@ -71,7 +71,9 @@ export function TranscriptViewer({ transcript, leadId, leadName, onAnalysisCompl
     const formattedTranscriptForAnalysis = groupedUtterances.map(g => `${g.speakerName}: ${g.texts.join(' ')}`).join('\n');
     
     useEffect(() => {
-        if (userMap.size === 0) return; // Wait for userMap to be populated
+        // fetchUsers();
+        // console.log(userMap.size)
+        // if (userMap.size === 0) return; // Wait for userMap to be populated
 
         let utterances: Utterance[] = [];
         try {

@@ -99,7 +99,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             console.log('[Flow] Logging transcript to Firebase...');
             await logTranscriptActivity(leadId, {
                 content: JSON.stringify(utterances),
-                author: leadAuthor,
+                author: lead.dialerAssigned,
                 callId: callId,
                 phoneNumber: lead.customerPhone || 'Unknown'
             });
