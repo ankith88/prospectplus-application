@@ -103,33 +103,35 @@ export const prospectWebsiteTool = ai.defineTool(
       };
     }
     
-    console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
-    
     let companyDescription = '';
     try {
         const websiteResponse = await fetch(websiteUrl, { timeout: 5000 });
         if (websiteResponse.ok) {
             const html = await websiteResponse.text();
-            // A simple way to get text content; might need a more robust parser for complex sites.
             const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
                                     .replace(/<script[^>]*>.*<\/script>/gs, '')
                                     .replace(/<[^>]+>/g, ' ')
                                     .replace(/\s+/g, ' ')
                                     .trim();
-            const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
-            if (output?.summary) {
-                companyDescription = output.summary;
-                const leadRef = doc(firestore, 'leads', leadId);
-                await updateDoc(leadRef, { companyDescription });
+            
+            if (textContent) {
+                const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
+                if (output?.summary) {
+                    companyDescription = output.summary;
+                    const leadRef = doc(firestore, 'leads', leadId);
+                    await updateDoc(leadRef, { companyDescription });
+                }
             }
         }
     } catch (error) {
         console.error('Error fetching or summarizing website content:', error);
-        // Do not block the rest of the process if this fails
+        // Do not block the rest of the process if this fails.
+        // It's non-critical.
     }
 
 
     try {
+      console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
       const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
       const response = await fetch(hunterUrl);
 
@@ -154,7 +156,6 @@ export const prospectWebsiteTool = ai.defineTool(
 
       console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
 
-      // Get existing contacts to avoid duplicates
       const lead = await getLeadFromFirebase(leadId, true);
       const getContactKey = (contact: {email?: string | null, phone?: string | null}) => {
           const email = (contact.email || '').toLowerCase();
@@ -173,7 +174,6 @@ export const prospectWebsiteTool = ai.defineTool(
       
       const savedContacts: Contact[] = [];
 
-      // Save new contacts to Firebase and sync to NetSuite
       for (const contact of uniqueNewContacts) {
         if (contact.email) {
           const contactData = {
