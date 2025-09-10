@@ -98,7 +98,7 @@ export const prospectWebsiteTool = ai.defineTool(
     
     // Step 1: Fetch and analyze website content for a description.
     try {
-        const websiteResponse = await fetch(websiteUrl, { timeout: 5000 });
+        const websiteResponse = await fetch(websiteUrl, { timeout: 10000 }); // 10 second timeout
         if (websiteResponse.ok) {
             const html = await websiteResponse.text();
             const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
