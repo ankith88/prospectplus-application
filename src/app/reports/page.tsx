@@ -271,6 +271,11 @@ export default function ReportsPage() {
     const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
     const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
     const uniqueWonLeadsWithAppointments = new Set(appointmentsForWonLeads.map(a => a.leadId)).size;
+
+    const lostLeadIds = new Set(filteredLeads.filter(l => l.status === 'Lost').map(l => l.id));
+    const appointmentsForLostLeads = filteredAppointments.filter(a => lostLeadIds.has(a.leadId));
+    const uniqueLostLeadsWithAppointments = new Set(appointmentsForLostLeads.map(a => a.leadId)).size;
+
     const totalAppointments = filteredAppointments.length;
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
 
@@ -288,6 +293,7 @@ export default function ReportsPage() {
       totalAppointments,
       averageDurationFormatted,
       wonLeadsWithAppointments: uniqueWonLeadsWithAppointments,
+      lostLeadsWithAppointments: uniqueLostLeadsWithAppointments,
       appointmentToCallRatio,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments]);
@@ -502,6 +508,18 @@ export default function ReportsPage() {
                     <div className="text-2xl font-bold">{stats.wonLeadsWithAppointments}</div>
                     <p className="text-xs text-muted-foreground">
                         Leads with appointments that ended in a 'Won' status
+                    </p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Appointments to Lost</CardTitle>
+                    <UserX className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.lostLeadsWithAppointments}</div>
+                    <p className="text-xs text-muted-foreground">
+                        Leads with appointments that ended in a 'Lost' status
                     </p>
                 </CardContent>
             </Card>
