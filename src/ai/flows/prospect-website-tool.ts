@@ -94,21 +94,9 @@ export const prospectWebsiteTool = ai.defineTool(
     outputSchema: ProspectWebsiteOutputSchema,
   },
   async ({ leadId, websiteUrl }) => {
-    const apiKey = process.env.HUNTER_API_KEY;
-    if (!apiKey) {
-      console.error('Hunter.io API key is not configured.');
-      throw new Error('Hunter.io API key is not configured.');
-    }
-
-    const domain = extractDomain(websiteUrl);
-    if (!domain) {
-      return {
-        contacts: [],
-        siteAnalysis: "Invalid website URL provided.",
-      };
-    }
-    
     let companyDescription = '';
+    
+    // Step 1: Fetch and analyze website content. This part is allowed to fail without stopping the process.
     try {
         const websiteResponse = await fetch(websiteUrl, { timeout: 5000 });
         if (websiteResponse.ok) {
@@ -129,78 +117,85 @@ export const prospectWebsiteTool = ai.defineTool(
             }
         }
     } catch (error) {
-        console.error('Error fetching or summarizing website content:', error);
+        console.error('Non-critical error fetching or summarizing website content:', error);
+        // Do not re-throw, allow the rest of the function to execute.
     }
 
-
+    // Step 2: Prospect for contacts using Hunter.io. This part is critical.
     try {
-      console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
-      const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
-      const response = await fetch(hunterUrl);
-
-      if (!response.ok) {
-        console.error(`Hunter.io API request failed with status: ${response.status}`);
-        const errorBody = await response.text();
-        console.error('Hunter.io error response:', errorBody);
-        throw new Error(`Hunter.io API request failed: ${response.statusText}`);
-      }
-
-      const hunterData = await response.json() as any;
-
-      const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => {
-        const fullName = `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim();
-        return {
-            name: fullName || extractNameFromEmail(emailInfo.value),
-            title: emailInfo.position || 'N/A',
-            email: emailInfo.value,
-            phone: emailInfo.phone_number || 'N/A',
-        };
-      }) || [];
-
-      console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
-
-      const lead = await getLeadFromFirebase(leadId, true);
-      const getContactKey = (contact: {email?: string | null, phone?: string | null}) => {
-          const email = (contact.email || '').toLowerCase();
-          return email;
-      };
-      
-      const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
-      
-      const uniqueNewContacts = foundContacts.filter((contact: any) => {
-        if (!contact.email) return false;
-        const contactKey = getContactKey(contact);
-        return !existingContacts.has(contactKey);
-      });
-      
-      console.log(`Found ${uniqueNewContacts.length} new unique contacts to add.`);
-      
-      const savedContacts: Contact[] = [];
-
-      for (const contact of uniqueNewContacts) {
-        if (contact.email) {
-          const contactData = {
-            name: contact.name,
-            title: contact.title || 'N/A',
-            email: contact.email,
-            phone: contact.phone || 'N/A',
-          };
-          const contactId = await addContactToLead(leadId, contactData);
-          const newContactWithId: Contact = { ...contactData, id: contactId };
-          savedContacts.push(newContactWithId);
-          await sendContactToNetSuite({ leadId, contact: newContactWithId });
+        const apiKey = process.env.HUNTER_API_KEY;
+        if (!apiKey) {
+            throw new Error('Hunter.io API key is not configured.');
         }
-      }
 
-      return {
-        logoUrl: hunterData?.data?.logo_url,
-        contacts: savedContacts,
-        siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
-        companyDescription: companyDescription,
-      };
+        const domain = extractDomain(websiteUrl);
+        if (!domain) {
+            return { siteAnalysis: "Invalid website URL provided." };
+        }
+        
+        console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
+        const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
+        const response = await fetch(hunterUrl);
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`Hunter.io API request failed with status: ${response.status}`, errorBody);
+            throw new Error(`Hunter.io API request failed: ${response.statusText}`);
+        }
+
+        const hunterData = await response.json() as any;
+
+        const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => {
+            const fullName = `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim();
+            return {
+                name: fullName || extractNameFromEmail(emailInfo.value),
+                title: emailInfo.position || 'N/A',
+                email: emailInfo.value,
+                phone: emailInfo.phone_number || 'N/A',
+            };
+        }) || [];
+
+        console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
+
+        const lead = await getLeadFromFirebase(leadId, true);
+        const getContactKey = (contact: {email?: string | null, phone?: string | null}) => (contact.email || '').toLowerCase();
+        
+        const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
+        
+        const uniqueNewContacts = foundContacts.filter((contact: any) => {
+            if (!contact.email) return false;
+            const contactKey = getContactKey(contact);
+            return !existingContacts.has(contactKey);
+        });
+        
+        console.log(`Found ${uniqueNewContacts.length} new unique contacts to add.`);
+        
+        const savedContacts: Contact[] = [];
+        for (const contact of uniqueNewContacts) {
+            if (contact.email) {
+                const contactData = {
+                    name: contact.name,
+                    title: contact.title || 'N/A',
+                    email: contact.email,
+                    phone: contact.phone || 'N/A',
+                };
+                const contactId = await addContactToLead(leadId, contactData);
+                const newContactWithId: Contact = { ...contactData, id: contactId };
+                savedContacts.push(newContactWithId);
+                await sendContactToNetSuite({ leadId, contact: newContactWithId });
+            }
+        }
+
+        return {
+            logoUrl: hunterData?.data?.logo_url,
+            contacts: savedContacts,
+            siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
+            companyDescription: companyDescription, // Return the description if it was generated
+        };
+
     } catch (error) {
-      console.error('Error during website prospecting with Hunter.io:', error);
-      throw new Error('An error occurred while prospecting the website.');
+        console.error('Error during website prospecting with Hunter.io:', error);
+        throw new Error('An error occurred while prospecting the website.');
     }
   }
 );
