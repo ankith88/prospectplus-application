@@ -382,8 +382,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   const handleGetTranscriptForCall = async (callId: string) => {
     console.log(`[Client] 'Fetch Transcript' button clicked for call ID: ${callId}`);
 
-    if (!lead || !user?.displayName) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not identify lead or user.' });
+    if (!lead) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not identify lead.' });
+      return;
+    }
+    if (!lead.dialerAssigned) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Lead has no assigned dialer to attribute the transcript to.' });
       return;
     }
     try {
@@ -393,7 +397,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
       const result = await getCallTranscriptByCallId({
         callId: callId,
         leadId: lead.id,
-        leadAuthor: user.displayName,
+        leadAuthor: lead.dialerAssigned,
       });
       
       console.log('[Client] Flow result:', result);
