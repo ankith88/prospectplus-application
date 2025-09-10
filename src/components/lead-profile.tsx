@@ -284,6 +284,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           toast({ title: "Logo Found!", description: "Company logo has been updated." });
         }
         
+        if (result.companyDescription) {
+            setLead(prev => prev ? { ...prev, companyDescription: result.companyDescription! } : null);
+            toast({ title: "Description Generated", description: "Company description has been updated." });
+        }
+        
         if (result.contacts && result.contacts.length > 0) {
             const updatedContacts = await getLeadContacts(lead.id);
             setLead(prev => prev ? { ...prev, contacts: updatedContacts } : null);
@@ -657,6 +662,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                 </div>
              </CardHeader>
              <CardContent className="space-y-4">
+                {lead.companyDescription && (
+                    <div className="text-sm text-muted-foreground border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">
+                        {lead.companyDescription}
+                    </div>
+                )}
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                  <div className="flex items-start gap-3">
                    <Key className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
@@ -1413,3 +1423,5 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
+
+    

@@ -138,6 +138,7 @@ export interface Lead {
   aiReason?: string;
   salesRecordInternalId?: string;
   discoveryData?: DiscoveryData;
+  companyDescription?: string;
 }
 
 export interface UserProfile {
@@ -150,6 +151,8 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin';
 }
+
+    
 
     
 

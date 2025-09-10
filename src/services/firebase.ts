@@ -183,6 +183,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           aiScore: data.aiScore,
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
+          companyDescription: data.companyDescription,
         };
 
         if (includeSubCollections) {
@@ -258,6 +259,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           aiScore: data.aiScore,
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
+          companyDescription: data.companyDescription,
         };
         
         if (!summary) {
@@ -1088,3 +1090,5 @@ export {
     bulkUpdateLeadDialerRep,
     addCallReview,
 };
+
+    

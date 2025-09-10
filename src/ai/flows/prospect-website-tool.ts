@@ -31,6 +31,7 @@ const ProspectWebsiteOutputSchema = z.object({
   socialLinks: SocialLinksSchema.optional().describe("Social media links found on the website."),
   contacts: z.array(ContactSchema).optional().describe("Contacts found on the website."),
   siteAnalysis: z.string().optional().describe("A brief analysis of the website content for shipping-related keywords."),
+  companyDescription: z.string().optional().describe("A brief description of the company's business based on website content."),
 });
 
 const ProspectWebsiteInputSchema = z.object({
@@ -64,11 +65,24 @@ function extractNameFromEmail(email: string): string {
     }
 }
 
+const summarizeWebsitePrompt = ai.definePrompt({
+    name: 'summarizeWebsitePrompt',
+    input: { schema: z.object({ siteContent: z.string() }) },
+    output: { schema: z.object({ summary: z.string().describe('A concise, one-paragraph summary of what the company does, based on the provided website content.') }) },
+    prompt: `Based on the following website content, provide a concise, one-paragraph summary of what the company does.
+
+    Website Content:
+    """
+    {{{siteContent}}}
+    """
+    `,
+});
+
 
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Saves new contacts to Firebase and syncs to NetSuite.',
+    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Also generates a company description. Saves new contacts to Firebase and syncs to NetSuite.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
@@ -88,6 +102,30 @@ export const prospectWebsiteTool = ai.defineTool(
     }
     
     console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
+    
+    let companyDescription = '';
+    try {
+        const websiteResponse = await fetch(websiteUrl, { timeout: 5000 });
+        if (websiteResponse.ok) {
+            const html = await websiteResponse.text();
+            // A simple way to get text content; might need a more robust parser for complex sites.
+            const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
+                                    .replace(/<script[^>]*>.*<\/script>/gs, '')
+                                    .replace(/<[^>]+>/g, ' ')
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+            const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
+            if (output?.summary) {
+                companyDescription = output.summary;
+                const leadRef = doc(firestore, 'leads', leadId);
+                await updateDoc(leadRef, { companyDescription });
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching or summarizing website content:', error);
+        // Do not block the rest of the process if this fails
+    }
+
 
     try {
       const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
@@ -153,6 +191,7 @@ export const prospectWebsiteTool = ai.defineTool(
         logoUrl: hunterData?.data?.logo_url,
         contacts: savedContacts,
         siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
+        companyDescription: companyDescription,
       };
     } catch (error) {
       console.error('Error during website prospecting with Hunter.io:', error);
@@ -160,3 +199,5 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
+
+    
