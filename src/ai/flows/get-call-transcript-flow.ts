@@ -43,7 +43,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       return { transcriptFound: false, error: errorMsg };
     }
 
-    const url = `https://api.aircall.io/v1/calls/${callId}`;
+    const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
     console.log(`[Flow] Fetching call data from AirCall URL: ${url}`);
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
