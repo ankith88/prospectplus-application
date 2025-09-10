@@ -21,7 +21,7 @@ import { getLeadsTool } from '@/ai/flows/get-leads-tool'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, getAllNotes, getAllActivities, bulkUpdateLeadDialerRep, getAllUsers } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -54,6 +54,7 @@ export default function LeadsPage() {
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [filters, setFilters] = useState({
@@ -155,6 +156,27 @@ export default function LeadsPage() {
     }
     return [];
   }, [filteredLeads, user]);
+
+  useEffect(() => {
+    if (!loading && myLeads.length > 0 && searchParams.get('nextLead') === 'true') {
+        const lastLeadStatus = searchParams.get('lastLeadStatus') as LeadStatus | null;
+        const statusToFind = lastLeadStatus || 'New';
+        
+        const leadsInStatus = myLeads.filter(lead => lead.status === statusToFind);
+
+        if (leadsInStatus.length > 0) {
+            router.replace(`/leads/${leadsInStatus[0].id}`);
+        } else {
+             const newLeads = myLeads.filter(lead => lead.status === 'New');
+             if (newLeads.length > 0) {
+                 router.replace(`/leads/${newLeads[0].id}`);
+             } else {
+                router.replace('/leads');
+             }
+        }
+    }
+  }, [loading, myLeads, searchParams, router]);
+
 
   const leadsByStatus = useMemo(() => {
     const grouped = myLeads.reduce((acc, lead) => {
@@ -539,11 +561,9 @@ export default function LeadsPage() {
                               return (
                                 <TableRow key={lead.id}>
                                   <TableCell>
-                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                                      </div>
-                                    </div>
+                                    <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                                      {lead.companyName}
+                                    </Button>
                                   </TableCell>
                                   <TableCell>
                                     {lead.customerPhone ? (
@@ -667,11 +687,9 @@ export default function LeadsPage() {
                                                       />
                                                   </TableCell>
                                                   <TableCell>
-                                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                                                      <div className="flex flex-col">
-                                                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                                                      </div>
-                                                    </div>
+                                                    <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                                                      {lead.companyName}
+                                                    </Button>
                                                   </TableCell>
                                                   <TableCell>
                                                     {lead.customerPhone ? (
@@ -783,11 +801,9 @@ export default function LeadsPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                          <div className="flex flex-col">
-                            <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                          </div>
-                        </div>
+                        <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                          {lead.companyName}
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {lead.customerPhone ? (
