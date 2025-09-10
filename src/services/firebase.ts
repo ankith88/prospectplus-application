@@ -70,6 +70,10 @@ function safeGetStatus(status: any): LeadStatus {
     if (typeof status === 'string') {
         let cleanStatus = status.replace('SUSPECT-', '');
 
+        if (cleanStatus === 'Signed') {
+            return 'Won';
+        }
+
         if (cleanStatus === 'Unqualified') {
             return 'New';
         }
