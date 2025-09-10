@@ -539,7 +539,7 @@ export default function LeadsPage() {
                               return (
                                 <TableRow key={lead.id}>
                                   <TableCell>
-                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                       <div className="flex flex-col">
                                         <span className="font-medium group-hover:underline">{lead.companyName}</span>
                                       </div>
@@ -667,7 +667,7 @@ export default function LeadsPage() {
                                                       />
                                                   </TableCell>
                                                   <TableCell>
-                                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                                       <div className="flex flex-col">
                                                         <span className="font-medium group-hover:underline">{lead.companyName}</span>
                                                       </div>
@@ -783,7 +783,7 @@ export default function LeadsPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                           <div className="flex flex-col">
                             <span className="font-medium group-hover:underline">{lead.companyName}</span>
                           </div>
@@ -860,7 +860,7 @@ export default function LeadsPage() {
                 <Label>Assign to</Label>
                 <ScrollArea className="h-48 mt-2 border rounded-md p-2">
                     <div className="space-y-2">
-                        {allDialers.map(u => (
+                        {allDialers.map((u) => (
                             <div key={u.uid} className="flex items-center space-x-2">
                                 <Checkbox
                                     id={`reassign-${u.uid}`}
