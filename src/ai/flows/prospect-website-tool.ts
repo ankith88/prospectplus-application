@@ -96,7 +96,7 @@ export const prospectWebsiteTool = ai.defineTool(
   async ({ leadId, websiteUrl }) => {
     let companyDescription = '';
     
-    // Step 1: Fetch and analyze website content for a description.
+    // Step 1: Fetch and analyze website content for a description. This is non-critical.
     try {
         const websiteResponse = await fetch(websiteUrl, { timeout: 10000 }); // 10 second timeout
         if (websiteResponse.ok) {
@@ -118,7 +118,7 @@ export const prospectWebsiteTool = ai.defineTool(
         console.error('Non-critical error fetching or summarizing website content:', error);
     }
 
-    // Step 2: Prospect for contacts using Hunter.io.
+    // Step 2: Prospect for contacts using Hunter.io. This is the primary function.
     try {
         const apiKey = process.env.HUNTER_API_KEY;
         if (!apiKey) {
