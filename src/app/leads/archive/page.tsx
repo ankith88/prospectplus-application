@@ -497,11 +497,9 @@ export default function ArchivedLeadsPage() {
                     return (
                     <TableRow key={lead.id}>
                       <TableCell>
-                        <div onClick={() => router.push(`/leads/${lead.id}`)} className="flex items-center gap-3 cursor-pointer">
-                          <div className="flex flex-col">
-                            <span className="font-medium hover:underline">{lead.companyName}</span>
-                          </div>
-                        </div>
+                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                            {lead.companyName}
+                        </Button>
                       </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={lead.status} />
