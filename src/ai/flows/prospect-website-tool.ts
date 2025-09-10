@@ -8,7 +8,8 @@ import { ai } from '@/ai/genkit';
 import { addContactToLead, getLeadFromFirebase, updateLeadDetails } from '@/services/firebase';
 import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
-import fetch, { AbortError } from 'node-fetch';
+import fetch from 'node-fetch';
+import type { AbortError } from 'node-fetch';
 import type { Contact } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -103,7 +104,7 @@ export const prospectWebsiteTool = ai.defineTool(
             controller.abort();
         }, 10000); // 10-second timeout
 
-        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal });
+        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal as any });
         
         clearTimeout(timeout);
 
@@ -152,7 +153,7 @@ export const prospectWebsiteTool = ai.defineTool(
 
         let response;
         try {
-            response = await fetch(hunterUrl, { signal: controller.signal });
+            response = await fetch(hunterUrl, { signal: controller.signal as any });
         } finally {
             clearTimeout(timeout);
         }
