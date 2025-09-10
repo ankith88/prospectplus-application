@@ -186,18 +186,28 @@ export default function LeadsPage() {
   }, [filteredLeads]);
   
   const leadsByUser = useMemo(() => {
-    const grouped = allAssignedLeads.reduce((acc, lead) => {
+    const groupedByUser = allAssignedLeads.reduce((acc, lead) => {
         const user = lead.dialerAssigned;
         if (user) {
             if (!acc[user]) {
-                acc[user] = [];
+                acc[user] = {};
             }
-            acc[user].push(lead);
+            const status = lead.status;
+            if (!acc[user][status]) {
+                acc[user][status] = [];
+            }
+            acc[user][status].push(lead);
         }
         return acc;
-    }, {} as Record<string, LeadWithDetails[]>);
+    }, {} as Record<string, Record<string, LeadWithDetails[]>>);
 
-    return Object.entries(grouped).sort(([userA], [userB]) => userA.localeCompare(userB));
+    return Object.entries(groupedByUser)
+        .sort(([userA], [userB]) => userA.localeCompare(userB))
+        .map(([user, statuses]) => {
+            const sortedStatuses = Object.entries(statuses).sort(([statusA], [statusB]) => statusA.localeCompare(statusB));
+            const totalLeads = sortedStatuses.reduce((sum, [, leads]) => sum + leads.length, 0);
+            return [user, sortedStatuses, totalLeads] as [string, [string, LeadWithDetails[]][], number];
+        });
   }, [allAssignedLeads]);
 
   const unassignedLeads = useMemo(() => {
@@ -606,96 +616,107 @@ export default function LeadsPage() {
              <div className="text-center"><Loader /></div>
            ) : allAssignedLeads.length > 0 ? (
              <Accordion type="multiple" className="w-full">
-                {leadsByUser.map(([user, leads]) => (
+                {leadsByUser.map(([user, statuses, totalLeads]) => (
                   <AccordionItem value={user} key={user}>
                     <AccordionTrigger>
                       <div className="flex items-center gap-2">
                         <Users className="h-5 w-5" />
                         <span className="font-semibold">{user}</span>
-                        <Badge variant="secondary">{leads.length}</Badge>
+                        <Badge variant="secondary">{totalLeads} lead(s)</Badge>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                       <Table>
-                          <TableHeader>
-                            <TableRow>
-                               <TableHead className="w-8">
-                                <Checkbox
-                                    checked={leads.every(l => selectedForReassignment.includes(l.id))}
-                                    onCheckedChange={(checked) => handleSelectAllForReassignment(leads, checked)}
-                                    aria-label={`Select all leads for ${user}`}
-                                />
-                                </TableHead>
-                              <TableHead>Company</TableHead>
-                              <TableHead>Phone</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Last Activity</TableHead>
-                              <TableHead className="w-[50px] text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {leads.map((lead) => {
-                               const addressString = formatAddress(lead.address);
-                               const lastActivity = lead.activity?.[0];
-                               return (
-                                <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
-                                  <TableCell>
-                                      <Checkbox
-                                        checked={selectedForReassignment.includes(lead.id)}
-                                        onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
-                                        aria-label={`Select lead ${lead.companyName}`}
-                                      />
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    {lead.customerPhone ? (
-                                      <div className="flex items-center gap-1">
-                                          <span className="font-medium break-all">{lead.customerPhone}</span>
-                                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
-                                              <PhoneCall className="w-3 h-3" />
-                                          </Button>
-                                      </div>
-                                    ) : 'N/A'}
-                                  </TableCell>
-                                  <TableCell>
-                                    <LeadStatusBadge status={lead.status} />
-                                  </TableCell>
-                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                                    {lastActivity ? (
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">{lastActivity.notes}</span>
-                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
-                                      </div>
-                                    ) : (
-                                      'N/A'
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                            <UserX className="mr-2 h-4 w-4" />
-                                            Unassign
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                  </TableCell>
-                                </TableRow>
-                               )
-                            })}
-                          </TableBody>
-                       </Table>
+                        <Accordion type="multiple" className="w-full pl-4">
+                            {statuses.map(([status, leads]) => (
+                                <AccordionItem value={`${user}-${status}`} key={`${user}-${status}`}>
+                                    <AccordionTrigger>
+                                        <div className="flex items-center gap-2">
+                                            <LeadStatusBadge status={status as LeadStatus} />
+                                            <span className="font-semibold">{status}</span>
+                                            <Badge variant="secondary">{leads.length}</Badge>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                       <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                               <TableHead className="w-8">
+                                                <Checkbox
+                                                    checked={leads.every(l => selectedForReassignment.includes(l.id))}
+                                                    onCheckedChange={(checked) => handleSelectAllForReassignment(leads, checked)}
+                                                    aria-label={`Select all leads for ${user} with status ${status}`}
+                                                />
+                                                </TableHead>
+                                              <TableHead>Company</TableHead>
+                                              <TableHead>Phone</TableHead>
+                                              <TableHead>Last Activity</TableHead>
+                                              <TableHead className="w-[50px] text-right">Actions</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {leads.map((lead) => {
+                                               const addressString = formatAddress(lead.address);
+                                               const lastActivity = lead.activity?.[0];
+                                               return (
+                                                <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                                  <TableCell>
+                                                      <Checkbox
+                                                        checked={selectedForReassignment.includes(lead.id)}
+                                                        onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
+                                                        aria-label={`Select lead ${lead.companyName}`}
+                                                      />
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                                                      <div className="flex flex-col">
+                                                        <span className="font-medium group-hover:underline">{lead.companyName}</span>
+                                                      </div>
+                                                    </div>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {lead.customerPhone ? (
+                                                      <div className="flex items-center gap-1">
+                                                          <span className="font-medium break-all">{lead.customerPhone}</span>
+                                                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
+                                                              <PhoneCall className="w-3 h-3" />
+                                                          </Button>
+                                                      </div>
+                                                    ) : 'N/A'}
+                                                  </TableCell>
+                                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
+                                                    {lastActivity ? (
+                                                      <div className="flex flex-col">
+                                                        <span className="font-medium">{lastActivity.notes}</span>
+                                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
+                                                      </div>
+                                                    ) : (
+                                                      'N/A'
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                          <Button variant="ghost" size="icon">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                          </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
+                                                            <UserX className="mr-2 h-4 w-4" />
+                                                            Unassign
+                                                          </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                      </DropdownMenu>
+                                                  </TableCell>
+                                                </TableRow>
+                                               )
+                                            })}
+                                          </TableBody>
+                                       </Table>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </Accordion>
                     </AccordionContent>
                   </AccordionItem>
                 ))}
