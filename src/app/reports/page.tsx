@@ -258,16 +258,18 @@ export default function ReportsPage() {
     const avgSeconds = Math.round(averageDuration % 60);
     const averageDurationFormatted = `${avgMinutes}m ${avgSeconds}s`;
 
-    const leadsByStatus = filteredLeads.reduce((acc, lead) => {
-      const status = lead.status;
-      const existingEntry = acc.find(item => item.name === status);
-      if (existingEntry) {
-        existingEntry.value += 1;
-      } else {
-        acc.push({ name: status, value: 1 });
-      }
-      return acc;
-    }, [] as { name: LeadStatus; value: number }[]);
+    const leadsByStatus = filteredLeads
+        .filter(lead => lead.status !== 'New')
+        .reduce((acc, lead) => {
+            const status = lead.status;
+            const existingEntry = acc.find(item => item.name === status);
+            if (existingEntry) {
+                existingEntry.value += 1;
+            } else {
+                acc.push({ name: status, value: 1 });
+            }
+            return acc;
+        }, [] as { name: LeadStatus; value: number }[]);
 
     const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
     const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
@@ -279,10 +281,16 @@ export default function ReportsPage() {
 
     const totalAppointments = filteredAppointments.length;
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
+    const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
     const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'];
-    const processedLeadsCount = filteredLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
-    const processedToCallsRatio = totalCalls > 0 ? (processedLeadsCount / totalCalls) * 100 : 0;
+    const archivedLeadsCount = filteredLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
+    const processedToCallsRatio = totalCalls > 0 ? (archivedLeadsCount / totalCalls) * 100 : 0;
+
+    const totalPreQualified = filteredLeads.filter(l => l.status === 'Pre Qualified').length;
+    const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
+    const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
+    const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
 
     return {
       totalCalls,
@@ -300,8 +308,13 @@ export default function ReportsPage() {
       wonLeadsWithAppointments: uniqueWonLeadsWithAppointments,
       lostLeadsWithAppointments: uniqueLostLeadsWithAppointments,
       appointmentToCallRatio,
-      processedLeadsCount,
+      appointmentToContactRatio,
+      archivedLeadsCount,
       processedToCallsRatio,
+      totalPreQualified,
+      totalQualified,
+      totalLost,
+      totalWon,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments]);
   
@@ -598,11 +611,11 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Processed Leads</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Archived Leads</CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.processedLeadsCount}</div>
+                <div className="text-2xl font-bold">{stats.archivedLeadsCount}</div>
                 <p className="text-xs text-muted-foreground">Leads with an archived status</p>
               </CardContent>
             </Card>
@@ -628,9 +641,59 @@ export default function ReportsPage() {
                 <p className="text-xs text-muted-foreground">Ratio of processed leads to calls</p>
               </CardContent>
             </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Appt. to Contact Ratio</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.appointmentToContactRatio.toFixed(1)}%</div>
+                    <p className="text-xs text-muted-foreground">Ratio of appointments to unique leads contacted</p>
+                </CardContent>
+            </Card>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Pre-Qualified Leads</CardTitle>
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalPreQualified}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Qualified Leads</CardTitle>
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalQualified}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Lost Leads</CardTitle>
+                <UserX className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalLost}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Won Leads</CardTitle>
+                <Goal className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalWon}</div>
+              </CardContent>
+            </Card>
         </div>
       </div>
 
     </div>
   );
 }
+
+    
