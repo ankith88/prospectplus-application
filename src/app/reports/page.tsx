@@ -216,9 +216,16 @@ export default function ReportsPage() {
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
-        return dialerMatch;
+        let dateMatch = true;
+        if (filters.date?.from && appointment.appointmentDate) {
+            const appointmentCreatedDate = new Date(appointment.appointmentDate);
+            const fromDate = startOfDay(filters.date.from);
+            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            dateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+        }
+        return dialerMatch && dateMatch;
     });
-  }, [allAppointments, filters.dialerAssigned]);
+  }, [allAppointments, filters]);
 
 
   const stats = useMemo(() => {

@@ -142,7 +142,7 @@ export default function AllAppointmentsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Lead Status', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
+    const headers = ['Lead Name', 'Lead Status', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time', 'Date Created'];
     const rows = filteredAppointments.map(appt => [
         escapeCsvCell(appt.leadName),
         escapeCsvCell(appt.leadStatus),
@@ -150,6 +150,7 @@ export default function AllAppointmentsPage() {
         escapeCsvCell(appt.assignedTo || 'Unassigned'),
         escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
         escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
+        escapeCsvCell(appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString() : 'N/A'),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -318,12 +319,13 @@ export default function AllAppointmentsPage() {
                   <TableHead>Assigned To (Appointment)</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Time</TableHead>
+                  <TableHead>Date Created</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredAppointments.length > 0 ? (
                   filteredAppointments.map((appointment) => {
@@ -362,11 +364,21 @@ export default function AllAppointmentsPage() {
                             <span>{new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                           </div>
                        </TableCell>
+                       <TableCell>
+                        {appointment.appointmentDate ? (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>{new Date(appointment.appointmentDate).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          'N/A'
+                        )}
+                       </TableCell>
                     </TableRow>
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>

@@ -511,6 +511,7 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
                 leadName: leadName,
                 dialerAssigned: leadData?.dialerAssigned,
                 leadStatus: safeGetStatus(leadData.customerStatus),
+                appointmentDate: appointmentData.appointmentDate,
             };
         }));
         allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());

@@ -57,6 +57,7 @@ export interface Appointment {
   duedate: string;
   starttime: string;
   assignedTo: string;
+  appointmentDate?: string;
 }
 
 export interface TranscriptAnalysis {
