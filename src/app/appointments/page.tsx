@@ -142,15 +142,15 @@ export default function AllAppointmentsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Lead Status', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time', 'Date Created'];
+    const headers = ['Lead Name', 'Lead Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
     const rows = filteredAppointments.map(appt => [
         escapeCsvCell(appt.leadName),
         escapeCsvCell(appt.leadStatus),
+        escapeCsvCell(appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString() : 'N/A'),
         escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
         escapeCsvCell(appt.assignedTo || 'Unassigned'),
         escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
         escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
-        escapeCsvCell(appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString() : 'N/A'),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -315,11 +315,11 @@ export default function AllAppointmentsPage() {
                 <TableRow>
                   <TableHead>Lead</TableHead>
                   <TableHead>Lead Status</TableHead>
+                  <TableHead>Date Created</TableHead>
                   <TableHead>Assigned To (Lead)</TableHead>
                   <TableHead>Assigned To (Appointment)</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Time</TableHead>
-                  <TableHead>Date Created</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -340,6 +340,16 @@ export default function AllAppointmentsPage() {
                       <TableCell>
                         <LeadStatusBadge status={appointment.leadStatus} />
                       </TableCell>
+                      <TableCell>
+                        {appointment.appointmentDate ? (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>{new Date(appointment.appointmentDate).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          'N/A'
+                        )}
+                       </TableCell>
                        <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
@@ -363,16 +373,6 @@ export default function AllAppointmentsPage() {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                             <span>{new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                           </div>
-                       </TableCell>
-                       <TableCell>
-                        {appointment.appointmentDate ? (
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span>{new Date(appointment.appointmentDate).toLocaleDateString()}</span>
-                          </div>
-                        ) : (
-                          'N/A'
-                        )}
                        </TableCell>
                     </TableRow>
                   )})
