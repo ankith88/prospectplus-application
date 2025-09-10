@@ -215,18 +215,9 @@ export default function ReportsPage() {
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
-        
-        let dateMatch = true;
-        if (filters.date?.from) {
-          const appointmentDate = new Date(appointment.duedate);
-          const fromDate = startOfDay(filters.date.from);
-          const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
-          dateMatch = appointmentDate >= fromDate && appointmentDate <= toDate;
-        }
-
-        return dialerMatch && dateMatch;
+        return dialerMatch;
     });
-  }, [allAppointments, filters]);
+  }, [allAppointments, filters.dialerAssigned]);
 
 
   const stats = useMemo(() => {
@@ -360,7 +351,7 @@ export default function ReportsPage() {
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Call/Appt. Date</Label>
+                        <Label htmlFor="date">Call Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -490,7 +481,7 @@ export default function ReportsPage() {
             <CardContent>
                 <div className="text-2xl font-bold">{stats.totalAppointments}</div>
                 <p className="text-xs text-muted-foreground">
-                    {filters.date ? 'in selected period' : 'across all time'}
+                    across all time
                 </p>
             </CardContent>
             </Card>
@@ -561,3 +552,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
