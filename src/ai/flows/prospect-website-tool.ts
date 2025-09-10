@@ -8,7 +8,7 @@ import { ai } from '@/ai/genkit';
 import { addContactToLead, getLeadFromFirebase, updateLeadDetails } from '@/services/firebase';
 import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
+import fetch, { AbortError } from 'node-fetch';
 import type { Contact } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -98,7 +98,15 @@ export const prospectWebsiteTool = ai.defineTool(
     
     // Step 1: Fetch and analyze website content for a description. This is non-critical.
     try {
-        const websiteResponse = await fetch(websiteUrl, { timeout: 10000 }); // 10 second timeout
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, 10000); // 10-second timeout
+
+        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal });
+        
+        clearTimeout(timeout);
+
         if (websiteResponse.ok) {
             const html = await websiteResponse.text();
             const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
@@ -115,7 +123,11 @@ export const prospectWebsiteTool = ai.defineTool(
             }
         }
     } catch (error) {
-        console.error('Non-critical error fetching or summarizing website content:', error);
+         if (error instanceof AbortError) {
+            console.error('Non-critical error: Website content fetch timed out.');
+        } else {
+            console.error('Non-critical error fetching or summarizing website content:', error);
+        }
     }
 
     // Step 2: Prospect for contacts using Hunter.io. This is the primary function.
@@ -132,7 +144,18 @@ export const prospectWebsiteTool = ai.defineTool(
         
         console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
         const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
-        const response = await fetch(hunterUrl);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, 15000); // 15-second timeout for Hunter API
+
+        let response;
+        try {
+            response = await fetch(hunterUrl, { signal: controller.signal });
+        } finally {
+            clearTimeout(timeout);
+        }
 
         if (!response.ok) {
             const errorBody = await response.text();
@@ -206,6 +229,10 @@ export const prospectWebsiteTool = ai.defineTool(
         };
 
     } catch (error) {
+        if (error instanceof AbortError) {
+            console.error('Error during website prospecting with Hunter.io: API call timed out.');
+            throw new Error('An error occurred while prospecting the website: The request to the prospecting service timed out.');
+        }
         console.error('Error during website prospecting with Hunter.io:', error);
         throw new Error('An error occurred while prospecting the website.');
     }
