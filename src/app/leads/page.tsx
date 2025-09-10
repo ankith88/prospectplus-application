@@ -80,7 +80,11 @@ export default function LeadsPage() {
           getAllActivities(),
           getAllUsers()
         ]);
-        const activeDialers = fetchedUsers.filter(u => u.role !== 'admin' && u.displayName);
+        
+        const activeDialers = fetchedUsers
+          .filter(u => u.role !== 'admin' && u.firstName && u.lastName)
+          .map(u => ({...u, displayName: `${u.firstName} ${u.lastName}`}));
+
         setAllDialers(activeDialers);
 
         const notesByLead = new Map<string, Note[]>();
