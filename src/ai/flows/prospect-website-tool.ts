@@ -5,7 +5,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { addContactToLead, getLeadFromFirebase } from '@/services/firebase';
+import { addContactToLead, getLeadFromFirebase, updateLeadDetails } from '@/services/firebase';
 import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
@@ -96,7 +96,7 @@ export const prospectWebsiteTool = ai.defineTool(
   async ({ leadId, websiteUrl }) => {
     let companyDescription = '';
     
-    // Step 1: Fetch and analyze website content. This part is allowed to fail without stopping the process.
+    // Step 1: Fetch and analyze website content for a description.
     try {
         const websiteResponse = await fetch(websiteUrl, { timeout: 5000 });
         if (websiteResponse.ok) {
@@ -111,17 +111,14 @@ export const prospectWebsiteTool = ai.defineTool(
                 const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
                 if (output?.summary) {
                     companyDescription = output.summary;
-                    const leadRef = doc(firestore, 'leads', leadId);
-                    await updateDoc(leadRef, { companyDescription });
                 }
             }
         }
     } catch (error) {
         console.error('Non-critical error fetching or summarizing website content:', error);
-        // Do not re-throw, allow the rest of the function to execute.
     }
 
-    // Step 2: Prospect for contacts using Hunter.io. This part is critical.
+    // Step 2: Prospect for contacts using Hunter.io.
     try {
         const apiKey = process.env.HUNTER_API_KEY;
         if (!apiKey) {
@@ -168,6 +165,11 @@ export const prospectWebsiteTool = ai.defineTool(
             };
         }
         
+        // Update the company description in Firestore if a new one was generated
+        if (companyDescription) {
+            await updateDoc(doc(firestore, 'leads', leadId), { companyDescription });
+        }
+        
         const getContactKey = (contact: {email?: string | null, phone?: string | null}) => (contact.email || '').toLowerCase();
         
         const existingContacts = new Set((lead.contacts || []).map(getContactKey));
@@ -200,7 +202,7 @@ export const prospectWebsiteTool = ai.defineTool(
             logoUrl: hunterData?.data?.logo_url,
             contacts: savedContacts,
             siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
-            companyDescription: companyDescription, // Return the description if it was generated
+            companyDescription: companyDescription,
         };
 
     } catch (error) {
