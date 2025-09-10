@@ -10,6 +10,8 @@ import { sendContactToNetSuite } from '@/services/netsuite';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
 import type { Contact } from '@/lib/types';
+import { doc, updateDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 
 const SocialLinksSchema = z.object({
   linkedIn: z.string().optional(),
@@ -199,5 +201,3 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
-
-    
