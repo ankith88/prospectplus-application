@@ -83,7 +83,7 @@ export default function LeadsPage() {
         
         const activeDialers = fetchedUsers
           .filter(u => u.role !== 'admin' && u.firstName && u.lastName)
-          .map(u => ({...u, displayName: `${u.firstName} ${u.lastName}`}));
+          .map(u => ({...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
 
         setAllDialers(activeDialers);
 
