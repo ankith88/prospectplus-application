@@ -499,7 +499,7 @@ export default function AllCallsPage() {
                     return (
                     <TableRow key={call.id}>
                       <TableCell>
-                         <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/leads/${call.leadId}`)}>
+                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
                             {call.leadName}
                         </Button>
                       </TableCell>
