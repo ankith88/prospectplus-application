@@ -158,9 +158,19 @@ export const prospectWebsiteTool = ai.defineTool(
         console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
 
         const lead = await getLeadFromFirebase(leadId, true);
+        if (!lead) {
+            console.error(`Could not find lead with ID ${leadId}. Skipping contact processing.`);
+            return {
+                logoUrl: hunterData?.data?.logo_url,
+                contacts: [],
+                siteAnalysis: "Could not find associated lead in Firebase.",
+                companyDescription: companyDescription,
+            };
+        }
+        
         const getContactKey = (contact: {email?: string | null, phone?: string | null}) => (contact.email || '').toLowerCase();
         
-        const existingContacts = new Set((lead?.contacts || []).map(getContactKey));
+        const existingContacts = new Set((lead.contacts || []).map(getContactKey));
         
         const uniqueNewContacts = foundContacts.filter((contact: any) => {
             if (!contact.email) return false;
