@@ -271,6 +271,8 @@ export default function ReportsPage() {
     const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
     const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
     const uniqueWonLeadsWithAppointments = new Set(appointmentsForWonLeads.map(a => a.leadId)).size;
+    const totalAppointments = filteredAppointments.length;
+    const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
 
     return {
       totalCalls,
@@ -283,9 +285,10 @@ export default function ReportsPage() {
       ratioOver2Min,
       ratio30sTo2min,
       totalLeadsInFilter,
-      totalAppointments: filteredAppointments.length,
+      totalAppointments,
       averageDurationFormatted,
       wonLeadsWithAppointments: uniqueWonLeadsWithAppointments,
+      appointmentToCallRatio,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments]);
   
@@ -503,6 +506,18 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Appointment Booking Rate</CardTitle>
+                    <Percent className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.appointmentToCallRatio.toFixed(1)}%</div>
+                    <p className="text-xs text-muted-foreground">
+                        Ratio of appointments to calls
+                    </p>
+                </CardContent>
+            </Card>
+            <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Unique Leads Contacted</CardTitle>
                 <UserCheck className="h-4 w-4 text-muted-foreground" />
@@ -569,5 +584,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
