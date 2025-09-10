@@ -122,8 +122,8 @@ export const prospectWebsiteTool = ai.defineTool(
                 }
             }
         }
-    } catch (error) {
-         if (error instanceof AbortError) {
+    } catch (error: any) {
+         if (error.name === 'AbortError') {
             console.error('Non-critical error: Website content fetch timed out.');
         } else {
             console.error('Non-critical error fetching or summarizing website content:', error);
@@ -228,8 +228,8 @@ export const prospectWebsiteTool = ai.defineTool(
             companyDescription: companyDescription,
         };
 
-    } catch (error) {
-        if (error instanceof AbortError) {
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
             console.error('Error during website prospecting with Hunter.io: API call timed out.');
             throw new Error('The request to the prospecting service timed out.');
         }
@@ -238,3 +238,5 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
+
+    
