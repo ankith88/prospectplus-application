@@ -70,8 +70,13 @@ function extractNameFromEmail(email: string): string {
 const summarizeWebsitePrompt = ai.definePrompt({
     name: 'summarizeWebsitePrompt',
     input: { schema: z.object({ siteContent: z.string() }) },
-    output: { schema: z.object({ summary: z.string().describe('A concise, one-paragraph summary of what the company does, based on the provided website content.') }) },
-    prompt: `Based on the following website content, provide a concise, one-paragraph summary of what the company does.
+    output: { schema: z.object({ summary: z.string().describe("A detailed description of the company's business, what they sell, and their target customers, based on the website content.") }) },
+    prompt: `You are an expert business analyst. Based on the following website content, provide a detailed description of the company. 
+
+    Your description should cover:
+    1. The company's core business and mission.
+    2. The key products or services they offer.
+    3. Their primary target audience or customer base.
 
     Website Content:
     """
@@ -125,8 +130,6 @@ export const prospectWebsiteTool = ai.defineTool(
         }
     } catch (error) {
         console.error('Error fetching or summarizing website content:', error);
-        // Do not block the rest of the process if this fails.
-        // It's non-critical.
     }
 
 
