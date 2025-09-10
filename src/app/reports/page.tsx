@@ -486,25 +486,57 @@ export default function ReportsPage() {
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
-                <Phone className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{stats.totalCalls}</div>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalCalls}</div>
+                </CardContent>
+            </Card>
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Average Call Duration</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.averageDurationFormatted}</div>
+                <p className="text-xs text-muted-foreground">Based on unique calls</p>
+              </CardContent>
             </Card>
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
-                <CalendarIconLucide className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{stats.totalAppointments}</div>
-                <p className="text-xs text-muted-foreground">
-                    across all time
-                </p>
-            </CardContent>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
+                <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
+              </CardContent>
+            </Card>
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Calls > 2min</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
+                <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
+              </CardContent>
+            </Card>
+        </div>
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
+                    <CalendarIconLucide className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalAppointments}</div>
+                    <p className="text-xs text-muted-foreground">
+                        across all time
+                    </p>
+                </CardContent>
             </Card>
              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -542,67 +574,29 @@ export default function ReportsPage() {
                     </p>
                 </CardContent>
             </Card>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Unique Leads Contacted</CardTitle>
-                <UserCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{stats.leadsContacted}</div>
-                <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
-            </CardContent>
-            </Card>
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Leads in Queue</CardTitle>
-                <UserX className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
-                <p className="text-xs text-muted-foreground">New, assigned leads</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
+                    <p className="text-xs text-muted-foreground">Matching current filters</p>
+                </CardContent>
             </Card>
             <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
-                <p className="text-xs text-muted-foreground">Matching current filters</p>
-            </CardContent>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Unique Leads Contacted</CardTitle>
+                    <UserCheck className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.leadsContacted}</div>
+                    <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
+                </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
-                <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
-              </CardContent>
-            </Card>
-             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Calls > 2min</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
-                <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average Call Duration</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.averageDurationFormatted}</div>
-                <p className="text-xs text-muted-foreground">Based on unique calls</p>
-              </CardContent>
-            </Card>
-             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Processed Leads</CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
@@ -612,6 +606,18 @@ export default function ReportsPage() {
                 <p className="text-xs text-muted-foreground">Leads with an archived status</p>
               </CardContent>
             </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Leads in Queue</CardTitle>
+                    <UserX className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
+                    <p className="text-xs text-muted-foreground">New, assigned leads</p>
+                </CardContent>
+            </Card>
+        </div>
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Processed to Call Ratio</CardTitle>
@@ -623,10 +629,8 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
         </div>
-        
       </div>
 
     </div>
   );
 }
-
