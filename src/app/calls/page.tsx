@@ -732,5 +732,3 @@ export default function AllCallsPage() {
     </>
   )
 }
-
-    
