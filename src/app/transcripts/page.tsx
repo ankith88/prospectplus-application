@@ -348,7 +348,7 @@ export default function TranscriptsPage() {
                         <div className="flex items-center gap-2 font-medium">
                             <Phone className="h-4 w-4 text-muted-foreground" />
                             {lead ? (
-                                <Button variant="link" className="p-0 h-auto" onClick={() => router.push(`/leads/${lead.id}`)}>
+                                <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                     {lead.companyName}
                                 </Button>
                             ) : (
@@ -439,3 +439,5 @@ export default function TranscriptsPage() {
     </>
   )
 }
+
+    

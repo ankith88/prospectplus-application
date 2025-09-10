@@ -326,7 +326,7 @@ export default function AllAppointmentsPage() {
                     return (
                     <TableRow key={appointment.id}>
                       <TableCell>
-                         <Button variant="link" className="p-0 h-auto flex items-center gap-2" onClick={() => router.push(`/leads/${appointment.leadId}`)}>
+                         <Button variant="link" className="p-0 h-auto flex items-center gap-2" onClick={() => window.open(`/leads/${appointment.leadId}`, '_blank')}>
                             <Briefcase className="h-4 w-4" />
                             {appointment.leadName}
                         </Button>
@@ -376,3 +376,5 @@ export default function AllAppointmentsPage() {
     </>
   )
 }
+
+    
