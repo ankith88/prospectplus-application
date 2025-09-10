@@ -217,7 +217,14 @@ export const prospectWebsiteTool = ai.defineTool(
                 const contactId = await addContactToLead(leadId, contactData);
                 const newContactWithId: Contact = { ...contactData, id: contactId };
                 savedContacts.push(newContactWithId);
-                await sendContactToNetSuite({ leadId, contact: newContactWithId });
+                
+                // Wrap NetSuite call in a try/catch to prevent it from crashing the whole tool
+                try {
+                    await sendContactToNetSuite({ leadId, contact: newContactWithId });
+                } catch (netsuiteError) {
+                    console.error(`[Non-critical] Failed to sync contact ${contact.email} for lead ${leadId} to NetSuite:`, netsuiteError);
+                    // Do not re-throw; allow the main function to continue.
+                }
             }
         }
 
@@ -238,5 +245,3 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
-
-    
