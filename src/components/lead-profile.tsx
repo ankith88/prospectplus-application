@@ -974,7 +974,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                           >
                               <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
                               <Calendar className="mr-2 h-4 w-4" />
-                              Book Appointment
+                              Book with Sales Rep
                               </a>
                           </Button>
                          </CardFooter>
