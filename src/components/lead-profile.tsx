@@ -682,7 +682,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <Button variant="outline" onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
+           <Button variant="outline" onClick={()=>{ setLastCallActivity(null); setShowPostCallDialog(true); }}>
               <PhoneCall className="mr-2 h-4 w-4" />
               Log a Call
             </Button>
@@ -918,7 +918,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
+                                <DropdownMenuItem onClick={()=>{ setSelectedContact(contact); setIsEditDialogOpen(true); }}>
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
                                 </DropdownMenuItem>
@@ -974,7 +974,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                           >
                               <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
                               <Calendar className="mr-2 h-4 w-4" />
-                              Book with Sales Rep
+                                {lead.salesRepAssigned ? `Schedule with ${lead.salesRepAssigned}` : 'Book Appointment'}
                               </a>
                           </Button>
                          </CardFooter>
@@ -1125,7 +1125,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                             </div>
                             <div className="flex items-center gap-2">
                                 {transcript ? (
-                                    <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
+                                    <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
                                         <FileText className="mr-2 h-4 w-4" />
                                         View Transcript
                                     </Button>
@@ -1352,7 +1352,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                     {new Date(transcript.date).toLocaleString()}
                                 </p>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => {
+                            <Button variant="outline" size="sm" onClick={()=>{
                                 setSelectedTranscript(transcript);
                                 setIsTranscriptViewerOpen(true);
                             }}>
