@@ -9,7 +9,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -37,6 +37,9 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
 };
+
+const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E'];
+
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
@@ -80,7 +83,7 @@ const renderActiveShape = (props: any) => {
       />
       <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
       <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333">{`${value} leads`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333">{`${value} ${payload.name.includes('lead') ? 'leads' : 'appointments'}`}</text>
       <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999">
         {`(Rate ${(percent * 100).toFixed(2)}%)`}
       </text>
@@ -99,6 +102,8 @@ export default function ReportsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
+  const [sourceActiveIndex, setSourceActiveIndex] = useState(0);
+
 
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
@@ -109,6 +114,10 @@ export default function ReportsPage() {
   
   const onStatusPieEnter = (_: any, index: number) => {
     setStatusActiveIndex(index);
+  };
+  
+  const onSourcePieEnter = (_: any, index: number) => {
+    setSourceActiveIndex(index);
   };
 
   useEffect(() => {
@@ -229,6 +238,7 @@ export default function ReportsPage() {
 
 
   const stats = useMemo(() => {
+    const leadsMap = new Map(allLeads.map(l => [l.id, l]));
     const validCalls = filteredCalls.filter(c => c.callId);
     const uniqueCallIds = new Set(validCalls.map(c => c.callId));
     const totalCalls = uniqueCallIds.size;
@@ -278,6 +288,19 @@ export default function ReportsPage() {
             return acc;
         }, [] as { name: LeadStatus; value: number }[]);
 
+    const appointmentsBySource = filteredAppointments.reduce((acc, appointment) => {
+        const lead = leadsMap.get(appointment.leadId);
+        const source = lead?.campaign || 'Unknown';
+        const existingEntry = acc.find(item => item.name === source);
+        if (existingEntry) {
+            existingEntry.value += 1;
+        } else {
+            acc.push({ name: source, value: 1 });
+        }
+        return acc;
+    }, [] as { name: string; value: number }[]);
+
+
     const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
     const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
     const uniqueWonLeadsWithAppointments = new Set(appointmentsForWonLeads.map(a => a.leadId)).size;
@@ -322,8 +345,9 @@ export default function ReportsPage() {
       totalQualified,
       totalLost,
       totalWon,
+      appointmentsBySource,
     };
-  }, [filteredCalls, filteredLeads, filteredAppointments]);
+  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
 
   const hasActiveFilters = 
@@ -460,7 +484,7 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
@@ -503,8 +527,54 @@ export default function ReportsPage() {
             )}
             </CardContent>
         </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Briefcase className="h-5 w-5" />
+                    Appointments by Lead Source
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+            {stats.appointmentsBySource.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                    <defs>
+                        <filter id="shadow-source" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
+                        </filter>
+                    </defs>
+                    <Pie
+                        activeIndex={sourceActiveIndex}
+                        activeShape={renderActiveShape}
+                        data={stats.appointmentsBySource}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onMouseEnter={onSourcePieEnter}
+                        isAnimationActive={true}
+                        animationDuration={500}
+                        style={{ filter: 'url(#shadow-source)' }}
+                    >
+                    {stats.appointmentsBySource.map((entry, index) => (
+                        <Cell key={`cell-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                    ))}
+                    </Pie>
+                    <Legend iconSize={12} />
+                </PieChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                    No appointment data to display for the selected filters.
+                </div>
+            )}
+            </CardContent>
+        </Card>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
@@ -545,7 +615,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
         </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
@@ -595,7 +665,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
@@ -637,7 +707,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Processed to Call Ratio</CardTitle>
@@ -659,7 +729,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Pre-Qualified Leads</CardTitle>
@@ -702,5 +772,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
