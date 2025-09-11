@@ -229,6 +229,9 @@ export default function ReportsPage() {
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
+        if (appointment.leadName === 'Unknown Lead') {
+          return false;
+        }
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
         let dateMatch = true;
         if (filters.date?.from && appointment.appointmentDate) {

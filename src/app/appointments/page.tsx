@@ -94,7 +94,7 @@ export default function AllAppointmentsPage() {
     }
 
     return appointmentsToFilter.filter(appointment => {
-        if (!appointment.leadName) {
+        if (!appointment.leadName || appointment.leadName === 'Unknown Lead') {
             return false;
         }
 
