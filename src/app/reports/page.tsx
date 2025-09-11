@@ -676,7 +676,7 @@ export default function ReportsPage() {
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                 <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
-                <StatCard title="Total Archived Leads" value={stats.archivedLeadsCount} icon={CheckCircle} description="Leads with an archived status" />
+                <StatCard title="Total Archived Leads" value={stats.archivedLeadsCount} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
                 <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New, assigned leads" />
             </div>
         </div>
