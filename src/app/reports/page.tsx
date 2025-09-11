@@ -6,10 +6,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -38,7 +38,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'LPO Review': '#A855F7', // Violet
 };
 
-const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E'];
+const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
@@ -83,8 +83,8 @@ const renderActiveShape = (props: any) => {
       />
       <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
       <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={12}>{`${value} leads`}</text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} dy={14} textAnchor={textAnchor} fill="#999" fontSize={10}>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={11}>{`${value} leads`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} dy={14} textAnchor={textAnchor} fill="#999" fontSize={9}>
         {`(Rate ${(percent * 100).toFixed(2)}%)`}
       </text>
     </g>
@@ -103,7 +103,7 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
   const [sourceActiveIndex, setSourceActiveIndex] = useState(0);
-  const [archivedSourceActiveIndex, setArchivedSourceActiveIndex] = useState(0);
+  const [lostSourceActiveIndex, setLostSourceActiveIndex] = useState(0);
 
 
   const [filters, setFilters] = useState({
@@ -121,8 +121,8 @@ export default function ReportsPage() {
     setSourceActiveIndex(index);
   };
 
-  const onArchivedSourcePieEnter = (_: any, index: number) => {
-    setArchivedSourceActiveIndex(index);
+  const onLostSourcePieEnter = (_: any, index: number) => {
+    setLostSourceActiveIndex(index);
   };
 
   useEffect(() => {
@@ -322,15 +322,17 @@ export default function ReportsPage() {
     const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
     const archivedLeadsCount = archivedLeads.length;
 
-    const archivedLeadsBySource = archivedLeads.reduce((acc, lead) => {
-        const source = lead.campaign || 'Unknown';
-        const existingEntry = acc.find(item => item.name === source);
-        if (existingEntry) {
-            existingEntry.value += 1;
-        } else {
-            acc.push({ name: source, value: 1 });
-        }
-        return acc;
+    const lostLeadsBySource = filteredLeads
+        .filter(lead => lead.status === 'Lost')
+        .reduce((acc, lead) => {
+            const source = lead.campaign || 'Unknown';
+            const existingEntry = acc.find(item => item.name === source);
+            if (existingEntry) {
+                existingEntry.value += 1;
+            } else {
+                acc.push({ name: source, value: 1 });
+            }
+            return acc;
     }, [] as { name: string; value: number }[]);
 
 
@@ -365,7 +367,7 @@ export default function ReportsPage() {
       totalLost,
       totalWon,
       appointmentsBySource,
-      archivedLeadsBySource,
+      lostLeadsBySource,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -383,6 +385,19 @@ export default function ReportsPage() {
       </div>
     );
   }
+
+  const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -504,44 +519,39 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
+                 <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
             </CardHeader>
             <CardContent>
             {stats.leadsByStatus.length > 0 ? (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
-                    <defs>
-                        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
-                        </filter>
-                    </defs>
                     <Pie
                         activeIndex={statusActiveIndex}
                         activeShape={renderActiveShape}
                         data={stats.leadsByStatus}
                         cx="50%"
                         cy="50%"
-                        innerRadius={80}
-                        outerRadius={120}
+                        innerRadius={70}
+                        outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
                         onMouseEnter={onStatusPieEnter}
                         isAnimationActive={true}
                         animationDuration={500}
-                        style={{ filter: 'url(#shadow)' }}
                     >
                     {stats.leadsByStatus.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
                     ))}
                     </Pie>
-                    <Legend iconSize={12} />
+                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}}/>
                 </PieChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                 No lead status data to display for the selected filters.
                 </div>
             )}
@@ -554,40 +564,35 @@ export default function ReportsPage() {
                     <Briefcase className="h-5 w-5" />
                     Appointments by Lead Source
                 </CardTitle>
+                <CardDescription>Appointments booked from different lead sources.</CardDescription>
             </CardHeader>
             <CardContent>
             {stats.appointmentsBySource.length > 0 ? (
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
-                    <defs>
-                        <filter id="shadow-source" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
-                        </filter>
-                    </defs>
                     <Pie
                         activeIndex={sourceActiveIndex}
                         activeShape={renderActiveShape}
                         data={stats.appointmentsBySource}
                         cx="50%"
                         cy="50%"
-                        innerRadius={80}
-                        outerRadius={120}
+                        innerRadius={70}
+                        outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
                         onMouseEnter={onSourcePieEnter}
                         isAnimationActive={true}
                         animationDuration={500}
-                        style={{ filter: 'url(#shadow-source)' }}
                     >
                     {stats.appointmentsBySource.map((entry, index) => (
                         <Cell key={`cell-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                     ))}
                     </Pie>
-                    <Legend iconSize={12} />
+                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
                 </PieChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                     No appointment data to display for the selected filters.
                 </div>
             )}
@@ -597,243 +602,108 @@ export default function ReportsPage() {
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <Archive className="h-5 w-5" />
-                    Archived Leads by Source
+                    <Frown className="h-5 w-5" />
+                    Lost Leads by Source
                 </CardTitle>
+                <CardDescription>Breakdown of sources for leads with a 'Lost' status.</CardDescription>
             </CardHeader>
             <CardContent>
-            {stats.archivedLeadsBySource.length > 0 ? (
-                <ResponsiveContainer width="100%" height={400}>
+            {stats.lostLeadsBySource.length > 0 ? (
+                <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
-                    <defs>
-                        <filter id="shadow-archived-source" x="-50%" y="-50%" width="200%" height="200%">
-                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
-                        </filter>
-                    </defs>
                     <Pie
-                        activeIndex={archivedSourceActiveIndex}
+                        activeIndex={lostSourceActiveIndex}
                         activeShape={renderActiveShape}
-                        data={stats.archivedLeadsBySource}
+                        data={stats.lostLeadsBySource}
                         cx="50%"
                         cy="50%"
-                        innerRadius={80}
-                        outerRadius={120}
+                        innerRadius={70}
+                        outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
-                        onMouseEnter={onArchivedSourcePieEnter}
+                        onMouseEnter={onLostSourcePieEnter}
                         isAnimationActive={true}
                         animationDuration={500}
-                        style={{ filter: 'url(#shadow-archived-source)' }}
                     >
-                    {stats.archivedLeadsBySource.map((entry, index) => (
-                        <Cell key={`cell-archived-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                    {stats.lostLeadsBySource.map((entry, index) => (
+                        <Cell key={`cell-lost-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                     ))}
                     </Pie>
-                    <Legend iconSize={12} />
+                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
                 </PieChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
-                    No archived lead data to display for the selected filters.
+                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                    No lost lead data to display for the selected filters.
                 </div>
             )}
             </CardContent>
         </Card>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.totalCalls}</div>
-                </CardContent>
-            </Card>
-             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average Call Duration</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.averageDurationFormatted}</div>
-                <p className="text-xs text-muted-foreground">Based on unique calls</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Calls 30s-2min</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.calls30sTo2min}</div>
-                <p className="text-xs text-muted-foreground">{stats.ratio30sTo2min.toFixed(1)}% of total calls</p>
-              </CardContent>
-            </Card>
-             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Calls > 2min</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.callsOver2Min}</div>
-                <p className="text-xs text-muted-foreground">{stats.ratioOver2Min.toFixed(1)}% of total calls</p>
-              </CardContent>
-            </Card>
-        </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
-                    <CalendarIconLucide className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.totalAppointments}</div>
-                    <p className="text-xs text-muted-foreground">
-                        across all time
-                    </p>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Appointments to Won Leads</CardTitle>
-                    <Goal className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.wonLeadsWithAppointments}</div>
-                    <p className="text-xs text-muted-foreground">
-                        Leads with appointments that ended in a 'Won' status
-                    </p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Appointments to Lost</CardTitle>
-                    <UserX className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.lostLeadsWithAppointments}</div>
-                    <p className="text-xs text-muted-foreground">
-                        Leads with appointments that ended in a 'Lost' status
-                    </p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Appointment Booking Rate</CardTitle>
-                    <Percent className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.appointmentToCallRatio.toFixed(1)}%</div>
-                    <p className="text-xs text-muted-foreground">
-                        Ratio of appointments to calls
-                    </p>
-                </CardContent>
-            </Card>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.totalAssignedLeads}</div>
-                    <p className="text-xs text-muted-foreground">Matching current filters</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Unique Leads Contacted</CardTitle>
-                    <UserCheck className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.leadsContacted}</div>
-                    <p className="text-xs text-muted-foreground">out of {stats.totalLeadsInFilter} total leads</p>
-                </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Archived Leads</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.archivedLeadsCount}</div>
-                <p className="text-xs text-muted-foreground">Leads with an archived status</p>
-              </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Leads in Queue</CardTitle>
-                    <UserX className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.leadsInQueue}</div>
-                    <p className="text-xs text-muted-foreground">New, assigned leads</p>
-                </CardContent>
-            </Card>
-        </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
-             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Processed to Call Ratio</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.processedToCallsRatio.toFixed(1)}%</div>
-                <p className="text-xs text-muted-foreground">Ratio of processed leads to calls</p>
-              </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Appt. to Contact Ratio</CardTitle>
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{stats.appointmentToContactRatio.toFixed(1)}%</div>
-                    <p className="text-xs text-muted-foreground">Ratio of appointments to unique leads contacted</p>
-                </CardContent>
-            </Card>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
-             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Pre-Qualified Leads</CardTitle>
-                <UserCheck className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalPreQualified}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Qualified Leads</CardTitle>
-                <UserCheck className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalQualified}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Lost Leads</CardTitle>
-                <UserX className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalLost}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Won Leads</CardTitle>
-                <Goal className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalWon}</div>
-              </CardContent>
-            </Card>
-        </div>
       </div>
+      
+       <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
+                <p className="text-muted-foreground">Metrics related to call activities.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
+                 <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
+                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={Clock} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
+                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={Clock} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
+            </div>
+        </div>
+
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
+                <p className="text-muted-foreground">Metrics related to booked appointments.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Across all time" />
+                 <StatCard title="Appointments to Won Leads" value={stats.wonLeadsWithAppointments} icon={Goal} description="Leads with appointments that ended in a 'Won' status" />
+                 <StatCard title="Appointments to Lost" value={stats.lostLeadsWithAppointments} icon={UserX} description="Leads with appointments that ended in a 'Lost' status" />
+                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(1)}%`} icon={Percent} description="Ratio of appointments to calls" />
+            </div>
+        </div>
+
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
+                <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
+            </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
+                <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
+                <StatCard title="Total Archived Leads" value={stats.archivedLeadsCount} icon={CheckCircle} description="Leads with an archived status" />
+                <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New, assigned leads" />
+            </div>
+        </div>
+
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Conversion Rates</h2>
+                <p className="text-muted-foreground">Key conversion metrics.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
+                <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
+            </div>
+        </div>
+
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Lead Outcomes</h2>
+                <p className="text-muted-foreground">Final breakdown of lead statuses.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="Total Pre-Qualified Leads" value={stats.totalPreQualified} icon={UserCheck} />
+                <StatCard title="Total Qualified Leads" value={stats.totalQualified} icon={UserCheck} />
+                <StatCard title="Total Lost Leads" value={stats.totalLost} icon={UserX} />
+                <StatCard title="Total Won Leads" value={stats.totalWon} icon={Goal} />
+            </div>
+        </div>
 
     </div>
   );
