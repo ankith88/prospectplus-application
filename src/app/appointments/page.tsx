@@ -87,14 +87,21 @@ export default function AllAppointmentsPage() {
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts.map(Number);
-      // Handles years like 24 -> 2024
-      const fullYear = year < 100 ? 2000 + year : year;
-      // month is 0-indexed in JS Date
-      return new Date(fullYear, month - 1, day);
+    
+    // Handle "DD/MM/YYYY HH:MM" format
+    const dateTimeParts = dateStr.split(' ');
+    const datePart = dateTimeParts[0];
+    const dateParts = datePart.split('/');
+    
+    if (dateParts.length === 3) {
+      const [day, month, year] = dateParts.map(Number);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        const fullYear = year < 100 ? 2000 + year : year;
+        // month is 0-indexed in JS Date
+        return new Date(fullYear, month - 1, day);
+      }
     }
+    
     // Fallback for ISO strings or other formats
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
@@ -102,17 +109,15 @@ export default function AllAppointmentsPage() {
 
 
   const filteredAppointments = useMemo(() => {
-    let appointmentsToFilter = allAppointments;
+    let appointmentsToFilter = allAppointments.filter(appointment => {
+        return appointment.leadName !== 'Unknown Lead';
+    });
 
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
-        appointmentsToFilter = allAppointments.filter(c => c.dialerAssigned === userProfile.displayName);
+        appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
     return appointmentsToFilter.filter(appointment => {
-        if (!appointment.leadName || appointment.leadName === 'Unknown Lead') {
-            return false;
-        }
-
         const appointmentUserMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
         const leadUserMatch = filters.leadAssignedTo === 'all' || appointment.dialerAssigned === filters.leadAssignedTo;
         
@@ -411,3 +416,5 @@ export default function AllAppointmentsPage() {
     </>
   )
 }
+
+    

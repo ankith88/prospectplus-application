@@ -193,14 +193,21 @@ export default function ReportsPage() {
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts.map(Number);
-      // Handles years like 24 -> 2024
-      const fullYear = year < 100 ? 2000 + year : year;
-      // month is 0-indexed in JS Date
-      return new Date(fullYear, month - 1, day);
+    
+    // Handle "DD/MM/YYYY HH:MM" format
+    const dateTimeParts = dateStr.split(' ');
+    const datePart = dateTimeParts[0];
+    const dateParts = datePart.split('/');
+    
+    if (dateParts.length === 3) {
+      const [day, month, year] = dateParts.map(Number);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        const fullYear = year < 100 ? 2000 + year : year;
+        // month is 0-indexed in JS Date
+        return new Date(fullYear, month - 1, day);
+      }
     }
+    
     // Fallback for ISO strings or other formats
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
@@ -727,3 +734,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
