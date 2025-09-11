@@ -9,7 +9,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -60,7 +60,7 @@ const renderActiveShape = (props: any) => {
 
   return (
     <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={14}>
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={12}>
         {payload.name}
       </text>
       <Sector
@@ -83,7 +83,7 @@ const renderActiveShape = (props: any) => {
       />
       <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
       <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={12}>{`${value} ${payload.name.includes('lead') ? 'leads' : 'appointments'}`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={12}>{`${value} leads`}</text>
       <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} dy={14} textAnchor={textAnchor} fill="#999" fontSize={10}>
         {`(Rate ${(percent * 100).toFixed(2)}%)`}
       </text>
@@ -103,6 +103,7 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
   const [sourceActiveIndex, setSourceActiveIndex] = useState(0);
+  const [archivedSourceActiveIndex, setArchivedSourceActiveIndex] = useState(0);
 
 
   const [filters, setFilters] = useState({
@@ -118,6 +119,10 @@ export default function ReportsPage() {
   
   const onSourcePieEnter = (_: any, index: number) => {
     setSourceActiveIndex(index);
+  };
+
+  const onArchivedSourcePieEnter = (_: any, index: number) => {
+    setArchivedSourceActiveIndex(index);
   };
 
   useEffect(() => {
@@ -314,7 +319,21 @@ export default function ReportsPage() {
     const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
     const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'];
-    const archivedLeadsCount = filteredLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
+    const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
+    const archivedLeadsCount = archivedLeads.length;
+
+    const archivedLeadsBySource = archivedLeads.reduce((acc, lead) => {
+        const source = lead.campaign || 'Unknown';
+        const existingEntry = acc.find(item => item.name === source);
+        if (existingEntry) {
+            existingEntry.value += 1;
+        } else {
+            acc.push({ name: source, value: 1 });
+        }
+        return acc;
+    }, [] as { name: string; value: number }[]);
+
+
     const processedToCallsRatio = totalCalls > 0 ? (archivedLeadsCount / totalCalls) * 100 : 0;
 
     const totalPreQualified = filteredLeads.filter(l => l.status === 'Pre Qualified').length;
@@ -346,6 +365,7 @@ export default function ReportsPage() {
       totalLost,
       totalWon,
       appointmentsBySource,
+      archivedLeadsBySource,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -484,7 +504,7 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
@@ -574,7 +594,53 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Archive className="h-5 w-5" />
+                    Archived Leads by Source
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+            {stats.archivedLeadsBySource.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                    <defs>
+                        <filter id="shadow-archived-source" x="-50%" y="-50%" width="200%" height="200%">
+                            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="rgba(0,0,0,0.1)" />
+                        </filter>
+                    </defs>
+                    <Pie
+                        activeIndex={archivedSourceActiveIndex}
+                        activeShape={renderActiveShape}
+                        data={stats.archivedLeadsBySource}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onMouseEnter={onArchivedSourcePieEnter}
+                        isAnimationActive={true}
+                        animationDuration={500}
+                        style={{ filter: 'url(#shadow-archived-source)' }}
+                    >
+                    {stats.archivedLeadsBySource.map((entry, index) => (
+                        <Cell key={`cell-archived-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                    ))}
+                    </Pie>
+                    <Legend iconSize={12} />
+                </PieChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                    No archived lead data to display for the selected filters.
+                </div>
+            )}
+            </CardContent>
+        </Card>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Calls Made</CardTitle>
@@ -615,7 +681,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
         </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Appointments Booked</CardTitle>
@@ -665,7 +731,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Assigned Leads</CardTitle>
@@ -707,7 +773,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Processed to Call Ratio</CardTitle>
@@ -729,7 +795,7 @@ export default function ReportsPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:col-span-3">
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Pre-Qualified Leads</CardTitle>
