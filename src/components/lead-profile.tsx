@@ -894,90 +894,94 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                   </DialogContent>
                 </Dialog>
               </CardHeader>
-              <CardContent className="divide-y divide-border">
+              <CardContent>
                 {loading ? (
                   <div className="py-4 space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
                   </div>
                 ) : lead.contacts && lead.contacts.length > 0 ? (
-                  lead.contacts.map((contact, index) => {
+                  <div className="space-y-4">
+                  {lead.contacts.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact);
                      return (
-                        <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
-                          <div className="absolute top-4 right-4">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                        <span className="text-red-500">Delete</span>
-                                      </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          This action cannot be undone. This will permanently delete the contact {contact.name}.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                          Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                            <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                            <span className="break-all">{contact.name}</span>
+                      <Card key={contact.id || index} className="relative group/contact">
+                        <CardHeader className="flex-row items-start justify-between pb-2">
+                          <div>
+                            <p className="font-semibold">{contact.name}</p>
+                            <p className="text-sm text-muted-foreground">{contact.title}</p>
                           </div>
-                          <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
-                          <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                            <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
-                            <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                              {contact.email}
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                            <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
-                            <div className="flex items-center gap-1">
-                                <span className="break-all">{contact.phone}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
-                                    <PhoneCall className="w-3 h-3" />
+                           <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
-                            </div>
-                          </div>
-                          <div className="sm:col-start-2 sm:col-span-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                asChild
-                                disabled={!contactCalendlyLink}
-                            >
-                                <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                                <Calendar className="mr-2 h-4 w-4" />
-                                Book Appointment
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will permanently delete the contact {contact.name}. This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                            <div className="flex items-center gap-3">
+                                <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                                  {contact.email}
                                 </a>
-                            </Button>
-                          </div>
-                        </div>
+                            </div>
+                             <div className="flex items-center gap-3">
+                                <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <div className="flex items-center gap-1">
+                                    <span className="break-all">{contact.phone}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                        <PhoneCall className="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                         <CardFooter>
+                           <Button
+                              variant="outline"
+                              size="sm"
+                              asChild
+                              disabled={!contactCalendlyLink}
+                              className="w-full"
+                          >
+                              <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                              <Calendar className="mr-2 h-4 w-4" />
+                              Book Appointment
+                              </a>
+                          </Button>
+                         </CardFooter>
+                      </Card>
                      )
-                  })
+                  })}
+                  </div>
                 ) : (
                   <div className="py-4 text-center text-muted-foreground">
                     No existing contacts found.
@@ -985,20 +989,20 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                 )}
                 {scoringResult?.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
                   scoringResult.prospectedContacts.map((contact, index) => (
-                    <div key={`prospect-${index}`} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                        <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                        <span className="break-all">{contact.name}</span>
-                        <Badge variant="outline">Found on website</Badge>
-                      </div>
-                      <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
-                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                        <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
-                        <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                          {contact.email}
-                        </a>
-                      </div>
-                    </div>
+                    <Card key={`prospect-${index}`} className="mt-4 bg-secondary">
+                        <CardHeader className="pb-2">
+                           <p className="font-semibold">{contact.name} <Badge variant="outline">Found on website</Badge></p>
+                           <p className="text-sm text-muted-foreground">{contact.title}</p>
+                        </CardHeader>
+                        <CardContent className="text-sm">
+                            <div className="flex items-center gap-3">
+                                <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                                {contact.email}
+                                </a>
+                            </div>
+                        </CardContent>
+                    </Card>
                   ))
                 }
               </CardContent>
@@ -1515,5 +1519,3 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
-
-    
