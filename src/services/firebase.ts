@@ -297,6 +297,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 id: doc.id,
                 dialerAssigned: data.dialerAssigned,
                 status: safeGetStatus(data.customerStatus),
+                campaign: data.customerSource,
             } as Lead;
         });
 
