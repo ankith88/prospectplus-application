@@ -634,12 +634,16 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
         onSubmit={handleCallLogged}
     />
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="flex items-center justify-between">
         <Button variant="ghost" asChild>
           <Link href="/leads">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to All Leads
           </Link>
+        </Button>
+        <Button onClick={handleNextLead} disabled={!hasNextLead}>
+            <SkipForward className="mr-2 h-4 w-4" />
+            Next Lead
         </Button>
       </div>
 
@@ -661,10 +665,6 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <Button variant="outline" onClick={handleNextLead} disabled={!hasNextLead}>
-                <SkipForward className="mr-2 h-4 w-4" />
-                Next Lead
-            </Button>
            <Button variant="outline" onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
               <PhoneCall className="mr-2 h-4 w-4" />
               Log a Call
@@ -1482,5 +1482,3 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
-
-    
