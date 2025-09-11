@@ -227,6 +227,13 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
       });
       fetchNotes(); // Refresh notes & activity
 
+      if (notes) {
+        await logNoteActivity(lead.id, {
+          content: notes,
+          author: user.displayName,
+        });
+      }
+
       const { status, reason } = outcomeStatusMap[outcome] || {};
       if (status) {
           await updateLeadStatus(lead.id, status, reason);
