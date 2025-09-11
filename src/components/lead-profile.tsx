@@ -40,6 +40,7 @@ import {
   FileQuestion,
   Route,
   Clock,
+  SkipForward,
 } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address } from '@/lib/types'
@@ -47,7 +48,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -107,6 +108,7 @@ import { AddressAutocomplete } from './address-autocomplete'
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialAppointments }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[], initialAppointments: Appointment[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
+  const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
@@ -199,6 +201,18 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     fetchTasks();
     fetchAppointments();
   }, [lead?.id]);
+
+  useEffect(() => {
+    const fetchUserLeads = async () => {
+        if (!user?.displayName) return;
+        setLoading(true);
+        const allLeads = await getLeadsFromFirebase({ summary: true });
+        const userLeads = allLeads.filter(l => l.dialerAssigned === user.displayName);
+        setAllUserLeads(userLeads);
+        setLoading(false);
+    }
+    fetchUserLeads();
+  }, [user]);
 
 
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
@@ -535,6 +549,27 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     }
   }
 
+  const { nextLeadId, hasNextLead } = useMemo(() => {
+    if (!lead || allUserLeads.length === 0) {
+      return { nextLeadId: null, hasNextLead: false };
+    }
+    const leadsWithSameStatus = allUserLeads.filter(l => l.status === lead.status);
+    const currentIndex = leadsWithSameStatus.findIndex(l => l.id === lead.id);
+
+    if (currentIndex === -1 || leadsWithSameStatus.length <= 1) {
+      return { nextLeadId: null, hasNextLead: false };
+    }
+
+    const nextIndex = (currentIndex + 1) % leadsWithSameStatus.length;
+    return { nextLeadId: leadsWithSameStatus[nextIndex].id, hasNextLead: true };
+  }, [lead, allUserLeads]);
+
+  const handleNextLead = () => {
+    if (nextLeadId) {
+      router.push(`/leads/${nextLeadId}`);
+    }
+  };
+
 
   if (!lead || !user) {
     return (
@@ -626,6 +661,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+           <Button variant="outline" onClick={handleNextLead} disabled={!hasNextLead}>
+                <SkipForward className="mr-2 h-4 w-4" />
+                Next Lead
+            </Button>
            <Button variant="outline" onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
               <PhoneCall className="mr-2 h-4 w-4" />
               Log a Call
@@ -1443,3 +1482,5 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
+
+    
