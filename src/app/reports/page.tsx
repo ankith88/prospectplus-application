@@ -190,6 +190,21 @@ export default function ReportsPage() {
     const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
     return minutes * 60 + seconds;
   };
+  
+  const parseDateString = (dateStr: string | undefined): Date | null => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      // Handles years like 24 -> 2024
+      const fullYear = year < 100 ? 2000 + year : year;
+      // month is 0-indexed in JS Date
+      return new Date(fullYear, month - 1, day);
+    }
+    // Fallback for ISO strings or other formats
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
 
   const filteredLeads = useMemo(() => {
      return allLeads.filter(lead => {
@@ -234,8 +249,9 @@ export default function ReportsPage() {
         }
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
         let dateMatch = true;
-        if (filters.date?.from && appointment.appointmentDate) {
-            const appointmentCreatedDate = new Date(appointment.appointmentDate);
+        if (filters.date?.from) {
+            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
+            if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.date.from);
             const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
             dateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;

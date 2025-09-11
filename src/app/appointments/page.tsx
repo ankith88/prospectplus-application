@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -85,6 +84,22 @@ export default function AllAppointmentsPage() {
   const clearFilters = () => {
     setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, leadName: '', status: 'all' });
   };
+  
+  const parseDateString = (dateStr: string | undefined): Date | null => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      // Handles years like 24 -> 2024
+      const fullYear = year < 100 ? 2000 + year : year;
+      // month is 0-indexed in JS Date
+      return new Date(fullYear, month - 1, day);
+    }
+    // Fallback for ISO strings or other formats
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
 
   const filteredAppointments = useMemo(() => {
     let appointmentsToFilter = allAppointments;
@@ -143,15 +158,18 @@ export default function AllAppointmentsPage() {
 
   const handleExport = () => {
     const headers = ['Lead Name', 'Lead Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
-    const rows = filteredAppointments.map(appt => [
-        escapeCsvCell(appt.leadName),
-        escapeCsvCell(appt.leadStatus),
-        escapeCsvCell(appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString() : 'N/A'),
-        escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
-        escapeCsvCell(appt.assignedTo || 'Unassigned'),
-        escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
-        escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
-    ]);
+    const rows = filteredAppointments.map(appt => {
+        const createdDate = parseDateString(appt.appointmentDate);
+        return [
+            escapeCsvCell(appt.leadName),
+            escapeCsvCell(appt.leadStatus),
+            escapeCsvCell(createdDate ? createdDate.toLocaleDateString() : 'N/A'),
+            escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
+            escapeCsvCell(appt.assignedTo || 'Unassigned'),
+            escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
+            escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
+        ]
+    });
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -329,6 +347,7 @@ export default function AllAppointmentsPage() {
                   </TableRow>
                 ) : filteredAppointments.length > 0 ? (
                   filteredAppointments.map((appointment) => {
+                    const createdDate = parseDateString(appointment.appointmentDate);
                     return (
                     <TableRow key={appointment.id}>
                       <TableCell>
@@ -341,10 +360,10 @@ export default function AllAppointmentsPage() {
                         <LeadStatusBadge status={appointment.leadStatus} />
                       </TableCell>
                       <TableCell>
-                        {appointment.appointmentDate ? (
+                        {createdDate ? (
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span>{new Date(appointment.appointmentDate).toLocaleDateString()}</span>
+                            <span>{createdDate.toLocaleDateString()}</span>
                           </div>
                         ) : (
                           'N/A'
