@@ -620,6 +620,23 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     return lead.salesRepAssignedCalendlyLink;
   }
   const calendlyLink = getCalendlyLink();
+  
+  const getContactCalendlyLink = (contact: Contact) => {
+    if (!lead.salesRepAssignedCalendlyLink) return null;
+    const nameParts = contact.name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    const params = new URLSearchParams({
+      first_name: firstName,
+      last_name: lastName,
+      email: contact.email,
+      a1: lead.id,
+      a2: lead.entityId,
+      a3: user.displayName || '',
+    });
+    return `${lead.salesRepAssignedCalendlyLink}?${params.toString()}`;
+  }
 
 
   return (
@@ -884,67 +901,83 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                     <Skeleton className="h-12 w-full" />
                   </div>
                 ) : lead.contacts && lead.contacts.length > 0 ? (
-                  lead.contacts.map((contact, index) => (
-                    <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
-                      <div className="absolute top-4 right-4">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                    <Trash2 className="mr-2 h-4 w-4 text-red-500" />
-                                    <span className="text-red-500">Delete</span>
+                  lead.contacts.map((contact, index) => {
+                     const contactCalendlyLink = getContactCalendlyLink(contact);
+                     return (
+                        <div key={contact.id || index} className="py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start relative group">
+                          <div className="absolute top-4 right-4">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem onClick={() => { setSelectedContact(contact); setIsEditDialogOpen(true); }}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
                                   </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will permanently delete the contact {contact.name}.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      <div className="flex items-center gap-3 font-medium sm:col-span-1">
-                        <User className="w-5 h-5 text-muted-foreground shrink-0" />
-                        <span className="break-all">{contact.name}</span>
-                      </div>
-                      <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
-                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                        <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
-                        <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                          {contact.email}
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
-                        <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
-                        <div className="flex items-center gap-1">
-                            <span className="break-all">{contact.phone}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
-                                <PhoneCall className="w-3 h-3" />
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                        <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                        <span className="text-red-500">Delete</span>
+                                      </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This action cannot be undone. This will permanently delete the contact {contact.name}.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          <div className="flex items-center gap-3 font-medium sm:col-span-1">
+                            <User className="w-5 h-5 text-muted-foreground shrink-0" />
+                            <span className="break-all">{contact.name}</span>
+                          </div>
+                          <p className="text-muted-foreground sm:col-span-2 break-all">{contact.title}</p>
+                          <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                            <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                            <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                              {contact.email}
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-3 sm:col-start-2 sm:col-span-2">
+                            <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
+                            <div className="flex items-center gap-1">
+                                <span className="break-all">{contact.phone}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                    <PhoneCall className="w-3 h-3" />
+                                </Button>
+                            </div>
+                          </div>
+                          <div className="sm:col-start-2 sm:col-span-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                asChild
+                                disabled={!contactCalendlyLink}
+                            >
+                                <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                                <Calendar className="mr-2 h-4 w-4" />
+                                Book Appointment
+                                </a>
                             </Button>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))
+                     )
+                  })
                 ) : (
                   <div className="py-4 text-center text-muted-foreground">
                     No existing contacts found.
@@ -1482,3 +1515,5 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     </>
   )
 }
+
+    
