@@ -45,6 +45,7 @@ export default function AllAppointmentsPage() {
     user: 'all',
     leadAssignedTo: 'all',
     date: undefined as DateRange | undefined,
+    createdDate: undefined as DateRange | undefined,
     leadName: '',
     status: 'all' as LeadStatus | 'all',
   });
@@ -82,13 +83,12 @@ export default function AllAppointmentsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, leadName: '', status: 'all' });
+    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, createdDate: undefined, leadName: '', status: 'all' });
   };
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
     
-    // Handle "DD/MM/YYYY HH:MM" format
     const dateTimeParts = dateStr.split(' ');
     const datePart = dateTimeParts[0];
     const dateParts = datePart.split('/');
@@ -97,12 +97,10 @@ export default function AllAppointmentsPage() {
       const [day, month, year] = dateParts.map(Number);
       if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
         const fullYear = year < 100 ? 2000 + year : year;
-        // month is 0-indexed in JS Date
         return new Date(fullYear, month - 1, day);
       }
     }
     
-    // Fallback for ISO strings or other formats
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
   };
@@ -128,6 +126,18 @@ export default function AllAppointmentsPage() {
             const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
             dateMatch = appointmentDate >= fromDate && appointmentDate <= toDate;
         }
+
+        let createdDateMatch = true;
+        if (filters.createdDate?.from) {
+            const createdDate = parseDateString(appointment.appointmentDate);
+            if(createdDate) {
+              const fromDate = startOfDay(filters.createdDate.from);
+              const toDate = filters.createdDate.to ? endOfDay(filters.createdDate.to) : endOfDay(filters.createdDate.from);
+              createdDateMatch = createdDate >= fromDate && createdDate <= toDate;
+            } else {
+              createdDateMatch = false;
+            }
+        }
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
@@ -136,7 +146,7 @@ export default function AllAppointmentsPage() {
 
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
 
-        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && leadNameMatch && statusMatch;
+        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch;
     });
   }, [allAppointments, filters, userProfile]);
   
@@ -307,6 +317,48 @@ export default function AllAppointmentsPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="createdDate">Date Created</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="createdDate"
+                                variant={"outline"}
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {filters.createdDate?.from ? (
+                                  filters.createdDate.to ? (
+                                    <>
+                                      {format(filters.createdDate.from, "LLL d, y")} -{" "}
+                                      {format(filters.createdDate.to, "LLL d, y")}
+                                    </>
+                                  ) : (
+                                    format(filters.createdDate.from, "LLL d, y")
+                                  )
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <div className="flex flex-col space-y-2 border-r p-2">
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: new Date(), to: new Date()})}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                </div>
+                                <CalendarPicker
+                                  mode="range"
+                                  selected={filters.createdDate}
+                                  onSelect={(date) => handleFilterChange('createdDate', date)}
+                                  initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
                      {hasActiveFilters && (
                         <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
@@ -416,5 +468,3 @@ export default function AllAppointmentsPage() {
     </>
   )
 }
-
-    
