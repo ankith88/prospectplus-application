@@ -145,7 +145,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     }
 
     onClose();
-    router.push(`/leads?nextLead=true&lastLeadStatus=${lead.status}`);
   }
 
   return (
