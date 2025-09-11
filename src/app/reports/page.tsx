@@ -42,7 +42,7 @@ const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
 
 
 const renderActiveShape = (props: any) => {
@@ -60,7 +60,7 @@ const renderActiveShape = (props: any) => {
 
   return (
     <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={12}>
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={11}>
         {payload.name}
       </text>
       <Sector
@@ -83,7 +83,7 @@ const renderActiveShape = (props: any) => {
       />
       <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
       <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={11}>{`${value} leads`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={10}>{`${value} leads`}</text>
       <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} dy={14} textAnchor={textAnchor} fill="#999" fontSize={9}>
         {`(Rate ${(percent * 100).toFixed(2)}%)`}
       </text>
@@ -194,7 +194,6 @@ export default function ReportsPage() {
   const parseDateString = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
     
-    // Handle "DD/MM/YYYY HH:MM" format
     const dateTimeParts = dateStr.split(' ');
     const datePart = dateTimeParts[0];
     const dateParts = datePart.split('/');
@@ -203,23 +202,32 @@ export default function ReportsPage() {
       const [day, month, year] = dateParts.map(Number);
       if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
         const fullYear = year < 100 ? 2000 + year : year;
-        // month is 0-indexed in JS Date
         return new Date(fullYear, month - 1, day);
       }
     }
     
-    // Fallback for ISO strings or other formats
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
   };
 
   const filteredLeads = useMemo(() => {
      return allLeads.filter(lead => {
-      const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
-      const statusMatch = filters.status === 'all' || lead.status === filters.status;
-      return dialerMatch && statusMatch;
+        const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
+        const statusMatch = filters.status === 'all' || lead.status === filters.status;
+        
+        let dateMatch = true;
+        if (filters.date?.from && lead.activity?.length) {
+            const fromDate = startOfDay(filters.date.from);
+            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            // Check if any activity falls within the date range
+            dateMatch = lead.activity.some(a => {
+                const activityDate = new Date(a.date);
+                return activityDate >= fromDate && activityDate <= toDate;
+            });
+        }
+        return dialerMatch && statusMatch && dateMatch;
     });
-  }, [allLeads, filters.dialerAssigned, filters.status]);
+  }, [allLeads, filters]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
@@ -255,6 +263,7 @@ export default function ReportsPage() {
           return false;
         }
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
+        const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
         let dateMatch = true;
         if (filters.date?.from) {
             const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
@@ -263,7 +272,7 @@ export default function ReportsPage() {
             const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
             dateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
-        return dialerMatch && dateMatch;
+        return dialerMatch && dateMatch && statusMatch;
     });
   }, [allAppointments, filters]);
 

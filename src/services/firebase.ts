@@ -291,15 +291,19 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
             return [];
         }
 
-        return snapshot.docs.map(doc => {
+        const leads = await Promise.all(snapshot.docs.map(async doc => {
             const data = doc.data();
+            const activity = await getLeadActivity(doc.id);
             return {
                 id: doc.id,
                 dialerAssigned: data.dialerAssigned,
                 status: safeGetStatus(data.customerStatus),
                 campaign: data.customerSource,
+                activity: activity,
             } as Lead;
-        });
+        }));
+
+        return leads;
 
     } catch (error) {
         console.error("Failed to fetch all leads for report:", error);
