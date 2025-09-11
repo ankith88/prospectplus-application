@@ -567,9 +567,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   }, [lead?.activity]);
 
   const getCalendlyLink = () => {
-    if (lead.salesRepAssignedCalendlyLink && lead.entityId && user.displayName) {
+    if (lead.salesRepAssignedCalendlyLink && lead.id && lead.entityId && user.displayName) {
         const params = new URLSearchParams({
-            a1: lead.entityId,
+            a1: lead.id,
             a2: lead.entityId,
             a3: user.displayName,
         });
