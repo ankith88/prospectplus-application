@@ -43,7 +43,7 @@ import {
   SkipForward,
 } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -108,6 +108,7 @@ import { AddressAutocomplete } from './address-autocomplete'
 
 export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialAppointments }: { initialLead: Lead, initialNotes: Note[], initialTranscripts: Transcript[], initialAppointments: Appointment[] }) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
+  const [initialStatus, setInitialStatus] = useState<LeadStatus>(initialLead.status);
   const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
@@ -151,6 +152,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
         prospectedContacts: [],
       });
     }
+    setInitialStatus(initialLead.status);
   }, [initialLead]);
 
   useEffect(() => {
@@ -553,7 +555,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     if (!lead || allUserLeads.length === 0) {
       return { nextLeadId: null, hasNextLead: false };
     }
-    const leadsWithSameStatus = allUserLeads.filter(l => l.status === lead.status);
+    const leadsWithSameStatus = allUserLeads.filter(l => l.status === initialStatus);
     const currentIndex = leadsWithSameStatus.findIndex(l => l.id === lead.id);
 
     if (currentIndex === -1 || leadsWithSameStatus.length <= 1) {
@@ -562,7 +564,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
 
     const nextIndex = (currentIndex + 1) % leadsWithSameStatus.length;
     return { nextLeadId: leadsWithSameStatus[nextIndex].id, hasNextLead: true };
-  }, [lead, allUserLeads]);
+  }, [lead, allUserLeads, initialStatus]);
 
   const handleNextLead = () => {
     if (nextLeadId) {
@@ -632,7 +634,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
       last_name: lastName,
       email: contact.email,
       a1: lead.id,
-      a2: lead.entityId,
+      a2: lead.entityId || '',
       a3: user.displayName || '',
     });
     return `${lead.salesRepAssignedCalendlyLink}?${params.toString()}`;
