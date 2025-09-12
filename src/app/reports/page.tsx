@@ -357,16 +357,12 @@ export default function ReportsPage() {
         return acc;
     }, [] as { name: string; value: number }[]);
 
-
-    const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
-    const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
-    const uniqueWonLeadsWithAppointments = new Set(appointmentsForWonLeads.map(a => a.leadId)).size;
-
-    const lostLeadIds = new Set(filteredLeads.filter(l => l.status === 'Lost').map(l => l.id));
-    const appointmentsForLostLeads = filteredAppointments.filter(a => lostLeadIds.has(a.leadId));
-    const uniqueLostLeadsWithAppointments = new Set(appointmentsForLostLeads.map(a => a.leadId)).size;
-
     const totalAppointments = filteredAppointments.length;
+    const appointmentsForWonLeads = filteredAppointments.filter(a => a.leadStatus === 'Won').length;
+    const appointmentsForLostLeads = filteredAppointments.filter(a => a.leadStatus === 'Lost').length;
+    const wonAppointmentRate = totalAppointments > 0 ? (appointmentsForWonLeads / totalAppointments) * 100 : 0;
+    const lostAppointmentRate = totalAppointments > 0 ? (appointmentsForLostLeads / totalAppointments) * 100 : 0;
+    
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
     const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
@@ -432,8 +428,10 @@ export default function ReportsPage() {
       totalLeadsInFilter,
       totalAppointments,
       averageDurationFormatted,
-      wonLeadsWithAppointments: uniqueWonLeadsWithAppointments,
-      lostLeadsWithAppointments: uniqueLostLeadsWithAppointments,
+      appointmentsForWonLeads,
+      appointmentsForLostLeads,
+      wonAppointmentRate,
+      lostAppointmentRate,
       appointmentToCallRatio,
       appointmentToContactRatio,
       archivedLeadsCount,
@@ -841,8 +839,18 @@ export default function ReportsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                  <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Across all time" />
-                 <StatCard title="Appointments to Won Leads" value={stats.wonLeadsWithAppointments} icon={Goal} description="Leads with appointments that ended in a 'Won' status" />
-                 <StatCard title="Appointments to Lost" value={stats.lostLeadsWithAppointments} icon={UserX} description="Leads with appointments that ended in a 'Lost' status" />
+                 <StatCard 
+                    title="Appointments to Won Leads" 
+                    value={stats.appointmentsForWonLeads} 
+                    icon={Goal} 
+                    description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
+                <StatCard 
+                    title="Appointments to Lost Leads" 
+                    value={stats.appointmentsForLostLeads} 
+                    icon={UserX} 
+                    description={`${stats.lostAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
                  <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(1)}%`} icon={Percent} description="Ratio of appointments to calls" />
             </div>
         </div>
