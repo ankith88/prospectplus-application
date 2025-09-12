@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib/types';
+import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -395,20 +395,21 @@ export default function ReportsPage() {
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
     
-    const discoveryData = filteredLeads.map(l => l.discoveryData).filter(Boolean);
+    const discoveryData = filteredLeads.map(l => l.discoveryData).filter((d): d is DiscoveryData => !!d);
+
     const averageDiscoveryScore = discoveryData.length > 0 
-        ? discoveryData.reduce((sum, data) => sum + (data?.score || 0), 0) / discoveryData.length
+        ? discoveryData.reduce((sum, data) => sum + (data.score || 0), 0) / discoveryData.length
         : 0;
 
     const leadsByRoutingTag = discoveryData.reduce((acc, data) => {
-        const tag = data?.routingTag || 'Unknown';
+        const tag = data.routingTag || 'Unknown';
         acc[tag] = (acc[tag] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
     const routingTagData = Object.entries(leadsByRoutingTag).map(([name, value]) => ({ name, value }));
 
     const leadsByScoreRange = discoveryData.reduce((acc, data) => {
-        const score = data?.score || 0;
+        const score = data.score || 0;
         if (score >= 75) acc['75-100'] += 1;
         else if (score >= 50) acc['50-74'] += 1;
         else if (score >= 25) acc['25-49'] += 1;
