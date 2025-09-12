@@ -188,6 +188,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
           companyDescription: data.companyDescription,
+          leadType: data.leadType,
         };
 
         if (includeSubCollections) {
@@ -264,6 +265,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
           companyDescription: data.companyDescription,
+          leadType: data.leadType,
         };
         
         if (!summary) {
@@ -300,6 +302,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 status: safeGetStatus(data.customerStatus),
                 campaign: data.customerSource,
                 activity: activity,
+                leadType: data.leadType,
             } as Lead;
         }));
 

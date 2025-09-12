@@ -140,6 +140,7 @@ export interface Lead {
   salesRecordInternalId?: string;
   discoveryData?: DiscoveryData;
   companyDescription?: string;
+  leadType?: string;
 }
 
 export interface UserProfile {
@@ -158,3 +159,4 @@ export interface UserProfile {
     
 
     
+

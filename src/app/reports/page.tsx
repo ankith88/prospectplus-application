@@ -8,8 +8,8 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -104,6 +104,7 @@ export default function ReportsPage() {
   const [statusActiveIndex, setStatusActiveIndex] = useState(0);
   const [sourceActiveIndex, setSourceActiveIndex] = useState(0);
   const [lostSourceActiveIndex, setLostSourceActiveIndex] = useState(0);
+  const [leadTypeActiveIndex, setLeadTypeActiveIndex] = useState(0);
 
 
   const [filters, setFilters] = useState({
@@ -123,6 +124,10 @@ export default function ReportsPage() {
 
   const onLostSourcePieEnter = (_: any, index: number) => {
     setLostSourceActiveIndex(index);
+  };
+  
+  const onLeadTypePieEnter = (_: any, index: number) => {
+    setLeadTypeActiveIndex(index);
   };
 
   useEffect(() => {
@@ -340,6 +345,18 @@ export default function ReportsPage() {
         return acc;
     }, [] as { name: string; value: number }[]);
 
+    const appointmentsByLeadType = filteredAppointments.reduce((acc, appointment) => {
+        const lead = leadsMap.get(appointment.leadId);
+        const leadType = lead?.leadType || 'Unknown';
+        const existingEntry = acc.find(item => item.name === leadType);
+        if (existingEntry) {
+            existingEntry.value += 1;
+        } else {
+            acc.push({ name: leadType, value: 1 });
+        }
+        return acc;
+    }, [] as { name: string; value: number }[]);
+
 
     const wonLeadIds = new Set(filteredLeads.filter(l => l.status === 'Won').map(l => l.id));
     const appointmentsForWonLeads = filteredAppointments.filter(a => wonLeadIds.has(a.leadId));
@@ -377,6 +394,29 @@ export default function ReportsPage() {
     const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
+    
+    const discoveryData = filteredLeads.map(l => l.discoveryData).filter(Boolean);
+    const averageDiscoveryScore = discoveryData.length > 0 
+        ? discoveryData.reduce((sum, data) => sum + (data?.score || 0), 0) / discoveryData.length
+        : 0;
+
+    const leadsByRoutingTag = discoveryData.reduce((acc, data) => {
+        const tag = data?.routingTag || 'Unknown';
+        acc[tag] = (acc[tag] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+    const routingTagData = Object.entries(leadsByRoutingTag).map(([name, value]) => ({ name, value }));
+
+    const leadsByScoreRange = discoveryData.reduce((acc, data) => {
+        const score = data?.score || 0;
+        if (score >= 75) acc['75-100'] += 1;
+        else if (score >= 50) acc['50-74'] += 1;
+        else if (score >= 25) acc['25-49'] += 1;
+        else acc['0-24'] += 1;
+        return acc;
+    }, { '0-24': 0, '25-49': 0, '50-74': 0, '75-100': 0 });
+    const scoreRangeData = Object.entries(leadsByScoreRange).map(([name, value]) => ({ name, value }));
+
 
     return {
       totalCalls,
@@ -403,6 +443,10 @@ export default function ReportsPage() {
       totalWon,
       appointmentsBySource,
       lostLeadsBySource,
+      averageDiscoveryScore,
+      routingTagData,
+      scoreRangeData,
+      appointmentsByLeadType,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -554,8 +598,8 @@ export default function ReportsPage() {
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <Card className="lg:col-span-1 xl:col-span-1">
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
                  <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
@@ -593,7 +637,7 @@ export default function ReportsPage() {
             </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-1 xl:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-5 w-5" />
@@ -633,8 +677,49 @@ export default function ReportsPage() {
             )}
             </CardContent>
         </Card>
+
+        <Card className="lg:col-span-1 xl:col-span-1">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Appointments by Lead Type
+                </CardTitle>
+                <CardDescription>Breakdown of lead types for booked appointments.</CardDescription>
+            </CardHeader>
+            <CardContent>
+            {stats.appointmentsByLeadType.length > 0 ? (
+                <ResponsiveContainer width="100%" height={350}>
+                <PieChart>
+                    <Pie
+                        activeIndex={leadTypeActiveIndex}
+                        activeShape={renderActiveShape}
+                        data={stats.appointmentsByLeadType}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onMouseEnter={onLeadTypePieEnter}
+                        isAnimationActive={true}
+                        animationDuration={500}
+                    >
+                    {stats.appointmentsByLeadType.map((entry, index) => (
+                        <Cell key={`cell-lead-type-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                    ))}
+                    </Pie>
+                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                </PieChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                    No lead type data to display for the selected filters.
+                </div>
+            )}
+            </CardContent>
+        </Card>
         
-        <Card>
+        <Card className="lg:col-span-1 xl:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Frown className="h-5 w-5" />
@@ -676,6 +761,64 @@ export default function ReportsPage() {
         </Card>
         
       </div>
+
+       <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Discovery & Routing Insights</h2>
+                <p className="text-muted-foreground">Metrics related to the discovery process.</p>
+            </div>
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <StatCard title="Average Discovery Score" value={stats.averageDiscoveryScore.toFixed(0)} icon={Star} description="Average score across all leads with discovery data." />
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                           <Route className="h-5 w-5" />
+                           Leads by Routing Tag
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.routingTagData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={200}>
+                                <PieChart>
+                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
+                                        {stats.routingTagData.map((entry, index) => (
+                                            <Cell key={`cell-route-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend iconSize={10} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                             <div className="flex h-[200px] items-center justify-center text-muted-foreground">No routing data.</div>
+                        )}
+                    </CardContent>
+                 </Card>
+                 <Card>
+                    <CardHeader>
+                         <CardTitle className="flex items-center gap-2">
+                           <BarChart3 className="h-5 w-5" />
+                           Leads by Score Range
+                        </CardTitle>
+                    </CardHeader>
+                     <CardContent>
+                         {stats.scoreRangeData.some(d => d.value > 0) ? (
+                            <ResponsiveContainer width="100%" height={200}>
+                                <BarChart data={stats.scoreRangeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" fontSize={12} />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="value" fill="#8884d8" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                         ) : (
+                             <div className="flex h-[200px] items-center justify-center text-muted-foreground">No score data.</div>
+                         )}
+                    </CardContent>
+                 </Card>
+             </div>
+        </div>
       
        <div className="space-y-6">
             <div>
@@ -685,8 +828,8 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                  <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
                  <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
-                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={Clock} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
-                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={Clock} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
+                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={TrendingDown} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
+                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
             </div>
         </div>
 
