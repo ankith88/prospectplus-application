@@ -391,21 +391,21 @@ export default function ReportsPage() {
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
     
-    const discoveryData = filteredLeads.map(l => l.discoveryData).filter((d): d is DiscoveryData => !!d);
+    const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData);
 
-    const averageDiscoveryScore = discoveryData.length > 0 
-        ? discoveryData.reduce((sum, data) => sum + (data.score || 0), 0) / discoveryData.length
+    const averageDiscoveryScore = leadsWithDiscoveryData.length > 0
+        ? leadsWithDiscoveryData.reduce((sum, lead) => sum + (lead.discoveryData.score || 0), 0) / leadsWithDiscoveryData.length
         : 0;
 
-    const leadsByRoutingTag = discoveryData.reduce((acc, data) => {
-        const tag = data.routingTag || 'Unknown';
+    const leadsByRoutingTag = leadsWithDiscoveryData.reduce((acc, lead) => {
+        const tag = lead.discoveryData.routingTag || 'Unknown';
         acc[tag] = (acc[tag] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
     const routingTagData = Object.entries(leadsByRoutingTag).map(([name, value]) => ({ name, value }));
 
-    const leadsByScoreRange = discoveryData.reduce((acc, data) => {
-        const score = data.score || 0;
+    const leadsByScoreRange = leadsWithDiscoveryData.reduce((acc, lead) => {
+        const score = lead.discoveryData.score || 0;
         if (score >= 75) acc['75-100'] += 1;
         else if (score >= 50) acc['50-74'] += 1;
         else if (score >= 25) acc['25-49'] += 1;
