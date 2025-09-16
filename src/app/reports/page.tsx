@@ -391,7 +391,7 @@ export default function ReportsPage() {
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
     
-    const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData);
+    const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData && Object.keys(l.discoveryData).length > 0);
 
     const averageDiscoveryScore = leadsWithDiscoveryData.length > 0
         ? leadsWithDiscoveryData.reduce((sum, lead) => sum + (lead.discoveryData.score || 0), 0) / leadsWithDiscoveryData.length
@@ -414,6 +414,7 @@ export default function ReportsPage() {
     }, { '0-24': 0, '25-49': 0, '50-74': 0, '75-100': 0 });
     const scoreRangeData = Object.entries(leadsByScoreRange).map(([name, value]) => ({ name, value }));
 
+    const leadsInProgress = leadsContactedIds.size - archivedLeadsCount;
 
     return {
       totalCalls,
@@ -446,6 +447,7 @@ export default function ReportsPage() {
       routingTagData,
       scoreRangeData,
       appointmentsByLeadType,
+      leadsInProgress,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -860,9 +862,10 @@ export default function ReportsPage() {
                 <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
                 <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                 <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
+                <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
                 <StatCard title="Total Archived Leads" value={stats.archivedLeadsCount} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
                 <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New, assigned leads" />
             </div>
