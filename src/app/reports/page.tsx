@@ -529,7 +529,7 @@ export default function ReportsPage() {
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Call Date</Label>
+                        <Label htmlFor="date">Date (Call or Appt. Creation)</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
