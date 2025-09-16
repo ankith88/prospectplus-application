@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -385,6 +384,7 @@ export default function ReportsPage() {
 
 
     const processedToCallsRatio = totalCalls > 0 ? (archivedLeadsCount / totalCalls) * 100 : 0;
+    const appointmentToArchivedRatio = archivedLeadsCount > 0 ? (totalAppointments / archivedLeadsCount) * 100 : 0;
 
     const totalPreQualified = filteredLeads.filter(l => l.status === 'Pre Qualified').length;
     const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
@@ -448,6 +448,7 @@ export default function ReportsPage() {
       scoreRangeData,
       appointmentsByLeadType,
       leadsInProgress,
+      appointmentToArchivedRatio,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -879,6 +880,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
                 <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
+                <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
             </div>
         </div>
 
@@ -898,5 +900,7 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
 
     
