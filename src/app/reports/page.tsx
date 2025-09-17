@@ -416,6 +416,10 @@ export default function ReportsPage() {
 
     const leadsInProgress = leadsContactedIds.size - archivedLeadsCount;
 
+    const qualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalQualified / archivedLeadsCount) * 100 : 0;
+    const preQualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalPreQualified / archivedLeadsCount) * 100 : 0;
+    const combinedQualifiedToArchivedRatio = archivedLeadsCount > 0 ? ((totalQualified + totalPreQualified) / archivedLeadsCount) * 100 : 0;
+
     return {
       totalCalls,
       leadsContacted: leadsContactedIds.size,
@@ -449,6 +453,9 @@ export default function ReportsPage() {
       appointmentsByLeadType,
       leadsInProgress,
       appointmentToArchivedRatio,
+      qualifiedToArchivedRatio,
+      preQualifiedToArchivedRatio,
+      combinedQualifiedToArchivedRatio,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -877,10 +884,13 @@ export default function ReportsPage() {
                 <h2 className="text-2xl font-semibold tracking-tight">Conversion Rates</h2>
                 <p className="text-muted-foreground">Key conversion metrics.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
                 <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
                 <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
+                <StatCard title="Qualified to Archived" value={`${stats.qualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Qualified' to all archived leads" />
+                <StatCard title="Pre-Qualified to Archived" value={`${stats.preQualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Pre-Qualified' to all archived leads" />
+                <StatCard title="Total Qualified to Archived" value={`${stats.combinedQualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Qualified' + 'Pre-Qualified' to all archived" />
             </div>
         </div>
 
@@ -900,6 +910,8 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
 
     
 
