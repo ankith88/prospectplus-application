@@ -32,9 +32,9 @@ export default async function ReportsPage() {
 
   return (
     <ReportsClientPage
-      initialCalls={calls as CallActivity[]}
+      initialCalls={calls}
       initialLeads={leads}
-      initialAppointments={appointments as AppointmentWithLead[]}
+      initialAppointments={appointments}
       initialDialers={dialers}
     />
   );

@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -191,18 +192,19 @@ export default function ReportsClientPage({
         const statusMatch = filters.status === 'all' || lead.status === filters.status;
         
         let dateMatch = true;
-        if (filters.date?.from && lead.activity?.length) {
+        if (filters.date?.from) {
             const fromDate = startOfDay(filters.date.from);
             const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
             // Check if any activity falls within the date range
-            dateMatch = lead.activity.some(a => {
+            const activitiesForLead = allCalls.filter(c => c.leadId === lead.id);
+            dateMatch = activitiesForLead.some(a => {
                 const activityDate = new Date(a.date);
                 return activityDate >= fromDate && activityDate <= toDate;
             });
         }
         return dialerMatch && statusMatch && dateMatch;
     });
-  }, [allLeads, filters]);
+  }, [allLeads, filters, allCalls]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
@@ -771,7 +773,7 @@ export default function ReportsClientPage({
                             </ResponsiveContainer>
                         ) : (
                              <div className="flex h-[200px] items-center justify-center text-muted-foreground">No routing data.</div>
-                        )}
+                         )}
                     </CardContent>
                  </Card>
                  <Card>

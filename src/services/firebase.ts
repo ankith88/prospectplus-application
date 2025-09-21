@@ -285,31 +285,32 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 }
 
 async function getAllLeadsForReport(): Promise<Lead[]> {
+    console.log('[getAllLeadsForReport] Starting to fetch all leads for reporting...');
     try {
-        const leadsRef = collection(firestore, 'leads');
-        const snapshot = await getDocs(leadsRef);
-
-        if (snapshot.empty) {
+        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+        if (leadsSnapshot.empty) {
+            console.log("[getAllLeadsForReport] No leads found.");
             return [];
         }
 
-        const leads = await Promise.all(snapshot.docs.map(async doc => {
+        const leads = leadsSnapshot.docs.map(doc => {
             const data = doc.data();
-            const activity = await getLeadActivity(doc.id);
             return {
                 id: doc.id,
                 dialerAssigned: data.dialerAssigned,
                 status: safeGetStatus(data.customerStatus),
                 campaign: data.customerSource,
-                activity: activity,
                 leadType: data.leadType,
+                discoveryData: data.discoveryData,
+                activity: [] // Activity will be populated by other functions if needed
             } as Lead;
-        }));
+        });
 
+        console.log(`[getAllLeadsForReport] Successfully fetched ${leads.length} lead shells.`);
         return leads;
 
     } catch (error) {
-        console.error("Failed to fetch all leads for report:", error);
+        console.error("[getAllLeadsForReport] Failed to fetch leads:", error);
         return [];
     }
 }
@@ -354,46 +355,79 @@ async function getLeadActivity(leadId: string): Promise<Activity[]> {
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
+    console.log('[getAllCallActivities] Starting to fetch call activities...');
     try {
-        console.log("Fetching all leads to get call activities...");
-        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
-        if (leadsSnapshot.empty) {
-            console.log("No leads found.");
+        const activitySnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call')));
+        if (activitySnapshot.empty) {
+            console.log("[getAllCallActivities] No call activities found in collection group.");
             return [];
         }
+        
+        console.log(`[getAllCallActivities] Found ${activitySnapshot.docs.length} raw call activities.`);
 
-        const allCalls: CallActivity[] = [];
-
-        for (const leadDoc of leadsSnapshot.docs) {
-            const leadData = leadDoc.data();
-            const leadId = leadDoc.id;
-
-            const activityRef = collection(firestore, 'leads', leadId, 'activity');
-            const q = query(activityRef, where('type', '==', 'Call'));
-            const activitySnapshot = await getDocs(q);
-
-            if (!activitySnapshot.empty) {
-                activitySnapshot.forEach(activityDoc => {
-                    const activityData = activityDoc.data() as Activity;
-                    allCalls.push({
-                        ...activityData,
-                        id: activityDoc.id,
-                        leadId: leadId,
-                        leadName: leadData.companyName || 'Unknown Lead',
-                        leadStatus: safeGetStatus(leadData.customerStatus),
-                        dialerAssigned: leadData.dialerAssigned || 'Unassigned',
-                    });
-                });
-            }
+        const leadIds = [...new Set(activitySnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
+        if (leadIds.length === 0) {
+             console.log("[getAllCallActivities] No lead IDs found from activities.");
+             return [];
         }
 
-        console.log(`Found ${allCalls.length} total call activities.`);
-        allCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        console.log(`[getAllCallActivities] Fetching data for ${leadIds.length} unique leads.`);
+        const leadsData: { [key: string]: Lead } = {};
+        const leadChunks: string[][] = [];
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
+        }
+
+        for (const chunk of leadChunks) {
+            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsSnapshot = await getDocs(leadsQuery);
+            leadsSnapshot.forEach(doc => {
+                leadsData[doc.id] = doc.data() as Lead;
+            });
+        }
         
-        return allCalls;
+        console.log(`[getAllCallActivities] Fetched data for ${Object.keys(leadsData).length} leads.`);
+
+        const allCalls = activitySnapshot.docs.map(activityDoc => {
+            const activityData = activityDoc.data() as Activity;
+            const leadId = activityDoc.ref.parent.parent!.id;
+            const leadData = leadsData[leadId];
+
+            if (!leadData) {
+                return null;
+            }
+
+            return {
+                ...activityData,
+                id: activityDoc.id,
+                leadId: leadId,
+                leadName: leadData.companyName || 'Unknown Lead',
+                leadStatus: safeGetStatus(leadData.customerStatus),
+                dialerAssigned: leadData.dialerAssigned || 'Unassigned',
+            };
+        }).filter((call): call is CallActivity => call !== null);
+
+        console.log(`[getAllCallActivities] Mapped ${allCalls.length} calls to their leads.`);
+
+        // De-duplicate by callId, keeping the most recent entry
+        const uniqueCallsMap = new Map<string, CallActivity>();
+        allCalls.forEach(call => {
+            if (call.callId) {
+                const existing = uniqueCallsMap.get(call.callId);
+                if (!existing || new Date(call.date) > new Date(existing.date)) {
+                    uniqueCallsMap.set(call.callId, call);
+                }
+            } else {
+                 uniqueCallsMap.set(call.id, call); // For manual calls without callId
+            }
+        });
+
+        const finalCalls = Array.from(uniqueCallsMap.values());
+        console.log(`[getAllCallActivities] Returning ${finalCalls.length} unique call activities.`);
+        return finalCalls;
 
     } catch (error) {
-        console.error('Failed to fetch all call activities:', error);
+        console.error('[getAllCallActivities] Failed to fetch all call activities:', error);
         return [];
     }
 }
@@ -474,17 +508,27 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
 async function getAllTranscripts(): Promise<Transcript[]> {
     try {
         const transcriptsSnapshot = await getDocs(collectionGroup(firestore, 'transcripts'));
-        const leadIds = new Set(transcriptsSnapshot.docs.map(doc => doc.ref.parent.parent!.id));
+        const leadIds = [...new Set(transcriptsSnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
         
-        if (leadIds.size === 0) return [];
+        if (leadIds.length === 0) return [];
 
-        const leadDocs = await Promise.all(Array.from(leadIds).map(id => getDoc(doc(firestore, 'leads', id))));
-        const leadsMap = new Map(leadDocs.map(doc => [doc.id, doc.data()]));
+        const leadsData: { [key: string]: Lead } = {};
+        const leadChunks: string[][] = [];
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
+        }
+        for (const chunk of leadChunks) {
+            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsSnapshot = await getDocs(leadsQuery);
+            leadsSnapshot.forEach(doc => {
+                leadsData[doc.id] = doc.data() as Lead;
+            });
+        }
 
         const allTranscripts = transcriptsSnapshot.docs.map(doc => {
             const transcriptData = doc.data();
             const leadId = doc.ref.parent.parent!.id;
-            const leadData = leadsMap.get(leadId);
+            const leadData = leadsData[leadId];
             
             return {
                 id: doc.id,
@@ -505,23 +549,38 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus }>> {
     try {
         const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
-        const allAppointments = await Promise.all(appointmentsSnapshot.docs.map(async (appointmentDoc) => {
+        
+        const leadIds = [...new Set(appointmentsSnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
+        if (leadIds.length === 0) return [];
+
+        const leadsData: { [key: string]: Lead } = {};
+        const leadChunks: string[][] = [];
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
+        }
+        for (const chunk of leadChunks) {
+            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsSnapshot = await getDocs(leadsQuery);
+            leadsSnapshot.forEach(doc => {
+                leadsData[doc.id] = doc.data() as Lead;
+            });
+        }
+
+        const allAppointments = appointmentsSnapshot.docs.map(appointmentDoc => {
             const appointmentData = appointmentDoc.data() as Appointment;
             const leadId = appointmentDoc.ref.parent.parent!.id;
-            const leadDoc = await getDoc(doc(firestore, 'leads', leadId));
-            const leadData = leadDoc.exists() ? leadDoc.data() : {};
-            const leadName = leadData?.companyName || 'Unknown Lead';
+            const leadData = leadsData[leadId];
             
             return {
                 ...appointmentData,
                 id: appointmentDoc.id,
                 leadId: leadId,
-                leadName: leadName,
+                leadName: leadData?.companyName || 'Unknown Lead',
                 dialerAssigned: leadData?.dialerAssigned,
                 leadStatus: safeGetStatus(leadData.customerStatus),
-                appointmentDate: appointmentData.appointmentDate,
             };
-        }));
+        });
+
         allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
         return allAppointments;
     } catch (error) {
@@ -1105,3 +1164,4 @@ export {
 };
 
     
+
