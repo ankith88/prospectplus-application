@@ -1114,6 +1114,25 @@ async function addCallReview(leadId: string, activityId: string, reviewData: { r
     }
 }
 
+async function shareCallReview(leadId: string, activityId: string, sharedWith: string[]): Promise<void> {
+    try {
+        const activityRef = doc(firestore, 'leads', leadId, 'activity', activityId);
+        const activityDoc = await getDoc(activityRef);
+        if (!activityDoc.exists() || !activityDoc.data()?.review) {
+            throw new Error('Review does not exist for this call.');
+        }
+
+        await updateDoc(activityRef, {
+            'review.sharedWith': sharedWith,
+        });
+
+        console.log(`Review for activity ${activityId} shared with:`, sharedWith);
+    } catch (error) {
+        console.error(`Failed to share review for activity ${activityId}:`, error);
+        throw new Error('Failed to share review in Firebase');
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -1159,9 +1178,11 @@ export {
     getAllUsers,
     bulkUpdateLeadDialerRep,
     addCallReview,
+    shareCallReview,
 };
 
     
+
 
 
 

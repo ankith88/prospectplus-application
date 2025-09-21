@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -15,15 +16,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Activity, LeadStatus, Transcript, Review, ReviewCategory } from '@/lib/types'
+import type { Activity, LeadStatus, Transcript, Review, ReviewCategory, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Share2, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllCallActivities, getAllTranscripts, addCallReview } from '@/services/firebase'
+import { getAllCallActivities, getAllTranscripts, addCallReview, shareCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,6 +48,8 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
+import { ScrollArea } from './ui/scroll-area'
+import { Checkbox } from './ui/checkbox'
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
@@ -60,6 +63,7 @@ interface CallsClientPageProps {
 export default function CallsClientPage({ initialCalls, initialTranscripts }: CallsClientPageProps) {
   const [allCalls, setAllCalls] = useState<CallActivity[]>(initialCalls);
   const [allTranscripts, setAllTranscripts] = useState<Transcript[]>(initialTranscripts);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false); // Data is pre-loaded
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -69,6 +73,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const [reviewCategory, setReviewCategory] = useState<ReviewCategory | "">("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [viewingReview, setViewingReview] = useState<Review | null>(null);
+  const [sharingCall, setSharingCall] = useState<CallActivity | null>(null);
+  const [sharedWithUsers, setSharedWithUsers] = useState<string[]>([]);
 
   const [filters, setFilters] = useState({
     user: 'all',
@@ -88,12 +94,14 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [fetchedCalls, fetchedTranscripts] = await Promise.all([
+      const [fetchedCalls, fetchedTranscripts, fetchedUsers] = await Promise.all([
         getAllCallActivities(),
-        getAllTranscripts()
+        getAllTranscripts(),
+        getAllUsers(),
       ]);
       setAllCalls(fetchedCalls);
       setAllTranscripts(fetchedTranscripts);
+      setAllDialers(fetchedUsers.filter(u => u.role !== 'admin'));
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls or transcripts.' });
@@ -107,6 +115,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
       router.push('/signin');
       return;
     }
+    fetchData(); // Fetch all data on initial load
   }, [user, authLoading, router]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
@@ -125,6 +134,11 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
     return minutes * 60 + seconds;
   };
+  
+  const callsSharedWithMe = useMemo(() => {
+    if (!userProfile?.displayName) return [];
+    return allCalls.filter(call => call.review?.sharedWith?.includes(userProfile.displayName!));
+  }, [allCalls, userProfile]);
 
   const filteredCalls = useMemo(() => {
     // Group calls by callId to ensure uniqueness
@@ -232,7 +246,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
+    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category', 'Shared With'];
     const rows = filteredCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.dialerAssigned || 'Unassigned'),
@@ -245,6 +259,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         escapeCsvCell(call.review?.reviewer || ''),
         escapeCsvCell(call.review?.notes || ''),
         escapeCsvCell(call.review?.category || ''),
+        escapeCsvCell(call.review?.sharedWith?.join(', ') || ''),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -307,6 +322,22 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
       setIsSubmittingReview(false);
     }
   };
+  
+  const handleSaveSharing = async () => {
+    if (!sharingCall || !sharingCall.review) return;
+    try {
+        await shareCallReview(sharingCall.leadId, sharingCall.id, sharedWithUsers);
+        toast({ title: "Success", description: "Sharing settings updated." });
+        setAllCalls(prev => prev.map(c => 
+            c.id === sharingCall.id 
+            ? { ...c, review: { ...c.review!, sharedWith: sharedWithUsers } } 
+            : c
+        ));
+        setSharingCall(null);
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: "Failed to update sharing settings." });
+    }
+  };
 
 
   if (loading || authLoading) {
@@ -328,6 +359,119 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     }[category];
     return <Badge variant="outline" className={colorClass}>{category}</Badge>;
   };
+  
+  const renderCallRow = (call: CallActivity) => {
+    const transcript = call.callId ? transcriptsByCallId[call.callId] : null;
+    return (
+        <TableRow key={call.id}>
+            <TableCell>
+                <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
+                {call.leadName}
+                </Button>
+            </TableCell>
+            <TableCell>
+                <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                {call.dialerAssigned || 'Unassigned'}
+                </div>
+            </TableCell>
+            <TableCell>
+                <LeadStatusBadge status={call.leadStatus} />
+            </TableCell>
+            <TableCell>
+                <div className="flex items-center gap-2 font-medium">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <span>{call.callId || 'N/A'}</span>
+                </div>
+            </TableCell>
+            <TableCell>
+                <div className="flex flex-col text-sm">
+                    <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{new Date(call.date).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>{new Date(call.date).toLocaleTimeString()}</span>
+                    </div>
+                </div>
+            </TableCell>
+            <TableCell>
+                <div className="flex items-center gap-2 font-medium">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>{call.duration || 'N/A'}</span>
+                </div>
+            </TableCell>
+            <TableCell className="min-w-[20rem] whitespace-pre-wrap">
+                {call.notes}
+            </TableCell>
+            <TableCell>
+                {call.review?.reviewer ? (
+                    <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    {call.review.reviewer}
+                    </div>
+                ) : (
+                    <span className="text-muted-foreground">N/A</span>
+                )}
+            </TableCell>
+            <TableCell>
+                <ReviewCategoryBadge category={call.review?.category} />
+            </TableCell>
+            <TableCell>
+                <div className="flex flex-col sm:flex-row gap-2">
+                {call.callId && (
+                    <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
+                    <Voicemail className="mr-2 h-4 w-4" />
+                    Recording
+                    </Button>
+                )}
+                {call.callId && (
+                    transcript ? (
+                        <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Transcript
+                        </Button>
+                    ) : (
+                        <Button variant="outline" size="sm" onClick={() => handleGetTranscriptForCall(call)} disabled={fetchingTranscriptId === call.callId}>
+                            {fetchingTranscriptId === call.callId ? <Loader /> : <Download className="mr-2 h-4 w-4" />}
+                            Fetch
+                        </Button>
+                    )
+                )}
+                {call.review && (
+                <Button variant="secondary" size="sm" onClick={() => setViewingReview(call.review!)}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    View Review
+                </Button>
+                )}
+                {userProfile?.role === 'admin' && (
+                    <Button variant="outline" size="sm" onClick={() => {
+                        setReviewingCall(call);
+                        setReviewNotes(call.review?.notes || "");
+                        setReviewCategory(call.review?.category || "");
+                    }}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        {call.isReviewed ? 'Edit Review' : 'Add Review'}
+                    </Button>
+                )}
+                 {userProfile?.role === 'admin' && call.review && (
+                    <Button variant="outline" size="sm" onClick={() => {
+                        setSharingCall(call);
+                        setSharedWithUsers(call.review?.sharedWith || []);
+                    }}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Share
+                    </Button>
+                )}
+                </div>
+            </TableCell>
+        </TableRow>
+    );
+  };
 
   return (
     <>
@@ -336,6 +480,37 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         <h1 className="text-3xl font-bold tracking-tight">All Calls</h1>
         <p className="text-muted-foreground">Review all call activities.</p>
       </header>
+
+       {callsSharedWithMe.length > 0 && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-primary">
+                        <Users className="h-5 w-5" />
+                        Shared With Me for Coaching
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Lead</TableHead>
+                                    <TableHead>User</TableHead>
+                                    <TableHead>Reviewed By</TableHead>
+                                    <TableHead>Review Category</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {callsSharedWithMe.map(renderCallRow)}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        )}
+
        <Collapsible>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -525,108 +700,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
                     <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCalls.length > 0 ? (
-                  filteredCalls.map((call) => {
-                    const transcript = call.callId ? transcriptsByCallId[call.callId] : null;
-                    return (
-                    <TableRow key={call.id}>
-                      <TableCell>
-                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
-                            {call.leadName}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          {call.dialerAssigned || 'Unassigned'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <LeadStatusBadge status={call.leadStatus} />
-                      </TableCell>
-                       <TableCell>
-                        <div className="flex items-center gap-2 font-medium">
-                            <Hash className="h-4 w-4 text-muted-foreground" />
-                            <span>{call.callId || 'N/A'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                            <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <span>{new Date(call.date).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                <span>{new Date(call.date).toLocaleTimeString()}</span>
-                            </div>
-                        </div>
-                      </TableCell>
-                       <TableCell>
-                          <div className="flex items-center gap-2 font-medium">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span>{call.duration || 'N/A'}</span>
-                          </div>
-                       </TableCell>
-                       <TableCell className="min-w-[20rem] whitespace-pre-wrap">
-                          {call.notes}
-                       </TableCell>
-                       <TableCell>
-                        {call.review?.reviewer ? (
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              {call.review.reviewer}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">N/A</span>
-                          )}
-                       </TableCell>
-                        <TableCell>
-                            <ReviewCategoryBadge category={call.review?.category} />
-                        </TableCell>
-                       <TableCell>
-                         <div className="flex flex-col sm:flex-row gap-2">
-                            {call.callId && (
-                                <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
-                                <Voicemail className="mr-2 h-4 w-4" />
-                                Recording
-                                </Button>
-                            )}
-                            {call.callId && (
-                                transcript ? (
-                                    <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Transcript
-                                    </Button>
-                                ) : (
-                                    <Button variant="outline" size="sm" onClick={() => handleGetTranscriptForCall(call)} disabled={fetchingTranscriptId === call.callId}>
-                                        {fetchingTranscriptId === call.callId ? <Loader /> : <Download className="mr-2 h-4 w-4" />}
-                                        Fetch
-                                    </Button>
-                                )
-                            )}
-                             {call.review && (
-                              <Button variant="secondary" size="sm" onClick={() => setViewingReview(call.review!)}>
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                View Review
-                              </Button>
-                            )}
-                             {userProfile?.role === 'admin' && (
-                                <Button variant="outline" size="sm" onClick={() => {
-                                    setReviewingCall(call);
-                                    setReviewNotes(call.review?.notes || "");
-                                    setReviewCategory(call.review?.category || "");
-                                }}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    {call.isReviewed ? 'Edit Review' : 'Add Review'}
-                                </Button>
-                            )}
-                         </div>
-                        </TableCell>
-                    </TableRow>
-                  )})
+                  filteredCalls.map(renderCallRow)
                 ) : (
                   <TableRow>
                       <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
@@ -726,6 +800,41 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
             </div>
             <DialogFooter>
                 <Button onClick={() => setViewingReview(null)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    
+     <Dialog open={!!sharingCall} onOpenChange={(open) => { if(!open) setSharingCall(null); }}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Share Call Review</DialogTitle>
+                <DialogDescription>Share the review for the call with {sharingCall?.leadName} with other users for coaching.</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-64 my-4">
+                <div className="space-y-2">
+                    {allDialers.map(dialer => (
+                        <div key={dialer.uid} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={`share-${dialer.uid}`}
+                                checked={sharedWithUsers.includes(dialer.displayName!)}
+                                onCheckedChange={(checked) => {
+                                    if (checked) {
+                                        setSharedWithUsers(prev => [...prev, dialer.displayName!]);
+                                    } else {
+                                        setSharedWithUsers(prev => prev.filter(name => name !== dialer.displayName));
+                                    }
+                                }}
+                            />
+                            <Label htmlFor={`share-${dialer.uid}`} className="font-normal">
+                                {dialer.displayName}
+                            </Label>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setSharingCall(null)}>Cancel</Button>
+                <Button onClick={handleSaveSharing}>Save Sharing</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

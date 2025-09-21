@@ -21,6 +21,7 @@ export interface Review {
   date: string;
   notes: string;
   category?: ReviewCategory;
+  sharedWith?: string[];
 }
 
 export interface Activity {
@@ -159,4 +160,3 @@ export interface UserProfile {
     
 
     
-
