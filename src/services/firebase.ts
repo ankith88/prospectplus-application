@@ -357,18 +357,13 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 async function getAllCallActivities(): Promise<CallActivity[]> {
     console.log('[getAllCallActivities] Starting to fetch call activities...');
     try {
-        // Query without the 'where' clause to avoid needing an index immediately
         const activitySnapshot = await getDocs(collectionGroup(firestore, 'activity'));
-        
-        // Filter for 'Call' type in code
         const callActivityDocs = activitySnapshot.docs.filter(doc => doc.data().type === 'Call');
 
         if (callActivityDocs.length === 0) {
             console.log("[getAllCallActivities] No call activities found after filtering.");
             return [];
         }
-        
-        console.log(`[getAllCallActivities] Found ${callActivityDocs.length} raw call activities.`);
 
         const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) {
@@ -376,7 +371,6 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
              return [];
         }
 
-        console.log(`[getAllCallActivities] Fetching data for ${leadIds.length} unique leads.`);
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
         for (let i = 0; i < leadIds.length; i += 30) {
@@ -391,8 +385,6 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             });
         }
         
-        console.log(`[getAllCallActivities] Fetched data for ${Object.keys(leadsData).length} leads.`);
-
         const allCalls = callActivityDocs.map(activityDoc => {
             const activityData = activityDoc.data() as Activity;
             const leadId = activityDoc.ref.parent.parent!.id;
@@ -412,9 +404,6 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             };
         }).filter((call): call is CallActivity => call !== null);
 
-        console.log(`[getAllCallActivities] Mapped ${allCalls.length} calls to their leads.`);
-
-        // De-duplicate by callId, keeping the most recent entry
         const uniqueCallsMap = new Map<string, CallActivity>();
         allCalls.forEach(call => {
             if (call.callId) {
@@ -423,7 +412,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
                     uniqueCallsMap.set(call.callId, call);
                 }
             } else {
-                 uniqueCallsMap.set(call.id, call); // For manual calls without callId
+                 uniqueCallsMap.set(call.id, call);
             }
         });
 
@@ -540,7 +529,7 @@ async function getAllTranscripts(): Promise<Transcript[]> {
                 ...transcriptData,
                 phoneNumber: transcriptData.phoneNumber || leadData?.customerPhone || 'Unknown',
             } as Transcript;
-        });
+        }).filter((t): t is Transcript => !!t);
         
         allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allTranscripts;
@@ -576,15 +565,19 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
             const leadId = appointmentDoc.ref.parent.parent!.id;
             const leadData = leadsData[leadId];
             
+            if (!leadData) {
+                return null;
+            }
+
             return {
                 ...appointmentData,
                 id: appointmentDoc.id,
                 leadId: leadId,
-                leadName: leadData?.companyName || 'Unknown Lead',
-                dialerAssigned: leadData?.dialerAssigned,
+                leadName: leadData.companyName || 'Unknown Lead',
+                dialerAssigned: leadData.dialerAssigned,
                 leadStatus: safeGetStatus(leadData.customerStatus),
             };
-        });
+        }).filter((appt): appt is Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus } => appt !== null);
 
         allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
         return allAppointments;
@@ -1169,5 +1162,6 @@ export {
 };
 
     
+
 
 
