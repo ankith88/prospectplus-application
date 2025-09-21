@@ -357,15 +357,20 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 async function getAllCallActivities(): Promise<CallActivity[]> {
     console.log('[getAllCallActivities] Starting to fetch call activities...');
     try {
-        const activitySnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call')));
-        if (activitySnapshot.empty) {
-            console.log("[getAllCallActivities] No call activities found in collection group.");
+        // Query without the 'where' clause to avoid needing an index immediately
+        const activitySnapshot = await getDocs(collectionGroup(firestore, 'activity'));
+        
+        // Filter for 'Call' type in code
+        const callActivityDocs = activitySnapshot.docs.filter(doc => doc.data().type === 'Call');
+
+        if (callActivityDocs.length === 0) {
+            console.log("[getAllCallActivities] No call activities found after filtering.");
             return [];
         }
         
-        console.log(`[getAllCallActivities] Found ${activitySnapshot.docs.length} raw call activities.`);
+        console.log(`[getAllCallActivities] Found ${callActivityDocs.length} raw call activities.`);
 
-        const leadIds = [...new Set(activitySnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
+        const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) {
              console.log("[getAllCallActivities] No lead IDs found from activities.");
              return [];
@@ -388,7 +393,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
         
         console.log(`[getAllCallActivities] Fetched data for ${Object.keys(leadsData).length} leads.`);
 
-        const allCalls = activitySnapshot.docs.map(activityDoc => {
+        const allCalls = callActivityDocs.map(activityDoc => {
             const activityData = activityDoc.data() as Activity;
             const leadId = activityDoc.ref.parent.parent!.id;
             const leadData = leadsData[leadId];
@@ -1164,4 +1169,5 @@ export {
 };
 
     
+
 
