@@ -101,7 +101,10 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
       ]);
       setAllCalls(fetchedCalls);
       setAllTranscripts(fetchedTranscripts);
-      setAllDialers(fetchedUsers.filter(u => u.role !== 'admin'));
+       const dialers = fetchedUsers
+        .filter(u => u.role !== 'admin' && u.firstName && u.lastName)
+        .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
+      setAllDialers(dialers);
     } catch (error) {
       console.error("Failed to fetch data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls or transcripts.' });
