@@ -9,7 +9,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getAllCallActivities, getAllLeadsForReport, getAllAppointments } from '@/services/firebase';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'New': '#A0A0A0', // Neutral Gray
@@ -107,7 +108,8 @@ export default function ReportsClientPage({
   const [allLeads, setAllLeads] = useState<Lead[]>(initialLeads);
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>(initialAppointments);
   const [allDialers, setAllDialers] = useState<string[]>(initialDialers);
-  const [loading, setLoading] = useState(false); // Data is pre-loaded, so no initial loading state
+  const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -128,6 +130,28 @@ export default function ReportsClientPage({
       handleFilterChange('dialerAssigned', userProfile.displayName);
     }
   }, [userProfile]);
+  
+  const fetchData = async () => {
+    setIsRefreshing(true);
+    toast({ title: 'Refreshing data...', description: 'Fetching the latest information from the database.' });
+    try {
+        const [refreshedCalls, refreshedLeads, refreshedAppointments] = await Promise.all([
+            getAllCallActivities(),
+            getAllLeadsForReport(),
+            getAllAppointments()
+        ]);
+        setAllCalls(refreshedCalls);
+        setAllLeads(refreshedLeads);
+        setAllAppointments(refreshedAppointments);
+        toast({ title: 'Success', description: 'Report data has been updated.' });
+    } catch (error) {
+        console.error("Failed to refresh data:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest data.' });
+    } finally {
+        setIsRefreshing(false);
+    }
+  };
+
 
   const onStatusPieEnter = (_: any, index: number) => {
     setStatusActiveIndex(index);
@@ -470,16 +494,22 @@ export default function ReportsClientPage({
        <Collapsible>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                <span>Filters</span>
-              </CardTitle>
-               <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                      <SlidersHorizontal className="h-4 w-4" />
-                      <span className="ml-2">Toggle Filters</span>
-                  </Button>
-              </CollapsibleTrigger>
+                <div className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    <CardTitle>Filters</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={fetchData} variant="outline" disabled={isRefreshing}>
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                    </Button>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                            <SlidersHorizontal className="h-4 w-4" />
+                            <span className="ml-2">Toggle Filters</span>
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
             </CardHeader>
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
