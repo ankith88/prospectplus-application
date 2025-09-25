@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -55,7 +56,8 @@ export default function LeadsPage() {
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [myLeadsPage, setMyLeadsPage] = useState(1);
-  const [assignedLeadsPage, setAssignedLeadsPage] = useState(1);
+  const [paginationState, setPaginationState] = useState<Record<string, number>>({});
+
   const LEADS_PER_PAGE = 10;
   
   const router = useRouter();
@@ -191,16 +193,25 @@ export default function LeadsPage() {
 
   const totalMyLeadsPages = Math.ceil(myLeads.length / LEADS_PER_PAGE);
 
-  const allAssignedLeads = useMemo(() => {
-    return filteredLeads.filter(lead => !!lead.dialerAssigned);
-  }, [filteredLeads]);
-  
-  const paginatedAssignedLeads = useMemo(() => {
-    const startIndex = (assignedLeadsPage - 1) * LEADS_PER_PAGE;
-    return allAssignedLeads.slice(startIndex, startIndex + LEADS_PER_PAGE);
-  }, [allAssignedLeads, assignedLeadsPage]);
+  const groupedAssignedLeads = useMemo(() => {
+    const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
+    
+    return assignedLeads.reduce((acc, lead) => {
+      const dialer = lead.dialerAssigned!;
+      const status = lead.status;
 
-  const totalAssignedLeadsPages = Math.ceil(allAssignedLeads.length / LEADS_PER_PAGE);
+      if (!acc[dialer]) {
+        acc[dialer] = {};
+      }
+      if (!acc[dialer][status]) {
+        acc[dialer][status] = [];
+      }
+      acc[dialer][status].push(lead);
+
+      return acc;
+    }, {} as Record<string, Record<string, LeadWithDetails[]>>);
+  }, [filteredLeads]);
+
 
   const unassignedLeads = useMemo(() => {
     return filteredLeads.filter(lead => !lead.dialerAssigned);
@@ -389,6 +400,10 @@ export default function LeadsPage() {
         checked ? [...prev, userId] : prev.filter(id => id !== userId)
     );
   };
+  
+  const handlePageChange = (groupKey: string, newPage: number) => {
+    setPaginationState(prev => ({...prev, [groupKey]: newPage}));
+  };
 
 
   if (loading || authLoading) {
@@ -530,7 +545,7 @@ export default function LeadsPage() {
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
                 <span>All Assigned Leads</span>
-                <Badge variant="secondary">{allAssignedLeads.length} lead(s)</Badge>
+                <Badge variant="secondary">{Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().length} lead(s)</Badge>
             </CardTitle>
             <div className="flex items-center gap-2">
                 {selectedForReassignment.length > 0 && (
@@ -539,7 +554,7 @@ export default function LeadsPage() {
                         Reassign ({selectedForReassignment.length})
                     </Button>
                 )}
-                <Button onClick={() => exportLeadsToCsv(allAssignedLeads, `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={allAssignedLeads.length === 0}>
+                <Button onClick={() => exportLeadsToCsv(filteredLeads.filter(l => l.dialerAssigned), `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export All Assigned
                 </Button>
@@ -548,65 +563,84 @@ export default function LeadsPage() {
         <CardContent>
           {loading ? (
              <div className="text-center"><Loader /></div>
-           ) : allAssignedLeads.length > 0 ? (
-            <div className="space-y-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-8">
-                                <Checkbox
-                                    checked={allAssignedLeads.length > 0 && selectedForReassignment.length === allAssignedLeads.length}
-                                    onCheckedChange={(checked) => {
-                                        if (checked) {
-                                            setSelectedForReassignment(allAssignedLeads.map(l => l.id));
-                                        } else {
-                                            setSelectedForReassignment([]);
-                                        }
-                                    }}
-                                    aria-label="Select all assigned leads"
-                                />
-                            </TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
-                            <TableHead>Assigned To</TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
-                            <TableHead className="w-[50px] text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {paginatedAssignedLeads.map((lead) => (
-                             <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
-                                <TableCell><Checkbox checked={selectedForReassignment.includes(lead.id)} onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
-                                <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
-                                <TableCell>{lead.dialerAssigned}</TableCell>
-                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                <TableCell className="text-right">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
+           ) : Object.keys(groupedAssignedLeads).length > 0 ? (
+              <Accordion type="multiple" className="w-full space-y-2">
+                {Object.entries(groupedAssignedLeads).map(([dialer, statusGroups]) => (
+                  <AccordionItem value={dialer} key={dialer}>
+                    <AccordionTrigger className="bg-muted px-4 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{dialer}</span>
+                        <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-2">
+                       <Accordion type="multiple" className="w-full space-y-1">
+                          {Object.entries(statusGroups).map(([status, leads]) => {
+                              const groupKey = `${dialer}-${status}`;
+                              const currentPage = paginationState[groupKey] || 1;
+                              const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
+                              const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+
+                              return (
+                                <AccordionItem value={status} key={status}>
+                                  <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
+                                      <div className="flex items-center gap-2">
+                                          <LeadStatusBadge status={status as LeadStatus} />
+                                          <Badge variant="outline">{leads.length} Leads</Badge>
+                                      </div>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="p-2">
+                                     <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Company</TableHead>
+                                                <TableHead>Franchisee</TableHead>
+                                                <TableHead>Industry</TableHead>
+                                                <TableHead className="w-[50px] text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {paginatedLeads.map((lead) => (
+                                              <TableRow key={lead.id}>
+                                                  <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                                  <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                                                  <TableCell>{lead.industryCategory}</TableCell>
+                                                  <TableCell className="text-right">
+                                                      <DropdownMenu>
+                                                          <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                          </DropdownMenuTrigger>
+                                                          <DropdownMenuContent>
+                                                            <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                          </DropdownMenuContent>
+                                                      </DropdownMenu>
+                                                  </TableCell>
+                                              </TableRow>
+                                          ))}
+                                        </TableBody>
+                                    </Table>
+                                    {totalPages > 1 && (
+                                        <div className="flex items-center justify-end gap-2 pt-4">
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(groupKey, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
+                                            <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(groupKey, currentPage + 1)} disabled={currentPage === totalPages}>Next</Button>
+                                        </div>
+                                    )}
+                                  </AccordionContent>
+                                </AccordionItem>
+                              )
+                          })}
+                       </Accordion>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
            ) : (
              <div className="py-10 text-center text-muted-foreground">
                 No leads are currently assigned to any user.
              </div>
            )}
         </CardContent>
-        {totalAssignedLeadsPages > 1 && (
-            <CardFooter className="flex items-center justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setAssignedLeadsPage(p => p - 1)} disabled={assignedLeadsPage === 1}>Previous</Button>
-                <span className="text-sm text-muted-foreground">Page {assignedLeadsPage} of {totalAssignedLeadsPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setAssignedLeadsPage(p => p + 1)} disabled={assignedLeadsPage === totalAssignedLeadsPages}>Next</Button>
-            </CardFooter>
-        )}
       </Card>
       )}
 
@@ -755,5 +789,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    
