@@ -61,7 +61,6 @@ export default function LeadsPage() {
     status: 'all',
     franchisee: '',
     industryCategory: '',
-    phoneNumber: '',
   });
 
   useEffect(() => {
@@ -107,7 +106,6 @@ export default function LeadsPage() {
       status: 'all',
       franchisee: '',
       industryCategory: '',
-      phoneNumber: '',
     });
   };
 
@@ -117,9 +115,8 @@ export default function LeadsPage() {
       const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
-      const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
       const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status);
-      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch;
+      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
     });
   }, [allLeads, filters]);
 
@@ -447,14 +444,10 @@ export default function LeadsPage() {
                     </CollapsibleTrigger>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="phoneNumber">Phone Number</Label>
-                            <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
@@ -523,7 +516,6 @@ export default function LeadsPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Company</TableHead>
-                              <TableHead>Phone</TableHead>
                               <TableHead>Industry</TableHead>
                               <TableHead>Last Activity</TableHead>
                               <TableHead>Last Note</TableHead>
@@ -539,16 +531,6 @@ export default function LeadsPage() {
                                     <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                       {lead.companyName}
                                     </Button>
-                                  </TableCell>
-                                  <TableCell>
-                                    {lead.customerPhone ? (
-                                      <div className="flex items-center gap-1">
-                                          <span className="font-medium break-all">{lead.customerPhone}</span>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
-                                              <PhoneCall className="w-3 h-3" />
-                                          </Button>
-                                      </div>
-                                    ) : 'N/A'}
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
                                   <TableCell className="min-w-[200px] whitespace-pre-wrap">
@@ -643,7 +625,6 @@ export default function LeadsPage() {
                                                 />
                                                 </TableHead>
                                               <TableHead>Company</TableHead>
-                                              <TableHead>Phone</TableHead>
                                               <TableHead>Last Activity</TableHead>
                                               <TableHead className="w-[50px] text-right">Actions</TableHead>
                                             </TableRow>
@@ -665,16 +646,6 @@ export default function LeadsPage() {
                                                     <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                                       {lead.companyName}
                                                     </Button>
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {lead.customerPhone ? (
-                                                      <div className="flex items-center gap-1">
-                                                          <span className="font-medium break-all">{lead.customerPhone}</span>
-                                                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
-                                                              <PhoneCall className="w-3 h-3" />
-                                                          </Button>
-                                                      </div>
-                                                    ) : 'N/A'}
                                                   </TableCell>
                                                   <TableCell className="min-w-[200px] whitespace-pre-wrap">
                                                     {lastActivity ? (
@@ -752,7 +723,6 @@ export default function LeadsPage() {
                     />
                   </TableHead>
                   <TableHead>Company</TableHead>
-                  <TableHead>Phone</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Industry</TableHead>
@@ -762,7 +732,7 @@ export default function LeadsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                      <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                      <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : unassignedLeads.length > 0 ? (
                   unassignedLeads.map((lead) => {
@@ -780,16 +750,6 @@ export default function LeadsPage() {
                           {lead.companyName}
                         </Button>
                       </TableCell>
-                      <TableCell>
-                        {lead.customerPhone ? (
-                           <div className="flex items-center gap-1">
-                               <span className="font-medium break-all">{lead.customerPhone}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {e.stopPropagation(); handleInitiateCall(lead.id, lead.customerPhone!)}}>
-                                   <PhoneCall className="w-3 h-3" />
-                               </Button>
-                           </div>
-                        ) : 'N/A'}
-                       </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
@@ -817,7 +777,7 @@ export default function LeadsPage() {
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                           No unassigned leads found.
                       </TableCell>
                   </TableRow>
@@ -879,3 +839,5 @@ export default function LeadsPage() {
     </>
   )
 }
+
+    
