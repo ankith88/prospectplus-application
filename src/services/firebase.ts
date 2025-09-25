@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -483,7 +484,7 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
                 leadId: leadId,
             };
         });
-        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -1121,6 +1122,38 @@ async function shareCallReview(leadId: string, activityId: string, sharedWith: s
     }
 }
 
+async function getLastNote(leadId: string): Promise<Note | null> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'notes');
+        const q = query(ref, orderBy('date', 'desc'), limit(1));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return null;
+        }
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() } as Note;
+    } catch (error) {
+        console.error(`Failed to fetch last note for lead ${leadId}:`, error);
+        return null;
+    }
+}
+
+async function getLastActivity(leadId: string): Promise<Activity | null> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, 'activity');
+        const q = query(ref, orderBy('date', 'desc'), limit(1));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return null;
+        }
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() } as Activity;
+    } catch (error) {
+        console.error(`Failed to fetch last activity for lead ${leadId}:`, error);
+        return null;
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     addContactToLead,
@@ -1167,4 +1200,6 @@ export {
     bulkUpdateLeadDialerRep,
     addCallReview,
     shareCallReview,
+    getLastNote,
+    getLastActivity,
 };

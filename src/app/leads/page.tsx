@@ -23,10 +23,10 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -39,9 +39,15 @@ import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { format } from 'date-fns'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'industryCategory';
+type ExpandedLeadDetails = {
+    note: Note | null;
+    activity: Activity | null;
+    loading: boolean;
+};
 
 
 export default function LeadsPage() {
@@ -56,6 +62,7 @@ export default function LeadsPage() {
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [myLeadsPagination, setMyLeadsPagination] = useState<Record<string, number>>({});
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
 
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
@@ -414,6 +421,40 @@ export default function LeadsPage() {
     setMyLeadsPagination(prev => ({ ...prev, [status]: newPage }));
   };
 
+  const toggleLeadDetails = async (leadId: string) => {
+        if (expandedDetails[leadId]) {
+            setExpandedDetails(prev => {
+                const newState = { ...prev };
+                delete newState[leadId];
+                return newState;
+            });
+            return;
+        }
+
+        setExpandedDetails(prev => ({
+            ...prev,
+            [leadId]: { note: null, activity: null, loading: true },
+        }));
+
+        try {
+            const [note, activity] = await Promise.all([
+                getLastNote(leadId),
+                getLastActivity(leadId)
+            ]);
+            setExpandedDetails(prev => ({
+                ...prev,
+                [leadId]: { note, activity, loading: false },
+            }));
+        } catch (error) {
+            console.error("Failed to fetch lead details:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not load lead details." });
+            setExpandedDetails(prev => ({
+                ...prev,
+                [leadId]: { note: null, activity: null, loading: false },
+            }));
+        }
+    };
+
 
   if (loading || authLoading) {
     return (
@@ -533,16 +574,57 @@ export default function LeadsPage() {
                                     <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                                     <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                                     <TableHead><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
+                                    <TableHead className="w-[120px] text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedLeads.map((lead) => (
+                                    <>
                                     <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
                                         <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
                                         <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                         <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                                         <TableCell>{lead.industryCategory}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                                                <History className="mr-2 h-4 w-4"/>
+                                                {expandedDetails[lead.id] ? 'Hide' : 'History'}
+                                            </Button>
+                                        </TableCell>
                                     </TableRow>
+                                     {expandedDetails[lead.id] && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="p-0">
+                                                <div className="p-4 bg-secondary/50">
+                                                    {expandedDetails[lead.id].loading ? (
+                                                        <Loader />
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                            <div>
+                                                                <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                                {expandedDetails[lead.id].activity ? (
+                                                                    <div>
+                                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                                    </div>
+                                                                ) : <p className="text-muted-foreground">No activities found.</p>}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-semibold mb-2">Last Note</h4>
+                                                                {expandedDetails[lead.id].note ? (
+                                                                    <div>
+                                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                                    </div>
+                                                                ) : <p className="text-muted-foreground">No notes found.</p>}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    </>
                                 ))}
                             </TableBody>
                         </Table>
@@ -622,26 +704,66 @@ export default function LeadsPage() {
                                                 <TableHead>Company</TableHead>
                                                 <TableHead>Franchisee</TableHead>
                                                 <TableHead>Industry</TableHead>
-                                                <TableHead className="w-[50px] text-right">Actions</TableHead>
+                                                <TableHead className="w-[120px] text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                           {paginatedLeads.map((lead) => (
+                                            <>
                                               <TableRow key={lead.id}>
                                                   <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                                                   <TableCell>{lead.industryCategory}</TableCell>
                                                   <TableCell className="text-right">
-                                                      <DropdownMenu>
-                                                          <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                                          </DropdownMenuTrigger>
-                                                          <DropdownMenuContent>
-                                                            <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
-                                                          </DropdownMenuContent>
-                                                      </DropdownMenu>
+                                                      <div className="flex items-center justify-end">
+                                                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                                                              <History className="mr-2 h-4 w-4"/>
+                                                              {expandedDetails[lead.id] ? 'Hide' : 'History'}
+                                                          </Button>
+                                                          <DropdownMenu>
+                                                              <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                              </DropdownMenuTrigger>
+                                                              <DropdownMenuContent>
+                                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                              </DropdownMenuContent>
+                                                          </DropdownMenu>
+                                                      </div>
                                                   </TableCell>
                                               </TableRow>
+                                              {expandedDetails[lead.id] && (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="p-0">
+                                                        <div className="p-4 bg-secondary/50">
+                                                            {expandedDetails[lead.id].loading ? (
+                                                                <Loader />
+                                                            ) : (
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                                    <div>
+                                                                        <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                                        {expandedDetails[lead.id].activity ? (
+                                                                            <div>
+                                                                                <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                                                <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                                            </div>
+                                                                        ) : <p className="text-muted-foreground">No activities found.</p>}
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-semibold mb-2">Last Note</h4>
+                                                                        {expandedDetails[lead.id].note ? (
+                                                                            <div>
+                                                                                <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                                                <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                                            </div>
+                                                                        ) : <p className="text-muted-foreground">No notes found.</p>}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                              )}
+                                            </>
                                           ))}
                                         </TableBody>
                                     </Table>
