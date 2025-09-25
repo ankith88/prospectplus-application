@@ -55,10 +55,10 @@ export default function LeadsPage() {
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
-  const [myLeadsPage, setMyLeadsPage] = useState(1);
-  const [paginationState, setPaginationState] = useState<Record<string, number>>({});
+  const [myLeadsPagination, setMyLeadsPagination] = useState<Record<string, number>>({});
 
   const LEADS_PER_PAGE = 10;
+  const [paginationState, setPaginationState] = useState<Record<string, number>>({});
   
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -186,12 +186,16 @@ export default function LeadsPage() {
     }
   }, [loading, myLeads, searchParams, router]);
 
-  const paginatedMyLeads = useMemo(() => {
-    const startIndex = (myLeadsPage - 1) * LEADS_PER_PAGE;
-    return myLeads.slice(startIndex, startIndex + LEADS_PER_PAGE);
-  }, [myLeads, myLeadsPage]);
-
-  const totalMyLeadsPages = Math.ceil(myLeads.length / LEADS_PER_PAGE);
+  const groupedMyLeads = useMemo(() => {
+    return myLeads.reduce((acc, lead) => {
+      const status = lead.status;
+      if (!acc[status]) {
+        acc[status] = [];
+      }
+      acc[status].push(lead);
+      return acc;
+    }, {} as Record<string, LeadWithDetails[]>);
+  }, [myLeads]);
 
   const groupedAssignedLeads = useMemo(() => {
     const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
@@ -336,11 +340,12 @@ export default function LeadsPage() {
     );
   };
 
-  const handleSelectAllMyLeads = (checked: boolean | 'indeterminate') => {
+  const handleSelectAllMyLeadsInGroup = (leadsInGroup: LeadWithDetails[], checked: boolean | 'indeterminate') => {
+    const leadIdsInGroup = leadsInGroup.map(l => l.id);
     if (checked) {
-      setSelectedMyLeads(myLeads.map(l => l.id));
+      setSelectedMyLeads(prev => [...new Set([...prev, ...leadIdsInGroup])]);
     } else {
-      setSelectedMyLeads([]);
+      setSelectedMyLeads(prev => prev.filter(id => !leadIdsInGroup.includes(id)));
     }
   };
   
@@ -403,6 +408,10 @@ export default function LeadsPage() {
   
   const handlePageChange = (groupKey: string, newPage: number) => {
     setPaginationState(prev => ({...prev, [groupKey]: newPage}));
+  };
+
+  const handleMyLeadsPageChange = (status: string, newPage: number) => {
+    setMyLeadsPagination(prev => ({ ...prev, [status]: newPage }));
   };
 
 
@@ -495,49 +504,66 @@ export default function LeadsPage() {
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-            <div className="space-y-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-8">
-                                <Checkbox
-                                    checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
-                                    onCheckedChange={handleSelectAllMyLeads}
-                                    aria-label="Select all my leads"
-                                />
-                            </TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {paginatedMyLeads.map((lead) => (
-                            <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
-                                <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
-                                <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
-                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                                <TableCell>{lead.industryCategory}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
+            <Accordion type="multiple" className="w-full space-y-2">
+              {Object.entries(groupedMyLeads).map(([status, leads]) => {
+                const currentPage = myLeadsPagination[status] || 1;
+                const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
+                const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+                const isAllInGroupSelected = paginatedLeads.every(l => selectedMyLeads.includes(l.id));
+
+                return (
+                  <AccordionItem value={status} key={status}>
+                    <AccordionTrigger className="bg-muted px-4 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <LeadStatusBadge status={status as LeadStatus} />
+                        <Badge>{leads.length} Leads</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-2">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-8">
+                                        <Checkbox
+                                            checked={paginatedLeads.length > 0 && isAllInGroupSelected}
+                                            onCheckedChange={(checked) => handleSelectAllMyLeadsInGroup(paginatedLeads, checked)}
+                                            aria-label={`Select all leads in ${status}`}
+                                        />
+                                    </TableHead>
+                                    <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                                    <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                                    <TableHead><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedLeads.map((lead) => (
+                                    <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                                        <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
+                                        <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                        <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                                        <TableCell>{lead.industryCategory}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                         {totalPages > 1 && (
+                            <div className="flex items-center justify-end gap-2 pt-4">
+                                <Button variant="outline" size="sm" onClick={() => handleMyLeadsPageChange(status, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
+                                <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                                <Button variant="outline" size="sm" onClick={() => handleMyLeadsPageChange(status, currentPage + 1)} disabled={currentPage === totalPages}>Next</Button>
+                            </div>
+                        )}
+                    </AccordionContent>
+                  </AccordionItem>
+                )
+              })}
+            </Accordion>
            ) : (
              <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                 You have no actionable leads assigned.
              </div>
            )}
         </CardContent>
-        {totalMyLeadsPages > 1 && (
-            <CardFooter className="flex items-center justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setMyLeadsPage(p => p - 1)} disabled={myLeadsPage === 1}>Previous</Button>
-                <span className="text-sm text-muted-foreground">Page {myLeadsPage} of {totalMyLeadsPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setMyLeadsPage(p => p + 1)} disabled={myLeadsPage === totalMyLeadsPages}>Next</Button>
-            </CardFooter>
-        )}
       </Card>
       
       {userProfile?.role === 'admin' && (
