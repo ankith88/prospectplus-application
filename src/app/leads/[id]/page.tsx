@@ -1,9 +1,8 @@
 
-
 import { notFound } from 'next/navigation'
-import { getLeadFromFirebase, getLeadSubCollection, getLeadNotes, getLeadTranscripts, getLeadContacts, getLeadAppointments } from '@/services/firebase'
+import { getLeadFromFirebase, getLeadContacts } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
-import type { Lead, Contact, Activity, Note, Transcript, Appointment } from '@/lib/types'
+import type { Lead } from '@/lib/types'
 
 export default async function LeadProfilePage({
   params: { id },
@@ -17,17 +16,9 @@ export default async function LeadProfilePage({
     return;
   }
 
-  // Fetch sub-collections on the server to pass as initial data
-  const [contacts, activity, notes, transcripts, appointments] = await Promise.all([
-    getLeadContacts(id),
-    getLeadSubCollection<Activity>(id, 'activity'),
-    getLeadNotes(id),
-    getLeadTranscripts(id),
-    getLeadAppointments(id),
-  ]);
-
+  // Fetch only essential data on the server
+  const contacts = await getLeadContacts(id);
   lead.contacts = contacts;
-  lead.activity = activity;
   
-  return <LeadProfile initialLead={lead} initialNotes={notes} initialTranscripts={transcripts} initialAppointments={appointments} />;
+  return <LeadProfile initialLead={lead} />;
 }
