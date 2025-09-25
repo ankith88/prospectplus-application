@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase } from '@/services/firebase'
+import { getLeadsFromFirebase, getLastNote, getLastActivity } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -35,10 +35,20 @@ import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subM
 import type { DateRange } from 'react-day-picker'
 import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
+import { useToast } from '@/hooks/use-toast'
+
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'discoveryScore';
+
+type ExpandedLeadDetails = {
+    note: Note | null;
+    activity: Activity | null;
+    loading: boolean;
+};
+
+const LEADS_PER_PAGE = 100;
 
 export default function ArchivedLeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -47,6 +57,10 @@ export default function ArchivedLeadsPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
+
   const [filters, setFilters] = useState({
     companyName: '',
     status: 'all',
@@ -65,7 +79,6 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        // Fetch leads with summary=true to get only the latest note and activity
         const fetchedLeads = await getLeadsFromFirebase({ summary: true });
         setAllLeads(fetchedLeads);
       } catch (error) {
@@ -79,6 +92,7 @@ export default function ArchivedLeadsPage() {
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+    setCurrentPage(1); 
   };
 
   const clearFilters = () => {
@@ -89,6 +103,7 @@ export default function ArchivedLeadsPage() {
       industryCategory: '',
       date: undefined,
     });
+    setCurrentPage(1);
   };
 
   const archivedLeads = useMemo(() => {
@@ -137,6 +152,13 @@ export default function ArchivedLeadsPage() {
     return sortableItems;
   }, [archivedLeads, sortConfig]);
 
+  const paginatedLeads = useMemo(() => {
+    const startIndex = (currentPage - 1) * LEADS_PER_PAGE;
+    return sortedLeads.slice(startIndex, startIndex + LEADS_PER_PAGE);
+  }, [sortedLeads, currentPage]);
+
+  const totalPages = Math.ceil(sortedLeads.length / LEADS_PER_PAGE);
+
   const requestSort = (key: SortableLeadKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -152,105 +174,133 @@ export default function ArchivedLeadsPage() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
-  const formatAddress = (address: Lead['address']) => {
-    if (!address) return 'N/A';
-    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
-  }
+  const escapeCsvCell = (cellData: any) => {
+      if (cellData === null || cellData === undefined) {
+          return '';
+      }
+      const stringData = String(cellData);
+      if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+          return `"${stringData.replace(/"/g, '""')}"`;
+      }
+      return stringData;
+  };
 
-    const escapeCsvCell = (cellData: any) => {
-        if (cellData === null || cellData === undefined) {
-            return '';
+  const handleExport = () => {
+      const headers = [
+          'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+          'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
+          'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
+      ];
+
+      const rows: string[][] = [];
+
+      sortedLeads.forEach(lead => {
+          const baseRow = [
+              escapeCsvCell(lead.id),
+              escapeCsvCell(lead.companyName),
+              escapeCsvCell(lead.status),
+              escapeCsvCell(lead.statusReason),
+              escapeCsvCell(lead.franchisee),
+              escapeCsvCell(lead.dialerAssigned),
+              escapeCsvCell(lead.salesRepAssigned),
+              escapeCsvCell(lead.websiteUrl),
+              escapeCsvCell(lead.industryCategory),
+              escapeCsvCell(lead.industrySubCategory),
+              escapeCsvCell(lead.customerServiceEmail),
+              escapeCsvCell(lead.address?.street),
+              escapeCsvCell(lead.address?.city),
+              escapeCsvCell(lead.address?.state),
+              escapeCsvCell(lead.address?.zip),
+              escapeCsvCell(lead.address?.country),
+              escapeCsvCell(lead.aiScore),
+              escapeCsvCell(lead.aiReason),
+              escapeCsvCell(lead.discoveryData?.score),
+              escapeCsvCell(lead.discoveryData?.routingTag),
+              escapeCsvCell(lead.discoveryData?.postOfficeRelationship),
+              escapeCsvCell(lead.discoveryData?.logisticsSetup),
+              escapeCsvCell(lead.discoveryData?.shippingVolume),
+              escapeCsvCell(lead.discoveryData?.expressVsStandard),
+              escapeCsvCell(lead.discoveryData?.packageType?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.sameDayCourier),
+              escapeCsvCell(lead.discoveryData?.decisionMaker),
+              escapeCsvCell(lead.discoveryData?.painPoints),
+          ];
+          
+          const maxContacts = lead.contacts?.length || 0;
+
+          if (maxContacts === 0) {
+                rows.push(baseRow);
+                return;
+          }
+
+          for (let i = 0; i < maxContacts; i++) {
+              const contact = lead.contacts?.[i];
+
+              const rowData = [
+                  ...baseRow,
+                  escapeCsvCell(contact?.name),
+                  escapeCsvCell(contact?.title),
+                  escapeCsvCell(contact?.email),
+                  escapeCsvCell(contact?.phone),
+              ];
+              
+              if (i === 0) {
+                  rows.push(rowData);
+              } else {
+                  const emptyBase = Array(baseRow.length).fill('');
+                  rows.push([...emptyBase, ...rowData.slice(baseRow.length)]);
+              }
+          }
+      });
+
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      if (link.href) {
+          URL.revokeObjectURL(link.href);
+      }
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.setAttribute('download', `processed_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
+  const toggleLeadDetails = async (leadId: string) => {
+        if (expandedDetails[leadId]) {
+            setExpandedDetails(prev => {
+                const newState = { ...prev };
+                delete newState[leadId];
+                return newState;
+            });
+            return;
         }
-        const stringData = String(cellData);
-        if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
-            return `"${stringData.replace(/"/g, '""')}"`;
+
+        setExpandedDetails(prev => ({
+            ...prev,
+            [leadId]: { note: null, activity: null, loading: true },
+        }));
+
+        try {
+            const [note, activity] = await Promise.all([
+                getLastNote(leadId),
+                getLastActivity(leadId)
+            ]);
+            setExpandedDetails(prev => ({
+                ...prev,
+                [leadId]: { note, activity, loading: false },
+            }));
+        } catch (error) {
+            console.error("Failed to fetch lead details:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not load lead details." });
+            setExpandedDetails(prev => ({
+                ...prev,
+                [leadId]: { note: null, activity: null, loading: false },
+            }));
         }
-        return stringData;
-    };
-
-
-    const handleExport = () => {
-        const headers = [
-            'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
-            'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
-            'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
-        ];
-
-        const rows: string[][] = [];
-
-        sortedLeads.forEach(lead => {
-            const baseRow = [
-                escapeCsvCell(lead.id),
-                escapeCsvCell(lead.companyName),
-                escapeCsvCell(lead.status),
-                escapeCsvCell(lead.statusReason),
-                escapeCsvCell(lead.franchisee),
-                escapeCsvCell(lead.dialerAssigned),
-                escapeCsvCell(lead.salesRepAssigned),
-                escapeCsvCell(lead.websiteUrl),
-                escapeCsvCell(lead.industryCategory),
-                escapeCsvCell(lead.industrySubCategory),
-                escapeCsvCell(lead.customerServiceEmail),
-                escapeCsvCell(lead.address?.street),
-                escapeCsvCell(lead.address?.city),
-                escapeCsvCell(lead.address?.state),
-                escapeCsvCell(lead.address?.zip),
-                escapeCsvCell(lead.address?.country),
-                escapeCsvCell(lead.aiScore),
-                escapeCsvCell(lead.aiReason),
-                escapeCsvCell(lead.discoveryData?.score),
-                escapeCsvCell(lead.discoveryData?.routingTag),
-                escapeCsvCell(lead.discoveryData?.postOfficeRelationship),
-                escapeCsvCell(lead.discoveryData?.logisticsSetup),
-                escapeCsvCell(lead.discoveryData?.shippingVolume),
-                escapeCsvCell(lead.discoveryData?.expressVsStandard),
-                escapeCsvCell(lead.discoveryData?.packageType?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.sameDayCourier),
-                escapeCsvCell(lead.discoveryData?.decisionMaker),
-                escapeCsvCell(lead.discoveryData?.painPoints),
-            ];
-            
-            const maxContacts = lead.contacts?.length || 0;
-
-            if (maxContacts === 0) {
-                 rows.push(baseRow);
-                 return;
-            }
-
-            for (let i = 0; i < maxContacts; i++) {
-                const contact = lead.contacts?.[i];
-
-                const rowData = [
-                    ...baseRow,
-                    escapeCsvCell(contact?.name),
-                    escapeCsvCell(contact?.title),
-                    escapeCsvCell(contact?.email),
-                    escapeCsvCell(contact?.phone),
-                ];
-                
-                if (i === 0) {
-                   rows.push(rowData);
-                } else {
-                   const emptyBase = Array(baseRow.length).fill('');
-                   rows.push([...emptyBase, ...rowData.slice(baseRow.length)]);
-                }
-            }
-        });
-
-        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        if (link.href) {
-            URL.revokeObjectURL(link.href);
-        }
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.setAttribute('download', `processed_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
   if (loading || authLoading) {
@@ -261,7 +311,7 @@ export default function ArchivedLeadsPage() {
     )
   }
   
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
 
   return (
     <>
@@ -423,16 +473,17 @@ export default function ArchivedLeadsPage() {
                       {getSortIndicator('industryCategory')}
                     </Button>
                   </TableHead>
+                  <TableHead className="w-[120px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : sortedLeads.length > 0 ? (
-                  sortedLeads.map((lead) => {
-                    return (
+                ) : paginatedLeads.length > 0 ? (
+                  paginatedLeads.map((lead) => (
+                    <>
                     <TableRow key={lead.id}>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
@@ -452,12 +503,50 @@ export default function ArchivedLeadsPage() {
                       <TableCell>
                         {lead.industryCategory}
                       </TableCell>
+                       <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                              <History className="mr-2 h-4 w-4"/>
+                              {expandedDetails[lead.id] ? 'Hide' : 'History'}
+                          </Button>
+                      </TableCell>
                     </TableRow>
-                    )
-                  })
+                     {expandedDetails[lead.id] && (
+                        <TableRow>
+                            <TableCell colSpan={7} className="p-0">
+                                <div className="p-4 bg-secondary/50">
+                                    {expandedDetails[lead.id].loading ? (
+                                        <Loader />
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                {expandedDetails[lead.id].activity ? (
+                                                    <div>
+                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                    </div>
+                                                ) : <p className="text-muted-foreground">No activities found.</p>}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-semibold mb-2">Last Note</h4>
+                                                {expandedDetails[lead.id].note ? (
+                                                    <div>
+                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                    </div>
+                                                ) : <p className="text-muted-foreground">No notes found.</p>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    )}
+                    </>
+                  ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
@@ -465,6 +554,13 @@ export default function ArchivedLeadsPage() {
               </TableBody>
             </Table>
           </div>
+           {totalPages > 1 && (
+            <div className="flex items-center justify-end gap-2 pt-4">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>Previous</Button>
+                <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>Next</Button>
+            </div>
+            )}
         </CardContent>
       </Card>
     </div>
@@ -476,3 +572,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    
