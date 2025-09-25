@@ -48,7 +48,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, getLeadSubCollection, updateLeadAvatar, logNoteActivity, getLeadNotes, getLeadTranscripts, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -107,15 +107,23 @@ import { sendDiscoveryDataToNetSuite, sendLeadUpdateToNetSuite } from '@/service
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { AddressAutocomplete } from './address-autocomplete'
 
-export function LeadProfile({ initialLead }: { initialLead: Lead }) {
+interface LeadProfileProps {
+  initialLead: Lead;
+  initialNotes: Note[];
+  initialTranscripts: Transcript[];
+  initialTasks: Task[];
+  initialAppointments: Appointment[];
+}
+
+export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialTasks, initialAppointments }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   const [initialStatus, setInitialStatus] = useState<LeadStatus>(initialLead.status);
   const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [activity, setActivity] = useState<Activity[]>([]);
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
+  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [activity, setActivity] = useState<Activity[]>(initialLead.activity || []);
   
   const [isLoading, setIsLoading] = useState({
     activity: false,
@@ -166,32 +174,32 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
     setInitialStatus(initialLead.status);
   }, [initialLead]);
   
-  const loadData = async (type: keyof typeof isLoading) => {
-    if (!lead) return;
-    setIsLoading(prev => ({...prev, [type]: true}));
-    try {
-        switch(type) {
-            case 'activity':
-                setActivity(await getLeadActivity(lead.id));
-                break;
-            case 'notes':
-                setNotes(await getLeadNotes(lead.id));
-                break;
-            case 'transcripts':
-                setTranscripts(await getLeadTranscripts(lead.id));
-                break;
-            case 'tasks':
-                setTasks(await getLeadTasks(lead.id));
-                break;
-            case 'appointments':
-                setAppointments(await getLeadAppointments(lead.id));
-                break;
-        }
-    } catch (error) {
-        toast({ variant: 'destructive', title: `Error loading ${type}`, description: `Could not fetch ${type} data.` });
-    } finally {
-        setIsLoading(prev => ({...prev, [type]: false}));
-    }
+  const refreshData = async (type: 'activity' | 'notes' | 'transcripts' | 'tasks' | 'appointments') => {
+      if (!lead) return;
+      setIsLoading(prev => ({...prev, [type]: true}));
+      try {
+          switch(type) {
+              case 'activity':
+                  setActivity(await getLeadActivity(lead.id));
+                  break;
+              case 'notes':
+                  setNotes(await getLeadNotes(lead.id));
+                  break;
+              case 'transcripts':
+                  setTranscripts(await getLeadTranscripts(lead.id));
+                  break;
+              case 'tasks':
+                  setTasks(await getLeadTasks(lead.id));
+                  break;
+              case 'appointments':
+                  setAppointments(await getLeadAppointments(lead.id));
+                  break;
+          }
+      } catch (error) {
+          toast({ variant: 'destructive', title: `Error refreshing ${type}`, description: `Could not fetch latest ${type} data.` });
+      } finally {
+          setIsLoading(prev => ({...prev, [type]: false}));
+      }
   }
 
 
@@ -232,14 +240,14 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
           notes: activityNotes,
           author: user.displayName
       });
-      loadData('activity');
+      refreshData('activity');
 
       if (notes) {
         await logNoteActivity(lead.id, {
           content: notes,
           author: user.displayName,
         });
-        loadData('notes');
+        refreshData('notes');
       }
 
       const { status, reason } = outcomeStatusMap[outcome] || {};
@@ -323,7 +331,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
   const addActivity = async (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
         await logActivity(lead.id, newActivity);
-        loadData('activity');
+        refreshData('activity');
     }
   };
 
@@ -418,7 +426,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
 
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
-        loadData('transcripts'); // Re-fetch transcripts to update the UI
+        refreshData('transcripts'); // Re-fetch transcripts to update the UI
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -1051,7 +1059,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
             </Card>
           </div>
           
-          <Accordion type="single" collapsible onValueChange={(value) => value === 'call-history' && callHistory.length === 0 && loadData('activity')}>
+          <Accordion type="single" collapsible>
             <Card>
               <AccordionItem value="call-history">
                 <AccordionTrigger className="p-6">
@@ -1129,7 +1137,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
           </Accordion>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible onValueChange={(value) => value === 'activity' && activity.length === 0 && loadData('activity')}>
+            <Accordion type="single" collapsible>
                 <Card>
                     <AccordionItem value="activity">
                         <AccordionTrigger className="p-6">
@@ -1180,7 +1188,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                 </Card>
             </Accordion>
             
-            <Accordion type="single" collapsible onValueChange={(value) => value === 'notes' && notes.length === 0 && loadData('notes')}>
+            <Accordion type="single" collapsible>
                 <Card>
                      <AccordionItem value="notes">
                         <AccordionTrigger className="p-6">
@@ -1258,7 +1266,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible onValueChange={(value) => value === 'appointments' && appointments.length === 0 && loadData('appointments')}>
+          <Accordion type="single" collapsible>
             <Card>
                  <AccordionItem value="appointments">
                      <AccordionTrigger className="p-6">
@@ -1337,7 +1345,7 @@ export function LeadProfile({ initialLead }: { initialLead: Lead }) {
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible onValueChange={(value) => value === 'tasks' && tasks.length === 0 && loadData('tasks')}>
+           <Accordion type="single" collapsible>
             <Card>
                  <AccordionItem value="tasks">
                      <AccordionTrigger className="p-6">
