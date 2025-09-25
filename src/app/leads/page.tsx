@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -39,8 +39,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
-
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'industryCategory';
+
 
 export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -52,6 +53,11 @@ export default function LeadsPage() {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
+  const [myLeadsPage, setMyLeadsPage] = useState(1);
+  const [assignedLeadsPage, setAssignedLeadsPage] = useState(1);
+  const LEADS_PER_PAGE = 10;
+  
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -73,7 +79,6 @@ export default function LeadsPage() {
 
       try {
         setLoading(true);
-        // Fetch summary data which includes the latest note and activity
         const [fetchedLeads, fetchedUsers] = await Promise.all([
           getLeadsFromFirebase({ summary: true }),
           getAllUsers()
@@ -95,6 +100,21 @@ export default function LeadsPage() {
     }
     getLeads();
   }, [user, authLoading, router, toast]);
+  
+  const requestSort = (key: SortableLeadKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (key: SortableLeadKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -110,7 +130,7 @@ export default function LeadsPage() {
   };
 
   const filteredLeads = useMemo(() => {
-    return allLeads.filter(lead => {
+    let leads = allLeads.filter(lead => {
       const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
@@ -118,7 +138,22 @@ export default function LeadsPage() {
       const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status);
       return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
     });
-  }, [allLeads, filters]);
+
+    if (sortConfig !== null) {
+      leads.sort((a, b) => {
+        let aValue = a[sortConfig.key] ?? '';
+        let bValue = b[sortConfig.key] ?? '';
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return leads;
+  }, [allLeads, filters, sortConfig]);
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
@@ -149,60 +184,23 @@ export default function LeadsPage() {
     }
   }, [loading, myLeads, searchParams, router]);
 
+  const paginatedMyLeads = useMemo(() => {
+    const startIndex = (myLeadsPage - 1) * LEADS_PER_PAGE;
+    return myLeads.slice(startIndex, startIndex + LEADS_PER_PAGE);
+  }, [myLeads, myLeadsPage]);
 
-  const leadsByStatus = useMemo(() => {
-    const grouped = myLeads.reduce((acc, lead) => {
-      const status = lead.status;
-      if (!acc[status]) {
-        acc[status] = [];
-      }
-      acc[status].push(lead);
-      return acc;
-    }, {} as Record<LeadStatus, LeadWithDetails[]>);
+  const totalMyLeadsPages = Math.ceil(myLeads.length / LEADS_PER_PAGE);
 
-    const preferredOrder: LeadStatus[] = ["New", "High Touch", "Connected", "In Progress"];
-    
-    return Object.entries(grouped).sort(([statusA], [statusB]) => {
-        const indexA = preferredOrder.indexOf(statusA as LeadStatus);
-        const indexB = preferredOrder.indexOf(statusB as LeadStatus);
-
-        if (indexA === -1 && indexB === -1) return statusA.localeCompare(statusB);
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        
-        return indexA - indexB;
-    });
-
-  }, [myLeads]);
-  
   const allAssignedLeads = useMemo(() => {
     return filteredLeads.filter(lead => !!lead.dialerAssigned);
   }, [filteredLeads]);
   
-  const leadsByUser = useMemo(() => {
-    const groupedByUser = allAssignedLeads.reduce((acc, lead) => {
-        const user = lead.dialerAssigned;
-        if (user) {
-            if (!acc[user]) {
-                acc[user] = {};
-            }
-            const status = lead.status;
-            if (!acc[user][status]) {
-                acc[user][status] = [];
-            }
-            acc[user][status].push(lead);
-        }
-        return acc;
-    }, {} as Record<string, Record<string, LeadWithDetails[]>>);
+  const paginatedAssignedLeads = useMemo(() => {
+    const startIndex = (assignedLeadsPage - 1) * LEADS_PER_PAGE;
+    return allAssignedLeads.slice(startIndex, startIndex + LEADS_PER_PAGE);
+  }, [allAssignedLeads, assignedLeadsPage]);
 
-    return Object.entries(groupedByUser)
-        .sort(([userA], [userB]) => userA.localeCompare(userB))
-        .map(([user, statuses]) => {
-            const sortedStatuses = Object.entries(statuses).sort(([statusA], [statusB]) => statusA.localeCompare(statusB));
-            const totalLeads = sortedStatuses.reduce((sum, [, leads]) => sum + leads.length, 0);
-            return [user, sortedStatuses, totalLeads] as [string, [string, LeadWithDetails[]][], number];
-        });
-  }, [allAssignedLeads]);
+  const totalAssignedLeadsPages = Math.ceil(allAssignedLeads.length / LEADS_PER_PAGE);
 
   const unassignedLeads = useMemo(() => {
     return filteredLeads.filter(lead => !lead.dialerAssigned);
@@ -326,16 +324,6 @@ export default function LeadsPage() {
         checked ? [...prev, leadId] : prev.filter(id => id !== leadId)
     );
   };
-  
-  const handleSelectAllForReassignment = (userLeads: LeadWithDetails[], checked: boolean | 'indeterminate') => {
-      const leadIds = userLeads.map(l => l.id);
-      if (checked) {
-          setSelectedForReassignment(prev => [...new Set([...prev, ...leadIds])]);
-      } else {
-          setSelectedForReassignment(prev => prev.filter(id => !leadIds.includes(id)));
-      }
-  };
-
 
   const handleSelectAllMyLeads = (checked: boolean | 'indeterminate') => {
     if (checked) {
@@ -412,7 +400,6 @@ export default function LeadsPage() {
   }
 
   const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
-  const showUnassigned = userProfile?.role !== 'admin';
 
   return (
     <>
@@ -475,67 +462,67 @@ export default function LeadsPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>My Assigned Leads</CardTitle>
-          <div className="flex items-center gap-2">
-            {selectedMyLeads.length > 0 && (
-              <Button onClick={handleBulkUnassign} variant="outline" size="sm">
-                <UserX className="mr-2 h-4 w-4" />
-                Unassign ({selectedMyLeads.length})
-              </Button>
-            )}
-             <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
-                Export My Leads
-              </Button>
-          </div>
+            <CardTitle>My Assigned Leads</CardTitle>
+            <div className="flex items-center gap-2">
+                {selectedMyLeads.length > 0 && (
+                <Button onClick={handleBulkUnassign} variant="outline" size="sm">
+                    <UserX className="mr-2 h-4 w-4" />
+                    Unassign ({selectedMyLeads.length})
+                </Button>
+                )}
+                <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export My Leads
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full">
-                {leadsByStatus.map(([status, leads]) => (
-                  <AccordionItem value={status} key={status}>
-                    <AccordionTrigger>
-                      <div className="flex items-center gap-2">
-                        <LeadStatusBadge status={status as LeadStatus} />
-                        <span className="font-semibold">{status}</span>
-                        <Badge variant="secondary">{leads.length}</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                       <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Company</TableHead>
-                              <TableHead>Industry</TableHead>
+            <div className="space-y-4">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-8">
+                                <Checkbox
+                                    checked={myLeads.length > 0 && selectedMyLeads.length === myLeads.length}
+                                    onCheckedChange={handleSelectAllMyLeads}
+                                    aria-label="Select all my leads"
+                                />
+                            </TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {paginatedMyLeads.map((lead) => (
+                            <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                                <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
+                                <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                                <TableCell>{lead.industryCategory}</TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {leads.map((lead) => {
-                              return (
-                                <TableRow key={lead.id}>
-                                  <TableCell>
-                                    <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                                      {lead.companyName}
-                                    </Button>
-                                  </TableCell>
-                                  <TableCell>{lead.industryCategory}</TableCell>
-                                </TableRow>
-                              )
-                            })}
-                          </TableBody>
-                       </Table>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-             </Accordion>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
            ) : (
              <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                 You have no actionable leads assigned.
              </div>
            )}
         </CardContent>
+        {totalMyLeadsPages > 1 && (
+            <CardFooter className="flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setMyLeadsPage(p => p - 1)} disabled={myLeadsPage === 1}>Previous</Button>
+                <span className="text-sm text-muted-foreground">Page {myLeadsPage} of {totalMyLeadsPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setMyLeadsPage(p => p + 1)} disabled={myLeadsPage === totalMyLeadsPages}>Next</Button>
+            </CardFooter>
+        )}
       </Card>
       
       {userProfile?.role === 'admin' && (
@@ -562,93 +549,64 @@ export default function LeadsPage() {
           {loading ? (
              <div className="text-center"><Loader /></div>
            ) : allAssignedLeads.length > 0 ? (
-             <Accordion type="multiple" className="w-full">
-                {leadsByUser.map(([user, statuses, totalLeads]) => (
-                  <AccordionItem value={user} key={user}>
-                    <AccordionTrigger>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        <span className="font-semibold">{user}</span>
-                        <Badge variant="secondary">{totalLeads} lead(s)</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        <Accordion type="multiple" className="w-full pl-4">
-                            {statuses.map(([status, leads]) => (
-                                <AccordionItem value={`${user}-${status}`} key={`${user}-${status}`}>
-                                    <AccordionTrigger>
-                                        <div className="flex items-center gap-2">
-                                            <LeadStatusBadge status={status as LeadStatus} />
-                                            <span className="font-semibold">{status}</span>
-                                            <Badge variant="secondary">{leads.length}</Badge>
-                                        </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent>
-                                       <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                               <TableHead className="w-8">
-                                                <Checkbox
-                                                    checked={leads.every(l => selectedForReassignment.includes(l.id))}
-                                                    onCheckedChange={(checked) => handleSelectAllForReassignment(leads, checked)}
-                                                    aria-label={`Select all leads for ${user} with status ${status}`}
-                                                />
-                                                </TableHead>
-                                              <TableHead>Company</TableHead>
-                                              <TableHead className="w-[50px] text-right">Actions</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {leads.map((lead) => {
-                                               const addressString = formatAddress(lead.address);
-                                               return (
-                                                <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
-                                                  <TableCell>
-                                                      <Checkbox
-                                                        checked={selectedForReassignment.includes(lead.id)}
-                                                        onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
-                                                        aria-label={`Select lead ${lead.companyName}`}
-                                                      />
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                                                      {lead.companyName}
-                                                    </Button>
-                                                  </TableCell>
-                                                  <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                          <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                          </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent>
-                                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}>
-                                                            <UserX className="mr-2 h-4 w-4" />
-                                                            Unassign
-                                                          </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                      </DropdownMenu>
-                                                  </TableCell>
-                                                </TableRow>
-                                               )
-                                            })}
-                                          </TableBody>
-                                       </Table>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            ))}
-                        </Accordion>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-             </Accordion>
+            <div className="space-y-4">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-8">
+                                <Checkbox
+                                    checked={allAssignedLeads.length > 0 && selectedForReassignment.length === allAssignedLeads.length}
+                                    onCheckedChange={(checked) => {
+                                        if (checked) {
+                                            setSelectedForReassignment(allAssignedLeads.map(l => l.id));
+                                        } else {
+                                            setSelectedForReassignment([]);
+                                        }
+                                    }}
+                                    aria-label="Select all assigned leads"
+                                />
+                            </TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
+                            <TableHead className="w-[50px] text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {paginatedAssignedLeads.map((lead) => (
+                             <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                <TableCell><Checkbox checked={selectedForReassignment.includes(lead.id)} onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
+                                <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                <TableCell>{lead.dialerAssigned}</TableCell>
+                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                <TableCell className="text-right">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                          <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                             </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
            ) : (
              <div className="py-10 text-center text-muted-foreground">
                 No leads are currently assigned to any user.
              </div>
            )}
         </CardContent>
+        {totalAssignedLeadsPages > 1 && (
+            <CardFooter className="flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setAssignedLeadsPage(p => p - 1)} disabled={assignedLeadsPage === 1}>Previous</Button>
+                <span className="text-sm text-muted-foreground">Page {assignedLeadsPage} of {totalAssignedLeadsPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setAssignedLeadsPage(p => p + 1)} disabled={assignedLeadsPage === totalAssignedLeadsPages}>Next</Button>
+            </CardFooter>
+        )}
       </Card>
       )}
 
@@ -797,3 +755,5 @@ export default function LeadsPage() {
     </>
   )
 }
+
+    
