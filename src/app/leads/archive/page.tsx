@@ -52,7 +52,6 @@ export default function ArchivedLeadsPage() {
     status: 'all',
     franchisee: '',
     industryCategory: '',
-    phoneNumber: '',
     date: undefined as DateRange | undefined,
   });
 
@@ -88,7 +87,6 @@ export default function ArchivedLeadsPage() {
       status: 'all',
       franchisee: '',
       industryCategory: '',
-      phoneNumber: '',
       date: undefined,
     });
   };
@@ -99,17 +97,16 @@ export default function ArchivedLeadsPage() {
         const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
         const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
         const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
-        const phoneMatch = filters.phoneNumber ? (lead.customerPhone || '').replace(/\D/g, '').includes(filters.phoneNumber.replace(/\D/g, '')) : true;
 
         const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status);
         
         let dateMatch = true;
-        if (filters.date?.from && lead.activity?.length) {
+        if (filters.date?.from && lead.activity?.[0]) {
             const lastActivityDate = new Date(lead.activity[0].date);
             dateMatch = lastActivityDate >= filters.date.from && lastActivityDate <= (filters.date.to || filters.date.from)
         }
 
-        return isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && phoneMatch && dateMatch;
+        return isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -316,10 +313,6 @@ export default function ArchivedLeadsPage() {
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="phoneNumber">Phone Number</Label>
-                            <Input id="phoneNumber" value={filters.phoneNumber} onChange={(e) => handleFilterChange('phoneNumber', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
