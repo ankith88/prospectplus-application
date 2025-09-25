@@ -171,11 +171,9 @@ export default function ArchivedLeadsPage() {
 
     const handleExport = () => {
         const headers = [
-            'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+            'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
             'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
-            'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone',
-            'Activity Type', 'Activity Date', 'Activity Notes', 'Activity Author',
-            'Note Date', 'Note Author', 'Note Content'
+            'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
         ];
 
         const rows: string[][] = [];
@@ -193,7 +191,6 @@ export default function ArchivedLeadsPage() {
                 escapeCsvCell(lead.industryCategory),
                 escapeCsvCell(lead.industrySubCategory),
                 escapeCsvCell(lead.customerServiceEmail),
-                escapeCsvCell(lead.customerPhone),
                 escapeCsvCell(lead.address?.street),
                 escapeCsvCell(lead.address?.city),
                 escapeCsvCell(lead.address?.state),
@@ -214,30 +211,16 @@ export default function ArchivedLeadsPage() {
                 escapeCsvCell(lead.discoveryData?.decisionMaker),
                 escapeCsvCell(lead.discoveryData?.painPoints),
             ];
-
-            let leadDataHasBeenAdded = false;
-
-            const addRow = (additionalData: (string | number | undefined)[]) => {
-                if (!leadDataHasBeenAdded) {
-                    rows.push([...baseRow, ...additionalData]);
-                    leadDataHasBeenAdded = true;
-                } else {
-                    const emptyBase = Array(baseRow.length).fill('');
-                    rows.push([...emptyBase, ...additionalData]);
-                }
-            };
             
-            const maxSubItems = Math.max(lead.contacts?.length || 0, lead.activity?.length || 0, lead.notes?.length || 0);
+            const maxContacts = lead.contacts?.length || 0;
 
-            if (maxSubItems === 0) {
+            if (maxContacts === 0) {
                  rows.push(baseRow);
                  return;
             }
 
-            for (let i = 0; i < maxSubItems; i++) {
+            for (let i = 0; i < maxContacts; i++) {
                 const contact = lead.contacts?.[i];
-                const activity = lead.activity?.[i];
-                const note = lead.notes?.[i];
 
                 const rowData = [
                     ...baseRow,
@@ -245,13 +228,6 @@ export default function ArchivedLeadsPage() {
                     escapeCsvCell(contact?.title),
                     escapeCsvCell(contact?.email),
                     escapeCsvCell(contact?.phone),
-                    escapeCsvCell(activity?.type),
-                    escapeCsvCell(activity ? new Date(activity.date).toLocaleString() : ''),
-                    escapeCsvCell(activity?.notes),
-                    escapeCsvCell(activity?.author),
-                    escapeCsvCell(note ? new Date(note.date).toLocaleString() : ''),
-                    escapeCsvCell(note?.author),
-                    escapeCsvCell(note?.content),
                 ];
                 
                 if (i === 0) {
@@ -447,19 +423,15 @@ export default function ArchivedLeadsPage() {
                       {getSortIndicator('industryCategory')}
                     </Button>
                   </TableHead>
-                   <TableHead>Last Activity</TableHead>
-                   <TableHead>Last Note</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedLeads.length > 0 ? (
                   sortedLeads.map((lead) => {
-                    const lastActivity = lead.activity?.[0];
-                    const lastNote = lead.notes?.[0];
                     return (
                     <TableRow key={lead.id}>
                       <TableCell>
@@ -480,30 +452,12 @@ export default function ArchivedLeadsPage() {
                       <TableCell>
                         {lead.industryCategory}
                       </TableCell>
-                      <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                        {lastActivity ? (
-                          <div className="flex flex-col">
-                            <span className="font-medium">{lastActivity.notes}</span>
-                            <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
-                          </div>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                        {lastNote ? (
-                            <div className="flex flex-col">
-                                <span className="font-medium">{lastNote.content}</span>
-                                <span className="text-xs text-muted-foreground">{new Date(lastNote.date).toLocaleDateString()} by {lastNote.author}</span>
-                            </div>
-                        ) : 'N/A'}
-                      </TableCell>
                     </TableRow>
                     )
                   })
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
@@ -522,5 +476,3 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
-
-    

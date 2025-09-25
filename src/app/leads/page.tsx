@@ -220,22 +220,14 @@ export default function LeadsPage() {
   };
 
   const exportLeadsToCsv = (leads: LeadWithDetails[], filename: string) => {
-    const headers = ['Lead ID', 'Company Name', 'Dialer Assigned', 'Status', 'Phone', 'Industry', 'Last Activity Note', 'Last Activity Date', 'Last Note Content', 'Last Note Date', 'Last Note Author'];
+    const headers = ['Lead ID', 'Company Name', 'Dialer Assigned', 'Status', 'Industry'];
     const rows = leads.map(lead => {
-        const lastActivity = lead.activity?.[0];
-        const lastNote = lead.notes?.[0];
         return [
             escapeCsvCell(lead.id),
             escapeCsvCell(lead.companyName),
             escapeCsvCell(lead.dialerAssigned),
             escapeCsvCell(lead.status),
-            escapeCsvCell(lead.customerPhone),
             escapeCsvCell(lead.industryCategory),
-            escapeCsvCell(lastActivity?.notes),
-            escapeCsvCell(lastActivity ? new Date(lastActivity.date).toLocaleString() : ''),
-            escapeCsvCell(lastNote?.content),
-            escapeCsvCell(lastNote ? new Date(lastNote.date).toLocaleString() : ''),
-            escapeCsvCell(lastNote?.author),
         ].join(',');
     });
 
@@ -517,14 +509,10 @@ export default function LeadsPage() {
                             <TableRow>
                               <TableHead>Company</TableHead>
                               <TableHead>Industry</TableHead>
-                              <TableHead>Last Activity</TableHead>
-                              <TableHead>Last Note</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {leads.map((lead) => {
-                              const lastActivity = lead.activity?.[0];
-                              const lastNote = lead.notes?.[0];
                               return (
                                 <TableRow key={lead.id}>
                                   <TableCell>
@@ -533,24 +521,6 @@ export default function LeadsPage() {
                                     </Button>
                                   </TableCell>
                                   <TableCell>{lead.industryCategory}</TableCell>
-                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                                    {lastActivity ? (
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">{lastActivity.notes}</span>
-                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
-                                      </div>
-                                    ) : (
-                                      'N/A'
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                                    {lastNote ? (
-                                        <div className="flex flex-col">
-                                            <span className="font-medium">{lastNote.content}</span>
-                                            <span className="text-xs text-muted-foreground">{new Date(lastNote.date).toLocaleDateString()} by {lastNote.author}</span>
-                                        </div>
-                                    ) : 'N/A'}
-                                  </TableCell>
                                 </TableRow>
                               )
                             })}
@@ -625,14 +595,12 @@ export default function LeadsPage() {
                                                 />
                                                 </TableHead>
                                               <TableHead>Company</TableHead>
-                                              <TableHead>Last Activity</TableHead>
                                               <TableHead className="w-[50px] text-right">Actions</TableHead>
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
                                             {leads.map((lead) => {
                                                const addressString = formatAddress(lead.address);
-                                               const lastActivity = lead.activity?.[0];
                                                return (
                                                 <TableRow key={lead.id} data-state={selectedForReassignment.includes(lead.id) && "selected"}>
                                                   <TableCell>
@@ -646,16 +614,6 @@ export default function LeadsPage() {
                                                     <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                                       {lead.companyName}
                                                     </Button>
-                                                  </TableCell>
-                                                  <TableCell className="min-w-[200px] whitespace-pre-wrap">
-                                                    {lastActivity ? (
-                                                      <div className="flex flex-col">
-                                                        <span className="font-medium">{lastActivity.notes}</span>
-                                                        <span className="text-xs text-muted-foreground">{new Date(lastActivity.date).toLocaleDateString()}</span>
-                                                      </div>
-                                                    ) : (
-                                                      'N/A'
-                                                    )}
                                                   </TableCell>
                                                   <TableCell className="text-right">
                                                     <DropdownMenu>
@@ -839,5 +797,3 @@ export default function LeadsPage() {
     </>
   )
 }
-
-    

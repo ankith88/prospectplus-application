@@ -220,29 +220,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
       console.log("No leads found in Firebase.");
       return [];
     }
-    
-    let latestNotes: Map<string, Note> = new Map();
-    let latestActivities: Map<string, Activity> = new Map();
 
-    if (summary) {
-        const notesSnapshot = await getDocs(query(collectionGroup(firestore, 'notes'), orderBy('date', 'desc')));
-        notesSnapshot.forEach(doc => {
-            const leadId = doc.ref.parent.parent!.id;
-            if (!latestNotes.has(leadId)) {
-                latestNotes.set(leadId, { id: doc.id, ...doc.data() } as Note);
-            }
-        });
-
-        const activitiesSnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc')));
-        activitiesSnapshot.forEach(doc => {
-            const leadId = doc.ref.parent.parent!.id;
-            if (!latestActivities.has(leadId)) {
-                latestActivities.set(leadId, { id: doc.id, ...doc.data() } as Activity);
-            }
-        });
-    }
-
-    const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (doc) => {
+    const leadsArray: Lead[] = snapshot.docs.map((doc) => {
         const data = doc.data();
         const companyName = data.companyName || 'Unknown Company';
         
@@ -286,23 +265,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           companyDescription: data.companyDescription,
           leadType: data.leadType,
         };
-        
-        if (summary) {
-            const latestNote = latestNotes.get(doc.id);
-            if (latestNote) transformedLead.notes = [latestNote];
-            
-            const latestActivity = latestActivities.get(doc.id);
-            if (latestActivity) transformedLead.activity = [latestActivity];
-
-        } else {
-            transformedLead.contacts = await getLeadContacts(doc.id);
-            transformedLead.activity = await getLeadActivity(doc.id);
-            transformedLead.notes = await getLeadNotes(doc.id);
-            transformedLead.contactCount = transformedLead.contacts.length;
-        }
 
         return transformedLead;
-      }));
+      });
       return leadsArray;
 
   } catch (error) {
@@ -836,14 +801,13 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
   }
 }
 
-async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone' | 'address'>>): Promise<void> {
+async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address'>>): Promise<void> {
     try {
         const leadRef = doc(firestore, 'leads', leadId);
         
         const updatePayload: { [key: string]: any } = {};
         if (newLeadData.companyName !== undefined) updatePayload.companyName = newLeadData.companyName;
         if (newLeadData.customerServiceEmail !== undefined) updatePayload.customerServiceEmail = newLeadData.customerServiceEmail;
-        if (newLeadData.customerPhone !== undefined) updatePayload.customerPhone = newLeadData.customerPhone;
         if (newLeadData.address) {
             updatePayload.address = {
                 address1: newLeadData.address.address1 || '',
@@ -865,9 +829,6 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
         }
         if (newLeadData.customerServiceEmail && newLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
             changes.push(`Email changed from "${oldLead.customerServiceEmail || 'N/A'}" to "${newLeadData.customerServiceEmail}".`);
-        }
-        if (newLeadData.customerPhone && newLeadData.customerPhone !== oldLead.customerPhone) {
-            changes.push(`Phone changed from "${oldLead.customerPhone || 'N/A'}" to "${newLeadData.customerPhone}".`);
         }
         if (newLeadData.address) {
             changes.push('Address updated.');
@@ -1207,12 +1168,3 @@ export {
     addCallReview,
     shareCallReview,
 };
-
-    
-
-
-
-
-
-
-    

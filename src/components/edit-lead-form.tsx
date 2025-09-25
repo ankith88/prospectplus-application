@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -23,7 +22,6 @@ import type { Lead, Address } from "@/lib/types"
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   customerServiceEmail: z.string().email("Invalid email address"),
-  customerPhone: z.string().min(1, "Phone number is required"),
 })
 
 interface EditLeadFormProps {
@@ -39,7 +37,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
     defaultValues: {
       companyName: lead.companyName,
       customerServiceEmail: lead.customerServiceEmail ?? '',
-      customerPhone: lead.customerPhone ?? '',
     },
   })
 
@@ -57,7 +54,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         leadId: lead.id,
         companyName: values.companyName,
         email: values.customerServiceEmail,
-        phone: values.customerPhone,
       });
 
       if (nsResult.success) {
@@ -107,19 +103,6 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
               <FormLabel>Email</FormLabel>
               <FormControl>
                 <Input placeholder="contact@acme.com" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="customerPhone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input placeholder="(123) 456-7890" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
