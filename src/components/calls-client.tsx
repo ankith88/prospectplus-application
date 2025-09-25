@@ -60,6 +60,8 @@ interface CallsClientPageProps {
   initialTranscripts: Transcript[];
 }
 
+const CALLS_PER_PAGE = 50;
+
 export default function CallsClientPage({ initialCalls, initialTranscripts }: CallsClientPageProps) {
   const [allCalls, setAllCalls] = useState<CallActivity[]>(initialCalls);
   const [allTranscripts, setAllTranscripts] = useState<Transcript[]>(initialTranscripts);
@@ -75,6 +77,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const [viewingReview, setViewingReview] = useState<Review | null>(null);
   const [sharingCall, setSharingCall] = useState<CallActivity | null>(null);
   const [sharedWithUsers, setSharedWithUsers] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [filters, setFilters] = useState({
     user: 'all',
@@ -123,10 +126,12 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+    setCurrentPage(1);
   };
   
   const clearFilters = () => {
     setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all' });
+     setCurrentPage(1);
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -216,6 +221,13 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     });
 
   }, [allCalls, filters, userProfile]);
+
+  const paginatedCalls = useMemo(() => {
+    const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
+    return filteredCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
+  }, [filteredCalls, currentPage]);
+
+  const totalPages = Math.ceil(filteredCalls.length / CALLS_PER_PAGE);
   
   const allUsers = useMemo(() => {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
@@ -702,8 +714,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
                   <TableRow>
                     <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : filteredCalls.length > 0 ? (
-                  filteredCalls.map(renderCallRow)
+                ) : paginatedCalls.length > 0 ? (
+                  paginatedCalls.map(renderCallRow)
                 ) : (
                   <TableRow>
                       <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
@@ -714,6 +726,13 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-end gap-2 pt-4">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1}>Previous</Button>
+                <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages}>Next</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
