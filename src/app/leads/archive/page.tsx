@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsTool } from '@/ai/flows/get-leads-tool'
+import { getLeadsFromFirebase } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
@@ -33,7 +33,6 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-import { getAllActivities, getAllNotes } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 
@@ -67,35 +66,9 @@ export default function ArchivedLeadsPage() {
 
       try {
         setLoading(true);
-        const [fetchedLeads, allNotes, allActivities] = await Promise.all([
-            getLeadsTool({ summary: false }), // Fetch full data
-            getAllNotes(),
-            getAllActivities()
-        ]);
-        
-        const notesByLead = new Map<string, Note[]>();
-        allNotes.forEach(note => {
-            if (!notesByLead.has(note.leadId)) {
-                notesByLead.set(note.leadId, []);
-            }
-            notesByLead.get(note.leadId)!.push(note);
-        });
-
-        const activitiesByLead = new Map<string, Activity[]>();
-        allActivities.forEach(activity => {
-            if (!activitiesByLead.has(activity.leadId)) {
-                activitiesByLead.set(activity.leadId, []);
-            }
-            activitiesByLead.get(activity.leadId)!.push(activity);
-        });
-
-        const leadsWithDetails = fetchedLeads.map(lead => ({
-          ...lead,
-          notes: notesByLead.get(lead.id) || [],
-          activity: activitiesByLead.get(lead.id) || [],
-        }));
-        
-        setAllLeads(leadsWithDetails);
+        // Fetch leads with summary=true to get only the latest note and activity
+        const fetchedLeads = await getLeadsFromFirebase({ summary: true });
+        setAllLeads(fetchedLeads);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
       } finally {
@@ -556,3 +529,5 @@ export default function ArchivedLeadsPage() {
     </>
   )
 }
+
+    

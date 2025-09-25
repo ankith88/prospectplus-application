@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -222,9 +221,29 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
       return [];
     }
     
-    const leadsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let latestNotes: Map<string, Note> = new Map();
+    let latestActivities: Map<string, Activity> = new Map();
 
-    const leadsArray: Lead[] = await Promise.all(leadsData.map(async (data) => {
+    if (summary) {
+        const notesSnapshot = await getDocs(query(collectionGroup(firestore, 'notes'), orderBy('date', 'desc')));
+        notesSnapshot.forEach(doc => {
+            const leadId = doc.ref.parent.parent!.id;
+            if (!latestNotes.has(leadId)) {
+                latestNotes.set(leadId, { id: doc.id, ...doc.data() } as Note);
+            }
+        });
+
+        const activitiesSnapshot = await getDocs(query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc')));
+        activitiesSnapshot.forEach(doc => {
+            const leadId = doc.ref.parent.parent!.id;
+            if (!latestActivities.has(leadId)) {
+                latestActivities.set(leadId, { id: doc.id, ...doc.data() } as Activity);
+            }
+        });
+    }
+
+    const leadsArray: Lead[] = await Promise.all(snapshot.docs.map(async (doc) => {
+        const data = doc.data();
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -242,7 +261,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
         }
 
         const transformedLead: Lead = {
-          id: data.id,
+          id: doc.id,
           entityId: data['customerEntityId'] || data['internalid'],
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
@@ -268,9 +287,17 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           leadType: data.leadType,
         };
         
-        if (!summary) {
-            transformedLead.contacts = await getLeadContacts(data.id);
-            transformedLead.activity = await getLeadActivity(data.id);
+        if (summary) {
+            const latestNote = latestNotes.get(doc.id);
+            if (latestNote) transformedLead.notes = [latestNote];
+            
+            const latestActivity = latestActivities.get(doc.id);
+            if (latestActivity) transformedLead.activity = [latestActivity];
+
+        } else {
+            transformedLead.contacts = await getLeadContacts(doc.id);
+            transformedLead.activity = await getLeadActivity(doc.id);
+            transformedLead.notes = await getLeadNotes(doc.id);
             transformedLead.contactCount = transformedLead.contacts.length;
         }
 
@@ -531,7 +558,7 @@ async function getAllTranscripts(): Promise<Transcript[]> {
             } as Transcript;
         }).filter((t): t is Transcript => !!t);
         
-        allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
         return allTranscripts;
 
     } catch (error) {
@@ -1186,3 +1213,6 @@ export {
 
 
 
+
+
+    
