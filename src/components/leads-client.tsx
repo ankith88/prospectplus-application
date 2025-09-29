@@ -529,7 +529,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                           </div>
                         </AccordionTrigger>
                         <Button
-                            variant="secondary"
+                            variant="default"
                             size="sm"
                             onClick={(e) => {
                                 e.stopPropagation();
