@@ -43,7 +43,7 @@ const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
 
 
 const renderActiveShape = (props: any) => {
@@ -330,7 +330,19 @@ export default function ReportsClientPage({
             return acc;
         }, [] as { name: LeadStatus; value: number }[]);
 
-    const appointmentsBySource = filteredAppointments.reduce((acc, appointment) => {
+    const uniqueAppointments = Array.from(
+        filteredAppointments
+            .reduce((map, appt) => {
+                const key = `${appt.leadName}-${appt.duedate}-${appt.starttime}`;
+                if (!map.has(key)) {
+                    map.set(key, appt);
+                }
+                return map;
+            }, new Map<string, AppointmentWithLead>())
+            .values()
+    );
+
+    const appointmentsBySource = uniqueAppointments.reduce((acc, appointment) => {
         const lead = leadsMap.get(appointment.leadId);
         const source = lead?.campaign || 'Unknown';
         const existingEntry = acc.find(item => item.name === source);
@@ -342,7 +354,7 @@ export default function ReportsClientPage({
         return acc;
     }, [] as { name: string; value: number }[]);
 
-    const appointmentsByLeadType = filteredAppointments.reduce((acc, appointment) => {
+    const appointmentsByLeadType = uniqueAppointments.reduce((acc, appointment) => {
         const lead = leadsMap.get(appointment.leadId);
         const leadType = lead?.leadType || 'Unknown';
         const existingEntry = acc.find(item => item.name === leadType);
@@ -354,10 +366,10 @@ export default function ReportsClientPage({
         return acc;
     }, [] as { name: string; value: number }[]);
 
-    const totalAppointments = filteredAppointments.length;
-    const appointmentsForWonLeads = filteredAppointments.filter(a => a.leadStatus === 'Won').length;
-    const appointmentsForDemoLeads = filteredAppointments.filter(a => a.leadStatus === 'Demo').length;
-    const appointmentsForLostLeads = filteredAppointments.filter(a => a.leadStatus === 'Lost').length;
+    const totalAppointments = uniqueAppointments.length;
+    const appointmentsForWonLeads = uniqueAppointments.filter(a => a.leadStatus === 'Won').length;
+    const appointmentsForDemoLeads = uniqueAppointments.filter(a => a.leadStatus === 'Demo').length;
+    const appointmentsForLostLeads = uniqueAppointments.filter(a => a.leadStatus === 'Lost').length;
     const wonAppointmentRate = totalAppointments > 0 ? (appointmentsForWonLeads / totalAppointments) * 100 : 0;
     const demoAppointmentRate = totalAppointments > 0 ? (appointmentsForDemoLeads / totalAppointments) * 100 : 0;
     const lostAppointmentRate = totalAppointments > 0 ? (appointmentsForLostLeads / totalAppointments) * 100 : 0;
@@ -858,7 +870,7 @@ export default function ReportsClientPage({
                 <p className="text-muted-foreground">Metrics related to booked appointments.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Across all time" />
+                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
                  <StatCard 
                     title="Appointments to Won Leads" 
                     value={stats.appointmentsForWonLeads} 
