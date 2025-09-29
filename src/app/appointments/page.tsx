@@ -115,8 +115,19 @@ export default function AllAppointmentsPage() {
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
         appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
+    
+    const uniqueAppointmentsMap = new Map<string, AppointmentWithLead>();
+    appointmentsToFilter.forEach(appointment => {
+        const key = `${appointment.leadName}-${appointment.duedate}-${appointment.starttime}`;
+        if (!uniqueAppointmentsMap.has(key)) {
+            uniqueAppointmentsMap.set(key, appointment);
+        }
+    });
 
-    return appointmentsToFilter.filter(appointment => {
+    const uniqueAppointments = Array.from(uniqueAppointmentsMap.values());
+
+
+    return uniqueAppointments.filter(appointment => {
         const appointmentUserMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
         const leadUserMatch = filters.leadAssignedTo === 'all' || appointment.dialerAssigned === filters.leadAssignedTo;
         
