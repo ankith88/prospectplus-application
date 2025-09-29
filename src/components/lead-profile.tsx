@@ -42,7 +42,7 @@ import {
   Clock,
   SkipForward,
 } from 'lucide-react'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
@@ -109,23 +109,25 @@ import { AddressAutocomplete } from './address-autocomplete'
 
 interface LeadProfileProps {
   initialLead: Lead;
-  initialNotes: Note[];
-  initialTranscripts: Transcript[];
-  initialTasks: Task[];
-  initialAppointments: Appointment[];
 }
 
-export function LeadProfile({ initialLead, initialNotes, initialTranscripts, initialTasks, initialAppointments }: LeadProfileProps) {
+type SubcollectionData = {
+  contacts: Contact[];
+  activity: Activity[];
+  notes: Note[];
+  transcripts: Transcript[];
+  tasks: Task[];
+  appointments: Appointment[];
+}
+
+export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   const [initialStatus, setInitialStatus] = useState<LeadStatus>(initialLead.status);
   const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [activity, setActivity] = useState<Activity[]>(initialLead.activity || []);
   
-  const [isLoading, setIsLoading] = useState({
+  const [data, setData] = useState<Partial<SubcollectionData>>({});
+  const [loadingStates, setLoadingStates] = useState({
+    contacts: false,
     activity: false,
     notes: false,
     transcripts: false,
@@ -173,34 +175,29 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     }
     setInitialStatus(initialLead.status);
   }, [initialLead]);
-  
-  const refreshData = async (type: 'activity' | 'notes' | 'transcripts' | 'tasks' | 'appointments') => {
-      if (!lead) return;
-      setIsLoading(prev => ({...prev, [type]: true}));
-      try {
-          switch(type) {
-              case 'activity':
-                  setActivity(await getLeadActivity(lead.id));
-                  break;
-              case 'notes':
-                  setNotes(await getLeadNotes(lead.id));
-                  break;
-              case 'transcripts':
-                  setTranscripts(await getLeadTranscripts(lead.id));
-                  break;
-              case 'tasks':
-                  setTasks(await getLeadTasks(lead.id));
-                  break;
-              case 'appointments':
-                  setAppointments(await getLeadAppointments(lead.id));
-                  break;
-          }
-      } catch (error) {
-          toast({ variant: 'destructive', title: `Error refreshing ${type}`, description: `Could not fetch latest ${type} data.` });
-      } finally {
-          setIsLoading(prev => ({...prev, [type]: false}));
-      }
-  }
+
+  const loadSubcollection = useCallback(async (collectionName: keyof SubcollectionData) => {
+    if (!lead || data[collectionName] || loadingStates[collectionName]) return;
+
+    setLoadingStates(prev => ({...prev, [collectionName]: true}));
+    try {
+        let result: any;
+        switch(collectionName) {
+            case 'contacts': result = await getLeadContacts(lead.id); break;
+            case 'activity': result = await getLeadActivity(lead.id); break;
+            case 'notes': result = await getLeadNotes(lead.id); break;
+            case 'transcripts': result = await getLeadTranscripts(lead.id); break;
+            case 'tasks': result = await getLeadTasks(lead.id); break;
+            case 'appointments': result = await getLeadAppointments(lead.id); break;
+        }
+        setData(prev => ({ ...prev, [collectionName]: result }));
+    } catch (error) {
+        console.error(`Error loading ${collectionName}:`, error);
+        toast({ variant: 'destructive', title: `Error`, description: `Could not load ${collectionName}.` });
+    } finally {
+        setLoadingStates(prev => ({...prev, [collectionName]: false}));
+    }
+  }, [lead, data, loadingStates, toast]);
 
 
   useEffect(() => {
@@ -240,14 +237,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           notes: activityNotes,
           author: user.displayName
       });
-      refreshData('activity');
+      loadSubcollection('activity');
 
       if (notes) {
         await logNoteActivity(lead.id, {
           content: notes,
           author: user.displayName,
         });
-        refreshData('notes');
+        loadSubcollection('notes');
       }
 
       const { status, reason } = outcomeStatusMap[outcome] || {};
@@ -273,7 +270,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
             leadId: lead.id,
             leadProfile: lead.profile,
             websiteUrl: lead.websiteUrl,
-            activity: activity || []
+            activity: data.activity || []
         };
         const scoring = await aiLeadScoring([leadToScore]);
         if (scoring.scoredLeads.length > 0) {
@@ -314,7 +311,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
         
         if (result.contacts && result.contacts.length > 0) {
             const updatedContacts = await getLeadContacts(lead.id);
-            setLead(prev => prev ? { ...prev, contacts: updatedContacts } : null);
+            setData(prev => ({...prev, contacts: updatedContacts}));
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -331,12 +328,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   const addActivity = async (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
         await logActivity(lead.id, newActivity);
-        refreshData('activity');
+        loadSubcollection('activity');
     }
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    setNotes(prev => [newNote, ...prev]);
+    setData(prev => ({ ...prev, notes: [newNote, ...(prev.notes || [])]}));
     addActivity({
         type: 'Update',
         date: newNote.date,
@@ -347,13 +344,13 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   const handleContactAdded = async () => {
     if (!lead) return;
     const updatedContacts = await getLeadContacts(lead.id);
-    setLead(prev => prev ? { ...prev, contacts: updatedContacts } : null);
+    setData(prev => ({ ...prev, contacts: updatedContacts}));
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
-    if (lead && lead.contacts) {
-      const updatedContacts = lead.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
-      setLead({ ...lead, contacts: updatedContacts });
+    if (lead && data.contacts) {
+      const updatedContacts = data.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
+      setData(prev => ({ ...prev, contacts: updatedContacts }));
        addActivity({
           type: 'Update',
           date: new Date().toISOString(),
@@ -374,7 +371,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setLead(prev => prev ? { ...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id) } : null);
+      setData(prev => ({ ...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id) }));
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -426,7 +423,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
 
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
-        refreshData('transcripts'); // Re-fetch transcripts to update the UI
+        loadSubcollection('transcripts'); // Re-fetch transcripts to update the UI
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -450,7 +447,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
-        setTasks(prev => [...prev, newTask]);
+        setData(prev => ({...prev, tasks: [...(prev.tasks || []), newTask]}));
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -461,10 +458,11 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   };
 
   const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
-      if (!lead) return;
+      if (!lead || !data.tasks) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
-          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined } : t));
+          const updatedTasks = data.tasks.map(t => t.id === taskId ? { ...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined } : t);
+          setData(prev => ({...prev, tasks: updatedTasks}));
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -473,10 +471,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
   };
 
   const handleDeleteTask = async (taskId: string) => {
-      if (!lead) return;
+      if (!lead || !data.tasks) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
-          setTasks(prev => prev.filter(t => t.id !== taskId));
+          setData(prev => ({...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId)}));
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -484,14 +482,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
       }
   };
 
-  const handleDiscoverySave = async (data: DiscoveryData) => {
+  const handleDiscoverySave = async (discoveryData: DiscoveryData) => {
     if (!lead) return;
     console.log('[Client] handleDiscoverySave triggered.');
 
     // Step 1: Call NetSuite and handle its response.
     try {
         console.log('[Client] Preparing to call NetSuite server action...');
-        const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: data });
+        const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: discoveryData });
         console.log('[Client] NetSuite call finished. Result:', nsResult);
 
         if (nsResult.success) {
@@ -508,8 +506,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     // Step 2: Save to Firebase, regardless of NetSuite outcome.
     try {
         console.log('[Client] Preparing to save to Firebase...');
-        await updateLeadDiscoveryData(lead.id, data);
-        setLead(prev => prev ? { ...prev, discoveryData: data } : null);
+        await updateLeadDiscoveryData(lead.id, discoveryData);
+        setLead(prev => prev ? { ...prev, discoveryData: discoveryData } : null);
         toast({ title: 'Success', description: 'Discovery questions saved to Firebase.' });
         console.log('[Client] Firebase save successful.');
     } catch (error: any) {
@@ -579,30 +577,30 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
     ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+  const primaryContact = data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
   
   const filteredActivities = useMemo(() => {
-    if (!dateFilter?.from) return activity || [];
+    if (!dateFilter?.from) return data.activity || [];
     const fromDate = startOfDay(dateFilter.from);
     const toDate = dateFilter.to ? endOfDay(dateFilter.to) : endOfDay(dateFilter.from);
-    return (activity || []).filter(a => {
+    return (data.activity || []).filter(a => {
         const activityDate = new Date(a.date);
         return activityDate >= fromDate && activityDate <= toDate;
     });
-  }, [activity, dateFilter]);
+  }, [data.activity, dateFilter]);
 
   const callHistory = useMemo(() => {
-    return filteredActivities.filter(a => a.type === 'Call' && a.callId);
-  }, [filteredActivities]);
+    return (data.activity || []).filter(a => a.type === 'Call' && a.callId);
+  }, [data.activity]);
 
   const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 5);
   const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 5);
-  const displayedNotes = isNotesExpanded ? notes : notes.slice(0, 5);
+  const displayedNotes = isNotesExpanded ? (data.notes || []) : (data.notes || []).slice(0, 5);
   
   const contactAttempts = useMemo(() => {
-    if (!activity) return 0;
-    return activity.filter(a => a.type === 'Call' && a.callId).length;
-  }, [activity]);
+    if (!data.activity) return 0;
+    return data.activity.filter(a => a.type === 'Call' && a.callId).length;
+  }, [data.activity]);
 
   const getCalendlyLink = () => {
     if (lead.salesRepAssignedCalendlyLink && lead.id && lead.entityId && user.displayName) {
@@ -666,14 +664,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={lead.status} />
-              {loading ? (
-                <Skeleton className="h-4 w-48" />
-              ) : (
                 <>
-                  <p className="text-muted-foreground">&bull; {lead.contacts?.length || 0} {lead.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
+                  <p className="text-muted-foreground">&bull; {data.contacts?.length || 0} {data.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
                   <p className="text-muted-foreground">&bull; Contacted {contactAttempts} {contactAttempts === 1 ? 'time' : 'times'}</p>
                 </>
-              )}
             </div>
           </div>
         </div>
@@ -864,41 +858,23 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                </div>
              </CardContent>
            </Card>
-           
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-muted-foreground" />
-                  Contacts
-                </CardTitle>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Contact
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add New Contact</DialogTitle>
-                      <DialogDescription>
-                        Enter the details for the new contact.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="py-4 space-y-4">
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                  </div>
-                ) : lead.contacts && lead.contacts.length > 0 ? (
+           <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'contacts') loadSubcollection('contacts'); }}>
+             <Card>
+               <AccordionItem value="contacts" className="border-b-0">
+                <AccordionTrigger className="p-6">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-muted-foreground" />
+                    Contacts
+                  </CardTitle>
+                </AccordionTrigger>
+                <AccordionContent className="px-6">
+                {loadingStates.contacts ? (
+                  <div className="py-4 flex justify-center"><Loader /></div>
+                ) : data.contacts && data.contacts.length > 0 ? (
                   <div className="space-y-4">
-                  {lead.contacts.map((contact, index) => {
+                  {data.contacts.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact);
                      return (
                       <Card key={contact.id || index} className="relative group/contact">
@@ -914,10 +890,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent>
-                                <DropdownMenuItem onClick={()=>{ setSelectedContact(contact); setIsEditDialogOpen(true); }}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Edit
-                                </DropdownMenuItem>
+                                <DialogTrigger asChild>
+                                    <DropdownMenuItem onSelect={() => {setSelectedContact(contact); setIsEditDialogOpen(true);}}>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                </DialogTrigger>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
@@ -977,91 +955,98 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                       </Card>
                      )
                   })}
+                   <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full mt-4">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Add Contact
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                        <DialogTitle>Add New Contact</DialogTitle>
+                        <DialogDescription>
+                            Enter the details for the new contact.
+                        </DialogDescription>
+                        </DialogHeader>
+                        <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
+                    </DialogContent>
+                    </Dialog>
                   </div>
                 ) : (
                   <div className="py-4 text-center text-muted-foreground">
-                    No existing contacts found.
+                    No contacts found.
                   </div>
                 )}
-                {scoringResult?.prospectedContacts && scoringResult.prospectedContacts.length > 0 &&
-                  scoringResult.prospectedContacts.map((contact, index) => (
-                    <Card key={`prospect-${index}`} className="mt-4 bg-secondary">
-                        <CardHeader className="pb-2">
-                           <p className="font-semibold">{contact.name} <Badge variant="outline">Found on website</Badge></p>
-                           <p className="text-sm text-muted-foreground">{contact.title}</p>
-                        </CardHeader>
-                        <CardContent className="text-sm">
-                            <div className="flex items-center gap-3">
-                                <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                                {contact.email}
-                                </a>
-                            </div>
-                        </CardContent>
-                    </Card>
-                  ))
-                }
-              </CardContent>
-            </Card>
+                </AccordionContent>
+               </AccordionItem>
+             </Card>
+           </Accordion>
+           <Accordion type="single" collapsible>
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
-                        Address
-                    </CardTitle>
-                    <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit Address
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Edit Address</DialogTitle>
-                            </DialogHeader>
-                            <AddressAutocomplete
-                                defaultValue={lead.address}
-                                onAddressSelect={handleAddressSave}
-                            />
-                        </DialogContent>
-                    </Dialog>
-                </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <button
-                      onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
-                      disabled={fullAddress === 'No address available'}
-                      className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 mt-1"
-                      title="View on map"
-                  >
-                      <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                  </button>
-                  <p className="text-sm text-muted-foreground">{fullAddress}</p>
-                </div>
-                {fullAddress !== 'No address available' && (
-                    <div className="h-48 w-full rounded-md overflow-hidden border">
-                        <iframe
-                            width="100%"
-                            height="100%"
-                            frameBorder="0"
-                            style={{ border: 0 }}
-                            src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                fullAddress
-                            )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                            allowFullScreen
-                            aria-hidden="false"
-                            tabIndex={0}
-                        ></iframe>
-                    </div>
-                )}
-              </CardContent>
+                <AccordionItem value="address" className="border-b-0">
+                    <AccordionTrigger className="p-6">
+                        <CardTitle className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-muted-foreground" />
+                            Address
+                        </CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-6">
+                        <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                            <button
+                                onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
+                                disabled={fullAddress === 'No address available'}
+                                className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 mt-1"
+                                title="View on map"
+                            >
+                                <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                            </button>
+                            <p className="text-sm text-muted-foreground">{fullAddress}</p>
+                            </div>
+                            {fullAddress !== 'No address available' && (
+                                <div className="h-48 w-full rounded-md overflow-hidden border">
+                                    <iframe
+                                        width="100%"
+                                        height="100%"
+                                        frameBorder="0"
+                                        style={{ border: 0 }}
+                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                                            fullAddress
+                                        )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                                        allowFullScreen
+                                        aria-hidden="false"
+                                        tabIndex={0}
+                                    ></iframe>
+                                </div>
+                            )}
+                             <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="w-full">
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit Address
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Edit Address</DialogTitle>
+                                    </DialogHeader>
+                                    <AddressAutocomplete
+                                        defaultValue={lead.address}
+                                        onAddressSelect={handleAddressSave}
+                                    />
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
             </Card>
+           </Accordion>
           </div>
           
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'call-history') loadSubcollection('transcripts'); loadSubcollection('activity'); }}>
             <Card>
-              <AccordionItem value="call-history">
+              <AccordionItem value="call-history" className="border-b-0">
                 <AccordionTrigger className="p-6">
                   <CardTitle className="flex items-center gap-2">
                     <PhoneCall className="w-5 h-5 text-muted-foreground" />
@@ -1069,12 +1054,12 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                   </CardTitle>
                 </AccordionTrigger>
                 <AccordionContent className="px-6">
-                   {isLoading.activity ? (
+                   {loadingStates.activity || loadingStates.transcripts ? (
                      <div className="flex items-center justify-center p-8"><Loader /></div>
                    ) : callHistory.length > 0 ? (
                     <ul className="space-y-4">
                       {displayedCallHistory.map((item, index) => {
-                        const transcript = transcripts.find(t => t.callId === item.callId);
+                        const transcript = (data.transcripts || []).find(t => t.callId === item.callId);
                         return (
                           <li key={item.id} className="flex gap-4 group">
                             <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
@@ -1137,14 +1122,14 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
           </Accordion>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible>
+            <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'activity') loadSubcollection('activity'); }}>
                 <Card>
-                    <AccordionItem value="activity">
+                    <AccordionItem value="activity" className="border-b-0">
                         <AccordionTrigger className="p-6">
                              <CardTitle>Activity History</CardTitle>
                         </AccordionTrigger>
                          <AccordionContent className="px-6">
-                            {isLoading.activity ? (
+                            {loadingStates.activity ? (
                                  <div className="flex items-center justify-center p-8"><Loader /></div>
                             ) : displayedActivities.length > 0 ? (
                                 <>
@@ -1188,9 +1173,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                 </Card>
             </Accordion>
             
-            <Accordion type="single" collapsible>
+            <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'notes') loadSubcollection('notes'); }}>
                 <Card>
-                     <AccordionItem value="notes">
+                     <AccordionItem value="notes" className="border-b-0">
                         <AccordionTrigger className="p-6">
                             <CardTitle className="flex items-center gap-2">
                                 <BookText className="w-5 h-5 text-muted-foreground" />
@@ -1198,7 +1183,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                             </CardTitle>
                         </AccordionTrigger>
                         <AccordionContent className="px-6">
-                            {isLoading.notes ? (
+                            {loadingStates.notes ? (
                                 <div className="flex items-center justify-center p-8"><Loader /></div>
                             ) : displayedNotes.length > 0 ? (
                                 <>
@@ -1212,7 +1197,7 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                                 </div>
                                 ))}
                                 </div>
-                                {notes.length > 5 && (
+                                {(data.notes || []).length > 5 && (
                                     <Button variant="link" className="w-full mt-2" onClick={() => setIsNotesExpanded(!isNotesExpanded)}>
                                         {isNotesExpanded ? 'Show less' : 'Show all notes'}
                                     </Button>
@@ -1238,7 +1223,8 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                            setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t))
+                            const updatedTranscripts = (data.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)
+                            setData(prev => ({...prev, transcripts: updatedTranscripts}));
                         }}
                       />
                   )}
@@ -1266,9 +1252,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'appointments') loadSubcollection('appointments'); }}>
             <Card>
-                 <AccordionItem value="appointments">
+                 <AccordionItem value="appointments" className="border-b-0">
                      <AccordionTrigger className="p-6">
                         <CardTitle className="flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-muted-foreground" />
@@ -1276,10 +1262,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                         </CardTitle>
                      </AccordionTrigger>
                      <AccordionContent className="px-6">
-                        {isLoading.appointments ? (
+                        {loadingStates.appointments ? (
                              <div className="flex items-center justify-center p-8"><Loader /></div>
-                        ) : appointments.length > 0 ? (
-                          appointments.map(appointment => (
+                        ) : (data.appointments || []).length > 0 ? (
+                          (data.appointments || []).map(appointment => (
                             <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                               <div className="flex items-center gap-4">
                                   <div className="text-center">
@@ -1345,9 +1331,9 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible>
+           <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'tasks') loadSubcollection('tasks'); }}>
             <Card>
-                 <AccordionItem value="tasks">
+                 <AccordionItem value="tasks" className="border-b-0">
                      <AccordionTrigger className="p-6">
                         <CardTitle className="flex items-center gap-2">
                             <ListTodo className="w-5 h-5 text-muted-foreground" />
@@ -1383,10 +1369,10 @@ export function LeadProfile({ initialLead, initialNotes, initialTranscripts, ini
                             <Button type="submit">Add Task</Button>
                         </form>
                         <div className="space-y-2">
-                            {isLoading.tasks ? (
+                            {loadingStates.tasks ? (
                                 <div className="flex items-center justify-center p-8"><Loader /></div>
-                            ) : tasks.length > 0 ? (
-                                tasks.map(task => (
+                            ) : (data.tasks || []).length > 0 ? (
+                                (data.tasks || []).map(task => (
                                     <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
                                         <Checkbox
                                             id={`task-${task.id}`}
