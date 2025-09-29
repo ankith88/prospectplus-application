@@ -536,7 +536,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 handleStartDialing(leads);
                             }}
                             disabled={leads.length === 0}
-                            className="ml-4"
+                            className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
                         >
                             <PlayCircle className="mr-2 h-4 w-4" />
                             Start Dialing
