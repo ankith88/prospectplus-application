@@ -358,6 +358,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                                     <SelectItem value="Lost">Lost</SelectItem>
                                     <SelectItem value="LPO Review">LPO Review</SelectItem>
                                     <SelectItem value="Unqualified">Unqualified</SelectItem>
+                                    <SelectItem value="Demo">Demo</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

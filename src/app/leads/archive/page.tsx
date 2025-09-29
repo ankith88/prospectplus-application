@@ -9,7 +9,7 @@ export const revalidate = 600;
 async function getArchivedLeadsData() {
     const allLeads = await getLeadsFromFirebase({ summary: true });
     const archivedLeads = allLeads.filter(lead => 
-        ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status)
+        ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Demo'].includes(lead.status)
     );
 
     // Fetch the last activity for each archived lead in parallel

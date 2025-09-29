@@ -9,7 +9,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -36,6 +36,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Unqualified': '#D1D5DB', // Light Gray
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
+  'Demo': '#EC4899', // Pink
 };
 
 const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
@@ -355,14 +356,16 @@ export default function ReportsClientPage({
 
     const totalAppointments = filteredAppointments.length;
     const appointmentsForWonLeads = filteredAppointments.filter(a => a.leadStatus === 'Won').length;
+    const appointmentsForDemoLeads = filteredAppointments.filter(a => a.leadStatus === 'Demo').length;
     const appointmentsForLostLeads = filteredAppointments.filter(a => a.leadStatus === 'Lost').length;
     const wonAppointmentRate = totalAppointments > 0 ? (appointmentsForWonLeads / totalAppointments) * 100 : 0;
+    const demoAppointmentRate = totalAppointments > 0 ? (appointmentsForDemoLeads / totalAppointments) * 100 : 0;
     const lostAppointmentRate = totalAppointments > 0 ? (appointmentsForLostLeads / totalAppointments) * 100 : 0;
     
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
     const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
-    const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'];
+    const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Demo'];
     const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
     const archivedLeadsCount = archivedLeads.length;
 
@@ -387,6 +390,7 @@ export default function ReportsClientPage({
     const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
+    const totalDemo = filteredLeads.filter(l => l.status === 'Demo').length;
     
     const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData && Object.keys(l.discoveryData).length > 0);
 
@@ -453,6 +457,9 @@ export default function ReportsClientPage({
       qualifiedToArchivedRatio,
       preQualifiedToArchivedRatio,
       combinedQualifiedToArchivedRatio,
+      appointmentsForDemoLeads,
+      demoAppointmentRate,
+      totalDemo,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -537,7 +544,7 @@ export default function ReportsClientPage({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -850,13 +857,19 @@ export default function ReportsClientPage({
                 <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
                 <p className="text-muted-foreground">Metrics related to booked appointments.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                  <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Across all time" />
                  <StatCard 
                     title="Appointments to Won Leads" 
                     value={stats.appointmentsForWonLeads} 
                     icon={Goal} 
                     description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
+                <StatCard 
+                    title="Appointments to Demo" 
+                    value={stats.appointmentsForDemoLeads} 
+                    icon={Presentation} 
+                    description={`${stats.demoAppointmentRate.toFixed(1)}% of total appointments`} 
                 />
                 <StatCard 
                     title="Appointments to Lost Leads" 
@@ -902,9 +915,10 @@ export default function ReportsClientPage({
                 <h2 className="text-2xl font-semibold tracking-tight">Lead Outcomes</h2>
                 <p className="text-muted-foreground">Final breakdown of lead statuses.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 <StatCard title="Total Pre-Qualified Leads" value={stats.totalPreQualified} icon={UserCheck} />
                 <StatCard title="Total Qualified Leads" value={stats.totalQualified} icon={UserCheck} />
+                <StatCard title="Total Demo Leads" value={stats.totalDemo} icon={Presentation} />
                 <StatCard title="Total Lost Leads" value={stats.totalLost} icon={UserX} />
                 <StatCard title="Total Won Leads" value={stats.totalWon} icon={Goal} />
             </div>
