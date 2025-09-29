@@ -590,17 +590,17 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.leadsByStatus.filter(d => !inactiveStatus.includes(d.name))}
+                            data={stats.leadsByStatus}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => inactiveStatus.includes(name) ? '' : `${name}: ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.leadsByStatus.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
+                           <Cell key={`cell-${index}`} fill={inactiveStatus.includes(entry.name) ? '#E5E7EB' : STATUS_COLORS[entry.name]} />
                         ))}
                         </Pie>
                         <Tooltip content={<ChartTooltipContent
@@ -636,17 +636,17 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.appointmentsBySource.filter(d => !inactiveSource.includes(d.name))}
+                            data={stats.appointmentsBySource}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => inactiveSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.appointmentsBySource.map((entry, index) => (
-                            <Cell key={`cell-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                           <Cell key={`cell-source-${index}`} fill={inactiveSource.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                          <Tooltip content={<ChartTooltipContent
@@ -682,17 +682,17 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.appointmentsByLeadType.filter(d => !inactiveLeadType.includes(d.name))}
+                            data={stats.appointmentsByLeadType}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => inactiveLeadType.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.appointmentsByLeadType.map((entry, index) => (
-                            <Cell key={`cell-lead-type-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                           <Cell key={`cell-lead-type-${index}`} fill={inactiveLeadType.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                         <Tooltip content={<ChartTooltipContent
@@ -728,17 +728,17 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                           data={stats.lostLeadsBySource.filter(d => !inactiveLostSource.includes(d.name))}
+                           data={stats.lostLeadsBySource}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => inactiveLostSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.lostLeadsBySource.map((entry, index) => (
-                            <Cell key={`cell-lost-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                            <Cell key={`cell-lost-source-${index}`} fill={inactiveLostSource.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                          <Tooltip content={<ChartTooltipContent
@@ -781,9 +781,9 @@ export default function ReportsClientPage({
                         {stats.routingTagData.length > 0 ? (
                             <ChartContainer config={chartConfig} className="h-[200px] w-full">
                                 <PieChart>
-                                    <Pie data={stats.routingTagData.filter(d => !inactiveRoutingTag.includes(d.name))} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
+                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
                                         {stats.routingTagData.map((entry, index) => (
-                                            <Cell key={`cell-route-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                            <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                                         ))}
                                     </Pie>
                                     <Tooltip content={<ChartTooltipContent
