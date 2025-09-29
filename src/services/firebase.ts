@@ -964,6 +964,27 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
     }
 }
 
+async function getAllTasks(): Promise<Array<Task & { leadId: string }>> {
+    try {
+        const tasksSnapshot = await getDocs(collectionGroup(firestore, 'tasks'));
+        const allTasks = tasksSnapshot.docs.map(doc => {
+            const taskData = doc.data() as Task;
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                ...taskData,
+                id: doc.id,
+                leadId: leadId,
+            };
+        });
+        allTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        return allTasks;
+    } catch (error) {
+        console.error('Failed to fetch all tasks:', error);
+        return [];
+    }
+}
+
+
 async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
     try {
         const tasksRef = collection(firestore, 'leads', leadId, 'tasks');
@@ -1201,6 +1222,7 @@ export {
     findLeadByPhoneNumber,
     getLeadTasks,
     getAllUserTasks,
+    getAllTasks,
     addTaskToLead,
     updateTaskCompletion,
     deleteTaskFromLead,
