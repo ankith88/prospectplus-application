@@ -230,17 +230,17 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
 
 
   const handleBulkUnassign = async () => {
-    if (selectedMyLeads.length === 0) return;
+    if (selectedForReassignment.length === 0) return;
     try {
-      const promises = selectedMyLeads.map(leadId => updateLeadDialerRep(leadId, null));
+      const promises = selectedForReassignment.map(leadId => updateLeadDialerRep(leadId, null));
       await Promise.all(promises);
       
       const updatedLeads = allLeads.map(lead =>
-        selectedMyLeads.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
+        selectedForReassignment.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
       );
       setAllLeads(updatedLeads);
-      toast({ title: "Success", description: `${selectedMyLeads.length} lead(s) unassigned.` });
-      setSelectedMyLeads([]);
+      toast({ title: "Success", description: `${selectedForReassignment.length} lead(s) unassigned.` });
+      setSelectedForReassignment([]);
     } catch (error) {
       console.error("Failed to bulk unassign leads:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
@@ -328,6 +328,15 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       setSelectedAllLeads(unassignedLeads.map(l => l.id));
     } else {
       setSelectedAllLeads([]);
+    }
+  };
+
+  const handleSelectAllInAssignedGroup = (leadsInGroup: LeadWithDetails[], checked: boolean | 'indeterminate') => {
+    const leadIdsInGroup = leadsInGroup.map(l => l.id);
+    if (checked) {
+      setSelectedForReassignment(prev => [...new Set([...prev, ...leadIdsInGroup])]);
+    } else {
+      setSelectedForReassignment(prev => prev.filter(id => !leadIdsInGroup.includes(id)));
     }
   };
 
@@ -536,7 +545,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 handleStartDialing(leads);
                             }}
                             disabled={leads.length === 0}
-                            className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
+                             className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
                         >
                             <PlayCircle className="mr-2 h-4 w-4" />
                             Start Dialing
@@ -639,10 +648,16 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
             </CardTitle>
             <div className="flex items-center gap-2">
                 {selectedForReassignment.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
-                        <UserCog className="mr-2 h-4 w-4" />
-                        Reassign ({selectedForReassignment.length})
-                    </Button>
+                    <>
+                        <Button variant="outline" size="sm" onClick={handleBulkUnassign}>
+                            <UserX className="mr-2 h-4 w-4" />
+                            Unassign ({selectedForReassignment.length})
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
+                            <UserCog className="mr-2 h-4 w-4" />
+                            Reassign ({selectedForReassignment.length})
+                        </Button>
+                    </>
                 )}
                 <Button onClick={() => exportLeadsToCsv(filteredLeads.filter(l => l.dialerAssigned), `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
                     <Download className="mr-2 h-4 w-4" />
@@ -670,6 +685,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                               const currentPage = paginationState[groupKey] || 1;
                               const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                               const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
+                              const areAllInGroupSelected = paginatedLeads.every(l => selectedForReassignment.includes(l.id));
 
                               return (
                                 <AccordionItem value={status} key={status}>
@@ -683,6 +699,13 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                      <Table>
                                         <TableHeader>
                                             <TableRow>
+                                                <TableHead className="w-8">
+                                                    <Checkbox
+                                                        checked={paginatedLeads.length > 0 && areAllInGroupSelected}
+                                                        onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
+                                                        aria-label={`Select all leads for ${dialer} with status ${status}`}
+                                                    />
+                                                </TableHead>
                                                 <TableHead>Company</TableHead>
                                                 <TableHead>Franchisee</TableHead>
                                                 <TableHead>Industry</TableHead>
@@ -692,7 +715,14 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                         <TableBody>
                                           {paginatedLeads.map((lead) => (
                                             <Fragment key={lead.id}>
-                                              <TableRow>
+                                              <TableRow data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                                  <TableCell>
+                                                      <Checkbox
+                                                          checked={selectedForReassignment.includes(lead.id)}
+                                                          onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
+                                                          aria-label={`Select lead ${lead.companyName}`}
+                                                      />
+                                                  </TableCell>
                                                   <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                                                   <TableCell>{lead.industryCategory}</TableCell>
@@ -715,7 +745,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                               </TableRow>
                                               {expandedDetails[lead.id] && (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="p-0">
+                                                    <TableCell colSpan={5} className="p-0">
                                                         <div className="p-4 bg-secondary/50">
                                                             {expandedDetails[lead.id].loading ? (
                                                                 <Loader />
