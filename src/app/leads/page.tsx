@@ -541,12 +541,13 @@ export default function LeadsPage() {
 
                 return (
                   <AccordionItem value={status} key={status}>
-                    <AccordionTrigger className="bg-muted px-4 rounded-md">
-                      <div className="flex flex-1 items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <LeadStatusBadge status={status as LeadStatus} />
-                          <Badge>{leads.length} Leads</Badge>
-                        </div>
+                    <div className="bg-muted px-4 rounded-md flex items-center justify-between">
+                        <AccordionTrigger className="py-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <LeadStatusBadge status={status as LeadStatus} />
+                            <Badge>{leads.length} Leads</Badge>
+                          </div>
+                        </AccordionTrigger>
                         <Button
                             variant="secondary"
                             size="sm"
@@ -555,13 +556,12 @@ export default function LeadsPage() {
                                 handleStartDialing(leads);
                             }}
                             disabled={leads.length === 0}
-                            className="mr-4"
+                            className="ml-4"
                         >
                             <PlayCircle className="mr-2 h-4 w-4" />
                             Start Dialing
                         </Button>
                       </div>
-                    </AccordionTrigger>
                     <AccordionContent className="pt-2">
                         <Table>
                             <TableHeader>
