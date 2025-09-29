@@ -122,7 +122,6 @@ type SubcollectionData = {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
-  const [initialStatus, setInitialStatus] = useState<LeadStatus>(initialLead.status);
   const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
   
   const [data, setData] = useState<Partial<SubcollectionData>>({});
@@ -173,7 +172,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         prospectedContacts: [],
       });
     }
-    setInitialStatus(initialLead.status);
   }, [initialLead]);
 
   const loadSubcollection = useCallback(async (collectionName: keyof SubcollectionData) => {
@@ -204,8 +202,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const fetchUserLeads = async () => {
         if (!user?.displayName) return;
         setLoading(true);
-        const allLeads = await getLeadsFromFirebase({ summary: true });
-        const userLeads = allLeads.filter(l => l.dialerAssigned === user.displayName);
+        const userLeads = await getLeadsFromFirebase({ summary: true, dialerAssigned: user.displayName });
         setAllUserLeads(userLeads);
         setLoading(false);
     }
@@ -547,7 +544,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || allUserLeads.length === 0) {
       return { nextLeadId: null, hasNextLead: false };
     }
-    const leadsWithSameStatus = allUserLeads.filter(l => l.status === initialStatus);
+    const leadsWithSameStatus = allUserLeads.filter(l => l.status === lead.status);
     const currentIndex = leadsWithSameStatus.findIndex(l => l.id === lead.id);
 
     if (currentIndex === -1 || leadsWithSameStatus.length <= 1) {
@@ -556,7 +553,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const nextIndex = (currentIndex + 1) % leadsWithSameStatus.length;
     return { nextLeadId: leadsWithSameStatus[nextIndex].id, hasNextLead: true };
-  }, [lead, allUserLeads, initialStatus]);
+  }, [lead, allUserLeads]);
 
   const handleNextLead = () => {
     if (nextLeadId) {

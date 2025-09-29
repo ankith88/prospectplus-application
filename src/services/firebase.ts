@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -193,7 +192,6 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         if (includeSubCollections) {
           transformedLead.contacts = await getLeadContacts(docSnapshot.id);
-          transformedLead.activity = await getLeadActivity(docSnapshot.id);
           transformedLead.contactCount = transformedLead.contacts.length;
         }
 
@@ -205,20 +203,25 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
     }
 }
 
-async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean }): Promise<Lead[]> {
-  const { leadId, summary = false } = options || {};
+async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean, dialerAssigned?: string }): Promise<Lead[]> {
+  const { leadId, summary = false, dialerAssigned } = options || {};
   
   if (leadId) {
       const lead = await getLeadFromFirebase(leadId, !summary);
       return lead ? [lead] : [];
   }
   try {
-    console.log(`Fetching all leads from Firebase (summary: ${summary})...`);
-    const leadsRef = collection(firestore, 'leads');
-    const snapshot = await getDocs(leadsRef);
+    console.log(`Fetching leads from Firebase (summary: ${summary}, dialer: ${dialerAssigned || 'all'})...`);
+    
+    let leadsQuery = query(collection(firestore, 'leads'));
+    if (dialerAssigned) {
+        leadsQuery = query(leadsQuery, where('dialerAssigned', '==', dialerAssigned));
+    }
+
+    const snapshot = await getDocs(leadsQuery);
 
     if (snapshot.empty) {
-      console.log("No leads found in Firebase.");
+      console.log("No leads found in Firebase for the given query.");
       return [];
     }
 
