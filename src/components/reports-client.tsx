@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -45,53 +46,6 @@ const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
 
-
-const renderActiveShape = (props: any) => {
-  const RADIAN = Math.PI / 180;
-  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-  const sin = Math.sin(-RADIAN * midAngle);
-  const cos = Math.cos(-RADIAN * midAngle);
-  const sx = cx + (outerRadius + 10) * cos;
-  const sy = cy + (outerRadius + 10) * sin;
-  const mx = cx + (outerRadius + 20) * cos;
-  const my = cy + (outerRadius + 20) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 12;
-  const ey = my;
-  const textAnchor = cos >= 0 ? 'start' : 'end';
-
-  return (
-    <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={11}>
-        {payload.name}
-      </text>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-      />
-      <Sector
-        cx={cx}
-        cy={cy}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        innerRadius={outerRadius + 6}
-        outerRadius={outerRadius + 10}
-        fill={fill}
-      />
-      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
-      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} textAnchor={textAnchor} fill="#333" fontSize={10}>{`${value} leads`}</text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 8} y={ey} dy={14} textAnchor={textAnchor} fill="#999" fontSize={9}>
-        {`(Rate ${(percent * 100).toFixed(2)}%)`}
-      </text>
-    </g>
-  );
-};
-
 interface ReportsClientPageProps {
   initialCalls: CallActivity[];
   initialLeads: Lead[];
@@ -114,10 +68,12 @@ export default function ReportsClientPage({
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [statusActiveIndex, setStatusActiveIndex] = useState(0);
-  const [sourceActiveIndex, setSourceActiveIndex] = useState(0);
-  const [lostSourceActiveIndex, setLostSourceActiveIndex] = useState(0);
-  const [leadTypeActiveIndex, setLeadTypeActiveIndex] = useState(0);
+  
+  const [inactiveStatus, setInactiveStatus] = useState<string[]>([]);
+  const [inactiveSource, setInactiveSource] = useState<string[]>([]);
+  const [inactiveLostSource, setInactiveLostSource] = useState<string[]>([]);
+  const [inactiveLeadType, setInactiveLeadType] = useState<string[]>([]);
+  const [inactiveRoutingTag, setInactiveRoutingTag] = useState<string[]>([]);
 
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
@@ -153,21 +109,13 @@ export default function ReportsClientPage({
     }
   };
 
-
-  const onStatusPieEnter = (_: any, index: number) => {
-    setStatusActiveIndex(index);
-  };
-  
-  const onSourcePieEnter = (_: any, index: number) => {
-    setSourceActiveIndex(index);
-  };
-
-  const onLostSourcePieEnter = (_: any, index: number) => {
-    setLostSourceActiveIndex(index);
-  };
-  
-  const onLeadTypePieEnter = (_: any, index: number) => {
-    setLeadTypeActiveIndex(index);
+  const handleLegendClick = (inactiveState: string[], setInactiveState: React.Dispatch<React.SetStateAction<string[]>>, entry: any) => {
+    const { value } = entry;
+    if (inactiveState.includes(value)) {
+      setInactiveState(inactiveState.filter(item => item !== value));
+    } else {
+      setInactiveState([...inactiveState, value]);
+    }
   };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
@@ -642,7 +590,7 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.leadsByStatus}
+                            data={stats.leadsByStatus.filter(d => !inactiveStatus.includes(d.name))}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -664,7 +612,7 @@ export default function ReportsClientPage({
                             )}
                             />}
                         />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}}/>
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} />
                     </PieChart>
                 </ChartContainer>
             ) : (
@@ -688,7 +636,7 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.appointmentsBySource}
+                            data={stats.appointmentsBySource.filter(d => !inactiveSource.includes(d.name))}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -710,7 +658,7 @@ export default function ReportsClientPage({
                             )}
                             />}
                         />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveSource, setInactiveSource, e)} />
                     </PieChart>
                 </ChartContainer>
             ) : (
@@ -734,7 +682,7 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                            data={stats.appointmentsByLeadType}
+                            data={stats.appointmentsByLeadType.filter(d => !inactiveLeadType.includes(d.name))}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -756,7 +704,7 @@ export default function ReportsClientPage({
                             )}
                             />}
                         />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLeadType, setInactiveLeadType, e)} />
                     </PieChart>
                 </ChartContainer>
             ) : (
@@ -780,7 +728,7 @@ export default function ReportsClientPage({
                 <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
-                           data={stats.lostLeadsBySource}
+                           data={stats.lostLeadsBySource.filter(d => !inactiveLostSource.includes(d.name))}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -802,7 +750,7 @@ export default function ReportsClientPage({
                             )}
                             />}
                         />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLostSource, setInactiveLostSource, e)} />
                     </PieChart>
                 </ChartContainer>
             ) : (
@@ -833,7 +781,7 @@ export default function ReportsClientPage({
                         {stats.routingTagData.length > 0 ? (
                             <ChartContainer config={chartConfig} className="h-[200px] w-full">
                                 <PieChart>
-                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
+                                    <Pie data={stats.routingTagData.filter(d => !inactiveRoutingTag.includes(d.name))} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
                                         {stats.routingTagData.map((entry, index) => (
                                             <Cell key={`cell-route-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                                         ))}
@@ -847,7 +795,7 @@ export default function ReportsClientPage({
                                       )}
                                       />}
                                     />
-                                    <Legend iconSize={10} />
+                                    <Legend iconSize={10} onClick={(e) => handleLegendClick(inactiveRoutingTag, setInactiveRoutingTag, e)} />
                                 </PieChart>
                             </ChartContainer>
                         ) : (
