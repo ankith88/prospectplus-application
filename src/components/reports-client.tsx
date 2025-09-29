@@ -380,6 +380,25 @@ export default function ReportsClientPage({
     const qualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalQualified / archivedLeadsCount) * 100 : 0;
     const preQualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalPreQualified / archivedLeadsCount) * 100 : 0;
     const combinedQualifiedToArchivedRatio = archivedLeadsCount > 0 ? ((totalQualified + totalPreQualified) / archivedLeadsCount) * 100 : 0;
+    
+    const teamPerformanceData = allDialers.map(dialer => {
+      const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer && c.callId);
+      const uniqueDialerCallIds = new Set(dialerCalls.map(c => c.callId));
+      const totalDialerCalls = uniqueDialerCallIds.size;
+      
+      const dialerAppointments = uniqueAppointments.filter(a => a.dialerAssigned === dialer);
+      const totalDialerAppointments = dialerAppointments.length;
+      
+      const conversionRate = totalDialerCalls > 0 ? (totalDialerAppointments / totalDialerCalls) * 100 : 0;
+      
+      return {
+        name: dialer,
+        'Total Calls': totalDialerCalls,
+        'Appointments': totalDialerAppointments,
+        'Conversion Rate': conversionRate
+      };
+    });
+
 
     return {
       totalCalls,
@@ -420,8 +439,9 @@ export default function ReportsClientPage({
       appointmentsForDemoLeads,
       demoAppointmentRate,
       totalDemo,
+      teamPerformanceData,
     };
-  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
+  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads, allDialers]);
   
 
   const hasActiveFilters = 
@@ -762,6 +782,44 @@ export default function ReportsClientPage({
         </Card>
         
       </div>
+      
+        {userProfile?.role === 'admin' && (
+          <div className="space-y-6">
+              <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">Team Performance Leaderboard</h2>
+                  <p className="text-muted-foreground">Comparison of dialer performance.</p>
+              </div>
+              <Card>
+                <CardContent className="pt-6">
+                  {stats.teamPerformanceData.length > 0 ? (
+                      <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                          <BarChart data={stats.teamPerformanceData} layout="vertical">
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis dataKey="name" type="category" width={120} />
+                              <Tooltip 
+                                content={<ChartTooltipContent 
+                                  formatter={(value, name) => (
+                                      <div className="flex flex-col">
+                                          <span className="font-medium">{name}</span>
+                                          <span className="text-muted-foreground">{typeof value === 'number' && name === 'Conversion Rate' ? `${value.toFixed(1)}%` : value}</span>
+                                      </div>
+                                  )}
+                                />} 
+                              />
+                              <Legend />
+                              <Bar dataKey="Total Calls" fill="#8884d8" />
+                              <Bar dataKey="Appointments" fill="#82ca9d" />
+                              <Bar dataKey="Conversion Rate" fill="#ffc658" />
+                          </BarChart>
+                      </ChartContainer>
+                  ) : (
+                      <div className="flex h-[400px] items-center justify-center text-muted-foreground">No team performance data available.</div>
+                  )}
+                </CardContent>
+              </Card>
+          </div>
+        )}
 
        <div className="space-y-6">
             <div>
@@ -781,7 +839,7 @@ export default function ReportsClientPage({
                         {stats.routingTagData.length > 0 ? (
                             <ChartContainer config={chartConfig} className="h-[200px] w-full">
                                 <PieChart>
-                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
+                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60}>
                                         {stats.routingTagData.map((entry, index) => (
                                             <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                                         ))}
