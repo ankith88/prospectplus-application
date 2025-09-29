@@ -26,7 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -173,26 +173,6 @@ export default function LeadsPage() {
     return [];
   }, [filteredLeads, user]);
 
-  useEffect(() => {
-    if (!loading && myLeads.length > 0 && searchParams.get('nextLead') === 'true') {
-        const lastLeadStatus = searchParams.get('lastLeadStatus') as LeadStatus | null;
-        const statusToFind = lastLeadStatus || 'New';
-        
-        const leadsInStatus = myLeads.filter(lead => lead.status === statusToFind);
-
-        if (leadsInStatus.length > 0) {
-            router.replace(`/leads/${leadsInStatus[0].id}`);
-        } else {
-             const newLeads = myLeads.filter(lead => lead.status === 'New');
-             if (newLeads.length > 0) {
-                 router.replace(`/leads/${newLeads[0].id}`);
-             } else {
-                router.replace('/leads');
-             }
-        }
-    }
-  }, [loading, myLeads, searchParams, router]);
-
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
       const status = lead.status;
@@ -259,6 +239,13 @@ export default function LeadsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleStartDialing = (leads: LeadWithDetails[]) => {
+    if (leads.length === 0) return;
+    const leadIds = leads.map(l => l.id);
+    localStorage.setItem('dialingSessionLeads', JSON.stringify(leadIds));
+    router.push(`/leads/${leadIds[0]}`);
   };
 
 
@@ -545,7 +532,7 @@ export default function LeadsPage() {
            {loading ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-            <Accordion type="multiple" className="w-full space-y-2">
+            <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
               {Object.entries(groupedMyLeads).map(([status, leads]) => {
                 const currentPage = myLeadsPagination[status] || 1;
                 const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
@@ -555,9 +542,24 @@ export default function LeadsPage() {
                 return (
                   <AccordionItem value={status} key={status}>
                     <AccordionTrigger className="bg-muted px-4 rounded-md">
-                      <div className="flex items-center gap-2">
-                        <LeadStatusBadge status={status as LeadStatus} />
-                        <Badge>{leads.length} Leads</Badge>
+                      <div className="flex flex-1 items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <LeadStatusBadge status={status as LeadStatus} />
+                          <Badge>{leads.length} Leads</Badge>
+                        </div>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartDialing(leads);
+                            }}
+                            disabled={leads.length === 0}
+                            className="mr-4"
+                        >
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Start Dialing
+                        </Button>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="pt-2">

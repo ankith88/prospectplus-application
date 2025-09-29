@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -122,7 +123,6 @@ type SubcollectionData = {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
-  const [allUserLeads, setAllUserLeads] = useState<Lead[]>([]);
   
   const [data, setData] = useState<Partial<SubcollectionData>>({});
   const [loadingStates, setLoadingStates] = useState({
@@ -134,7 +134,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     appointments: false,
   });
   
-  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][number] | null>(null);
+  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -158,10 +158,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isCallHistoryExpanded, setIsCallHistoryExpanded] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
 
+  const [sessionLeads, setSessionLeads] = useState<string[]>([]);
+  const [isSessionActive, setIsSessionActive] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
+    if (sessionLeadIds) {
+      setSessionLeads(JSON.parse(sessionLeadIds));
+      setIsSessionActive(true);
+    } else {
+      setIsSessionActive(false);
+    }
+  }, [lead]);
   
   useEffect(() => {
     if (initialLead.aiScore) {
@@ -196,19 +208,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setLoadingStates(prev => ({...prev, [collectionName]: false}));
     }
   }, [lead, data, loadingStates, toast]);
-
-
-  useEffect(() => {
-    const fetchUserLeads = async () => {
-        if (!user?.displayName) return;
-        setLoading(true);
-        const userLeads = await getLeadsFromFirebase({ summary: true, dialerAssigned: user.displayName });
-        setAllUserLeads(userLeads);
-        setLoading(false);
-    }
-    fetchUserLeads();
-  }, [user]);
-
 
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
       if (!lead || !user?.displayName) return;
@@ -541,19 +540,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }
 
   const { nextLeadId, hasNextLead } = useMemo(() => {
-    if (!lead || allUserLeads.length === 0) {
+    if (!lead || !isSessionActive || sessionLeads.length === 0) {
       return { nextLeadId: null, hasNextLead: false };
     }
-    const leadsWithSameStatus = allUserLeads.filter(l => l.status === lead.status);
-    const currentIndex = leadsWithSameStatus.findIndex(l => l.id === lead.id);
-
-    if (currentIndex === -1 || leadsWithSameStatus.length <= 1) {
+    const currentIndex = sessionLeads.indexOf(lead.id);
+    if (currentIndex === -1) {
       return { nextLeadId: null, hasNextLead: false };
     }
-
-    const nextIndex = (currentIndex + 1) % leadsWithSameStatus.length;
-    return { nextLeadId: leadsWithSameStatus[nextIndex].id, hasNextLead: true };
-  }, [lead, allUserLeads]);
+    const nextIndex = (currentIndex + 1) % sessionLeads.length;
+    return { nextLeadId: sessionLeads[nextIndex], hasNextLead: true };
+  }, [lead, sessionLeads, isSessionActive]);
 
   const handleNextLead = () => {
     if (nextLeadId) {
@@ -651,7 +647,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
         <Button onClick={handleNextLead} disabled={!hasNextLead}>
             <SkipForward className="mr-2 h-4 w-4" />
-            Next Lead
+            Next in Session
         </Button>
       </div>
 
