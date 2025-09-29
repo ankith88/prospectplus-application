@@ -62,7 +62,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         return;
     }
     try {
-      const { newNote, netSuiteResult } = await logNoteActivity(lead.id, {
+      const newNote = await logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
       });
@@ -73,19 +73,6 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         title: 'Success',
         description: 'Note has been logged successfully.',
       })
-
-      if (netSuiteResult.success) {
-        toast({
-          title: "NetSuite Updated",
-          description: "Note sent to NetSuite.",
-        });
-      } else {
-         toast({
-          variant: "destructive",
-          title: "NetSuite Sync Failed",
-          description: netSuiteResult.message,
-        });
-      }
 
       setIsOpen(false)
       form.reset()

@@ -109,6 +109,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Immediately submit to Firebase and update UI
     onSubmitProp(values.outcome, values.notes || '');
 
     const outcomeMapping = outcomeStatusMap[values.outcome];
@@ -120,31 +121,28 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         });
     }
     
-    if (netSuiteOutcomes.includes(values.outcome)) {
-        try {
-            await sendToNetSuiteForOutcome({
-                leadId: lead.id,
-                outcome: values.outcome,
-                reason: outcomeMapping.reason || '',
-                dialerAssigned: lead.dialerAssigned || '',
-                notes: values.notes || '',
-                salesRecordInternalId: lead.salesRecordInternalId || ''
-            });
-            toast({
-                title: "NetSuite Updated",
-                description: "The outcome has been sent to NetSuite."
-            });
-        } catch (error) {
-            console.error("Failed to send outcome to NetSuite:", error);
-            toast({
-                variant: "destructive",
-                title: "NetSuite Error",
-                description: "Could not send outcome to NetSuite."
-            });
-        }
-    }
-
+    // Close the dialog now
     onClose();
+
+    // Trigger NetSuite sync in the background (fire and forget)
+    if (netSuiteOutcomes.includes(values.outcome)) {
+        sendToNetSuiteForOutcome({
+            leadId: lead.id,
+            outcome: values.outcome,
+            reason: outcomeMapping.reason || '',
+            dialerAssigned: lead.dialerAssigned || '',
+            notes: values.notes || '',
+            salesRecordInternalId: lead.salesRecordInternalId || ''
+        }).then(result => {
+            if (result.success) {
+                 console.log("NetSuite outcome sync successful.");
+            } else {
+                console.error("Background NetSuite outcome sync failed:", result.message);
+            }
+        }).catch(error => {
+            console.error("Background NetSuite outcome sync failed:", error);
+        });
+    }
   }
 
   return (
