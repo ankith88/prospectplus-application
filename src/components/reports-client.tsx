@@ -604,8 +604,8 @@ export default function ReportsClientPage({
           </Card>
       </Collapsible>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <Card className="lg:col-span-1 xl:col-span-1">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
             <CardHeader>
                 <CardTitle>Leads by Status</CardTitle>
                  <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
@@ -621,7 +621,6 @@ export default function ReportsClientPage({
                             labelLine={false}
                             label={({ name, percent }) => inactiveStatus.includes(name) ? '' : `${name}: ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
-                            fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.leadsByStatus.map((entry, index) => (
@@ -647,8 +646,10 @@ export default function ReportsClientPage({
             )}
             </CardContent>
         </Card>
+      </div>
 
-        <Card className="lg:col-span-1 xl:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Briefcase className="h-5 w-5" />
@@ -667,7 +668,6 @@ export default function ReportsClientPage({
                             labelLine={false}
                             label={({ name, percent }) => inactiveSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
-                            fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.appointmentsBySource.map((entry, index) => (
@@ -694,7 +694,7 @@ export default function ReportsClientPage({
             </CardContent>
         </Card>
 
-        <Card className="lg:col-span-1 xl:col-span-1">
+        <Card className="lg:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Target className="h-5 w-5" />
@@ -713,7 +713,6 @@ export default function ReportsClientPage({
                             labelLine={false}
                             label={({ name, percent }) => inactiveLeadType.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
-                            fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.appointmentsByLeadType.map((entry, index) => (
@@ -740,7 +739,7 @@ export default function ReportsClientPage({
             </CardContent>
         </Card>
         
-        <Card className="lg:col-span-1 xl:col-span-1">
+        <Card className="lg:col-span-1">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Frown className="h-5 w-5" />
@@ -759,7 +758,6 @@ export default function ReportsClientPage({
                             labelLine={false}
                             label={({ name, percent }) => inactiveLostSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
-                            fill="#8884d8"
                             dataKey="value"
                         >
                         {stats.lostLeadsBySource.map((entry, index) => (
