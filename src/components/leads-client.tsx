@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -19,7 +20,7 @@ import {
 import { getLeadsFromFirebase } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
@@ -560,8 +561,8 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                             </TableHeader>
                             <TableBody>
                                 {paginatedLeads.map((lead) => (
-                                    <>
-                                    <TableRow key={lead.id} data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                                    <Fragment key={lead.id}>
+                                    <TableRow data-state={selectedMyLeads.includes(lead.id) && "selected"}>
                                         <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
                                         <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                         <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
@@ -605,7 +606,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                             </TableCell>
                                         </TableRow>
                                     )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </TableBody>
                         </Table>
@@ -690,8 +691,8 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                         </TableHeader>
                                         <TableBody>
                                           {paginatedLeads.map((lead) => (
-                                            <>
-                                              <TableRow key={lead.id}>
+                                            <Fragment key={lead.id}>
+                                              <TableRow>
                                                   <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                   <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                                                   <TableCell>{lead.industryCategory}</TableCell>
@@ -744,7 +745,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                                     </TableCell>
                                                 </TableRow>
                                               )}
-                                            </>
+                                            </Fragment>
                                           ))}
                                         </TableBody>
                                     </Table>
