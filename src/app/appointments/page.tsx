@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllAppointments } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
@@ -38,10 +38,13 @@ import { Badge } from '@/components/ui/badge'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
+type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime';
+
 
 export default function AllAppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableAppointmentKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [filters, setFilters] = useState({
     user: 'all',
     leadAssignedTo: 'all',
@@ -162,6 +165,50 @@ export default function AllAppointmentsPage() {
     });
   }, [allAppointments, filters, userProfile]);
   
+  const sortedAppointments = useMemo(() => {
+    let sortableItems = [...filteredAppointments];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortConfig.key === 'appointmentDate') {
+            aValue = parseDateString(a.appointmentDate)?.getTime() || 0;
+            bValue = parseDateString(b.appointmentDate)?.getTime() || 0;
+        } else if (sortConfig.key === 'duedate' || sortConfig.key === 'starttime') {
+            aValue = new Date(a[sortConfig.key]).getTime();
+            bValue = new Date(b[sortConfig.key]).getTime();
+        } else {
+            aValue = a[sortConfig.key] || '';
+            bValue = b[sortConfig.key] || '';
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredAppointments, sortConfig]);
+
+  const requestSort = (key: SortableAppointmentKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (key: SortableAppointmentKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
+  
   const allUsers = useMemo(() => {
       const users = new Set(allAppointments.map(c => c.assignedTo).filter(Boolean));
       return Array.from(users as string[]);
@@ -185,7 +232,7 @@ export default function AllAppointmentsPage() {
 
   const handleExport = () => {
     const headers = ['Lead Name', 'Lead Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
-    const rows = filteredAppointments.map(appt => {
+    const rows = sortedAppointments.map(appt => {
         const createdDate = parseDateString(appt.appointmentDate);
         return [
             escapeCsvCell(appt.leadName),
@@ -386,10 +433,10 @@ export default function AllAppointmentsPage() {
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Appointment Schedule</CardTitle>
-                <Badge variant="secondary">{filteredAppointments.length} appointment(s)</Badge>
+                <Badge variant="secondary">{sortedAppointments.length} appointment(s)</Badge>
             </div>
              {userProfile?.role === 'admin' && (
-                <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredAppointments.length === 0}>
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedAppointments.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export
                 </Button>
@@ -400,13 +447,13 @@ export default function AllAppointmentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>Lead Status</TableHead>
-                  <TableHead>Date Created</TableHead>
-                  <TableHead>Assigned To (Lead)</TableHead>
-                  <TableHead>Assigned To (Appointment)</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Time</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Lead Status{getSortIndicator('leadStatus')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentDate')} className="group -ml-4">Date Created{getSortIndicator('appointmentDate')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Assigned To (Lead){getSortIndicator('dialerAssigned')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('assignedTo')} className="group -ml-4">Assigned To (Appointment){getSortIndicator('assignedTo')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('duedate')} className="group -ml-4">Date{getSortIndicator('duedate')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('starttime')} className="group -ml-4">Time{getSortIndicator('starttime')}</Button></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -414,8 +461,8 @@ export default function AllAppointmentsPage() {
                   <TableRow>
                     <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : filteredAppointments.length > 0 ? (
-                  filteredAppointments.map((appointment) => {
+                ) : sortedAppointments.length > 0 ? (
+                  sortedAppointments.map((appointment) => {
                     const createdDate = parseDateString(appointment.appointmentDate);
                     return (
                     <TableRow key={appointment.id}>
