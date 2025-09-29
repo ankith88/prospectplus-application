@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Share2, Users } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Share2, Users, ArrowUpDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities, getAllTranscripts, addCallReview, shareCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
@@ -55,6 +55,8 @@ import { Checkbox } from './ui/checkbox'
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
+type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
+
 interface CallsClientPageProps {
   initialCalls: CallActivity[];
   initialTranscripts: Transcript[];
@@ -78,6 +80,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const [sharingCall, setSharingCall] = useState<CallActivity | null>(null);
   const [sharedWithUsers, setSharedWithUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
+
 
   const [filters, setFilters] = useState({
     user: 'all',
@@ -167,7 +171,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
-    const finalFiltered = callsToFilter.filter(call => {
+    return callsToFilter.filter(call => {
         const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
         
         let dateMatch = true;
@@ -203,31 +207,58 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
 
         return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
-
-    // Sort the final list
-    return finalFiltered.sort((a, b) => {
-        // 1. Date & Time descending
-        const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
-        if (dateComparison !== 0) return dateComparison;
-
-        // 2. Lead Name ascending
-        const nameComparison = a.leadName.localeCompare(b.leadName);
-        if (nameComparison !== 0) return nameComparison;
-
-        // 3. User ascending
-        const userA = a.dialerAssigned || '';
-        const userB = b.dialerAssigned || '';
-        return userA.localeCompare(userB);
-    });
-
   }, [allCalls, filters, userProfile]);
+  
+  const sortedCalls = useMemo(() => {
+    let sortableItems = [...filteredCalls];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortConfig.key === 'date') {
+            aValue = new Date(a.date).getTime();
+            bValue = new Date(b.date).getTime();
+        } else if (sortConfig.key === 'duration') {
+            aValue = parseDuration(a.duration);
+            bValue = parseDuration(b.duration);
+        } else {
+            aValue = a[sortConfig.key] || '';
+            bValue = b[sortConfig.key] || '';
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredCalls, sortConfig]);
+
+  const requestSort = (key: SortableCallKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: SortableCallKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
 
   const paginatedCalls = useMemo(() => {
     const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
-    return filteredCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
-  }, [filteredCalls, currentPage]);
+    return sortedCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
+  }, [sortedCalls, currentPage]);
 
-  const totalPages = Math.ceil(filteredCalls.length / CALLS_PER_PAGE);
+  const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
   
   const allUsers = useMemo(() => {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
@@ -262,7 +293,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
 
   const handleExport = () => {
     const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category', 'Shared With'];
-    const rows = filteredCalls.map(call => [
+    const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.dialerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
@@ -683,10 +714,10 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Call History</CardTitle>
-                <Badge variant="secondary">{filteredCalls.length} call(s)</Badge>
+                <Badge variant="secondary">{sortedCalls.length} call(s)</Badge>
             </div>
             {userProfile?.role === 'admin' && (
-                <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredCalls.length === 0}>
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedCalls.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export
                 </Button>
@@ -697,12 +728,12 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">User{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Status{getSortIndicator('leadStatus')}</Button></TableHead>
                   <TableHead>Call ID</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Duration</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('date')} className="group -ml-4">Date & Time{getSortIndicator('date')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('duration')} className="group -ml-4">Duration{getSortIndicator('duration')}</Button></TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Reviewed By</TableHead>
                   <TableHead>Review Category</TableHead>

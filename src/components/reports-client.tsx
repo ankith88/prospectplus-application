@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getAllCallActivities, getAllLeadsForReport, getAllAppointments } from '@/services/firebase';
+import { ChartTooltipContent } from './ui/chart';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'New': '#A0A0A0', // Neutral Gray
@@ -638,27 +639,32 @@ export default function ReportsClientPage({
             <CardContent>
             {stats.leadsByStatus.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                    <Pie
-                        activeIndex={statusActiveIndex}
-                        activeShape={renderActiveShape}
-                        data={stats.leadsByStatus}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={onStatusPieEnter}
-                        isAnimationActive={true}
-                        animationDuration={500}
-                    >
-                    {stats.leadsByStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
-                    ))}
-                    </Pie>
-                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}}/>
-                </PieChart>
+                    <PieChart>
+                        <Pie
+                            data={stats.leadsByStatus}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                        {stats.leadsByStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name]} />
+                        ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltipContent
+                            formatter={(value, name) => (
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{name}</span>
+                                    <span className="text-muted-foreground">{value} leads</span>
+                                </div>
+                            )}
+                            />}
+                        />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}}/>
+                    </PieChart>
                 </ResponsiveContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
@@ -679,27 +685,32 @@ export default function ReportsClientPage({
             <CardContent>
             {stats.appointmentsBySource.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                    <Pie
-                        activeIndex={sourceActiveIndex}
-                        activeShape={renderActiveShape}
-                        data={stats.appointmentsBySource}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={onSourcePieEnter}
-                        isAnimationActive={true}
-                        animationDuration={500}
-                    >
-                    {stats.appointmentsBySource.map((entry, index) => (
-                        <Cell key={`cell-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                    ))}
-                    </Pie>
-                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
-                </PieChart>
+                    <PieChart>
+                        <Pie
+                            data={stats.appointmentsBySource}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                        {stats.appointmentsBySource.map((entry, index) => (
+                            <Cell key={`cell-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        ))}
+                        </Pie>
+                         <Tooltip content={<ChartTooltipContent
+                            formatter={(value, name) => (
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{name}</span>
+                                    <span className="text-muted-foreground">{value} appointments</span>
+                                </div>
+                            )}
+                            />}
+                        />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                    </PieChart>
                 </ResponsiveContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
@@ -720,27 +731,32 @@ export default function ReportsClientPage({
             <CardContent>
             {stats.appointmentsByLeadType.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                    <Pie
-                        activeIndex={leadTypeActiveIndex}
-                        activeShape={renderActiveShape}
-                        data={stats.appointmentsByLeadType}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={onLeadTypePieEnter}
-                        isAnimationActive={true}
-                        animationDuration={500}
-                    >
-                    {stats.appointmentsByLeadType.map((entry, index) => (
-                        <Cell key={`cell-lead-type-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                    ))}
-                    </Pie>
-                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
-                </PieChart>
+                    <PieChart>
+                        <Pie
+                            data={stats.appointmentsByLeadType}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                        {stats.appointmentsByLeadType.map((entry, index) => (
+                            <Cell key={`cell-lead-type-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltipContent
+                            formatter={(value, name) => (
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{name}</span>
+                                    <span className="text-muted-foreground">{value} appointments</span>
+                                </div>
+                            )}
+                            />}
+                        />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                    </PieChart>
                 </ResponsiveContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
@@ -761,27 +777,32 @@ export default function ReportsClientPage({
             <CardContent>
             {stats.lostLeadsBySource.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                    <Pie
-                        activeIndex={lostSourceActiveIndex}
-                        activeShape={renderActiveShape}
-                        data={stats.lostLeadsBySource}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={onLostSourcePieEnter}
-                        isAnimationActive={true}
-                        animationDuration={500}
-                    >
-                    {stats.lostLeadsBySource.map((entry, index) => (
-                        <Cell key={`cell-lost-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                    ))}
-                    </Pie>
-                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
-                </PieChart>
+                    <PieChart>
+                        <Pie
+                           data={stats.lostLeadsBySource}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                        {stats.lostLeadsBySource.map((entry, index) => (
+                            <Cell key={`cell-lost-source-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        ))}
+                        </Pie>
+                         <Tooltip content={<ChartTooltipContent
+                            formatter={(value, name) => (
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{name}</span>
+                                    <span className="text-muted-foreground">{value} leads</span>
+                                </div>
+                            )}
+                            />}
+                        />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
+                    </PieChart>
                 </ResponsiveContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
