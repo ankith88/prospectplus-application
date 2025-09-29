@@ -381,10 +381,15 @@ export default function ReportsClientPage({
     const preQualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalPreQualified / archivedLeadsCount) * 100 : 0;
     const combinedQualifiedToArchivedRatio = archivedLeadsCount > 0 ? ((totalQualified + totalPreQualified) / archivedLeadsCount) * 100 : 0;
     
-    const teamPerformanceData = allDialers.map(dialer => {
-      const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer && c.callId);
-      const uniqueDialerCallIds = new Set(dialerCalls.map(c => c.callId));
-      const totalDialerCalls = uniqueDialerCallIds.size;
+    const activeDialersInFilter = [...new Set(
+        [...filteredCalls, ...filteredAppointments]
+        .map(item => item.dialerAssigned)
+        .filter((d): d is string => !!d)
+    )];
+
+    const teamPerformanceData = activeDialersInFilter.map(dialer => {
+      const dialerCalls = uniqueCallsArray.filter(c => c.dialerAssigned === dialer);
+      const totalDialerCalls = dialerCalls.length;
       
       const dialerAppointments = uniqueAppointments.filter(a => a.dialerAssigned === dialer);
       const totalDialerAppointments = dialerAppointments.length;
@@ -441,7 +446,7 @@ export default function ReportsClientPage({
       totalDemo,
       teamPerformanceData,
     };
-  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads, allDialers]);
+  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
 
   const hasActiveFilters = 
