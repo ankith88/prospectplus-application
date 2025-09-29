@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -23,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getAllCallActivities, getAllLeadsForReport, getAllAppointments } from '@/services/firebase';
-import { ChartTooltipContent } from './ui/chart';
+import { ChartTooltipContent, ChartContainer } from './ui/chart';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'New': '#A0A0A0', // Neutral Gray
@@ -504,6 +503,8 @@ export default function ReportsClientPage({
     </Card>
   );
 
+  const chartConfig = {};
+
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -638,7 +639,7 @@ export default function ReportsClientPage({
             </CardHeader>
             <CardContent>
             {stats.leadsByStatus.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
+                <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
                             data={stats.leadsByStatus}
@@ -665,7 +666,7 @@ export default function ReportsClientPage({
                         />
                         <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}}/>
                     </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                 No lead status data to display for the selected filters.
@@ -684,7 +685,7 @@ export default function ReportsClientPage({
             </CardHeader>
             <CardContent>
             {stats.appointmentsBySource.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
+                <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
                             data={stats.appointmentsBySource}
@@ -711,7 +712,7 @@ export default function ReportsClientPage({
                         />
                         <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
                     </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                     No appointment data to display for the selected filters.
@@ -730,7 +731,7 @@ export default function ReportsClientPage({
             </CardHeader>
             <CardContent>
             {stats.appointmentsByLeadType.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
+                <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
                             data={stats.appointmentsByLeadType}
@@ -757,7 +758,7 @@ export default function ReportsClientPage({
                         />
                         <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
                     </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                     No lead type data to display for the selected filters.
@@ -776,7 +777,7 @@ export default function ReportsClientPage({
             </CardHeader>
             <CardContent>
             {stats.lostLeadsBySource.length > 0 ? (
-                <ResponsiveContainer width="100%" height={350}>
+                <ChartContainer config={chartConfig} className="h-[350px] w-full">
                     <PieChart>
                         <Pie
                            data={stats.lostLeadsBySource}
@@ -803,7 +804,7 @@ export default function ReportsClientPage({
                         />
                         <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
                     </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
             ) : (
                 <div className="flex h-[350px] items-center justify-center text-muted-foreground">
                     No lost lead data to display for the selected filters.
@@ -830,17 +831,25 @@ export default function ReportsClientPage({
                     </CardHeader>
                     <CardContent>
                         {stats.routingTagData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={200}>
+                            <ChartContainer config={chartConfig} className="h-[200px] w-full">
                                 <PieChart>
                                     <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8">
                                         {stats.routingTagData.map((entry, index) => (
                                             <Cell key={`cell-route-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                    <Tooltip content={<ChartTooltipContent
+                                      formatter={(value, name) => (
+                                          <div className="flex flex-col">
+                                              <span className="font-medium">{name}</span>
+                                              <span className="text-muted-foreground">{value} leads</span>
+                                          </div>
+                                      )}
+                                      />}
+                                    />
                                     <Legend iconSize={10} />
                                 </PieChart>
-                            </ResponsiveContainer>
+                            </ChartContainer>
                         ) : (
                              <div className="flex h-[200px] items-center justify-center text-muted-foreground">No routing data.</div>
                          )}
@@ -960,3 +969,5 @@ export default function ReportsClientPage({
     </div>
   );
 }
+
+    
