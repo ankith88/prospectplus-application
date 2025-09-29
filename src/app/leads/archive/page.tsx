@@ -1,5 +1,5 @@
 
-import { getLeadsFromFirebase } from '@/services/firebase';
+import { getLeadsFromFirebase, getLastActivity } from '@/services/firebase';
 import ArchivedLeadsClientPage from '@/components/archived-leads-client';
 import type { Lead } from '@/lib/types';
 
@@ -11,7 +11,19 @@ async function getArchivedLeadsData() {
     const archivedLeads = allLeads.filter(lead => 
         ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified'].includes(lead.status)
     );
-    return archivedLeads;
+
+    // Fetch the last activity for each archived lead in parallel
+    const leadsWithLastActivity = await Promise.all(
+        archivedLeads.map(async (lead) => {
+            const lastActivity = await getLastActivity(lead.id);
+            return {
+                ...lead,
+                activity: lastActivity ? [lastActivity] : [], // Embed last activity
+            };
+        })
+    );
+
+    return leadsWithLastActivity;
 }
 
 export default async function ArchivedLeadsPage() {

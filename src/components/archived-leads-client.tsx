@@ -46,7 +46,7 @@ type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigne
 type ExpandedLeadDetails = {
     note: Note | null;
     activity: Activity | null;
-    loading: boolean;
+    loadingNote: boolean;
 };
 
 const LEADS_PER_PAGE = 100;
@@ -89,6 +89,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
   
   useEffect(() => {
     setIsRefreshing(false);
+    setAllLeads(initialLeads); // Update state when new initialLeads are passed
   }, [initialLeads]);
 
 
@@ -269,7 +270,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
       document.body.removeChild(link);
   };
 
-  const toggleLeadDetails = async (leadId: string) => {
+  const toggleLeadDetails = async (leadId: string, lastActivity: Activity | null) => {
         if (expandedDetails[leadId]) {
             setExpandedDetails(prev => {
                 const newState = { ...prev };
@@ -281,24 +282,21 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
 
         setExpandedDetails(prev => ({
             ...prev,
-            [leadId]: { note: null, activity: null, loading: true },
+            [leadId]: { note: null, activity: lastActivity, loadingNote: true },
         }));
 
         try {
-            const [note, activity] = await Promise.all([
-                getLastNote(leadId),
-                getLastActivity(leadId)
-            ]);
+            const note = await getLastNote(leadId);
             setExpandedDetails(prev => ({
                 ...prev,
-                [leadId]: { note, activity, loading: false },
+                [leadId]: { ...prev[leadId], note, loadingNote: false },
             }));
         } catch (error) {
-            console.error("Failed to fetch lead details:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not load lead details." });
+            console.error("Failed to fetch lead note:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not load lead note." });
             setExpandedDetails(prev => ({
                 ...prev,
-                [leadId]: { note: null, activity: null, loading: false },
+                [leadId]: { ...prev[leadId], loadingNote: false },
             }));
         }
     };
@@ -510,7 +508,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                         {lead.industryCategory}
                       </TableCell>
                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id, lead.activity?.[0] || null)}>
                               <History className="mr-2 h-4 w-4"/>
                               {expandedDetails[lead.id] ? 'Hide' : 'History'}
                           </Button>
@@ -520,30 +518,28 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                         <TableRow>
                             <TableCell colSpan={7} className="p-0">
                                 <div className="p-4 bg-secondary/50">
-                                    {expandedDetails[lead.id].loading ? (
-                                        <Loader />
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <h4 className="font-semibold mb-2">Last Activity</h4>
-                                                {expandedDetails[lead.id].activity ? (
-                                                    <div>
-                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
-                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
-                                                    </div>
-                                                ) : <p className="text-muted-foreground">No activities found.</p>}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-semibold mb-2">Last Note</h4>
-                                                {expandedDetails[lead.id].note ? (
-                                                    <div>
-                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
-                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
-                                                    </div>
-                                                ) : <p className="text-muted-foreground">No notes found.</p>}
-                                            </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Last Activity</h4>
+                                            {expandedDetails[lead.id].activity ? (
+                                                <div>
+                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                </div>
+                                            ) : <p className="text-muted-foreground">No activities found.</p>}
                                         </div>
-                                    )}
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Last Note</h4>
+                                            {expandedDetails[lead.id].loadingNote ? (
+                                                <Loader />
+                                            ) : expandedDetails[lead.id].note ? (
+                                                <div>
+                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                </div>
+                                            ) : <p className="text-muted-foreground">No notes found.</p>}
+                                        </div>
+                                    </div>
                                 </div>
                             </TableCell>
                         </TableRow>
