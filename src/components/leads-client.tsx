@@ -468,7 +468,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Demo'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
