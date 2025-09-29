@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -18,7 +19,7 @@ import {
 import { getLeadsFromFirebase, getLastNote, getLastActivity } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
@@ -488,8 +489,8 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
                   paginatedLeads.map((lead) => (
-                    <>
-                    <TableRow key={lead.id}>
+                    <Fragment key={lead.id}>
+                    <TableRow>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                             {lead.companyName}
@@ -547,7 +548,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                             </TableCell>
                         </TableRow>
                     )}
-                    </>
+                    </Fragment>
                   ))
                 ) : (
                   <TableRow>
