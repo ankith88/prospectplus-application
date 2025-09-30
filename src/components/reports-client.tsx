@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData } from '@/lib/types';
+import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -39,6 +39,15 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'LPO Review': '#A855F7', // Violet
   'Demo': '#EC4899', // Pink
 };
+
+const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
+  'Completed': '#22C55E',
+  'Cancelled': '#EF4444',
+  'No Show': '#F59E0B',
+  'Rescheduled': '#8884d8',
+  'Pending': '#A0A0A0',
+};
+
 
 const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
 
@@ -74,6 +83,8 @@ export default function ReportsClientPage({
   const [inactiveLostSource, setInactiveLostSource] = useState<string[]>([]);
   const [inactiveLeadType, setInactiveLeadType] = useState<string[]>([]);
   const [inactiveRoutingTag, setInactiveRoutingTag] = useState<string[]>([]);
+  const [inactiveAppointmentStatus, setInactiveAppointmentStatus] = useState<string[]>([]);
+
 
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
@@ -403,6 +414,21 @@ export default function ReportsClientPage({
         'Conversion Rate': conversionRate
       };
     });
+    
+    const appointmentOutcomes = uniqueAppointments.reduce((acc, appt) => {
+        const status = appt.appointmentStatus || 'Pending';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, {} as Record<AppointmentStatus | 'Pending', number>);
+    const appointmentOutcomeData = Object.entries(appointmentOutcomes).map(([name, value]) => ({ name: name as AppointmentStatus | 'Pending', value }));
+
+    const totalCompleted = appointmentOutcomes['Completed'] || 0;
+    const totalCancellations = appointmentOutcomes['Cancelled'] || 0;
+    const totalNoShows = appointmentOutcomes['No Show'] || 0;
+    const relevantAppointments = totalCompleted + totalNoShows + totalCancellations;
+    
+    const showRate = relevantAppointments > 0 ? (totalCompleted / relevantAppointments) * 100 : 0;
+    const noShowRate = relevantAppointments > 0 ? (totalNoShows / relevantAppointments) * 100 : 0;
 
 
     return {
@@ -445,6 +471,9 @@ export default function ReportsClientPage({
       demoAppointmentRate,
       totalDemo,
       teamPerformanceData,
+      appointmentOutcomeData,
+      showRate,
+      noShowRate,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -619,12 +648,12 @@ export default function ReportsClientPage({
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => inactiveStatus.includes(name) ? '' : `${name}: ${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             dataKey="value"
                         >
                         {stats.leadsByStatus.map((entry, index) => (
-                           <Cell key={`cell-${index}`} fill={inactiveStatus.includes(entry.name) ? '#E5E7EB' : STATUS_COLORS[entry.name]} />
+                           <Cell key={`cell-${index}`} fill={inactiveStatus.includes(entry.name) ? 'transparent' : STATUS_COLORS[entry.name]} />
                         ))}
                         </Pie>
                         <Tooltip content={<ChartTooltipContent
@@ -666,12 +695,12 @@ export default function ReportsClientPage({
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => inactiveSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             dataKey="value"
                         >
                         {stats.appointmentsBySource.map((entry, index) => (
-                           <Cell key={`cell-source-${index}`} fill={inactiveSource.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                           <Cell key={`cell-source-${index}`} fill={inactiveSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                          <Tooltip content={<ChartTooltipContent
@@ -711,12 +740,12 @@ export default function ReportsClientPage({
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => inactiveLeadType.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             dataKey="value"
                         >
                         {stats.appointmentsByLeadType.map((entry, index) => (
-                           <Cell key={`cell-lead-type-${index}`} fill={inactiveLeadType.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                           <Cell key={`cell-lead-type-${index}`} fill={inactiveLeadType.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                         <Tooltip content={<ChartTooltipContent
@@ -756,12 +785,12 @@ export default function ReportsClientPage({
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => inactiveLostSource.includes(name) ? '' : `${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             dataKey="value"
                         >
                         {stats.lostLeadsBySource.map((entry, index) => (
-                            <Cell key={`cell-lost-source-${index}`} fill={inactiveLostSource.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                            <Cell key={`cell-lost-source-${index}`} fill={inactiveLostSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                         ))}
                         </Pie>
                          <Tooltip content={<ChartTooltipContent
@@ -786,6 +815,58 @@ export default function ReportsClientPage({
         
       </div>
       
+       <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
+            <p className="text-muted-foreground">Metrics related to booked appointments.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
+            <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(1)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
+            <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(1)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
+          </div>
+          <Card>
+            <CardHeader>
+                <CardTitle>Appointment Outcomes</CardTitle>
+                <CardDescription>Distribution of appointment statuses.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {stats.appointmentOutcomeData.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                    <PieChart>
+                    <Pie
+                        data={stats.appointmentOutcomeData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        dataKey="value"
+                    >
+                        {stats.appointmentOutcomeData.map((entry, index) => (
+                        <Cell key={`cell-appt-status-${index}`} fill={inactiveAppointmentStatus.includes(entry.name) ? 'transparent' : APPOINTMENT_STATUS_COLORS[entry.name]} />
+                        ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltipContent
+                        formatter={(value, name) => (
+                        <div className="flex flex-col">
+                            <span className="font-medium">{name}</span>
+                            <span className="text-muted-foreground">{value} appointments</span>
+                        </div>
+                        )}
+                    />} />
+                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveAppointmentStatus, setInactiveAppointmentStatus, e)} />
+                    </PieChart>
+                </ChartContainer>
+                ) : (
+                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                    No appointment outcome data to display.
+                </div>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+        
         {userProfile?.role === 'admin' && (
           <div className="space-y-6">
               <div>
@@ -844,7 +925,7 @@ export default function ReportsClientPage({
                                 <PieChart>
                                     <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60}>
                                         {stats.routingTagData.map((entry, index) => (
-                                            <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? '#E5E7EB' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                            <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                                         ))}
                                     </Pie>
                                     <Tooltip content={<ChartTooltipContent

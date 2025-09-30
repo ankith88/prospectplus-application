@@ -54,12 +54,14 @@ export interface Task {
     author: string;
 }
 
+export type AppointmentStatus = 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
 export interface Appointment {
   id: string;
   duedate: string;
   starttime: string;
   assignedTo: string;
   appointmentDate?: string;
+  appointmentStatus?: AppointmentStatus;
 }
 
 export interface TranscriptAnalysis {
@@ -161,4 +163,3 @@ export interface UserProfile {
     
 
     
-
