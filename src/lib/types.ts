@@ -13,6 +13,7 @@ export type LeadStatus =
   | 'High Touch'
   | 'Pre Qualified'
   | 'Demo'
+  | 'Reschedule'
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 
@@ -163,3 +164,4 @@ export interface UserProfile {
     
 
     
+

@@ -64,6 +64,7 @@ const callOutcomes = [
     'Wrong Number',
     'Not a Fit',
     'DNC - Stop List',
+    'Reschedule',
 ];
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp }: PostCallOutcomeDialogProps) {
@@ -104,6 +105,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
       'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
       'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+      'Reschedule': { status: 'Reschedule' },
   };
 
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested'];
