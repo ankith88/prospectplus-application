@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -89,6 +88,7 @@ export default function ReportsClientPage({
   const [filters, setFilters] = useState({
     status: 'all' as LeadStatus | 'all',
     date: undefined as DateRange | undefined,
+    appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: 'all',
   });
@@ -137,6 +137,7 @@ export default function ReportsClientPage({
     setFilters({
       status: 'all',
       date: undefined,
+      appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
     });
@@ -225,15 +226,25 @@ export default function ReportsClientPage({
         }
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
-        let dateMatch = true;
+
+        let creationDateMatch = true;
         if (filters.date?.from) {
             const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.date.from);
             const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
-            dateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
-        return dialerMatch && dateMatch && statusMatch;
+
+        let appointmentDateMatch = true;
+        if (filters.appointmentDate?.from) {
+            const apptDate = new Date(appointment.duedate);
+            const fromDate = startOfDay(filters.appointmentDate.from);
+            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
+            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+        }
+
+        return dialerMatch && statusMatch && creationDateMatch && appointmentDateMatch;
     });
   }, [allAppointments, filters]);
 
@@ -482,6 +493,7 @@ export default function ReportsClientPage({
     (filters.dialerAssigned !== 'all' && userProfile?.role === 'admin') || 
     filters.status !== 'all' || 
     !!filters.date || 
+    !!filters.appointmentDate ||
     filters.duration !== 'all';
 
   if (authLoading || !userProfile) {
@@ -565,7 +577,7 @@ export default function ReportsClientPage({
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Date (Call or Appt. Creation)</Label>
+                        <Label htmlFor="date">Call/Creation Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -601,6 +613,48 @@ export default function ReportsClientPage({
                                   mode="range"
                                   selected={filters.date}
                                   onSelect={(date) => handleFilterChange('date', date)}
+                                  initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="appointmentDate">Appointment Date</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="appointmentDate"
+                                variant={"outline"}
+                                className="w-full justify-start text-left font-normal"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {filters.appointmentDate?.from ? (
+                                  filters.appointmentDate.to ? (
+                                    <>
+                                      {format(filters.appointmentDate.from, "LLL dd, y")} -{" "}
+                                      {format(filters.appointmentDate.to, "LLL dd, y")}
+                                    </>
+                                  ) : (
+                                    format(filters.appointmentDate.from, "LLL dd, y")
+                                  )
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <div className="flex flex-col space-y-2 border-r p-2">
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: new Date(), to: new Date()})}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('appointmentDate', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                </div>
+                                <Calendar
+                                  mode="range"
+                                  selected={filters.appointmentDate}
+                                  onSelect={(date) => handleFilterChange('appointmentDate', date)}
                                   initialFocus
                                 />
                             </PopoverContent>
@@ -1059,5 +1113,7 @@ export default function ReportsClientPage({
     </div>
   );
 }
+
+    
 
     
