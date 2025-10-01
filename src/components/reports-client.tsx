@@ -36,7 +36,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Unqualified': '#D1D5DB', // Light Gray
   'Lost': '#EF4444', // Red
   'LPO Review': '#A855F7', // Violet
-  'Demo': '#EC4899', // Pink
+  'Trialing ShipMate': '#EC4899', // Pink
   'Reschedule': '#FBBF24', // Amber 500
 };
 
@@ -339,16 +339,16 @@ export default function ReportsClientPage({
 
     const totalAppointments = uniqueAppointments.length;
     const appointmentsForWonLeads = uniqueAppointments.filter(a => a.leadStatus === 'Won').length;
-    const appointmentsForDemoLeads = uniqueAppointments.filter(a => a.leadStatus === 'Demo').length;
+    const appointmentsForTrialingShipMateLeads = uniqueAppointments.filter(a => a.leadStatus === 'Trialing ShipMate').length;
     const appointmentsForLostLeads = uniqueAppointments.filter(a => a.leadStatus === 'Lost').length;
     const wonAppointmentRate = totalAppointments > 0 ? (appointmentsForWonLeads / totalAppointments) * 100 : 0;
-    const demoAppointmentRate = totalAppointments > 0 ? (appointmentsForDemoLeads / totalAppointments) * 100 : 0;
+    const trialingShipMateAppointmentRate = totalAppointments > 0 ? (appointmentsForTrialingShipMateLeads / totalAppointments) * 100 : 0;
     const lostAppointmentRate = totalAppointments > 0 ? (appointmentsForLostLeads / totalAppointments) * 100 : 0;
     
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
     const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
-    const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Demo'];
+    const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
     const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
     const archivedLeadsCount = archivedLeads.length;
 
@@ -373,7 +373,7 @@ export default function ReportsClientPage({
     const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
     const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
     const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
-    const totalDemo = filteredLeads.filter(l => l.status === 'Demo').length;
+    const totalTrialingShipMate = filteredLeads.filter(l => l.status === 'Trialing ShipMate').length;
     
     const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData && Object.keys(l.discoveryData).length > 0);
 
@@ -479,9 +479,9 @@ export default function ReportsClientPage({
       qualifiedToArchivedRatio,
       preQualifiedToArchivedRatio,
       combinedQualifiedToArchivedRatio,
-      appointmentsForDemoLeads,
-      demoAppointmentRate,
-      totalDemo,
+      appointmentsForTrialingShipMateLeads: appointmentsForTrialingShipMateLeads,
+      trialingShipMateAppointmentRate: trialingShipMateAppointmentRate,
+      totalTrialingShipMate: totalTrialingShipMate,
       teamPerformanceData,
       appointmentOutcomeData,
       showRate,
@@ -573,7 +573,7 @@ export default function ReportsClientPage({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -1053,10 +1053,10 @@ export default function ReportsClientPage({
                     description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
                 />
                 <StatCard 
-                    title="Appointments to Demo" 
-                    value={stats.appointmentsForDemoLeads} 
+                    title="Appointments to Trialing ShipMate" 
+                    value={stats.appointmentsForTrialingShipMateLeads} 
                     icon={Presentation} 
-                    description={`${stats.demoAppointmentRate.toFixed(1)}% of total appointments`} 
+                    description={`${stats.trialingShipMateAppointmentRate.toFixed(1)}% of total appointments`} 
                 />
                 <StatCard 
                     title="Appointments to Lost Leads" 
@@ -1105,7 +1105,7 @@ export default function ReportsClientPage({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 <StatCard title="Total Pre-Qualified Leads" value={stats.totalPreQualified} icon={UserCheck} />
                 <StatCard title="Total Qualified Leads" value={stats.totalQualified} icon={UserCheck} />
-                <StatCard title="Total Demo Leads" value={stats.totalDemo} icon={Presentation} />
+                <StatCard title="Total Trialing ShipMate Leads" value={stats.totalTrialingShipMate} icon={Presentation} />
                 <StatCard title="Total Lost Leads" value={stats.totalLost} icon={UserX} />
                 <StatCard title="Total Won Leads" value={stats.totalWon} icon={Goal} />
             </div>

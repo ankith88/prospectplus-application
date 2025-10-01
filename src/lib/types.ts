@@ -12,7 +12,7 @@ export type LeadStatus =
   | 'Connected'
   | 'High Touch'
   | 'Pre Qualified'
-  | 'Demo'
+  | 'Trialing ShipMate'
   | 'Reschedule'
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
@@ -164,4 +164,3 @@ export interface UserProfile {
     
 
     
-
