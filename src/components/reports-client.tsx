@@ -442,6 +442,12 @@ export default function ReportsClientPage({
     const showRate = relevantAppointments > 0 ? (totalCompleted / relevantAppointments) * 100 : 0;
     const noShowRate = relevantAppointments > 0 ? (totalNoShows / relevantAppointments) * 100 : 0;
 
+    const leadsWithDemoCompleted = filteredLeads.filter(l => l.demoCompleted === 'Yes');
+    const totalDemosConducted = leadsWithDemoCompleted.length;
+    const demosWon = leadsWithDemoCompleted.filter(l => l.status === 'Won').length;
+    const demosLost = leadsWithDemoCompleted.filter(l => l.status === 'Lost').length;
+    const demosTrialing = leadsWithDemoCompleted.filter(l => l.status === 'Trialing ShipMate').length;
+
 
     return {
       totalCalls,
@@ -486,6 +492,10 @@ export default function ReportsClientPage({
       appointmentOutcomeData,
       showRate,
       noShowRate,
+      totalDemosConducted,
+      demosWon,
+      demosLost,
+      demosTrialing,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -921,6 +931,19 @@ export default function ReportsClientPage({
             </CardContent>
           </Card>
         </div>
+
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Demo Performance</h2>
+                <p className="text-muted-foreground">Metrics related to conducted demos.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <StatCard title="Total Demos Conducted" value={stats.totalDemosConducted} icon={Presentation} />
+                 <StatCard title="Demos Won" value={stats.demosWon} icon={Goal} />
+                 <StatCard title="Demos Lost" value={stats.demosLost} icon={Frown} />
+                 <StatCard title="Demos in Trial" value={stats.demosTrialing} icon={TrendingUp} />
+            </div>
+        </div>
         
         {userProfile?.role === 'admin' && (
           <div className="space-y-6">
@@ -1114,7 +1137,3 @@ export default function ReportsClientPage({
     </div>
   );
 }
-
-    
-
-    

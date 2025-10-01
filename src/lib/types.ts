@@ -1,5 +1,4 @@
 
-
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -146,6 +145,7 @@ export interface Lead {
   discoveryData?: DiscoveryData;
   companyDescription?: string;
   leadType?: string;
+  demoCompleted?: 'Yes';
 }
 
 export interface UserProfile {
@@ -158,9 +158,3 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin';
 }
-
-    
-
-    
-
-    
