@@ -948,29 +948,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       </Card>
                      )
                   })}
-                   <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full mt-4">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add Contact
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                        <DialogTitle>Add New Contact</DialogTitle>
-                        <DialogDescription>
-                            Enter the details for the new contact.
-                        </DialogDescription>
-                        </DialogHeader>
-                        <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
-                    </DialogContent>
-                    </Dialog>
                   </div>
                 ) : (
                   <div className="py-4 text-center text-muted-foreground">
                     No contacts found.
                   </div>
                 )}
+                 <Dialog>
+                  <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full mt-4">
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Add Contact
+                      </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                      <DialogHeader>
+                      <DialogTitle>Add New Contact</DialogTitle>
+                      <DialogDescription>
+                          Enter the details for the new contact.
+                      </DialogDescription>
+                      </DialogHeader>
+                      <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
+                  </DialogContent>
+                </Dialog>
                 </AccordionContent>
                </AccordionItem>
              </Card>
