@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Appointment, LeadStatus } from '@/lib/types'
+import type { Appointment, LeadStatus, AppointmentStatus } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -36,9 +36,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
+import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
 
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
-type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime';
+type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime';
 
 
 export default function AllAppointmentsPage() {
@@ -52,6 +53,7 @@ export default function AllAppointmentsPage() {
     createdDate: undefined as DateRange | undefined,
     leadName: '',
     status: 'all' as LeadStatus | 'all',
+    appointmentStatus: 'all' as AppointmentStatus | 'Pending' | 'all',
   });
 
   const router = useRouter();
@@ -87,7 +89,7 @@ export default function AllAppointmentsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, createdDate: undefined, leadName: '', status: 'all' });
+    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, createdDate: undefined, leadName: '', status: 'all', appointmentStatus: 'all' });
   };
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
@@ -160,8 +162,10 @@ export default function AllAppointmentsPage() {
         const finalLeadUserMatch = userProfile?.role === 'admin' ? leadUserMatch : true;
 
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
+        
+        const appointmentStatusMatch = filters.appointmentStatus === 'all' || (appointment.appointmentStatus || 'Pending') === filters.appointmentStatus;
 
-        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch;
+        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch && appointmentStatusMatch;
     });
   }, [allAppointments, filters, userProfile]);
   
@@ -177,6 +181,9 @@ export default function AllAppointmentsPage() {
         } else if (sortConfig.key === 'duedate' || sortConfig.key === 'starttime') {
             aValue = new Date(a[sortConfig.key]).getTime();
             bValue = new Date(b[sortConfig.key]).getTime();
+        } else if (sortConfig.key === 'appointmentStatus') {
+            aValue = a.appointmentStatus || 'Pending';
+            bValue = b.appointmentStatus || 'Pending';
         } else {
             aValue = a[sortConfig.key] || '';
             bValue = b[sortConfig.key] || '';
@@ -231,12 +238,13 @@ export default function AllAppointmentsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Lead Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
+    const headers = ['Lead Name', 'Lead Status', 'Appointment Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
     const rows = sortedAppointments.map(appt => {
         const createdDate = parseDateString(appt.appointmentDate);
         return [
             escapeCsvCell(appt.leadName),
             escapeCsvCell(appt.leadStatus),
+            escapeCsvCell(appt.appointmentStatus || 'Pending'),
             escapeCsvCell(createdDate ? createdDate.toLocaleDateString() : 'N/A'),
             escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
             escapeCsvCell(appt.assignedTo || 'Unassigned'),
@@ -331,6 +339,18 @@ export default function AllAppointmentsPage() {
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
                                 {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="appointmentStatus">Appointment Status</Label>
+                        <Select value={filters.appointmentStatus} onValueChange={(value) => handleFilterChange('appointmentStatus', value)}>
+                            <SelectTrigger id="appointmentStatus">
+                                <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {(['Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'] as (AppointmentStatus | 'Pending')[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -449,6 +469,7 @@ export default function AllAppointmentsPage() {
                 <TableRow>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Lead Status{getSortIndicator('leadStatus')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentStatus')} className="group -ml-4">Appointment Status{getSortIndicator('appointmentStatus')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentDate')} className="group -ml-4">Date Created{getSortIndicator('appointmentDate')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Assigned To (Lead){getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('assignedTo')} className="group -ml-4">Assigned To (Appointment){getSortIndicator('assignedTo')}</Button></TableHead>
@@ -459,7 +480,7 @@ export default function AllAppointmentsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedAppointments.length > 0 ? (
                   sortedAppointments.map((appointment) => {
@@ -474,6 +495,9 @@ export default function AllAppointmentsPage() {
                       </TableCell>
                       <TableCell>
                         <LeadStatusBadge status={appointment.leadStatus} />
+                      </TableCell>
+                      <TableCell>
+                        <AppointmentStatusBadge status={appointment.appointmentStatus || 'Pending'} />
                       </TableCell>
                       <TableCell>
                         {createdDate ? (
@@ -513,7 +537,7 @@ export default function AllAppointmentsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>
