@@ -985,17 +985,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardTitle>
                     </AccordionTrigger>
                     <AccordionContent className="px-6">
-                        <div className="space-y-2">
-                            <div className="flex items-start gap-2">
-                            <button
-                                onClick={() => fullAddress !== 'No address available' && setSelectedAddress(fullAddress)}
-                                disabled={fullAddress === 'No address available'}
-                                className="p-1 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 mt-1"
-                                title="View on map"
-                            >
-                                <MapPin className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                            </button>
-                            <p className="text-sm text-muted-foreground">{fullAddress}</p>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1">
+                                    <p className="text-muted-foreground break-words">{fullAddress}</p>
+                                    <div className="flex items-center gap-1 mt-1">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
+                                            <Search className="w-3 h-3" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
+                                            <Clipboard className="w-3 h-3" />
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
                             {fullAddress !== 'No address available' && (
                                 <div className="h-48 w-full rounded-md overflow-hidden border">
