@@ -880,56 +880,90 @@ export default function ReportsClientPage({
         
       </div>
       
+      <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
+                <p className="text-muted-foreground">Metrics related to call activities.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
+                 <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
+                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={TrendingDown} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
+                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
+            </div>
+        </div>
+
        <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
             <p className="text-muted-foreground">Metrics related to booked appointments.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
-            <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(1)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
-            <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(1)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
-          </div>
-          <Card>
-            <CardHeader>
-                <CardTitle>Appointment Outcomes</CardTitle>
-                <CardDescription>Distribution of appointment statuses.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {stats.appointmentOutcomeData.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                    <PieChart>
-                    <Pie
-                        data={stats.appointmentOutcomeData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        dataKey="value"
-                    >
-                        {stats.appointmentOutcomeData.map((entry, index) => (
-                        <Cell key={`cell-appt-status-${index}`} fill={inactiveAppointmentStatus.includes(entry.name) ? 'transparent' : APPOINTMENT_STATUS_COLORS[entry.name]} />
-                        ))}
-                    </Pie>
-                    <Tooltip content={<ChartTooltipContent
-                        formatter={(value, name) => (
-                        <div className="flex flex-col">
-                            <span className="font-medium">{name}</span>
-                            <span className="text-muted-foreground">{value} appointments</span>
-                        </div>
-                        )}
-                    />} />
-                    <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveAppointmentStatus, setInactiveAppointmentStatus, e)} />
-                    </PieChart>
-                </ChartContainer>
-                ) : (
-                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                    No appointment outcome data to display.
-                </div>
-                )}
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
+                 <StatCard 
+                    title="Appointments to Won Leads" 
+                    value={stats.appointmentsForWonLeads} 
+                    icon={Goal} 
+                    description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
+                <StatCard 
+                    title="Appointments to Trialing ShipMate" 
+                    value={stats.appointmentsForTrialingShipMateLeads} 
+                    icon={Presentation} 
+                    description={`${stats.trialingShipMateAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
+                <StatCard 
+                    title="Appointments to Lost Leads" 
+                    value={stats.appointmentsForLostLeads} 
+                    icon={UserX} 
+                    description={`${stats.lostAppointmentRate.toFixed(1)}% of total appointments`} 
+                />
+                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(1)}%`} icon={Percent} description="Ratio of appointments to calls" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(1)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
+                <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(1)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
+                <Card>
+                <CardHeader>
+                    <CardTitle>Appointment Outcomes</CardTitle>
+                    <CardDescription>Distribution of appointment statuses.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.appointmentOutcomeData.length > 0 ? (
+                    <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                        <PieChart>
+                        <Pie
+                            data={stats.appointmentOutcomeData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            dataKey="value"
+                        >
+                            {stats.appointmentOutcomeData.map((entry, index) => (
+                            <Cell key={`cell-appt-status-${index}`} fill={inactiveAppointmentStatus.includes(entry.name) ? 'transparent' : APPOINTMENT_STATUS_COLORS[entry.name]} />
+                            ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltipContent
+                            formatter={(value, name) => (
+                            <div className="flex flex-col">
+                                <span className="font-medium">{name}</span>
+                                <span className="text-muted-foreground">{value} appointments</span>
+                            </div>
+                            )}
+                        />} />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveAppointmentStatus, setInactiveAppointmentStatus, e)} />
+                        </PieChart>
+                    </ChartContainer>
+                    ) : (
+                    <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                        No appointment outcome data to display.
+                    </div>
+                    )}
+                </CardContent>
+              </Card>
+            </div>
         </div>
 
         <div className="space-y-6">
@@ -1050,48 +1084,6 @@ export default function ReportsClientPage({
         </div>
       
        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
-                <p className="text-muted-foreground">Metrics related to call activities.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                 <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
-                 <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
-                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={TrendingDown} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
-                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
-            </div>
-        </div>
-
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
-                <p className="text-muted-foreground">Metrics related to booked appointments.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
-                 <StatCard 
-                    title="Appointments to Won Leads" 
-                    value={stats.appointmentsForWonLeads} 
-                    icon={Goal} 
-                    description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
-                />
-                <StatCard 
-                    title="Appointments to Trialing ShipMate" 
-                    value={stats.appointmentsForTrialingShipMateLeads} 
-                    icon={Presentation} 
-                    description={`${stats.trialingShipMateAppointmentRate.toFixed(1)}% of total appointments`} 
-                />
-                <StatCard 
-                    title="Appointments to Lost Leads" 
-                    value={stats.appointmentsForLostLeads} 
-                    icon={UserX} 
-                    description={`${stats.lostAppointmentRate.toFixed(1)}% of total appointments`} 
-                />
-                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(1)}%`} icon={Percent} description="Ratio of appointments to calls" />
-            </div>
-        </div>
-
-        <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
                 <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
