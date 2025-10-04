@@ -944,27 +944,38 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        const allTasks: Array<Task & { leadId: string; leadName: string }> = [];
-        
-        const leadsRef = collection(firestore, 'leads');
-        const q = query(leadsRef, where('dialerAssigned', '==', displayName));
-        const leadsSnapshot = await getDocs(q);
+        const tasksQuery = query(collectionGroup(firestore, 'tasks'), where('author', '==', displayName));
+        const tasksSnapshot = await getDocs(tasksQuery);
 
-        for (const leadDoc of leadsSnapshot.docs) {
-            const tasks = await getLeadTasks(leadDoc.id);
-            const leadName = leadDoc.data().companyName || 'Unknown Lead';
-            const tasksWithLeadInfo = tasks.map(task => ({
-                ...task,
-                leadId: leadDoc.id,
-                leadName: leadName
-            }));
-            allTasks.push(...tasksWithLeadInfo);
+        if (tasksSnapshot.empty) {
+            return [];
         }
 
-        return allTasks;
+        const tasksWithLeadInfo: Array<Task & { leadId: string; leadName: string }> = [];
+
+        for (const taskDoc of tasksSnapshot.docs) {
+            const taskData = taskDoc.data() as Task;
+            const leadRef = taskDoc.ref.parent.parent;
+            if (leadRef) {
+                const leadDoc = await getDoc(leadRef);
+                if (leadDoc.exists()) {
+                    const leadData = leadDoc.data();
+                    tasksWithLeadInfo.push({
+                        ...taskData,
+                        id: taskDoc.id,
+                        leadId: leadDoc.id,
+                        leadName: leadData.companyName || 'Unknown Lead',
+                    });
+                }
+            }
+        }
+        
+        tasksWithLeadInfo.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+        return tasksWithLeadInfo;
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
-        return [];
+        throw new Error(`Failed to get user tasks: ${error}`);
     }
 }
 
@@ -1085,7 +1096,14 @@ async function getAllUsers(): Promise<UserProfile[]> {
         if (snapshot.empty) {
             return [];
         }
-        return snapshot.docs.map(doc => doc.data() as UserProfile);
+        return snapshot.docs.map(doc => {
+            const data = doc.data() as Omit<UserProfile, 'displayName'>;
+            const displayName = `${data.firstName} ${data.lastName}`.trim();
+            return {
+                ...data,
+                displayName
+            } as UserProfile;
+        });
     } catch (error) {
         console.error('Failed to fetch all users:', error);
         return [];
