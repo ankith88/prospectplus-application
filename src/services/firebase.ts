@@ -944,35 +944,38 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        const tasksQuery = query(collectionGroup(firestore, 'tasks'), where('author', '==', displayName));
-        const tasksSnapshot = await getDocs(tasksQuery);
+        // 1. Get all leads assigned to the user
+        const leadsQuery = query(collection(firestore, 'leads'), where('dialerAssigned', '==', displayName));
+        const leadsSnapshot = await getDocs(leadsQuery);
 
-        if (tasksSnapshot.empty) {
+        if (leadsSnapshot.empty) {
             return [];
         }
 
-        const tasksWithLeadInfo: Array<Task & { leadId: string; leadName: string }> = [];
+        const allUserTasks: Array<Task & { leadId: string; leadName: string }> = [];
 
-        for (const taskDoc of tasksSnapshot.docs) {
-            const taskData = taskDoc.data() as Task;
-            const leadRef = taskDoc.ref.parent.parent;
-            if (leadRef) {
-                const leadDoc = await getDoc(leadRef);
-                if (leadDoc.exists()) {
-                    const leadData = leadDoc.data();
-                    tasksWithLeadInfo.push({
+        // 2. For each lead, get its tasks and filter by author
+        for (const leadDoc of leadsSnapshot.docs) {
+            const leadData = leadDoc.data();
+            const tasksRef = collection(firestore, 'leads', leadDoc.id, 'tasks');
+            const tasksSnapshot = await getDocs(tasksRef);
+
+            tasksSnapshot.forEach(taskDoc => {
+                const taskData = taskDoc.data() as Task;
+                if (taskData.author === displayName) {
+                    allUserTasks.push({
                         ...taskData,
                         id: taskDoc.id,
                         leadId: leadDoc.id,
                         leadName: leadData.companyName || 'Unknown Lead',
                     });
                 }
-            }
+            });
         }
         
-        tasksWithLeadInfo.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        allUserTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-        return tasksWithLeadInfo;
+        return allUserTasks;
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
         throw new Error(`Failed to get user tasks: ${error}`);
