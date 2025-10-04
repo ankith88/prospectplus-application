@@ -486,7 +486,7 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
                 leadId: leadId,
             };
         });
-        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -946,29 +946,33 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
             return [];
         }
 
-        let userTasks: Array<Task & { leadId: string; leadName: string }> = [];
-
-        for (const leadDoc of leadsSnapshot.docs) {
+        const userTasksPromises = leadsSnapshot.docs.map(async (leadDoc) => {
             const leadData = leadDoc.data() as Lead;
             const tasksRef = collection(firestore, 'leads', leadDoc.id, 'tasks');
             const tasksSnapshot = await getDocs(tasksRef);
-            
-            tasksSnapshot.forEach(taskDoc => {
-                const taskData = taskDoc.data() as Task;
-                 if (taskData.author === displayName) {
-                    userTasks.push({
-                        ...taskData,
-                        id: taskDoc.id,
-                        leadId: leadDoc.id,
-                        leadName: leadData.companyName,
-                    });
-                }
-            });
-        }
-        
-        userTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-        return userTasks;
+            return tasksSnapshot.docs
+                .map(taskDoc => {
+                    const taskData = taskDoc.data() as Task;
+                    if (taskData.author === displayName) {
+                        return {
+                            ...taskData,
+                            id: taskDoc.id,
+                            leadId: leadDoc.id,
+                            leadName: leadData.companyName,
+                        };
+                    }
+                    return null;
+                })
+                .filter((task): task is Task & { leadId: string; leadName: string } => task !== null);
+        });
+
+        const tasksByLead = await Promise.all(userTasksPromises);
+        const allUserTasks = tasksByLead.flat();
+
+        allUserTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+        return allUserTasks;
 
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
