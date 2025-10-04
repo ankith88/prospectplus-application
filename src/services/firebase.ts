@@ -92,17 +92,14 @@ function safeGetStatus(status: any): LeadStatus {
 
 async function getUserAircallId(displayName: string): Promise<string | null> {
     try {
-        const usersRef = collection(firestore, 'users');
-        const q = query(usersRef, where('displayName', '==', displayName), limit(1));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
+        const users = await getAllUsers();
+        const user = users.find(u => u.displayName === displayName);
+        if (!user) {
             console.log(`No user found with display name: ${displayName}`);
             return null;
         }
 
-        const userDoc = querySnapshot.docs[0];
-        const aircallUserId = userDoc.data().aircallUserId;
+        const aircallUserId = user.aircallUserId;
 
         if (!aircallUserId) {
             console.log(`AirCall User ID not found for user: ${displayName}`);
@@ -117,17 +114,15 @@ async function getUserAircallId(displayName: string): Promise<string | null> {
 
 async function getUserPhoneNumber(displayName: string): Promise<string | null> {
     try {
-        const usersRef = collection(firestore, 'users');
-        const q = query(usersRef, where('displayName', '==', displayName), limit(1));
-        const querySnapshot = await getDocs(q);
+        const users = await getAllUsers();
+        const user = users.find(u => u.displayName === displayName);
 
-        if (querySnapshot.empty) {
+        if (!user) {
             console.log(`No user found with display name: ${displayName}`);
             return null;
         }
 
-        const userDoc = querySnapshot.docs[0];
-        const phoneNumber = userDoc.data().phoneNumber;
+        const phoneNumber = user.phoneNumber;
 
         return phoneNumber || null;
     } catch (error) {
@@ -944,17 +939,17 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        // 1. Get all leads assigned to the user
+        console.log(`Fetching tasks for user: ${displayName}`);
         const leadsQuery = query(collection(firestore, 'leads'), where('dialerAssigned', '==', displayName));
         const leadsSnapshot = await getDocs(leadsQuery);
 
         if (leadsSnapshot.empty) {
+            console.log(`No leads assigned to user ${displayName}.`);
             return [];
         }
 
-        const allUserTasks: Array<Task & { leadId: string; leadName: string }> = [];
+        let allUserTasks: Array<Task & { leadId: string; leadName: string }> = [];
 
-        // 2. For each lead, get its tasks and filter by author
         for (const leadDoc of leadsSnapshot.docs) {
             const leadData = leadDoc.data();
             const tasksRef = collection(firestore, 'leads', leadDoc.id, 'tasks');
@@ -962,6 +957,7 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
 
             tasksSnapshot.forEach(taskDoc => {
                 const taskData = taskDoc.data() as Task;
+                // Important: Filter tasks by author inside the loop
                 if (taskData.author === displayName) {
                     allUserTasks.push({
                         ...taskData,
@@ -975,7 +971,9 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         
         allUserTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+        console.log(`Found ${allUserTasks.length} tasks for user ${displayName}.`);
         return allUserTasks;
+
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
         throw new Error(`Failed to get user tasks: ${error}`);
@@ -1100,9 +1098,10 @@ async function getAllUsers(): Promise<UserProfile[]> {
             return [];
         }
         return snapshot.docs.map(doc => {
-            const data = doc.data() as Omit<UserProfile, 'displayName'>;
+            const data = doc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
             const displayName = `${data.firstName} ${data.lastName}`.trim();
             return {
+                uid: doc.id,
                 ...data,
                 displayName
             } as UserProfile;
