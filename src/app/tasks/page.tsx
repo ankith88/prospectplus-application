@@ -61,10 +61,10 @@ export default function TasksPage() {
       }
     };
 
-    if (!authLoading && userProfile) {
+    if (!authLoading && userProfile?.displayName) {
         fetchTasks();
     }
-  }, [userProfile, authLoading, toast]);
+  }, [userProfile?.displayName, authLoading, toast]);
 
 
   const { overdue, upcoming, completed } = useMemo(() => {
@@ -85,7 +85,7 @@ export default function TasksPage() {
     // Sort by due date
     overdue.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
     upcoming.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    completed.sort((a, b) => (b.completedAt ? new Date(b.completedAt).getTime() : 0) - (a.completedAt ? new Date(a.completedAt).getTime() : 0));
+    completed.sort((a, b) => (b.completedAt ? new Date(b.completedAt).getTime() : 0) - (a.completedAt ? new Date(a.createdAt).getTime() : 0));
 
 
     return { overdue, upcoming, completed };

@@ -940,39 +940,30 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
         console.log(`Fetching tasks for user: ${displayName}`);
-        const leadsQuery = query(collection(firestore, 'leads'), where('dialerAssigned', '==', displayName));
-        const leadsSnapshot = await getDocs(leadsQuery);
+        // This query requires a composite index on `dialerAssigned` and `author`.
+        const tasksQuery = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
+        const tasksSnapshot = await getDocs(tasksQuery);
 
-        if (leadsSnapshot.empty) {
-            console.log(`No leads assigned to user ${displayName}.`);
+        if (tasksSnapshot.empty) {
+            console.log(`No tasks found for user ${displayName}.`);
             return [];
         }
 
-        let allUserTasks: Array<Task & { leadId: string; leadName: string }> = [];
-
-        for (const leadDoc of leadsSnapshot.docs) {
-            const leadData = leadDoc.data();
-            const tasksRef = collection(firestore, 'leads', leadDoc.id, 'tasks');
-            const tasksSnapshot = await getDocs(tasksRef);
-
-            tasksSnapshot.forEach(taskDoc => {
-                const taskData = taskDoc.data() as Task;
-                // Important: Filter tasks by author inside the loop
-                if (taskData.author === displayName) {
-                    allUserTasks.push({
-                        ...taskData,
-                        id: taskDoc.id,
-                        leadId: leadDoc.id,
-                        leadName: leadData.companyName || 'Unknown Lead',
-                    });
-                }
-            });
-        }
+        const userTasks = tasksSnapshot.docs.map(doc => {
+            const taskData = doc.data();
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                id: doc.id,
+                ...taskData,
+                leadId: leadId,
+                leadName: taskData.leadName || 'Unknown Lead',
+            } as Task & { leadId: string; leadName: string };
+        });
         
-        allUserTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        userTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-        console.log(`Found ${allUserTasks.length} tasks for user ${displayName}.`);
-        return allUserTasks;
+        console.log(`Found ${userTasks.length} tasks for user ${displayName}.`);
+        return userTasks;
 
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
@@ -1003,11 +994,20 @@ async function getAllTasks(): Promise<Array<Task & { leadId: string }>> {
 
 async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
     try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        if (!leadSnap.exists()) {
+            throw new Error(`Lead with ID ${leadId} not found.`);
+        }
+        const leadData = leadSnap.data();
+
         const tasksRef = collection(firestore, 'leads', leadId, 'tasks');
-        const newTask: Omit<Task, 'id'> = {
+        const newTask: Omit<Task, 'id'> & { dialerAssigned?: string, leadName?: string } = {
             ...taskData,
             isCompleted: false,
             createdAt: new Date().toISOString(),
+            dialerAssigned: leadData.dialerAssigned,
+            leadName: leadData.companyName,
         };
         const docRef = await addDoc(tasksRef, newTask);
         await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"` });
