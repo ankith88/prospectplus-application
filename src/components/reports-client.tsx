@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -8,7 +9,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -38,6 +39,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'LPO Review': '#A855F7', // Violet
   'Trialing ShipMate': '#EC4899', // Pink
   'Reschedule': '#FBBF24', // Amber 500
+  'Hot Lead': '#F97316', // Orange 500
 };
 
 const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
@@ -260,7 +262,8 @@ export default function ReportsClientPage({
     const totalLeadsInFilter = filteredLeads.length;
     const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
     const totalAssignedLeads = assignedLeads.length;
-
+    
+    const hotLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Hot Lead').length;
     const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
     
     // To calculate duration stats correctly, we should also only use unique calls
@@ -453,6 +456,7 @@ export default function ReportsClientPage({
       totalCalls,
       leadsContacted: leadsContactedIds.size,
       leadsInQueue,
+      hotLeadsRemaining,
       leadsByStatus,
       totalAssignedLeads,
       callsOver2Min,
@@ -583,7 +587,7 @@ export default function ReportsClientPage({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {(['New', 'Hot Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -935,7 +939,8 @@ export default function ReportsClientPage({
                 <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
                 <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+                <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                 <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
                 <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />

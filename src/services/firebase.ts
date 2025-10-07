@@ -66,29 +66,21 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule'];
     if (typeof status === 'string') {
         let cleanStatus = status.replace('SUSPECT-', '');
 
         if (cleanStatus === 'Signed') {
             return 'Won';
         }
-
-        if (cleanStatus === 'Unqualified') {
-            return 'New';
-        }
         
-        // This is a specific business rule requested by the user
-        if (status === "SUSPECT-Unqualified") {
-            return 'New';
-        }
-
         if (validStatuses.includes(cleanStatus as LeadStatus)) {
             return cleanStatus as LeadStatus;
         }
     }
     return 'New';
 }
+
 
 async function getUserAircallId(displayName: string): Promise<string | null> {
     try {
@@ -939,40 +931,44 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        const leadsQuery = query(collection(firestore, 'leads'), where('dialerAssigned', '==', displayName));
-        const leadsSnapshot = await getDocs(leadsQuery);
+        const tasksSnapshot = await getDocs(collectionGroup(firestore, 'tasks'));
+        
+        const userTasks = tasksSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Task & { leadId?: string; leadName?: string }))
+            .filter(task => task.author === displayName);
 
-        if (leadsSnapshot.empty) {
+        if (userTasks.length === 0) {
             return [];
         }
 
-        const userTasksPromises = leadsSnapshot.docs.map(async (leadDoc) => {
-            const leadData = leadDoc.data() as Lead;
-            const tasksRef = collection(firestore, 'leads', leadDoc.id, 'tasks');
-            const tasksSnapshot = await getDocs(tasksRef);
+        const leadIds = [...new Set(userTasks.map(task => task.id.split('_')[0]))]; // Heuristic to get leadId
+        const leadsData: Record<string, Lead> = {};
 
-            return tasksSnapshot.docs
-                .map(taskDoc => {
-                    const taskData = taskDoc.data() as Task;
-                    if (taskData.author === displayName) {
-                        return {
-                            ...taskData,
-                            id: taskDoc.id,
-                            leadId: leadDoc.id,
-                            leadName: leadData.companyName,
-                        };
-                    }
-                    return null;
-                })
-                .filter((task): task is Task & { leadId: string; leadName: string } => task !== null);
+        const leadChunks: string[][] = [];
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
+        }
+
+        for (const chunk of leadChunks) {
+            if (chunk.length === 0) continue;
+            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsSnapshot = await getDocs(leadsQuery);
+            leadsSnapshot.forEach(doc => {
+                leadsData[doc.id] = doc.data() as Lead;
+            });
+        }
+        
+        const hydratedTasks = userTasks.map(task => {
+            const leadId = task.id.split('_')[0]; // Re-derive leadId
+            const lead = leadsData[leadId];
+            return {
+                ...task,
+                leadId: leadId,
+                leadName: lead ? lead.companyName : "Unknown Lead",
+            };
         });
 
-        const tasksByLead = await Promise.all(userTasksPromises);
-        const allUserTasks = tasksByLead.flat();
-
-        allUserTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-        return allUserTasks;
+        return hydratedTasks;
 
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
