@@ -353,7 +353,7 @@ export default function ReportsClientPage({
     
     const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
     const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
-    const archivedLeadsCount = archivedLeads.length;
+    const totalArchivedLeads = archivedLeads.length;
 
     const lostLeadsBySource = filteredLeads
         .filter(lead => lead.status === 'Lost')
@@ -369,8 +369,8 @@ export default function ReportsClientPage({
     }, [] as { name: string; value: number }[]);
 
 
-    const processedToCallsRatio = totalCalls > 0 ? (archivedLeadsCount / totalCalls) * 100 : 0;
-    const appointmentToArchivedRatio = archivedLeadsCount > 0 ? (totalAppointments / archivedLeadsCount) * 100 : 0;
+    const processedToCallsRatio = totalCalls > 0 ? (totalArchivedLeads / totalCalls) * 100 : 0;
+    const appointmentToArchivedRatio = totalArchivedLeads > 0 ? (totalAppointments / totalArchivedLeads) * 100 : 0;
 
     const totalPreQualified = filteredLeads.filter(l => l.status === 'Pre Qualified').length;
     const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
@@ -401,11 +401,11 @@ export default function ReportsClientPage({
     }, { '0-24': 0, '25-49': 0, '50-74': 0, '75-100': 0 });
     const scoreRangeData = Object.entries(leadsByScoreRange).map(([name, value]) => ({ name, value }));
 
-    const leadsInProgress = leadsContactedIds.size - archivedLeadsCount;
+    const leadsInProgress = totalAssignedLeads - (totalArchivedLeads + leadsInQueue);
 
-    const qualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalQualified / archivedLeadsCount) * 100 : 0;
-    const preQualifiedToArchivedRatio = archivedLeadsCount > 0 ? (totalPreQualified / archivedLeadsCount) * 100 : 0;
-    const combinedQualifiedToArchivedRatio = archivedLeadsCount > 0 ? ((totalQualified + totalPreQualified) / archivedLeadsCount) * 100 : 0;
+    const qualifiedToArchivedRatio = totalArchivedLeads > 0 ? (totalQualified / totalArchivedLeads) * 100 : 0;
+    const preQualifiedToArchivedRatio = totalArchivedLeads > 0 ? (totalPreQualified / totalArchivedLeads) * 100 : 0;
+    const combinedQualifiedToArchivedRatio = totalArchivedLeads > 0 ? ((totalQualified + totalPreQualified) / totalArchivedLeads) * 100 : 0;
     
     const activeDialersInFilter = [...new Set(
         [...filteredCalls, ...filteredAppointments]
@@ -472,7 +472,7 @@ export default function ReportsClientPage({
       lostAppointmentRate,
       appointmentToCallRatio,
       appointmentToContactRatio,
-      archivedLeadsCount,
+      totalArchivedLeads,
       processedToCallsRatio,
       totalPreQualified,
       totalQualified,
@@ -928,6 +928,7 @@ export default function ReportsClientPage({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                  <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
+                 <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
                  <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
                  <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={TrendingDown} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
                  <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
@@ -940,12 +941,11 @@ export default function ReportsClientPage({
                 <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-                <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
-                <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
-                <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
-                <StatCard title="Total Archived Leads" value={stats.archivedLeadsCount} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
                 <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New, assigned leads" />
+                <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
+                <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
+                <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
             </div>
         </div>
 
