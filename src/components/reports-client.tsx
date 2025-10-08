@@ -264,7 +264,7 @@ export default function ReportsClientPage({
     const totalAssignedLeads = assignedLeads.length;
     
     const hotLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Hot Lead').length;
-    const leadsInQueue = assignedLeads.filter(lead => lead.status === 'New').length;
+    const leadsInQueue = assignedLeads.filter(lead => ['New', 'Hot Lead'].includes(lead.status)).length;
     
     // To calculate duration stats correctly, we should also only use unique calls
     const uniqueCallsMap = new Map<string, CallActivity>();
@@ -352,8 +352,10 @@ export default function ReportsClientPage({
     const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
     
     const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
-    const archivedLeads = filteredLeads.filter(lead => archivedStatuses.includes(lead.status));
-    const totalArchivedLeads = archivedLeads.length;
+    const totalArchivedLeads = assignedLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
+    
+    const inProgressStatuses: LeadStatus[] = ['Connected', 'High Touch', 'Reschedule', 'In Progress', 'Contacted'];
+    const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
 
     const lostLeadsBySource = filteredLeads
         .filter(lead => lead.status === 'Lost')
@@ -400,8 +402,6 @@ export default function ReportsClientPage({
         return acc;
     }, { '0-24': 0, '25-49': 0, '50-74': 0, '75-100': 0 });
     const scoreRangeData = Object.entries(leadsByScoreRange).map(([name, value]) => ({ name, value }));
-
-    const leadsInProgress = totalAssignedLeads - (totalArchivedLeads + leadsInQueue);
 
     const qualifiedToArchivedRatio = totalArchivedLeads > 0 ? (totalQualified / totalArchivedLeads) * 100 : 0;
     const preQualifiedToArchivedRatio = totalArchivedLeads > 0 ? (totalPreQualified / totalArchivedLeads) * 100 : 0;
@@ -942,7 +942,7 @@ export default function ReportsClientPage({
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
-                <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New, assigned leads" />
+                <StatCard title="Leads in Queue" value={stats.leadsInQueue} icon={UserX} description="New or Hot leads" />
                 <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
                 <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
                 <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
