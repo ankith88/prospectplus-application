@@ -264,7 +264,12 @@ export default function ReportsClientPage({
     const totalAssignedLeads = assignedLeads.length;
     
     const hotLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Hot Lead').length;
-    const leadsInQueue = assignedLeads.filter(lead => ['New', 'Hot Lead'].includes(lead.status)).length;
+    
+    const inProgressStatuses: LeadStatus[] = ['Contacted', 'Connected', 'High Touch', 'In Progress', 'Reschedule'];
+    const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
+    
+    const queueStatuses: LeadStatus[] = ['New', 'Hot Lead'];
+    const leadsInQueue = assignedLeads.filter(lead => queueStatuses.includes(lead.status)).length;
     
     // To calculate duration stats correctly, we should also only use unique calls
     const uniqueCallsMap = new Map<string, CallActivity>();
@@ -353,9 +358,6 @@ export default function ReportsClientPage({
     
     const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
     const totalArchivedLeads = assignedLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
-    
-    const inProgressStatuses: LeadStatus[] = ['Connected', 'High Touch', 'Reschedule', 'In Progress', 'Contacted'];
-    const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
 
     const lostLeadsBySource = filteredLeads
         .filter(lead => lead.status === 'Lost')
@@ -450,6 +452,8 @@ export default function ReportsClientPage({
     const demosWon = leadsWithDemoCompleted.filter(l => l.status === 'Won').length;
     const demosLost = leadsWithDemoCompleted.filter(l => l.status === 'Lost').length;
     const demosTrialing = leadsWithDemoCompleted.filter(l => l.status === 'Trialing ShipMate').length;
+    
+    const callsToContactedRatio = leadsContactedIds.size > 0 ? (totalCalls / leadsContactedIds.size) : 0;
 
 
     return {
@@ -500,6 +504,7 @@ export default function ReportsClientPage({
       demosWon,
       demosLost,
       demosTrialing,
+      callsToContactedRatio,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -926,11 +931,11 @@ export default function ReportsClientPage({
                 <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
                 <p className="text-muted-foreground">Metrics related to call activities.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                  <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
                  <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
+                 <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(1)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
                  <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
-                 <StatCard title="Calls 30s-2min" value={stats.calls30sTo2min} icon={TrendingDown} description={`${stats.ratio30sTo2min.toFixed(1)}% of total calls`} />
                  <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
             </div>
         </div>
