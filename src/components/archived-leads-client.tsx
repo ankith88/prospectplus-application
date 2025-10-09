@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -24,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History, RefreshCw } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History, RefreshCw, Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -456,10 +455,11 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                   </TableHead>
                    <TableHead>
                      <Button variant="ghost" onClick={() => requestSort('discoveryScore')} className="group -ml-4">
-                       Score
+                       Discovery Score
                        {getSortIndicator('discoveryScore')}
                      </Button>
                    </TableHead>
+                   <TableHead>Routing Tag</TableHead>
                   <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
                       Franchisee
@@ -484,7 +484,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
               <TableBody>
                 {loading || isRefreshing ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
                   paginatedLeads.map((lead) => (
@@ -503,6 +503,14 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                           <ScoreIndicator score={lead.discoveryData.score} />
                         ) : 'N/A'}
                        </TableCell>
+                       <TableCell>
+                        {lead.discoveryData?.routingTag ? (
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Route className="h-3 w-3" />
+                            {lead.discoveryData.routingTag}
+                          </Badge>
+                        ) : 'N/A'}
+                      </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                       <TableCell>{lead.dialerAssigned ?? 'N/A'}</TableCell>
                       <TableCell>
@@ -517,7 +525,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                     </TableRow>
                      {expandedDetails[lead.id] && (
                         <TableRow>
-                            <TableCell colSpan={7} className="p-0">
+                            <TableCell colSpan={8} className="p-0">
                                 <div className="p-4 bg-secondary/50">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                         <div>
@@ -549,7 +557,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>

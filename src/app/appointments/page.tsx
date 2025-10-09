@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -16,13 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Appointment, LeadStatus, AppointmentStatus } from '@/lib/types'
+import type { Appointment, LeadStatus, AppointmentStatus, DiscoveryData } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllAppointments } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
@@ -37,9 +36,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
+import { ScoreIndicator } from '@/components/score-indicator'
 
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus };
-type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime';
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData; };
+type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime' | 'discoveryScore';
 
 
 export default function AllAppointmentsPage() {
@@ -184,6 +184,9 @@ export default function AllAppointmentsPage() {
         } else if (sortConfig.key === 'appointmentStatus') {
             aValue = a.appointmentStatus || 'Pending';
             bValue = b.appointmentStatus || 'Pending';
+        } else if (sortConfig.key === 'discoveryScore') {
+          aValue = a.discoveryData?.score ?? -1;
+          bValue = b.discoveryData?.score ?? -1;
         } else {
             aValue = a[sortConfig.key] || '';
             bValue = b[sortConfig.key] || '';
@@ -470,6 +473,8 @@ export default function AllAppointmentsPage() {
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Lead Status{getSortIndicator('leadStatus')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentStatus')} className="group -ml-4">Appointment Status{getSortIndicator('appointmentStatus')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('discoveryScore')} className="group -ml-4">Discovery Score{getSortIndicator('discoveryScore')}</Button></TableHead>
+                  <TableHead>Routing Tag</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentDate')} className="group -ml-4">Date Created{getSortIndicator('appointmentDate')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Assigned To (Lead){getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('assignedTo')} className="group -ml-4">Assigned To (Appointment){getSortIndicator('assignedTo')}</Button></TableHead>
@@ -480,7 +485,7 @@ export default function AllAppointmentsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedAppointments.length > 0 ? (
                   sortedAppointments.map((appointment) => {
@@ -498,6 +503,19 @@ export default function AllAppointmentsPage() {
                       </TableCell>
                       <TableCell>
                         <AppointmentStatusBadge status={appointment.appointmentStatus || 'Pending'} />
+                      </TableCell>
+                      <TableCell>
+                        {typeof appointment.discoveryData?.score === 'number' ? (
+                          <ScoreIndicator score={appointment.discoveryData.score} />
+                        ) : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {appointment.discoveryData?.routingTag ? (
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Route className="h-3 w-3" />
+                            {appointment.discoveryData.routingTag}
+                          </Badge>
+                        ) : 'N/A'}
                       </TableCell>
                       <TableCell>
                         {createdDate ? (
@@ -537,7 +555,7 @@ export default function AllAppointmentsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>
