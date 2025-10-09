@@ -428,7 +428,7 @@ export default function ReportsClientPage({
         name: dialer,
         'Total Calls': totalDialerCalls,
         'Appointments': totalDialerAppointments,
-        'Conversion Rate': conversionRate
+        'Conversion Rate': parseFloat(conversionRate.toFixed(2))
       };
     });
     
@@ -465,46 +465,46 @@ export default function ReportsClientPage({
       totalAssignedLeads,
       callsOver2Min,
       calls30sTo2min,
-      ratioOver2Min,
-      ratio30sTo2min,
+      ratioOver2Min: parseFloat(ratioOver2Min.toFixed(2)),
+      ratio30sTo2min: parseFloat(ratio30sTo2min.toFixed(2)),
       totalLeadsInFilter,
       totalAppointments,
       averageDurationFormatted,
       appointmentsForWonLeads,
       appointmentsForLostLeads,
-      wonAppointmentRate,
-      lostAppointmentRate,
-      appointmentToCallRatio,
-      appointmentToContactRatio,
+      wonAppointmentRate: parseFloat(wonAppointmentRate.toFixed(2)),
+      lostAppointmentRate: parseFloat(lostAppointmentRate.toFixed(2)),
+      appointmentToCallRatio: parseFloat(appointmentToCallRatio.toFixed(2)),
+      appointmentToContactRatio: parseFloat(appointmentToContactRatio.toFixed(2)),
       totalArchivedLeads,
-      processedToCallsRatio,
+      processedToCallsRatio: parseFloat(processedToCallsRatio.toFixed(2)),
       totalPreQualified,
       totalQualified,
       totalLost,
       totalWon,
       appointmentsBySource,
       lostLeadsBySource,
-      averageDiscoveryScore,
+      averageDiscoveryScore: parseFloat(averageDiscoveryScore.toFixed(2)),
       routingTagData,
       scoreRangeData,
       appointmentsByLeadType,
       leadsInProgress,
-      appointmentToArchivedRatio,
-      qualifiedToArchivedRatio,
-      preQualifiedToArchivedRatio,
-      combinedQualifiedToArchivedRatio,
+      appointmentToArchivedRatio: parseFloat(appointmentToArchivedRatio.toFixed(2)),
+      qualifiedToArchivedRatio: parseFloat(qualifiedToArchivedRatio.toFixed(2)),
+      preQualifiedToArchivedRatio: parseFloat(preQualifiedToArchivedRatio.toFixed(2)),
+      combinedQualifiedToArchivedRatio: parseFloat(combinedQualifiedToArchivedRatio.toFixed(2)),
       appointmentsForTrialingShipMateLeads: appointmentsForTrialingShipMateLeads,
-      trialingShipMateAppointmentRate: trialingShipMateAppointmentRate,
+      trialingShipMateAppointmentRate: parseFloat(trialingShipMateAppointmentRate.toFixed(2)),
       totalTrialingShipMate: totalTrialingShipMate,
       teamPerformanceData,
       appointmentOutcomeData,
-      showRate,
-      noShowRate,
+      showRate: parseFloat(showRate.toFixed(2)),
+      noShowRate: parseFloat(noShowRate.toFixed(2)),
       totalDemosConducted,
       demosWon,
       demosLost,
       demosTrialing,
-      callsToContactedRatio,
+      callsToContactedRatio: parseFloat(callsToContactedRatio.toFixed(2)),
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -907,7 +907,7 @@ export default function ReportsClientPage({
                                   formatter={(value, name) => (
                                       <div className="flex flex-col">
                                           <span className="font-medium">{name}</span>
-                                          <span className="text-muted-foreground">{typeof value === 'number' && name === 'Conversion Rate' ? `${value.toFixed(1)}%` : value}</span>
+                                          <span className="text-muted-foreground">{typeof value === 'number' && name === 'Conversion Rate' ? `${value.toFixed(2)}%` : value}</span>
                                       </div>
                                   )}
                                 />} 
@@ -934,9 +934,9 @@ export default function ReportsClientPage({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                  <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
                  <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
-                 <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(1)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
+                 <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(2)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
                  <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
-                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(1)}% of total calls`} />
+                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(2)}% of total calls`} />
             </div>
         </div>
 
@@ -1026,12 +1026,12 @@ export default function ReportsClientPage({
                 <p className="text-muted-foreground">Key conversion metrics.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
-                <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
-                <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(1)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
-                <StatCard title="Qualified to Archived" value={`${stats.qualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Qualified' to all archived leads" />
-                <StatCard title="Pre-Qualified to Archived" value={`${stats.preQualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Pre-Qualified' to all archived leads" />
-                <StatCard title="Total Qualified to Archived" value={`${stats.combinedQualifiedToArchivedRatio.toFixed(1)}%`} icon={Percent} description="Ratio of 'Qualified' + 'Pre-Qualified' to all archived" />
+                <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
+                <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
+                <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
+                <StatCard title="Qualified to Archived" value={`${stats.qualifiedToArchivedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified' to all archived leads" />
+                <StatCard title="Pre-Qualified to Archived" value={`${stats.preQualifiedToArchivedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Pre-Qualified' to all archived leads" />
+                <StatCard title="Total Qualified to Archived" value={`${stats.combinedQualifiedToArchivedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified' + 'Pre-Qualified' to all archived" />
             </div>
         </div>
 
@@ -1046,25 +1046,25 @@ export default function ReportsClientPage({
                     title="Appointments to Won Leads" 
                     value={stats.appointmentsForWonLeads} 
                     icon={Goal} 
-                    description={`${stats.wonAppointmentRate.toFixed(1)}% of total appointments`} 
+                    description={`${stats.wonAppointmentRate.toFixed(2)}% of total appointments`} 
                 />
                 <StatCard 
                     title="Appointments to Trialing ShipMate" 
                     value={stats.appointmentsForTrialingShipMateLeads} 
                     icon={Presentation} 
-                    description={`${stats.trialingShipMateAppointmentRate.toFixed(1)}% of total appointments`} 
+                    description={`${stats.trialingShipMateAppointmentRate.toFixed(2)}% of total appointments`} 
                 />
                 <StatCard 
                     title="Appointments to Lost Leads" 
                     value={stats.appointmentsForLostLeads} 
                     icon={UserX} 
-                    description={`${stats.lostAppointmentRate.toFixed(1)}% of total appointments`} 
+                    description={`${stats.lostAppointmentRate.toFixed(2)}% of total appointments`} 
                 />
-                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(1)}%`} icon={Percent} description="Ratio of appointments to calls" />
+                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Ratio of appointments to calls" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(1)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
-                <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(1)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
+                <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(2)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
+                <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(2)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
                 <Card>
                 <CardHeader>
                     <CardTitle>Appointment Outcomes</CardTitle>
