@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -851,13 +850,13 @@ export default function ReportsClientPage({
 
        <div className="space-y-6">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance by Assignee</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance by Account Manager</h2>
             <p className="text-muted-foreground">Breakdown of appointment metrics for each appointment setter.</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                  <CardTitle>Appointments per Assignee</CardTitle>
+                  <CardTitle>Appointments per Account Manager</CardTitle>
               </CardHeader>
               <CardContent>
                 {stats.appointmentsByAssigneeData.length > 0 ? (
@@ -877,7 +876,7 @@ export default function ReportsClientPage({
             </Card>
             <Card>
               <CardHeader>
-                  <CardTitle>Appointment Outcomes by Assignee</CardTitle>
+                  <CardTitle>Appointment Outcomes by Account Manager</CardTitle>
               </CardHeader>
               <CardContent>
                 {stats.appointmentOutcomesByAssigneeData.length > 0 ? (
@@ -1287,3 +1286,5 @@ export default function ReportsClientPage({
     </div>
   );
 }
+
+    
