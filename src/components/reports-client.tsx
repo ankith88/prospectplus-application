@@ -95,12 +95,18 @@ export default function ReportsClientPage({
     duration: 'all',
     dialerAssigned: 'all',
     salesRepAssigned: 'all',
+    appointmentAssignedTo: 'all',
   });
   
   const allSalesReps = useMemo(() => {
     const reps = new Set(allLeads.map(l => l.salesRepAssigned).filter(Boolean));
     return Array.from(reps as string[]);
   }, [allLeads]);
+
+  const allAppointmentAssignees = useMemo(() => {
+    const assignees = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
+    return Array.from(assignees as string[]);
+  }, [allAppointments]);
 
   useEffect(() => {
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
@@ -150,6 +156,7 @@ export default function ReportsClientPage({
       duration: 'all',
       dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
       salesRepAssigned: 'all',
+      appointmentAssignedTo: 'all',
     });
   };
 
@@ -201,15 +208,19 @@ export default function ReportsClientPage({
             });
             callDateMatch = hasMatchingActivity || hasMatchingAppointment;
         }
+        
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || allAppointments.some(a => a.leadId === lead.id && a.assignedTo === filters.appointmentAssignedTo);
 
-        return dialerMatch && salesRepMatch && statusMatch && callDateMatch;
+
+        return dialerMatch && salesRepMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
     });
   }, [allLeads, filters, allCalls, allAppointments]);
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
+        const lead = allLeads.find(l => l.id === call.leadId);
         const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
-        const salesRepMatch = filters.salesRepAssigned === 'all' || allLeads.find(l => l.id === call.leadId)?.salesRepAssigned === filters.salesRepAssigned;
+        const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
 
         let callDateMatch = true;
@@ -231,18 +242,23 @@ export default function ReportsClientPage({
             }
         };
 
-        return dialerMatch && salesRepMatch && statusMatch && callDateMatch && durationMatch();
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo === filters.appointmentAssignedTo);
+
+
+        return dialerMatch && salesRepMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
-  }, [allCalls, allLeads, filters]);
+  }, [allCalls, allLeads, filters, allAppointments]);
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') {
           return false;
         }
+        const lead = allLeads.find(l => l.id === appointment.leadId);
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
-        const salesRepMatch = filters.salesRepAssigned === 'all' || allLeads.find(l => l.id === appointment.leadId)?.salesRepAssigned === filters.salesRepAssigned;
+        const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || appointment.assignedTo === filters.appointmentAssignedTo;
 
         let creationDateMatch = true;
         if (filters.callDate?.from) {
@@ -261,7 +277,7 @@ export default function ReportsClientPage({
             appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
-        return dialerMatch && salesRepMatch && statusMatch && creationDateMatch && appointmentDateMatch;
+        return dialerMatch && salesRepMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
   }, [allAppointments, allLeads, filters]);
 
@@ -477,6 +493,29 @@ export default function ReportsClientPage({
     
     const callsToContactedRatio = totalCalls > 0 && uniqueLeadsContacted > 0 ? (totalCalls / uniqueLeadsContacted) : 0;
 
+    const appointmentsByAssignee = uniqueAppointments.reduce((acc, appt) => {
+        const assignee = appt.assignedTo || 'Unassigned';
+        if (!acc[assignee]) {
+            acc[assignee] = { name: assignee, appointments: 0 };
+        }
+        acc[assignee].appointments++;
+        return acc;
+    }, {} as Record<string, { name: string; appointments: number }>);
+    const appointmentsByAssigneeData = Object.values(appointmentsByAssignee);
+
+    const appointmentOutcomesByAssignee = uniqueAppointments.reduce((acc, appt) => {
+        const assignee = appt.assignedTo || 'Unassigned';
+        const status = appt.leadStatus;
+        if (!acc[assignee]) {
+            acc[assignee] = { name: assignee };
+        }
+        acc[assignee][status] = (acc[assignee][status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, { name: string } & Partial<Record<LeadStatus, number>>>);
+
+    const allStatuses = [...new Set(uniqueAppointments.map(a => a.leadStatus))];
+    const appointmentOutcomesByAssigneeData = Object.values(appointmentOutcomesByAssignee);
+
 
     return {
       totalCalls,
@@ -529,6 +568,9 @@ export default function ReportsClientPage({
       demosTrialing,
       callsToContactedRatio: parseFloat(callsToContactedRatio.toFixed(2)),
       qualifiedToContactedRatio: parseFloat(qualifiedToContactedRatio.toFixed(2)),
+      appointmentsByAssigneeData,
+      appointmentOutcomesByAssigneeData,
+      allStatuses,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -539,7 +581,8 @@ export default function ReportsClientPage({
     filters.status !== 'all' || 
     !!filters.callDate || 
     !!filters.appointmentDate ||
-    filters.duration !== 'all';
+    filters.duration !== 'all' ||
+    filters.appointmentAssignedTo !== 'all';
 
   if (authLoading || !userProfile) {
     return (
@@ -624,6 +667,21 @@ export default function ReportsClientPage({
                         </SelectContent>
                         </Select>
                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="appointmentAssignedTo">Assigned To (Appointment)</Label>
+                        <Select 
+                            value={filters.appointmentAssignedTo} 
+                            onValueChange={(value) => handleFilterChange('appointmentAssignedTo', value)}
+                        >
+                        <SelectTrigger id="appointmentAssignedTo">
+                            <SelectValue placeholder="Select user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Users</SelectItem>
+                            {allAppointmentAssignees.map(assignee => <SelectItem key={assignee} value={assignee}>{assignee}</SelectItem>)}
+                        </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
                         <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
@@ -637,7 +695,7 @@ export default function ReportsClientPage({
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="callDate">Call Date</Label>
+                        <Label htmlFor="callDate">Call/Creation Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -790,6 +848,58 @@ export default function ReportsClientPage({
             </CardContent>
         </Card>
       </div>
+
+       <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance by Assignee</h2>
+            <p className="text-muted-foreground">Breakdown of appointment metrics for each appointment setter.</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                  <CardTitle>Appointments per Assignee</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stats.appointmentsByAssigneeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={stats.appointmentsByAssigneeData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={100} />
+                      <Tooltip />
+                      <Bar dataKey="appointments" fill="#82ca9d" name="Appointments" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                  <CardTitle>Appointment Outcomes by Assignee</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stats.appointmentOutcomesByAssigneeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={stats.appointmentOutcomesByAssigneeData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" stackId="a" />
+                      <YAxis dataKey="name" type="category" width={100} />
+                      <Tooltip />
+                      <Legend />
+                      {stats.allStatuses.map((status, index) => (
+                        <Bar key={status} dataKey={status} stackId="a" fill={STATUS_COLORS[status] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
