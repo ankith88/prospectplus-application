@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -278,6 +279,7 @@ export default function ReportsClientPage({
     const totalAssignedLeads = assignedLeads.length;
     
     const hotLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Hot Lead').length;
+    const newLeads = assignedLeads.filter(lead => lead.status === 'New').length;
     
     const inProgressStatuses: LeadStatus[] = ['Contacted', 'Connected', 'High Touch', 'In Progress', 'Reschedule'];
     const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
@@ -481,6 +483,7 @@ export default function ReportsClientPage({
       leadsContacted: uniqueLeadsContacted,
       leadsInQueue,
       hotLeadsRemaining,
+      newLeads,
       leadsByStatus,
       totalAssignedLeads,
       callsOver2Min,
@@ -982,7 +985,8 @@ export default function ReportsClientPage({
                 <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
                 <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <StatCard title="New Leads" value={stats.newLeads} icon={Users} description="Leads not yet actioned." />
                 <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                 <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
@@ -1173,5 +1177,3 @@ export default function ReportsClientPage({
     </div>
   );
 }
-
-    
