@@ -26,7 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -59,6 +59,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>(initialLeads);
   const [allDialers, setAllDialers] = useState<UserProfile[]>(initialDialers);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAllLeads, setSelectedAllLeads] = useState<string[]>([]);
   const [selectedForReassignment, setSelectedForReassignment] = useState<string[]>([]);
@@ -89,6 +90,16 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       return;
     }
   }, [user, authLoading, router]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+  };
+  
+  useEffect(() => {
+    setIsRefreshing(false);
+    setAllLeads(initialLeads);
+  }, [initialLeads]);
   
   const requestSort = (key: SortableLeadKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -309,11 +320,23 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     document.body.removeChild(link);
   };
 
-  const handleStartDialing = (leads: LeadWithDetails[]) => {
+  const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     if (leads.length === 0) return;
-    const leadIds = leads.map(l => l.id);
-    localStorage.setItem('dialingSessionLeads', JSON.stringify(leadIds));
-    router.push(`/leads/${leadIds[0]}`);
+    
+    let sortedLeadIds = leads.map(l => l.id);
+
+    if (startingFromLeadId) {
+        const startIndex = sortedLeadIds.indexOf(startingFromLeadId);
+        if (startIndex !== -1) {
+            sortedLeadIds = [
+                ...sortedLeadIds.slice(startIndex),
+                ...sortedLeadIds.slice(0, startIndex)
+            ];
+        }
+    }
+    
+    localStorage.setItem('dialingSessionLeads', JSON.stringify(sortedLeadIds));
+    router.push(`/leads/${sortedLeadIds[0]}`);
   };
 
 
@@ -544,12 +567,18 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                         <Filter className="h-5 w-5" />
                         <span>Filters</span>
                     </CardTitle>
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                            <SlidersHorizontal className="h-4 w-4" />
-                            <span className="ml-2">Toggle Filters</span>
+                    <div className="flex items-center gap-2">
+                        <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isRefreshing}>
+                          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                           {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
                         </Button>
-                    </CollapsibleTrigger>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="ml-2">Toggle Filters</span>
+                            </Button>
+                        </CollapsibleTrigger>
+                    </div>
                 </CardHeader>
                 <CollapsibleContent>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
@@ -612,7 +641,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
             </div>
         </CardHeader>
         <CardContent>
-           {loading ? (
+           {loading || isRefreshing ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
@@ -666,8 +695,24 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 {paginatedLeads.map((lead) => (
                                     <Fragment key={lead.id}>
                                     <TableRow data-state={selectedMyLeads.includes(lead.id) && "selected"}>
-                                        <TableCell><Checkbox checked={selectedMyLeads.includes(lead.id)} onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} aria-label={`Select lead ${lead.companyName}`} /></TableCell>
-                                        <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                        <TableCell>
+                                           <Checkbox 
+                                                checked={selectedMyLeads.includes(lead.id)} 
+                                                onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} 
+                                                aria-label={`Select lead ${lead.companyName}`} 
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="link" className="p-0 h-auto">{lead.companyName}</Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
                                         <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                                         <TableCell>{lead.industryCategory}</TableCell>
                                         <TableCell className="text-right">

@@ -3,8 +3,8 @@ import { getLeadsFromFirebase, getAllUsers } from '@/services/firebase';
 import LeadsClientPage from '@/components/leads-client';
 import type { UserProfile } from '@/lib/types';
 
-// Revalidate the data for this page every 10 minutes (600 seconds)
-export const revalidate = 600;
+// This page is now dynamically rendered to ensure fresh data on load.
+export const dynamic = 'force-dynamic';
 
 async function getLeadsData() {
   const [fetchedLeads, fetchedUsers] = await Promise.all([
