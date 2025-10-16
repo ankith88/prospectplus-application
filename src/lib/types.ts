@@ -13,7 +13,7 @@ export type LeadStatus =
   | 'Pre Qualified'
   | 'Trialing ShipMate'
   | 'Reschedule'
-  | 'Hot Lead'
+  | 'Priority Lead'
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 

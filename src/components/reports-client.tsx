@@ -38,7 +38,7 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'LPO Review': '#A855F7', // Violet
   'Trialing ShipMate': '#EC4899', // Pink
   'Reschedule': '#FBBF24', // Amber 500
-  'Hot Lead': '#F97316', // Orange 500
+  'Priority Lead': '#F97316', // Orange 500
 };
 
 const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
@@ -293,13 +293,13 @@ export default function ReportsClientPage({
     const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
     const totalAssignedLeads = assignedLeads.length;
     
-    const hotLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Hot Lead').length;
+    const priorityLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Priority Lead').length;
     const newLeads = assignedLeads.filter(lead => lead.status === 'New').length;
     
     const inProgressStatuses: LeadStatus[] = ['Contacted', 'Connected', 'High Touch', 'In Progress', 'Reschedule'];
     const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
     
-    const queueStatuses: LeadStatus[] = ['New', 'Hot Lead'];
+    const queueStatuses: LeadStatus[] = ['New', 'Priority Lead'];
     const leadsInQueue = assignedLeads.filter(lead => queueStatuses.includes(lead.status)).length;
     
     // To calculate duration stats correctly, we should also only use unique calls
@@ -520,7 +520,7 @@ export default function ReportsClientPage({
       totalCalls,
       leadsContacted: uniqueLeadsContacted,
       leadsInQueue,
-      hotLeadsRemaining,
+      priorityLeadsRemaining,
       newLeads,
       leadsByStatus,
       totalAssignedLeads,
@@ -689,7 +689,7 @@ export default function ReportsClientPage({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Hot Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                {(['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -1096,7 +1096,7 @@ export default function ReportsClientPage({
             </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 <StatCard title="New Leads" value={stats.newLeads} icon={Users} description="Leads not yet actioned." />
-                <StatCard title="Hot Leads Remaining" value={stats.hotLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
+                <StatCard title="Priority Leads Remaining" value={stats.priorityLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
                 <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                 <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
                 <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
