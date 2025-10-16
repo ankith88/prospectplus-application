@@ -508,6 +508,15 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     setMyLeadsPagination(prev => ({ ...prev, [status]: newPage }));
   };
 
+  const handleJumpToPage = (e: React.FormEvent<HTMLFormElement>, groupKey: string, totalPages: number, setPageFn: (key: string, page: number) => void) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const page = parseInt(formData.get('page') as string, 10);
+    if (!isNaN(page) && page > 0 && page <= totalPages) {
+        setPageFn(groupKey, page);
+    }
+  };
+
   const toggleLeadDetails = async (leadId: string) => {
         if (expandedDetails[leadId]) {
             setExpandedDetails(prev => {
@@ -594,7 +603,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    {(['New', 'Hot Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    {(['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -759,9 +768,22 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                             </TableBody>
                         </Table>
                          {totalPages > 1 && (
-                            <div className="flex items-center justify-end gap-2 pt-4">
+                            <div className="flex items-center justify-end gap-2 pt-4 text-sm">
                                 <Button variant="outline" size="sm" onClick={() => handleMyLeadsPageChange(status, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
-                                <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                                <div className="flex items-center gap-1">
+                                    Page
+                                    <form onSubmit={(e) => handleJumpToPage(e, status, totalPages, handleMyLeadsPageChange)} >
+                                        <Input
+                                            type="number"
+                                            name="page"
+                                            defaultValue={currentPage}
+                                            className="h-7 w-12"
+                                            min="1"
+                                            max={totalPages}
+                                        />
+                                    </form>
+                                    of {totalPages}
+                                </div>
                                 <Button variant="outline" size="sm" onClick={() => handleMyLeadsPageChange(status, currentPage + 1)} disabled={currentPage === totalPages}>Next</Button>
                             </div>
                         )}
@@ -813,6 +835,13 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                   <AccordionItem value={dialer} key={dialer}>
                     <AccordionTrigger className="bg-muted px-4 rounded-md">
                       <div className="flex items-center gap-2">
+                        <Checkbox
+                            checked={Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
+                            onCheckedChange={(checked) => handleSelectAllInAssignedGroup(Object.values(statusGroups).flat(), checked)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mr-2"
+                            aria-label={`Select all leads for ${dialer}`}
+                        />
                         <span className="font-semibold">{dialer}</span>
                         <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
                       </div>
@@ -830,6 +859,13 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 <AccordionItem value={status} key={status}>
                                   <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
                                       <div className="flex items-center gap-2">
+                                           <Checkbox
+                                              checked={paginatedLeads.length > 0 && areAllInGroupSelected}
+                                              onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="mr-2"
+                                              aria-label={`Select all leads for ${dialer} with status ${status}`}
+                                          />
                                           <LeadStatusBadge status={status as LeadStatus} />
                                           <Badge variant="outline">{leads.length} Leads</Badge>
                                       </div>
@@ -839,11 +875,6 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead className="w-8">
-                                                    <Checkbox
-                                                        checked={paginatedLeads.length > 0 && areAllInGroupSelected}
-                                                        onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
-                                                        aria-label={`Select all leads for ${dialer} with status ${status}`}
-                                                    />
                                                 </TableHead>
                                                 <TableHead>Company</TableHead>
                                                 <TableHead>Franchisee</TableHead>
@@ -919,9 +950,22 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                         </TableBody>
                                     </Table>
                                     {totalPages > 1 && (
-                                        <div className="flex items-center justify-end gap-2 pt-4">
+                                        <div className="flex items-center justify-end gap-2 pt-4 text-sm">
                                             <Button variant="outline" size="sm" onClick={() => handlePageChange(groupKey, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
-                                            <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                                             <div className="flex items-center gap-1">
+                                                Page
+                                                <form onSubmit={(e) => handleJumpToPage(e, groupKey, totalPages, handlePageChange)}>
+                                                    <Input
+                                                        type="number"
+                                                        name="page"
+                                                        defaultValue={currentPage}
+                                                        className="h-7 w-12"
+                                                        min="1"
+                                                        max={totalPages}
+                                                    />
+                                                </form>
+                                                of {totalPages}
+                                            </div>
                                             <Button variant="outline" size="sm" onClick={() => handlePageChange(groupKey, currentPage + 1)} disabled={currentPage === totalPages}>Next</Button>
                                         </div>
                                     )}
