@@ -65,6 +65,7 @@ const callOutcomes = [
     'Not a Fit',
     'DNC - Stop List',
     'Reschedule',
+    'LOST - No Contact',
 ];
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp }: PostCallOutcomeDialogProps) {
@@ -106,9 +107,10 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
       'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
       'Reschedule': { status: 'Reschedule' },
+      'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
   };
 
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested'];
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // Immediately submit to Firebase and update UI
