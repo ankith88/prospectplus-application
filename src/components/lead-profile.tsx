@@ -568,9 +568,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || !user?.displayName) return '#';
     
     const calendlyUrl = new URL(url);
-    calendlyUrl.searchParams.append('a1', lead.id);
+    if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
     if(lead.entityId) calendlyUrl.searchParams.append('a2', lead.entityId);
-    calendlyUrl.searchParams.append('a3', user.displayName);
+    if(user.displayName) calendlyUrl.searchParams.append('a3', user.displayName);
 
     return calendlyUrl.toString();
   };
@@ -584,8 +584,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const calendlyUrl = new URL(baseUrl);
     const params = calendlyUrl.searchParams;
 
-    params.set('first_name', firstName);
-    params.set('last_name', lastName);
+    params.set('name', `${firstName} ${lastName}`);
     params.set('email', contact.email);
     if (lead) params.set('a1', lead.id);
     if (lead?.entityId) params.set('a2', lead.entityId);
@@ -679,7 +678,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Calendar className="mr-2 h-4 w-4" />
-                  Set Appointment
+                  Schedule Appointment
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
