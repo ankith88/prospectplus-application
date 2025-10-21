@@ -616,11 +616,12 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
   }
 }
 
-async function updateLeadSalesRep(leadId: string, salesRep: string | null): Promise<void> {
+async function updateLeadSalesRep(leadId: string, salesRep: string | null, calendlyLink: string | null): Promise<void> {
   try {
     const leadRef = doc(firestore, 'leads', leadId);
     await updateDoc(leadRef, {
       salesRepAssigned: salesRep,
+      salesRepAssignedCalendlyLink: calendlyLink,
     });
     const notes = salesRep ? `Lead assigned to sales rep ${salesRep}` : `Lead unassigned from sales rep`;
     await logActivity(leadId, { type: 'Update', notes });

@@ -49,7 +49,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -575,6 +575,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return calendlyUrl.toString();
   };
   
+  const handleRepSelection = async (repName: string, repUrl: string, contact?: Contact) => {
+    if (!lead) return;
+
+    try {
+      await updateLeadSalesRep(lead.id, repName, repUrl);
+      setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
+      toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
+      
+      let finalUrl: string;
+      if (contact) {
+        finalUrl = getContactCalendlyLink(contact, repUrl) || '#';
+      } else {
+        finalUrl = getCalendlyLink(repUrl);
+      }
+      window.open(finalUrl, '_blank');
+
+    } catch (error) {
+        console.error("Failed to assign sales rep:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not assign sales rep." });
+    }
+  };
+
   const getContactCalendlyLink = (contact: Contact, baseUrl: string) => {
     if (!baseUrl) return null;
     const nameParts = contact.name.split(' ');
@@ -683,7 +705,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {salesReps.map(rep => (
-                    <DropdownMenuItem key={rep.name} onSelect={() => window.open(getCalendlyLink(rep.url), '_blank')}>
+                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
                         {rep.name}
                     </DropdownMenuItem>
                 ))}
@@ -953,19 +975,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardContent>
                          <CardFooter>
                            <div className="flex w-full items-center gap-0.5">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  asChild
-                                  disabled={!contactCalendlyLink}
-                                  className={cn("flex-grow rounded-r-none", !lead.salesRepAssigned ? "rounded-r-full" : "")}
-                                >
-                                  <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                                    <Calendar className="mr-2 h-4 w-4" />
-                                    {lead.salesRepAssigned ? `Schedule with ${lead.salesRepAssigned}` : 'Book Appointment'}
-                                  </a>
-                                </Button>
-                                {lead.salesRepAssigned && (
+                                {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      asChild
+                                      className={cn("flex-grow rounded-r-none")}
+                                    >
+                                      <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                                        <Calendar className="mr-2 h-4 w-4" />
+                                        Schedule with {lead.salesRepAssigned}
+                                      </a>
+                                    </Button>
+                                ) : (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm" className="flex-grow">
+                                                <Calendar className="mr-2 h-4 w-4" />
+                                                Schedule Appointment
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            {salesReps.map(rep => (
+                                                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
+                                                    {rep.name}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
@@ -974,13 +1012,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
-                                            <DropdownMenuItem key={rep.name} onSelect={() => window.open(getContactCalendlyLink(contact, rep.url) || '#', '_blank')}>
+                                            <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
                                                 Schedule with {rep.name}
                                             </DropdownMenuItem>
                                         ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
-                                )}
                             </div>
                          </CardFooter>
                       </Card>
@@ -1444,5 +1481,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
