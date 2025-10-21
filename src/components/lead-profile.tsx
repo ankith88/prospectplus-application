@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -42,6 +41,7 @@ import {
   Route,
   Clock,
   SkipForward,
+  ChevronDown,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
@@ -107,6 +107,7 @@ import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { sendDiscoveryDataToNetSuite, sendLeadUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { AddressAutocomplete } from './address-autocomplete'
+import { cn } from '@/lib/utils'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -120,6 +121,12 @@ type SubcollectionData = {
   tasks: Task[];
   appointments: Appointment[];
 }
+
+const salesReps = [
+    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
+    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
+    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
+]
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
@@ -340,7 +347,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleContactAdded = async () => {
     if (!lead) return;
     const updatedContacts = await getLeadContacts(lead.id);
-    setData(prev => ({ ...prev, contacts: updatedContacts}));
+    setData(prev => ({ ...prev, contacts: updatedContacts }));
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
@@ -474,7 +481,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
-          toast({ variant: "destructive", title: "Error", description: "Failed to delete task." });
+          toast({ variant: "destructive", title: "Error", description: "Failed to update task." });
       }
   };
 
@@ -557,6 +564,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const getCalendlyLink = (url: string) => {
+    if (!lead || !user?.displayName) return '#';
+    
+    const calendlyUrl = new URL(url);
+    calendlyUrl.searchParams.append('a1', lead.id);
+    if(lead.entityId) calendlyUrl.searchParams.append('a2', lead.entityId);
+    calendlyUrl.searchParams.append('a3', user.displayName);
+
+    return calendlyUrl.toString();
+  };
+  
+  const getContactCalendlyLink = (contact: Contact, baseUrl: string) => {
+    if (!baseUrl) return null;
+    const nameParts = contact.name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    const calendlyUrl = new URL(baseUrl);
+    const params = calendlyUrl.searchParams;
+
+    params.set('first_name', firstName);
+    params.set('last_name', lastName);
+    params.set('email', contact.email);
+    if (lead) params.set('a1', lead.id);
+    if (lead?.entityId) params.set('a2', lead.entityId);
+    if (user?.displayName) params.set('a3', user.displayName);
+
+    return calendlyUrl.toString();
+  }
+
 
   if (!lead || !user) {
     return (
@@ -594,41 +631,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!data.activity) return 0;
     return data.activity.filter(a => a.type === 'Call' && a.callId).length;
   }, [data.activity]);
-
-  const getCalendlyLink = (salesRep: 'Lee Russell' | 'Luke Forbes' | 'Kerina Helliwell') => {
-    if (!lead || !user?.displayName) return '#';
-    
-    const baseUrls = {
-      'Lee Russell': 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee',
-      'Luke Forbes': 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke',
-      'Kerina Helliwell': 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina',
-    };
-
-    const url = new URL(baseUrls[salesRep]);
-    url.searchParams.append('a1', lead.id);
-    if(lead.entityId) url.searchParams.append('a2', lead.entityId);
-    url.searchParams.append('a3', user.displayName);
-
-    return url.toString();
-  };
-  
-  const getContactCalendlyLink = (contact: Contact) => {
-    if (!lead.salesRepAssignedCalendlyLink) return null;
-    const nameParts = contact.name.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
-
-    const params = new URLSearchParams({
-      first_name: firstName,
-      last_name: lastName,
-      email: contact.email,
-      a1: lead.id,
-      a2: lead.entityId || '',
-      a3: user.displayName || '',
-    });
-    return `${lead.salesRepAssignedCalendlyLink}?${params.toString()}`;
-  }
-
 
   return (
     <>
@@ -681,9 +683,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Lee Russell'), '_blank')}>Lee Russell</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Luke Forbes'), '_blank')}>Luke Forbes</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Kerina Helliwell'), '_blank')}>Kerina Helliwell</DropdownMenuItem>
+                {salesReps.map(rep => (
+                    <DropdownMenuItem key={rep.name} onSelect={() => window.open(getCalendlyLink(rep.url), '_blank')}>
+                        {rep.name}
+                    </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
@@ -885,7 +889,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 ) : data.contacts && data.contacts.length > 0 ? (
                   <div className="space-y-4">
                   {data.contacts.map((contact, index) => {
-                     const contactCalendlyLink = getContactCalendlyLink(contact);
+                     const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                      return (
                       <Card key={contact.id || index} className="relative group/contact">
                         <CardHeader className="flex-row items-start justify-between pb-2">
@@ -949,18 +953,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
                         </CardContent>
                          <CardFooter>
-                           <Button
-                              variant="outline"
-                              size="sm"
-                              asChild
-                              disabled={!contactCalendlyLink}
-                              className="w-full"
-                          >
-                              <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                              <Calendar className="mr-2 h-4 w-4" />
-                                {lead.salesRepAssigned ? `Schedule with ${lead.salesRepAssigned}` : 'Book Appointment'}
-                              </a>
-                          </Button>
+                           <div className="flex w-full items-center gap-0.5">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  asChild
+                                  disabled={!contactCalendlyLink}
+                                  className={cn("flex-grow rounded-r-none", !lead.salesRepAssigned ? "rounded-r-full" : "")}
+                                >
+                                  <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                                    <Calendar className="mr-2 h-4 w-4" />
+                                    {lead.salesRepAssigned ? `Schedule with ${lead.salesRepAssigned}` : 'Book Appointment'}
+                                  </a>
+                                </Button>
+                                {lead.salesRepAssigned && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
+                                            <ChevronDown className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
+                                            <DropdownMenuItem key={rep.name} onSelect={() => window.open(getContactCalendlyLink(contact, rep.url) || '#', '_blank')}>
+                                                Schedule with {rep.name}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                )}
+                            </div>
                          </CardFooter>
                       </Card>
                      )
@@ -1423,3 +1445,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
