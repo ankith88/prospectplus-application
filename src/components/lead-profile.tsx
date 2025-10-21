@@ -595,18 +595,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return data.activity.filter(a => a.type === 'Call' && a.callId).length;
   }, [data.activity]);
 
-  const getCalendlyLink = () => {
-    if (lead.salesRepAssignedCalendlyLink && lead.id && lead.entityId && user.displayName) {
-        const params = new URLSearchParams({
-            a1: lead.id,
-            a2: lead.entityId,
-            a3: user.displayName,
-        });
-        return `${lead.salesRepAssignedCalendlyLink}?${params.toString()}`;
-    }
-    return lead.salesRepAssignedCalendlyLink;
-  }
-  const calendlyLink = getCalendlyLink();
+  const getCalendlyLink = (salesRep: 'Lee Russell' | 'Luke Forbes' | 'Kerina Helliwell') => {
+    if (!lead || !user?.displayName) return '#';
+    
+    const baseUrls = {
+      'Lee Russell': 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee',
+      'Luke Forbes': 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke',
+      'Kerina Helliwell': 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina',
+    };
+
+    const url = new URL(baseUrls[salesRep]);
+    url.searchParams.append('a1', lead.id);
+    if(lead.entityId) url.searchParams.append('a2', lead.entityId);
+    url.searchParams.append('a3', user.displayName);
+
+    return url.toString();
+  };
   
   const getContactCalendlyLink = (contact: Contact) => {
     if (!lead.salesRepAssignedCalendlyLink) return null;
@@ -669,6 +673,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               <PhoneCall className="mr-2 h-4 w-4" />
               Log a Call
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Set Appointment
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Lee Russell'), '_blank')}>Lee Russell</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Luke Forbes'), '_blank')}>Luke Forbes</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.open(getCalendlyLink('Kerina Helliwell'), '_blank')}>Kerina Helliwell</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
             <Button variant="outline">
               <ClipboardEdit className="mr-2 h-4 w-4" />
@@ -828,8 +845,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div>
                       <p className="text-muted-foreground">Sales Rep Assigned</p>
                       {lead.salesRepAssigned ? (
-                        calendlyLink ? (
-                          <a href={calendlyLink} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
+                        lead.salesRepAssignedCalendlyLink ? (
+                          <a href={lead.salesRepAssignedCalendlyLink} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
                             <span>{lead.salesRepAssigned}</span>
                             <LinkIcon className="w-3 h-3 shrink-0" />
                           </a>
