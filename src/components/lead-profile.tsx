@@ -216,6 +216,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead, data, loadingStates, toast]);
 
+  useEffect(() => {
+    if (lead) {
+      const allSubcollections: (keyof SubcollectionData)[] = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments'];
+      allSubcollections.forEach(name => loadSubcollection(name));
+    }
+  }, [lead, loadSubcollection]);
+
+
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
       if (!lead || !user?.displayName) return;
 
@@ -481,7 +489,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
-          toast({ variant: "destructive", title: "Error", description: "Failed to update task." });
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete task." });
       }
   };
 
@@ -895,7 +903,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Card>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'contacts') loadSubcollection('contacts'); }}>
+           <Accordion type="single" collapsible>
              <Card>
                <AccordionItem value="contacts" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -1115,7 +1123,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Accordion>
           </div>
           
-          <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'call-history') loadSubcollection('transcripts'); loadSubcollection('activity'); }}>
+          <Accordion type="single" collapsible>
             <Card>
               <AccordionItem value="call-history" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -1193,7 +1201,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Accordion>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'activity') loadSubcollection('activity'); }}>
+            <Accordion type="single" collapsible>
                 <Card>
                     <AccordionItem value="activity" className="border-b-0">
                         <AccordionTrigger className="p-6">
@@ -1244,7 +1252,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </Accordion>
             
-            <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'notes') loadSubcollection('notes'); }}>
+            <Accordion type="single" collapsible>
                 <Card>
                      <AccordionItem value="notes" className="border-b-0">
                         <AccordionTrigger className="p-6">
@@ -1323,7 +1331,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'appointments') loadSubcollection('appointments'); }}>
+          <Accordion type="single" collapsible>
             <Card>
                  <AccordionItem value="appointments" className="border-b-0">
                      <AccordionTrigger className="p-6">
@@ -1402,7 +1410,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible onValueChange={(value) => { if(value === 'tasks') loadSubcollection('tasks'); }}>
+           <Accordion type="single" collapsible>
             <Card>
                  <AccordionItem value="tasks" className="border-b-0">
                      <AccordionTrigger className="p-6">
