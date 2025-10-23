@@ -18,7 +18,7 @@ import {
     signOut as firebaseSignOut,
     updateProfile,
     Auth,
-    sendSignInLinkToEmail,
+    sendPasswordResetEmail,
     isSignInWithEmailLink,
     signInWithEmailLink,
 } from 'firebase/auth';
@@ -41,6 +41,7 @@ interface AuthContextType {
     isSigningOut: boolean;
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
+    sendPasswordReset: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -51,6 +52,7 @@ const AuthContext = createContext<AuthContextType>({
     isSigningOut: false,
     signIn: async () => {},
     signOut: async () => {},
+    sendPasswordReset: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -143,6 +145,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsSigningOut(false);
     };
 
+    const sendPasswordReset = async (email: string) => {
+        if (!auth) throw new Error("Firebase Auth not initialized");
+        await sendPasswordResetEmail(auth, email);
+    }
+
     const value = {
         user,
         userProfile,
@@ -151,6 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isSigningOut,
         signIn,
         signOut,
+        sendPasswordReset,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

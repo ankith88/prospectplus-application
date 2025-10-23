@@ -14,18 +14,30 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Image from 'next/image';
 import Link from 'next/link';
-import { FullScreenLoader } from '@/components/ui/loader';
+import { FullScreenLoader, Loader } from '@/components/ui/loader';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const router = useRouter();
-  const { signIn, user, loading: authLoading, isSigningIn } = useAuth();
+  const { signIn, user, loading: authLoading, isSigningIn, sendPasswordReset } = useAuth();
   const { toast } = useToast();
   
   useEffect(() => {
@@ -56,6 +68,29 @@ export default function SignInPage() {
       })
     }
   };
+
+  const handlePasswordReset = async () => {
+    if (!resetEmail) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Please enter your email address.' });
+        return;
+    }
+    setIsSendingReset(true);
+    try {
+        await sendPasswordReset(resetEmail);
+        toast({ title: 'Success', description: 'If an account exists for that email, a password reset link has been sent.' });
+        setIsResetDialogOpen(false);
+        setResetEmail('');
+    } catch (error: any) {
+        console.error('Password reset failed:', error);
+        // We show a generic message to avoid confirming if an email exists
+        toast({ title: 'Success', description: 'If an account exists for that email, a password reset link has been sent.' });
+        setIsResetDialogOpen(false);
+        setResetEmail('');
+    } finally {
+        setIsSendingReset(false);
+    }
+  };
+
 
   if (authLoading) {
       return <FullScreenLoader message="Loading..." />;
@@ -94,7 +129,17 @@ export default function SignInPage() {
                 />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <Button
+                            type="button"
+                            variant="link"
+                            className="p-0 h-auto text-xs"
+                            onClick={() => setIsResetDialogOpen(true)}
+                        >
+                            Forgot password?
+                        </Button>
+                    </div>
                     <Input
                         id="password"
                         type="password"
@@ -121,6 +166,40 @@ export default function SignInPage() {
         </CardFooter>
       </Card>
     </div>
+
+    <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reset Password</DialogTitle>
+                <DialogDescription>
+                    Enter your email address below and we'll send you a link to reset your password.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <Input
+                        id="reset-email"
+                        type="email"
+                        placeholder="m@example.com"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        disabled={isSendingReset}
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button type="button" variant="outline" disabled={isSendingReset}>
+                        Cancel
+                    </Button>
+                </DialogClose>
+                <Button onClick={handlePasswordReset} disabled={isSendingReset}>
+                    {isSendingReset ? <Loader/> : "Send Reset Link"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
