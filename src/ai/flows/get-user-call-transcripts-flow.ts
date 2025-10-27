@@ -8,7 +8,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
+import fetch, { AbortError } from 'node-fetch';
 import { getUserAircallId, logActivity, findLeadByPhoneNumber } from '@/services/firebase';
 import type { Activity, Transcript } from '@/lib/types';
 
@@ -59,12 +59,18 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
     console.log(`Fetching all recent calls from AirCall for user: ${userDisplayName} (ID: ${aircallUserId})`);
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -107,6 +113,10 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
       return { newTranscripts }; // The UI will refetch all transcripts after sync
 
     } catch (error: any) {
+      if (error instanceof AbortError) {
+          console.error(`Request to AirCall for user ${userDisplayName} timed out.`);
+          return { newTranscripts: [], error: 'The request to sync transcripts timed out. Please try again later.' };
+      }
       console.error('Error fetching call transcripts from AirCall:', error);
       return { newTranscripts: [], error: `An unexpected error occurred: ${error.message}` };
     }

@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
+import fetch, { AbortError } from 'node-fetch';
 import { logTranscriptActivity, getLeadFromFirebase } from '@/services/firebase';
 
 const GetTranscriptByCallIdInputSchema = z.object({
@@ -54,12 +54,18 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
       console.log(`[Flow] Attempt ${attempt} to fetch transcript for call ID: ${callId}`);
 
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+
         const response = await fetch(url, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${credentials}`,
           },
+          signal: controller.signal,
         });
+
+        clearTimeout(timeout);
 
         console.log(`[Flow] AirCall API response status: ${response.status}`);
         
@@ -117,6 +123,10 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         }
 
       } catch (error: any) {
+        if (error instanceof AbortError) {
+          console.error(`[Flow Exception] Request for call ID ${callId} timed out.`);
+          return { transcriptFound: false, error: `The request to AirCall timed out. Please try again later.` };
+        }
         console.error(`[Flow Exception] Error during fetch for call ID ${callId} (Attempt ${attempt}):`, error);
         if (attempt < maxRetries) {
           await sleep(retryDelay);
