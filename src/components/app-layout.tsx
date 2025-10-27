@@ -50,10 +50,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
 
   useEffect(() => {
-    if (user && !isAuthPage) {
-      document.body.classList.add('logged-in');
-    } else {
-      document.body.classList.remove('logged-in');
+    if (typeof window !== 'undefined') {
+      if (user && !isAuthPage) {
+        document.body.classList.add('logged-in');
+      } else {
+        document.body.classList.remove('logged-in');
+      }
     }
   }, [user, isAuthPage]);
   
