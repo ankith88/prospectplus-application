@@ -249,7 +249,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       
       callbacks.onFirebaseSave();
       
-      callbacks.onNetSuiteSync();
       if (netSuiteOutcomes.includes(outcome)) {
         await sendToNetSuiteForOutcome({
             leadId: lead.id,
@@ -260,6 +259,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             salesRecordInternalId: lead.salesRecordInternalId || ''
         });
       }
+      callbacks.onNetSuiteSync();
 
       if (status) {
           setLead(prev => prev ? { ...prev, status } : null);
@@ -351,10 +351,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 content: noteContent, 
                 author: user.displayName || 'Unknown',
                 date: new Date().toISOString()
-            }
+            },
+            callbacks,
         );
-        callbacks.onFirebaseSave();
-        callbacks.onNetSuiteSync();
     } catch (error) {
         console.error("Failed to log note in profile:", error);
         throw error; // Re-throw to be caught by the dialog

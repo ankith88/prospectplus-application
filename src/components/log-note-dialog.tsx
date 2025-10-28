@@ -83,11 +83,9 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                 setSubmissionState('syncing_netsuite');
             },
             onNetSuiteSync: () => {
-                // This callback is now just for show, the main await handles completion
+                setSubmissionState('complete');
             }
         });
-        
-        setSubmissionState('complete');
     } catch (error) {
       setSubmissionState('error');
       console.error('Failed to log note:', error)
@@ -101,7 +99,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (submissionState !== 'idle' && submissionState !== 'error') {
+        if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
             if (open) return; // prevent closing while in progress
         }
         setIsOpen(open);
@@ -159,12 +157,10 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'complete' ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : submissionState === 'saving_firebase' ? (
-                            <div className="h-5 w-5 border-2 border-dashed rounded-full" />
-                        ): (
-                            <Loader />
+                        {submissionState === 'complete' || submissionState === 'saving_firebase' ? (
+                            submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        ) : (
+                           <Loader />
                         )}
                         <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...

@@ -671,14 +671,17 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }): Promise<void> {
+async function logNoteActivity(
+    leadId: string, 
+    noteData: { content: string; author: string, date: string },
+    callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }
+): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = {
         ...noteData
     };
 
     const docRef = await addDoc(notesRef, newNoteData);
-    const newNote = { ...newNoteData, id: docRef.id };
     
     await logActivity(leadId, {
         type: 'Update',
@@ -686,17 +689,18 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         date: noteData.date
     });
     
-    // Fire-and-forget the NetSuite sync
-    sendNoteToNetSuite({
-        leadId,
-        noteId: newNote.id,
-        author: newNote.author,
-        content: newNote.content,
-    }).catch(error => {
-        console.error(`[Background Sync Failed] Could not sync note ${newNote.id} to NetSuite:`, error);
-    });
+    callbacks.onFirebaseSave();
 
-    console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}. NetSuite sync initiated.`);
+    await sendNoteToNetSuite({
+        leadId,
+        noteId: docRef.id,
+        author: newNoteData.author,
+        content: newNoteData.content,
+    });
+    
+    callbacks.onNetSuiteSync();
+    
+    console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}. NetSuite sync complete.`);
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {

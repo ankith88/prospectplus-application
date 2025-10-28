@@ -111,13 +111,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     try {
         await onSubmitProp(values.outcome, values.notes || '', {
           onFirebaseSave: () => {
-            // This is now handled implicitly by the state change below
+            setSubmissionState('syncing_netsuite');
           },
           onNetSuiteSync: () => {
-             setSubmissionState('syncing_netsuite');
+             setSubmissionState('complete');
           }
         });
-        setSubmissionState('complete');
     } catch (error: any) {
         setSubmissionState('error');
         console.error("Failed to save call outcome:", error);
@@ -209,10 +208,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'complete' ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : submissionState === 'saving_outcome' ? (
-                            <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        {submissionState === 'complete' || submissionState === 'saving_outcome' ? (
+                            submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
                         ) : (
                            <Loader />
                         )}
