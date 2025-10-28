@@ -31,6 +31,7 @@ import { addContactToLead, updateLeadStatus } from '@/services/firebase'
 import { useToast } from '@/hooks/use-toast'
 import { sendToNetSuiteForOutcome } from '@/services/netsuite'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/use-auth'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -79,6 +80,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const { toast } = useToast()
   const router = useRouter();
   const outcome = form.watch('outcome');
+  const { user } = useAuth();
   
   useEffect(() => {
     if (isOpen) {
@@ -133,7 +135,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                     leadId: lead.id,
                     outcome: values.outcome,
                     reason: outcomeMapping?.reason || '',
-                    dialerAssigned: lead.dialerAssigned || '',
+                    dialerAssigned: user?.displayName || '',
                     notes: values.notes || '',
                     salesRecordInternalId: lead.salesRecordInternalId || ''
                 });
