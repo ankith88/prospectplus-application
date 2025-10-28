@@ -269,17 +269,32 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
     }
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+    let params: URLSearchParams;
 
-    const params = new URLSearchParams({
-        script: "2163",
-        deploy: "1",
-        compid: "1048144",
-        "ns-at": "AAEJ7tMQv82BUnS0O7ggE-shiuIVD0iRQJbU_RdY_87W2N0W3lw",
-        leadID: leadId,
-        noteID: noteId,
-        author,
-        content,
-    });
+    if (author === 'Lachlan Ball') {
+        params = new URLSearchParams({
+            script: "2163",
+            deploy: "2",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQifr1Zy5ZAH7_XU99qvbnccxk_8zzRdRA0tTNuiZ1c4U",
+            leadID: leadId,
+            noteID: noteId,
+            author,
+            content,
+        });
+    } else {
+        params = new URLSearchParams({
+            script: "2163",
+            deploy: "1",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQv82BUnS0O7ggE-shiuIVD0iRQJbU_RdY_87W2N0W3lw",
+            leadID: leadId,
+            noteID: noteId,
+            author,
+            content,
+        });
+    }
+
 
     const url = `${baseUrl}?${params.toString()}`;
 
