@@ -680,23 +680,20 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
             date: new Date().toISOString()
         };
         
-        // Await the primary operation of saving the note
+        // Await all critical operations
         const docRef = await addDoc(notesRef, newNoteData);
         const newNote = { ...newNoteData, id: docRef.id };
         
-        // Don't await secondary tasks
-        logActivity(leadId, { 
+        await logActivity(leadId, { 
             type: 'Update', 
             notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
-        }).catch(err => console.error("Background activity logging failed:", err));
+        });
 
-        sendNoteToNetSuite({
+        await sendNoteToNetSuite({
             leadId,
             noteId: newNote.id,
             author: newNote.author,
             content: newNote.content,
-        }).catch(error => {
-            console.error("[Background] NetSuite note sync failed:", error);
         });
 
         console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
