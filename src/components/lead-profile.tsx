@@ -576,26 +576,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return calendlyUrl.toString();
   };
   
-  const handleRepSelection = async (repName: string, repUrl: string, contact?: Contact) => {
+  const handleRepSelection = (repName: string, repUrl: string, contact?: Contact) => {
     if (!lead) return;
 
-    try {
-      await updateLeadSalesRep(lead.id, repName, repUrl);
-      setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
-      toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
-      
-      let finalUrl: string;
-      if (contact) {
+    // Open the Calendly link immediately
+    let finalUrl: string;
+    if (contact) {
         finalUrl = getContactCalendlyLink(contact, repUrl) || '#';
-      } else {
+    } else {
         finalUrl = getCalendlyLink(repUrl);
-      }
-      window.open(finalUrl, '_blank');
-
-    } catch (error) {
-        console.error("Failed to assign sales rep:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not assign sales rep." });
     }
+    window.open(finalUrl, '_blank');
+    
+    // Update the UI optimistically
+    setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
+    toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
+
+    // Update Firebase in the background
+    updateLeadSalesRep(lead.id, repName, repUrl)
+        .then(() => {
+            console.log(`Lead ${lead.id} successfully assigned to ${repName} in the background.`);
+        })
+        .catch(error => {
+            console.error("Failed to assign sales rep in the background:", error);
+            // Optionally, you could show a toast here to inform the user of the background failure.
+            toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
+            // You might want to revert the optimistic UI update here, though it could be jarring.
+        });
   };
 
   const getContactCalendlyLink = (contact: Contact, baseUrl: string) => {
