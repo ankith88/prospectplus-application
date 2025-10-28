@@ -67,6 +67,8 @@ const callOutcomes = [
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -82,6 +84,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const resetAndClose = () => {
     form.reset();
     setSubmissionState('idle');
+    setStartTime(null);
+    setDuration(null);
     onClose();
   };
 
@@ -92,6 +96,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         notes: callActivity?.notes || '',
       });
       setSubmissionState('idle');
+      setStartTime(null);
+      setDuration(null);
     }
   }, [isOpen, callActivity, form]);
 
@@ -106,6 +112,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         return;
     }
     
+    setStartTime(Date.now());
+    setDuration(null);
     setSubmissionState('saving_outcome');
 
     try {
@@ -115,6 +123,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
           },
           onNetSuiteSync: () => {
              setSubmissionState('complete');
+             if (startTime) {
+                setDuration((Date.now() - startTime) / 1000);
+             }
           }
         });
     } catch (error: any) {
@@ -219,11 +230,16 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                     </li>
                 </ul>
                 {submissionState === 'complete' && (
-                     <DialogFooter className="mt-8">
-                        <Button onClick={resetAndClose}>Done</Button>
-                        {isSessionActive && (
-                            <Button onClick={() => { resetAndClose(); onSessionNext(); }}>Next in Session</Button>
-                        )}
+                     <DialogFooter className="mt-8 flex w-full items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                            {duration !== null ? `Completed in ${duration.toFixed(2)}s` : ''}
+                        </p>
+                        <div className="flex gap-2">
+                           <Button variant="secondary" onClick={resetAndClose}>Done</Button>
+                            {isSessionActive && (
+                                <Button onClick={() => { resetAndClose(); onSessionNext(); }}>Next in Session</Button>
+                            )}
+                        </div>
                      </DialogFooter>
                 )}
             </div>

@@ -47,6 +47,8 @@ type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'compl
 export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
 
   const { toast } = useToast()
   const { user } = useAuth();
@@ -62,6 +64,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setIsOpen(false);
     form.reset();
     setSubmissionState('idle');
+    setStartTime(null);
+    setDuration(null);
   };
 
 
@@ -75,6 +79,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         return;
     }
 
+    setStartTime(Date.now());
+    setDuration(null);
     setSubmissionState('saving_firebase');
     
     try {
@@ -84,6 +90,9 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
             },
             onNetSuiteSync: () => {
                 setSubmissionState('complete');
+                if (startTime) {
+                  setDuration((Date.now() - startTime) / 1000);
+                }
             }
         });
     } catch (error) {
@@ -169,7 +178,12 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                 </ul>
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8">
-                        <Button onClick={resetAndClose}>Done</Button>
+                        <div className="flex w-full items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                {duration !== null ? `Completed in ${duration.toFixed(2)}s` : ''}
+                            </p>
+                            <Button onClick={resetAndClose}>Done</Button>
+                        </div>
                      </DialogFooter>
                 )}
              </div>
