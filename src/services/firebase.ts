@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -571,7 +572,7 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
   try {
     const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
     const docRef = await addDoc(contactsRef, contact);
-    await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
+    await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}`, date: new Date().toISOString() });
     
     // Update contact count
     const leadRef = doc(firestore, 'leads', leadId);
@@ -595,7 +596,7 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null, calen
       salesRepAssignedCalendlyLink: calendlyLink,
     });
     const notes = salesRep ? `Lead assigned to sales rep ${salesRep}` : `Lead unassigned from sales rep`;
-    await logActivity(leadId, { type: 'Update', notes });
+    await logActivity(leadId, { type: 'Update', notes, date: new Date().toISOString() });
     console.log(`Lead ${leadId} assigned to ${salesRep}`);
   } catch (error) {
     console.error(`Failed to assign lead ${leadId}:`, error);
@@ -610,7 +611,7 @@ async function updateLeadDialerRep(leadId: string, dialerRep: string | null): Pr
       dialerAssigned: dialerRep,
     });
     const notes = dialerRep ? `Lead assigned to dialer ${dialerRep}` : `Lead unassigned from dialer`;
-    await logActivity(leadId, { type: 'Update', notes });
+    await logActivity(leadId, { type: 'Update', notes, date: new Date().toISOString() });
     console.log(`Lead ${leadId} assigned to dialer ${dialerRep}`);
   } catch (error) {
     console.error(`Failed to assign lead dialer ${leadId}:`, error);
@@ -625,7 +626,7 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
     await updateDoc(leadRef, {
       avatarUrl: avatarUrl,
     });
-    await logActivity(leadId, { type: 'Update', notes: `Lead avatar updated.` });
+    await logActivity(leadId, { type: 'Update', notes: `Lead avatar updated.`, date: new Date().toISOString() });
     console.log(`Lead ${leadId} avatar updated.`);
   } catch (error) {
     console.error(`Failed to update avatar for lead ${leadId}:`, error);
@@ -673,23 +674,13 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
 async function logCallActivity(
   leadId: string,
   callData: {
-    notes: string;
     outcome: string;
-    reason?: string;
+    notes: string;
     author: string;
     salesRecordInternalId?: string;
   },
   callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void }
 ): Promise<void> {
-  const notes = `Outcome: ${callData.outcome}${
-    callData.reason ? ` (${callData.reason})` : ''
-  }. Notes: ${callData.notes}`;
-  await logActivity(leadId, {
-    type: 'Call',
-    notes,
-    author: callData.author,
-  });
-
   const outcomeStatusMap: { [key: string]: { status: Lead['status']; reason?: string } } = {
     'Busy': { status: 'In Progress' },
     'Call Back/Follow-up': { status: 'High Touch' },
@@ -706,27 +697,25 @@ async function logCallActivity(
     'Reschedule': { status: 'Reschedule' },
     'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
   };
-  
+
   const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
-  if (status) {
-    await updateLeadStatus(leadId, status, callData.reason || outcomeReason);
-  }
+  const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes}`;
 
-  if (callData.notes) {
-    await logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() }, {
-      onFirebaseSave: () => {}, // Internal call, dialog handles UI
-      onNetSuiteSync: () => {}, // Internal call, dialog handles UI
-    });
-  }
-
-  callbacks.onFirebaseSave();
+  // Firebase operations
+  const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author, date: new Date().toISOString() });
+  const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
+  const notePromise = callData.notes ? logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() }) : Promise.resolve();
   
+  await Promise.all([activityPromise, statusPromise, notePromise]);
+  callbacks.onFirebaseSave();
+
+  // NetSuite operation
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
   if (netSuiteOutcomes.includes(callData.outcome)) {
     await sendToNetSuiteForOutcome({
         leadId: leadId,
         outcome: callData.outcome,
-        reason: callData.reason || outcomeReason || '',
+        reason: outcomeReason || '',
         dialerAssigned: callData.author,
         notes: callData.notes || '',
         salesRecordInternalId: callData.salesRecordInternalId || ''
@@ -739,7 +728,7 @@ async function logCallActivity(
 async function logNoteActivity(
     leadId: string, 
     noteData: { content: string; author: string, date: string },
-    callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }
+    callbacks?: { onFirebaseSave: () => void, onNetSuiteSync: () => void }
 ): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = {
@@ -754,22 +743,16 @@ async function logNoteActivity(
         date: noteData.date
     });
     
-    callbacks.onFirebaseSave();
+    callbacks?.onFirebaseSave?.();
 
-    // No longer awaiting this call
-    sendNoteToNetSuite({
+    await sendNoteToNetSuite({
         leadId,
         noteId: docRef.id,
         author: newNoteData.author,
         content: newNoteData.content,
-    }).then(() => {
-        console.log(`[Background] NetSuite sync for note ${docRef.id} initiated.`);
-    }).catch(error => {
-        console.error(`[Background] NetSuite sync for note ${docRef.id} failed:`, error);
-        // Here you could add more robust error handling, like logging to a separate "failed jobs" collection
     });
     
-    callbacks.onNetSuiteSync();
+    callbacks?.onNetSuiteSync?.();
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -794,7 +777,8 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
         
         await logActivity(leadId, { 
             type: 'Update', 
-            notes: `Transcript added for call ID ${transcriptData.callId}` 
+            notes: `Transcript added for call ID ${transcriptData.callId}`,
+            date: new Date().toISOString(),
         });
 
         console.log(`Transcript logged with ID: ${docRef.id} for lead ${leadId}`);
@@ -810,7 +794,7 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await updateDoc(contactRef, contactData);
-    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.` });
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.`, date: new Date().toISOString() });
     console.log(`Contact ${contactId} updated for lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
@@ -822,7 +806,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await deleteDoc(contactRef);
-    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.`, date: new Date().toISOString() });
 
     // Update contact count
     const leadRef = doc(firestore, 'leads', leadId);
@@ -871,7 +855,7 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
         }
 
         if (changes.length > 0) {
-            await logActivity(leadId, { type: 'Update', notes: changes.join(' ') }, {});
+            await logActivity(leadId, { type: 'Update', notes: changes.join(' '), date: new Date().toISOString() });
         }
         
         console.log(`Lead ${leadId} details updated.`);
@@ -1041,7 +1025,7 @@ async function addTaskToLead(leadId: string, taskData: { title: string; dueDate:
             createdAt: new Date().toISOString(),
         };
         const docRef = await addDoc(tasksRef, newTask);
-        await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"` });
+        await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"`, date: new Date().toISOString() });
         console.log(`Task added with ID: ${docRef.id} to lead ${leadId}`);
         return { ...newTask, id: docRef.id };
     } catch (error) {
@@ -1060,7 +1044,7 @@ async function updateTaskCompletion(leadId: string, taskId: string, isCompleted:
         await updateDoc(taskRef, updateData as any);
         const taskDoc = await getDoc(taskRef);
         const taskTitle = taskDoc.data()?.title || 'a task';
-        await logActivity(leadId, { type: 'Update', notes: `Task "${taskTitle}" marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
+        await logActivity(leadId, { type: 'Update', notes: `Task "${taskTitle}" marked as ${isCompleted ? 'complete' : 'incomplete'}.`, date: new Date().toISOString() });
         console.log(`Task ${taskId} for lead ${leadId} completion status updated to ${isCompleted}`);
     } catch (error) {
         console.error(`Failed to update task ${taskId} for lead ${leadId}:`, error);
@@ -1074,7 +1058,7 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
          const taskDoc = await getDoc(taskRef);
         const taskTitle = taskDoc.data()?.title || 'a task';
         await deleteDoc(taskRef);
-        await logActivity(leadId, { type: 'Update', notes: `Task deleted: "${taskTitle}"` });
+        await logActivity(leadId, { type: 'Update', notes: `Task deleted: "${taskTitle}"`, date: new Date().toISOString() });
         console.log(`Task ${taskId} deleted from lead ${leadId}`);
     } catch (error) {
         console.error(`Failed to delete task ${taskId} from lead ${leadId}:`, error);
@@ -1086,7 +1070,7 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
     try {
         const leadRef = doc(firestore, 'leads', leadId);
         await updateDoc(leadRef, { discoveryData: data });
-        await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.' });
+        await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.', date: new Date().toISOString() });
         console.log(`Discovery data for lead ${leadId} updated.`);
     } catch (error) {
         console.error(`Failed to update discovery data for lead ${leadId}:`, error);
@@ -1290,3 +1274,5 @@ export {
     getLastNote,
     getLastActivity,
 };
+
+    

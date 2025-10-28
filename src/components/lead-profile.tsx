@@ -50,7 +50,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity } from '@/services/firebase'
 import { sendToNetSuiteForOutcome, sendDiscoveryDataToNetSuite, sendLeadUpdateToNetSuite } from '@/services/netsuite'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
@@ -213,64 +213,37 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleCallLogged = async (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => {
       if (!lead || !user?.displayName) return;
+      
+      try {
+        await logCallActivity(
+          lead.id,
+          {
+            outcome,
+            notes,
+            author: user.displayName,
+            salesRecordInternalId: lead.salesRecordInternalId,
+          },
+          callbacks
+        );
 
-      const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
-          'Busy': { status: 'In Progress' },
-          'Call Back/Follow-up': { status: 'High Touch' },
-          'Gatekeeper': { status: 'Connected' },
-          'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
+        const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
           'Appointment Booked': { status: 'Qualified' },
           'Email Interested': { status: 'Pre Qualified' },
-          'No Answer': { status: 'In Progress' },
-          'Not Interested': { status: 'Lost', reason: 'Not Interested' },
-          'Voicemail': { status: 'In Progress' },
-          'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-          'Not a Fit': { status: 'Unqualified' },
-          'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
-          'Reschedule': { status: 'Reschedule' },
-          'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
-      };
-      
-      const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
-      
-      const { status, reason } = outcomeStatusMap[outcome] || {};
+        };
+        const { status } = outcomeStatusMap[outcome] || {};
+        if (status) {
+            setLead(prev => prev ? { ...prev, status } : null);
+        }
 
-      // Await all critical Firebase operations
-      await Promise.all([
-          logActivity(lead.id, {
-              type: 'Call',
-              notes: `Call logged manually. Outcome: ${outcome}. Notes: ${notes}`,
-              author: user.displayName,
-              date: new Date().toISOString()
-          }),
-          notes ? logNoteActivity(lead.id, { content: notes, author: user.displayName, date: new Date().toISOString() }) : Promise.resolve(),
-          status ? updateLeadStatus(lead.id, status, reason) : Promise.resolve(),
-      ]);
-      
-      callbacks.onFirebaseSave();
-      
-      if (netSuiteOutcomes.includes(outcome)) {
-        await sendToNetSuiteForOutcome({
-            leadId: lead.id,
-            outcome: outcome,
-            reason: reason || '',
-            dialerAssigned: user?.displayName || '',
-            notes: notes || '',
-            salesRecordInternalId: lead.salesRecordInternalId || ''
-        });
-      }
-      callbacks.onNetSuiteSync();
-
-      if (status) {
-          setLead(prev => prev ? { ...prev, status } : null);
-      }
-      
-      // Remove lead from session if active
-      if (isSessionActive) {
-        const currentLeadId = lead.id;
-        const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
-        localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-        setSessionLeads(updatedSessionLeads); // Update state for nextLeadId calculation
+        if (isSessionActive) {
+          const currentLeadId = lead.id;
+          const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
+          localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+          setSessionLeads(updatedSessionLeads);
+        }
+      } catch (error) {
+        console.error('Failed to log call outcome:', error);
+        throw error; // Re-throw to be handled by the dialog
       }
   };
 
@@ -336,9 +309,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const addActivity = async (newActivity: Omit<Activity, 'id'>) => {
+  const addActivity = async (newActivity: Omit<Activity, 'id' | 'date'>) => {
     if (lead) {
-        await logActivity(lead.id, newActivity);
+        await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
     }
   };
 
@@ -352,7 +325,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 author: user.displayName || 'Unknown',
                 date: new Date().toISOString()
             },
-            callbacks,
+            callbacks
         );
     } catch (error) {
         console.error("Failed to log note in profile:", error);
@@ -367,8 +340,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
      addActivity({
         type: 'Update',
-        date: new Date().toISOString(),
         notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
+        author: user?.displayName,
      });
     
      setIsEditDialogOpen(false);
@@ -395,7 +368,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleInitiateCall = (phoneNumber: string) => {
     if (!lead) return;
     window.open(`aircall:${phoneNumber}`);
-    logActivity(lead.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    logActivity(lead.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.`, date: new Date().toISOString() });
     toast({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
@@ -1428,3 +1401,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
