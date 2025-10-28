@@ -249,6 +249,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           await updateLeadStatus(lead.id, status, reason);
           setLead(prev => prev ? { ...prev, status } : null);
           toast({ title: 'Status Updated', description: `Lead status changed to ${status}.` });
+
+          if (isSessionActive) {
+            const currentLeadId = lead.id;
+            const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
+
+            if (updatedSessionLeads.length > 0) {
+                localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+                const currentIndex = sessionLeads.indexOf(currentLeadId);
+                const nextLeadId = updatedSessionLeads[currentIndex] || updatedSessionLeads[0];
+                router.push(`/leads/${nextLeadId}`);
+                toast({ title: "Next Lead", description: "Moving to the next lead in your session."});
+            } else {
+                localStorage.removeItem('dialingSessionLeads');
+                toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
+                router.push('/leads');
+            }
+          }
       }
       
       toast({ title: "Success", description: "Call outcome logged successfully." });
@@ -530,15 +547,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     const currentIndex = sessionLeads.indexOf(lead.id);
     if (currentIndex === -1) {
+      // Current lead is not in session, maybe it was just actioned. Find next logical lead.
+      if (sessionLeads.length > 0) {
+          return { nextLeadId: sessionLeads[0], hasNextLead: true };
+      }
       return { nextLeadId: null, hasNextLead: false };
     }
-    const nextIndex = (currentIndex + 1) % sessionLeads.length;
-    return { nextLeadId: sessionLeads[nextIndex], hasNextLead: true };
-  }, [lead, sessionLeads, isSessionActive]);
+    // If there are more leads after the current one
+    if (currentIndex < sessionLeads.length - 1) {
+      return { nextLeadId: sessionLeads[currentIndex + 1], hasNextLead: true };
+    }
+    // If it's the last lead, but there are others (looping)
+    if (sessionLeads.length > 1) {
+      return { nextLeadId: sessionLeads[0], hasNextLead: true };
+    }
+    // Only one lead left, which is the current one
+    return { nextLeadId: null, hasNextLead: false };
+}, [lead, sessionLeads, isSessionActive]);
 
   const handleNextLead = () => {
     if (nextLeadId) {
       router.push(`/leads/${nextLeadId}`);
+    } else {
+      toast({ title: "No more leads", description: "You are at the end of your dialing session."});
     }
   };
 
