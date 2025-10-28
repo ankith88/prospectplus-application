@@ -113,40 +113,45 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Immediately submit to Firebase and update UI
-    onSubmitProp(values.outcome, values.notes || '');
-
-    const outcomeMapping = outcomeStatusMap[values.outcome];
-    if (outcomeMapping) {
-        await updateLeadStatus(lead.id, outcomeMapping.status, outcomeMapping.reason);
-        toast({
-            title: "Status Updated",
-            description: `Lead status changed to ${outcomeMapping.status}.`
-        });
-    }
-    
-    // Close the dialog now
+    // Immediately close dialog and give feedback
     onClose();
+    form.reset();
+    toast({ title: 'Saving Outcome...', description: 'Your call outcome is being logged.' });
 
-    // Trigger NetSuite sync in the background (fire and forget)
-    if (netSuiteOutcomes.includes(values.outcome)) {
-        sendToNetSuiteForOutcome({
-            leadId: lead.id,
-            outcome: values.outcome,
-            reason: outcomeMapping.reason || '',
-            dialerAssigned: lead.dialerAssigned || '',
-            notes: values.notes || '',
-            salesRecordInternalId: lead.salesRecordInternalId || ''
-        }).then(result => {
-            if (result.success) {
-                 console.log("NetSuite outcome sync successful.");
-            } else {
-                console.error("Background NetSuite outcome sync failed:", result.message);
+    // Perform server operations in the background
+    (async () => {
+        try {
+            await onSubmitProp(values.outcome, values.notes || '');
+
+            const outcomeMapping = outcomeStatusMap[values.outcome];
+            if (outcomeMapping) {
+                await updateLeadStatus(lead.id, outcomeMapping.status, outcomeMapping.reason);
             }
-        }).catch(error => {
-            console.error("Background NetSuite outcome sync failed:", error);
-        });
-    }
+
+            if (netSuiteOutcomes.includes(values.outcome)) {
+                await sendToNetSuiteForOutcome({
+                    leadId: lead.id,
+                    outcome: values.outcome,
+                    reason: outcomeMapping?.reason || '',
+                    dialerAssigned: lead.dialerAssigned || '',
+                    notes: values.notes || '',
+                    salesRecordInternalId: lead.salesRecordInternalId || ''
+                });
+            }
+            
+            // Optionally, update toast on success
+            // Note: This might create a new toast if the original one auto-dismissed.
+            // toast({ title: 'Success', description: 'Call outcome saved.' });
+
+        } catch (error: any) {
+            console.error("Failed to save call outcome:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Save Failed',
+                description: 'Could not save the call outcome. Please try again.',
+            });
+        }
+    })();
   }
 
   return (
