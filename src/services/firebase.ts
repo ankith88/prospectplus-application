@@ -702,7 +702,7 @@ async function logCallActivity(
   const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
   const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
   
-  // Conditionally create the note logging promise
+  // Conditionally create the note logging promise. This will also handle NetSuite sync for the note.
   const notePromise = callData.notes 
       ? logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() })
       : Promise.resolve();
@@ -710,7 +710,7 @@ async function logCallActivity(
   // Wait for all Firebase operations to complete
   await Promise.all([activityPromise, statusPromise, notePromise]);
 
-  // NetSuite operation for outcome
+  // NetSuite operation for the outcome itself.
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
   if (netSuiteOutcomes.includes(callData.outcome)) {
       await sendToNetSuiteForOutcome({
@@ -1267,4 +1267,5 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
