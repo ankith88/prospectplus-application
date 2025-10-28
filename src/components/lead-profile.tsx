@@ -562,17 +562,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } else {
         finalUrl = getCalendlyLink(repUrl);
     }
+    
     window.open(finalUrl, '_blank');
     
+    // Optimistically update the UI
     setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
     toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
 
+    // Update Firebase in the background (fire and forget)
     updateLeadSalesRep(lead.id, repName, repUrl)
         .then(() => {
             console.log(`Lead ${lead.id} successfully assigned to ${repName} in the background.`);
         })
         .catch(error => {
             console.error("Failed to assign sales rep in the background:", error);
+            // Optionally, show a non-blocking error toast
             toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
         });
   };
@@ -1270,7 +1274,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Card>
           
            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Route className="w-5 h-5 text-muted-foreground" />
                         Discovery & Routing
