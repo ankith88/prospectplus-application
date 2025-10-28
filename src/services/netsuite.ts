@@ -81,6 +81,18 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
             dialerAssigned: dialerAssigned,
             notes: notes,
         });
+    } else if (dialerAssigned === 'Elmarez Guerrero') {
+        params = new URLSearchParams({
+            script: "2156",
+            deploy: "4",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQGegW2NQZA9xEft6BpUWOFwrRkxCBqe05kNbxzzveErU",
+            leadID: leadId,
+            outcome: outcome,
+            reason: reason,
+            dialerAssigned: dialerAssigned,
+            notes: notes,
+        });
     } else {
         params = new URLSearchParams({
             script: "2156",
