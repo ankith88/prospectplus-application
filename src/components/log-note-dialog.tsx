@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState } from 'react'
@@ -61,23 +62,22 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         });
         return;
     }
+    
+    // Close the dialog immediately for a responsive UI
+    setIsOpen(false)
+    form.reset()
+    toast({
+        title: 'Logging note...',
+        description: 'Your note is being saved.',
+    });
+
     try {
-      // Fire and forget: don't await the result
-      logNoteActivity(lead.id, {
+      await logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
       });
-      
-      // The onNoteLogged callback will be triggered by the real-time listener,
-      // so we don't need to call it manually here.
-
-      toast({
-        title: 'Success',
-        description: 'Note has been logged successfully.',
-      })
-
-      setIsOpen(false)
-      form.reset()
+      // The onNoteLogged callback will be triggered by the real-time listener.
+      // A second success toast is not needed as the UI will update automatically.
     } catch (error) {
       console.error('Failed to log note:', error)
       toast({

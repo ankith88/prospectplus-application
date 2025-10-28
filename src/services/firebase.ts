@@ -679,11 +679,12 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
             ...noteData,
             date: new Date().toISOString()
         };
+        
         // Await the primary operation of saving the note
         const docRef = await addDoc(notesRef, newNoteData);
         const newNote = { ...newNoteData, id: docRef.id };
         
-        // Fire and forget secondary tasks
+        // Don't await secondary tasks
         logActivity(leadId, { 
             type: 'Update', 
             notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
