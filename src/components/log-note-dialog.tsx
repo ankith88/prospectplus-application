@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState } from 'react'
@@ -30,6 +29,8 @@ import { useToast } from '@/hooks/use-toast'
 import type { Lead, Note } from '@/lib/types'
 import { logNoteActivity } from '@/services/firebase'
 import { useAuth } from '@/hooks/use-auth'
+import { Loader } from './ui/loader'
+import { CheckCircle } from 'lucide-react'
 
 const formSchema = z.object({
   content: z.string().min(1, 'Note content cannot be empty.'),
@@ -41,8 +42,13 @@ interface LogNoteDialogProps {
   onNoteLogged: (newNote: Note) => void
 }
 
+type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
+
+
 export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
+
   const { toast } = useToast()
   const { user } = useAuth();
 
@@ -52,6 +58,13 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
       content: '',
     },
   })
+  
+  const resetAndClose = () => {
+    setIsOpen(false);
+    form.reset();
+    setSubmissionState('idle');
+  };
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {
@@ -62,23 +75,25 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         });
         return;
     }
-    
-    // Close the dialog immediately for a responsive UI
-    setIsOpen(false)
-    form.reset()
-    toast({
-        title: 'Logging note...',
-        description: 'Your note is being saved.',
-    });
 
+    setSubmissionState('saving_firebase');
+    
     try {
-      await logNoteActivity(lead.id, {
+      // The logNoteActivity function now internally awaits both Firebase and NetSuite.
+      const newNote = await logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
+      }, () => setSubmissionState('syncing_netsuite')); // Callback to update state
+
+      setSubmissionState('complete');
+      toast({
+          title: 'Success',
+          description: 'Note logged and synced successfully.',
       });
-      // The onNoteLogged callback will be triggered by the real-time listener.
-      // A second success toast is not needed as the UI will update automatically.
+      // onNoteLogged(newNote); // This will be handled by the real-time listener.
+
     } catch (error) {
+      setSubmissionState('error');
       console.error('Failed to log note:', error)
       toast({
         variant: 'destructive',
@@ -89,40 +104,78 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+        if (submissionState !== 'idle' && submissionState !== 'error') return;
+        setIsOpen(open);
+        if (!open) {
+            resetAndClose();
+        }
+    }}>
         <DialogTrigger asChild>{children}</DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
+             if (submissionState !== 'idle' && submissionState !== 'error') {
+                e.preventDefault();
+             }
+        }}>
           <DialogHeader>
             <DialogTitle>Log a Note</DialogTitle>
             <DialogDescription>
-              Add a note for {lead.companyName}. This will be saved in the activity history.
+              Add a note for {lead.companyName}. This will be saved in the activity history and synced to NetSuite.
             </DialogDescription>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormField
-                control={form.control}
-                name="content"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Note</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Enter your note here..." {...field} rows={5}/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          
+          {submissionState === 'idle' || submissionState === 'error' ? (
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                  <FormField
+                    control={form.control}
+                    name="content"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Note</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Enter your note here..." {...field} rows={5}/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {submissionState === 'error' && (
+                    <p className="text-sm text-destructive">An error occurred. Please try again.</p>
+                  )}
+                  <DialogFooter>
+                      <DialogClose asChild>
+                          <Button type="button" variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button type="submit" disabled={form.formState.isSubmitting}>
+                        Log Note
+                      </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+          ) : (
+             <div className="py-8">
+                <ul className="space-y-4">
+                    <li className="flex items-center gap-3">
+                        {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        <span className={submissionState !== 'saving_firebase' ? 'text-muted-foreground' : ''}>
+                            Saving to ProspectPlus...
+                        </span>
+                    </li>
+                     <li className="flex items-center gap-3">
+                        {submissionState === 'syncing_netsuite' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        <span className={submissionState !== 'syncing_netsuite' ? 'text-muted-foreground' : ''}>
+                           Syncing to NetSuite...
+                        </span>
+                    </li>
+                </ul>
+                {submissionState === 'complete' && (
+                     <DialogFooter className="mt-8">
+                        <Button onClick={resetAndClose}>Done</Button>
+                     </DialogFooter>
                 )}
-              />
-              <DialogFooter>
-                  <DialogClose asChild>
-                      <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Logging...' : 'Log Note'}
-                  </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+             </div>
+          )}
         </DialogContent>
       </Dialog>
   )

@@ -672,37 +672,34 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<Note> {
-    try {
-        const notesRef = collection(firestore, 'leads', leadId, 'notes');
-        const newNoteData = {
-            ...noteData,
-            date: new Date().toISOString()
-        };
-        
-        // Await all critical operations
-        const docRef = await addDoc(notesRef, newNoteData);
-        const newNote = { ...newNoteData, id: docRef.id };
-        
-        await logActivity(leadId, { 
-            type: 'Update', 
-            notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
-        });
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string }, onSyncStart?: () => void): Promise<Note> {
+    const notesRef = collection(firestore, 'leads', leadId, 'notes');
+    const newNoteData = {
+        ...noteData,
+        date: new Date().toISOString()
+    };
 
-        await sendNoteToNetSuite({
-            leadId,
-            noteId: newNote.id,
-            author: newNote.author,
-            content: newNote.content,
-        });
+    // All operations are awaited to ensure completion before returning.
+    const docRef = await addDoc(notesRef, newNoteData);
+    const newNote = { ...newNoteData, id: docRef.id };
+    
+    await logActivity(leadId, {
+        type: 'Update',
+        notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`
+    });
+    
+    // Signal that the sync process is about to start
+    onSyncStart?.();
 
-        console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
-        return newNote;
+    await sendNoteToNetSuite({
+        leadId,
+        noteId: newNote.id,
+        author: newNote.author,
+        content: newNote.content,
+    });
 
-    } catch (error) {
-        console.error(`Failed to log note for lead ${leadId}:`, error);
-        throw new Error('Failed to log note in Firebase');
-    }
+    console.log(`Note logged with ID: ${docRef.id} and synced for lead ${leadId}`);
+    return newNote;
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {

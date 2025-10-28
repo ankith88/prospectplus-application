@@ -23,34 +23,29 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Lead, Activity, Contact, LeadStatus } from '@/lib/types'
-import { addContactToLead, updateLeadStatus } from '@/services/firebase'
+import type { Lead, Activity, Contact } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
-import { sendToNetSuiteForOutcome } from '@/services/netsuite'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { Loader } from './ui/loader'
+import { CheckCircle } from 'lucide-react'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
   notes: z.string().optional(),
-  contactName: z.string().optional(),
-  contactEmail: z.string().optional().refine(email => !email || z.string().email().safeParse(email).success, {
-    message: "Invalid email address",
-  }),
-  contactPhone: z.string().optional(),
-  contactTitle: z.string().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
   lead: Lead
-  callActivity?: Activity | null // Make optional for manual logging
+  callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string, contact?: Partial<Contact>) => void
+  onSubmit: (outcome: string, notes: string) => Promise<void> // Make it async
 }
+
+type SubmissionStatus = 'idle' | 'saving_outcome' | 'syncing_netsuite' | 'complete' | 'error';
 
 const callOutcomes = [
     'Busy',
@@ -70,6 +65,10 @@ const callOutcomes = [
 ];
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp }: PostCallOutcomeDialogProps) {
+  const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -77,141 +76,144 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       notes: '',
     },
   })
-  const { toast } = useToast()
-  const router = useRouter();
   const outcome = form.watch('outcome');
-  const { user } = useAuth();
-  
+
+  const resetAndClose = () => {
+    form.reset();
+    setSubmissionState('idle');
+    onClose();
+  };
+
   useEffect(() => {
     if (isOpen) {
       form.reset({
         outcome: '',
         notes: callActivity?.notes || '',
-        contactName: '',
-        contactEmail: '',
-        contactPhone: '',
-        contactTitle: '',
       });
+      setSubmissionState('idle');
     }
   }, [isOpen, callActivity, form]);
 
-  const outcomeStatusMap: { [key: string]: { status: LeadStatus, reason?: string } } = {
-      'Voicemail': { status: 'In Progress' },
-      'No Answer': { status: 'In Progress' },
-      'Busy': { status: 'In Progress' },
-      'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
-      'Appointment Booked': { status: 'Qualified' },
-      'Email Interested': { status: 'Pre Qualified' },
-      'Not Interested': { status: 'Lost', reason: 'Not Interested' },
-      'Gatekeeper': { status: 'Connected' },
-      'Call Back/Follow-up': { status: 'High Touch' },
-      'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
-      'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-      'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
-      'Reschedule': { status: 'Reschedule' },
-      'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
-  };
-
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Immediately close dialog and give feedback
-    onClose();
-    form.reset();
-    toast({ title: 'Saving Outcome...', description: 'Your call outcome is being logged.' });
+    if (!user) {
+        toast({
+            variant: 'destructive',
+            title: 'Authentication Error',
+            description: 'Could not identify the current user.',
+        });
+        return;
+    }
+    
+    setSubmissionState('saving_outcome');
 
-    // Perform server operations in the background
-    (async () => {
-        try {
-            await onSubmitProp(values.outcome, values.notes || '');
-
-            const outcomeMapping = outcomeStatusMap[values.outcome];
-            if (outcomeMapping) {
-                await updateLeadStatus(lead.id, outcomeMapping.status, outcomeMapping.reason);
-            }
-
-            if (netSuiteOutcomes.includes(values.outcome)) {
-                await sendToNetSuiteForOutcome({
-                    leadId: lead.id,
-                    outcome: values.outcome,
-                    reason: outcomeMapping?.reason || '',
-                    dialerAssigned: user?.displayName || '',
-                    notes: values.notes || '',
-                    salesRecordInternalId: lead.salesRecordInternalId || ''
-                });
-            }
-            
-            // Optionally, update toast on success
-            // Note: This might create a new toast if the original one auto-dismissed.
-            // toast({ title: 'Success', description: 'Call outcome saved.' });
-
-        } catch (error: any) {
-            console.error("Failed to save call outcome:", error);
-            toast({
-                variant: 'destructive',
-                title: 'Save Failed',
-                description: 'Could not save the call outcome. Please try again.',
-            });
-        }
-    })();
+    try {
+        // This now awaits the full completion before setting state to 'complete'
+        await onSubmitProp(values.outcome, values.notes || '');
+        setSubmissionState('complete');
+        toast({
+            title: 'Success!',
+            description: 'Call outcome logged successfully.',
+        });
+    } catch (error: any) {
+        setSubmissionState('error');
+        console.error("Failed to save call outcome:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Save Failed',
+            description: 'Could not save the call outcome. Please try again.',
+        });
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={isOpen} onOpenChange={(open) => {
+        if (submissionState === 'idle' || submissionState === 'error' || submissionState === 'complete') {
+            if (!open) {
+                resetAndClose();
+            } else {
+                onClose(); // This seems incorrect, should be handled by trigger
+            }
+        }
+    }}>
+      <DialogContent 
+        className="sm:max-w-[425px]"
+        onInteractOutside={(e) => {
+            if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
+                e.preventDefault();
+            }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Log Call Outcome</DialogTitle>
           <DialogDescription>
-            Select the outcome of your recent call with {lead.companyName}.
+            Select the outcome of your call with {lead.companyName}.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="outcome"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Outcome</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+        
+        {submissionState === 'idle' || submissionState === 'error' ? (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="outcome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Outcome</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a call outcome" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {callOutcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a call outcome" />
-                      </SelectTrigger>
+                      <Textarea placeholder="Add any notes from the call..." {...field} />
                     </FormControl>
-                    <SelectContent>
-                      {callOutcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Add any notes from the call..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <DialogFooter>
-                <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
-                    {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <DialogFooter>
+                  <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
+                  <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
+                      {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
+                  </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        ) : (
+            <div className="py-8">
+                <ul className="space-y-4">
+                    <li className="flex items-center gap-3">
+                        {submissionState === 'saving_outcome' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        <span className={submissionState !== 'saving_outcome' ? 'text-muted-foreground' : ''}>
+                            Updating lead status...
+                        </span>
+                    </li>
+                </ul>
+                {submissionState === 'complete' && (
+                     <DialogFooter className="mt-8">
+                        <Button onClick={resetAndClose}>Done</Button>
+                     </DialogFooter>
+                )}
+            </div>
+        )}
       </DialogContent>
     </Dialog>
   )

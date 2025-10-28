@@ -50,7 +50,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, sendToNetSuiteForOutcome } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -212,67 +212,74 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead]);
 
 
-  const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
+  const handleCallLogged = async (outcome: string, notes: string) => {
       if (!lead || !user?.displayName) return;
 
       const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
           'Busy': { status: 'In Progress' },
           'Call Back/Follow-up': { status: 'High Touch' },
           'Gatekeeper': { status: 'Connected' },
-          'Disconnected': { status: 'In Progress' },
+          'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
           'Appointment Booked': { status: 'Qualified' },
           'Email Interested': { status: 'Pre Qualified' },
           'No Answer': { status: 'In Progress' },
           'Not Interested': { status: 'Lost', reason: 'Not Interested' },
           'Voicemail': { status: 'In Progress' },
           'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-          'Disqualified - Not a Fit': { status: 'Unqualified' },
+          'Not a Fit': { status: 'Unqualified' },
           'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+          'Reschedule': { status: 'Reschedule' },
+          'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
       };
       
-      let activityNotes = `Call logged manually. Outcome: ${outcome}. Notes: ${notes}`;
-      await logActivity(lead.id, {
-          type: 'Call',
-          notes: activityNotes,
-          author: user.displayName
-      });
-
-      if (notes) {
-        await logNoteActivity(lead.id, {
-          content: notes,
-          author: user.displayName,
-        });
-      }
-
+      const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
+      
       const { status, reason } = outcomeStatusMap[outcome] || {};
+
+      // Await all critical operations
+      await Promise.all([
+          logActivity(lead.id, {
+              type: 'Call',
+              notes: `Call logged manually. Outcome: ${outcome}. Notes: ${notes}`,
+              author: user.displayName
+          }),
+          notes ? logNoteActivity(lead.id, { content: notes, author: user.displayName }) : Promise.resolve(),
+          status ? updateLeadStatus(lead.id, status, reason) : Promise.resolve(),
+          netSuiteOutcomes.includes(outcome) ? sendToNetSuiteForOutcome({
+              leadId: lead.id,
+              outcome: outcome,
+              reason: reason || '',
+              dialerAssigned: user?.displayName || '',
+              notes: notes || '',
+              salesRecordInternalId: lead.salesRecordInternalId || ''
+          }) : Promise.resolve(),
+      ]);
+
       if (status) {
-          await updateLeadStatus(lead.id, status, reason);
           setLead(prev => prev ? { ...prev, status } : null);
-          toast({ title: 'Status Updated', description: `Lead status changed to ${status}.` });
-
-          if (isSessionActive) {
-            const currentLeadId = lead.id;
-            const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
-
-            if (updatedSessionLeads.length > 0) {
-                localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-                const currentIndex = sessionLeads.indexOf(currentLeadId);
-                const nextLeadId = updatedSessionLeads[currentIndex] || updatedSessionLeads[0];
-                router.push(`/leads/${nextLeadId}`);
-                toast({ title: "Next Lead", description: "Moving to the next lead in your session."});
-            } else {
-                localStorage.removeItem('dialingSessionLeads');
-                toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
-                router.push('/leads');
-            }
-          }
       }
       
-      toast({ title: "Success", description: "Call outcome logged successfully." });
-
       setShowPostCallDialog(false);
       setIsLogOutcomeOpen(false);
       setLastCallActivity(null);
+
+      // Handle session navigation after all awaits are complete
+      if (isSessionActive) {
+        const currentLeadId = lead.id;
+        const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
+        
+        localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+
+        if (updatedSessionLeads.length > 0) {
+            const currentIndex = sessionLeads.indexOf(currentLeadId);
+            const nextLeadId = updatedSessionLeads[currentIndex] || updatedSessionLeads[0];
+            router.push(`/leads/${nextLeadId}`);
+        } else {
+            localStorage.removeItem('dialingSessionLeads');
+            toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
+            router.push('/leads');
+        }
+      }
   };
 
 
@@ -344,11 +351,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    addActivity({
-        type: 'Update',
-        date: newNote.date,
-        notes: `Note added: ${newNote.content.substring(0, 50)}...`
-    })
+    // This function can now be simplified as the heavy lifting is done in the dialog
+    // The real-time listener will update the UI automatically
   }
   
   const handleContactAdded = async () => {
@@ -661,7 +665,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             setShowPostCallDialog(false);
         }}
         lead={lead}
-        callActivity={lastCallActivity} // Pass null for manual logging
+        callActivity={lastCallActivity}
         onSubmit={handleCallLogged}
     />
     <div className="flex flex-col gap-6">
