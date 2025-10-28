@@ -211,7 +211,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead]);
 
 
-  const handleCallLogged = async (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => {
+  const handleCallLogged = async (outcome: string, notes: string) => {
       if (!lead || !user?.displayName) return;
       
       try {
@@ -222,8 +222,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             notes,
             author: user.displayName,
             salesRecordInternalId: lead.salesRecordInternalId,
-          },
-          callbacks
+          }
         );
 
         const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
@@ -315,7 +314,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleNoteLogged = async (noteContent: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => {
+  const handleNoteLogged = async (noteContent: string, date: string) => {
     if (!lead || !user) return;
     try {
         await logNoteActivity(
@@ -323,9 +322,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             { 
                 content: noteContent, 
                 author: user.displayName || 'Unknown',
-                date: new Date().toISOString()
-            },
-            callbacks
+                date: date
+            }
         );
     } catch (error) {
         console.error("Failed to log note in profile:", error);
@@ -1401,5 +1399,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    

@@ -41,7 +41,7 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => Promise<void>
+  onSubmit: (outcome: string, notes: string) => Promise<void>
   onSessionNext: () => void
   isSessionActive: boolean
 }
@@ -117,17 +117,17 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     setSubmissionState('saving_outcome');
 
     try {
-        await onSubmitProp(values.outcome, values.notes || '', {
-          onFirebaseSave: () => {
-            setSubmissionState('syncing_netsuite');
-          },
-          onNetSuiteSync: () => {
-             setSubmissionState('complete');
-             if (startTime) {
-                setDuration((Date.now() - startTime) / 1000);
-             }
-          }
-        });
+        // Simulate Firebase step
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setSubmissionState('syncing_netsuite');
+        
+        // Call the server action which handles both Firebase and NetSuite
+        await onSubmitProp(values.outcome, values.notes || '');
+
+        if (startTime) {
+            setDuration((Date.now() - startTime) / 1000);
+        }
+        setSubmissionState('complete');
     } catch (error: any) {
         setSubmissionState('error');
         console.error("Failed to save call outcome:", error);

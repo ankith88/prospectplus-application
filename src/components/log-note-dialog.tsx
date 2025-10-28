@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import type { Lead, Note } from '@/lib/types'
+import type { Lead } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
@@ -38,7 +38,7 @@ const formSchema = z.object({
 interface LogNoteDialogProps {
   lead: Lead
   children: React.ReactNode
-  onNoteLogged: (content: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => Promise<void>
+  onNoteLogged: (content: string, date: string) => Promise<void>
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
@@ -83,18 +83,21 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setDuration(null);
     setSubmissionState('saving_firebase');
     
+    // The server action now handles all steps. We await its completion.
     try {
-        await onNoteLogged(values.content, {
-            onFirebaseSave: () => {
-                setSubmissionState('syncing_netsuite');
-            },
-            onNetSuiteSync: () => {
-                setSubmissionState('complete');
-                if (startTime) {
-                  setDuration((Date.now() - startTime) / 1000);
-                }
-            }
-        });
+        const submissionDate = new Date().toISOString();
+        // Simulate Firebase step
+        await new Promise(resolve => setTimeout(resolve, 800)); 
+        setSubmissionState('syncing_netsuite');
+
+        // Call the server action which now handles both Firebase and NetSuite
+        await onNoteLogged(values.content, submissionDate);
+        
+        // Once the server action is complete, we know both steps are done.
+        if (startTime) {
+          setDuration((Date.now() - startTime) / 1000);
+        }
+        setSubmissionState('complete');
     } catch (error) {
       setSubmissionState('error');
       console.error('Failed to log note:', error)
