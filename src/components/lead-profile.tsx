@@ -109,6 +109,7 @@ import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
+import { DiscoveryRadarChart } from './discovery-radar-chart'
 
 interface LeadProfileProps {
   initialLead: Lead;
