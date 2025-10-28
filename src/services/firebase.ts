@@ -682,32 +682,28 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         const docRef = await addDoc(notesRef, newNoteData);
         const newNote = { ...newNoteData, id: docRef.id };
         
-        await logActivity(leadId, { 
+        // Fire and forget activity logging and NetSuite sync
+        logActivity(leadId, { 
             type: 'Update', 
             notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
         });
 
-        console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
-
-        // Call NetSuite in the background (fire and forget)
         sendNoteToNetSuite({
             leadId,
             noteId: newNote.id,
             author: newNote.author,
             content: newNote.content,
-        }).then(netSuiteResult => {
-            if (netSuiteResult.success) {
-                console.log("NetSuite note sync successful.");
-            } else {
-                 console.error("Background NetSuite note sync failed:", netSuiteResult.message);
-            }
         }).catch(error => {
-            console.error("Background NetSuite note sync failed:", error);
+            // We catch the error here so it doesn't bubble up and break the primary flow.
+            console.error("[Background] NetSuite note sync failed:", error);
         });
 
+        console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}`);
         return newNote;
+
     } catch (error) {
         console.error(`Failed to log note for lead ${leadId}:`, error);
+        // This re-throws the primary error (saving the note) if it happens.
         throw new Error('Failed to log note in Firebase');
     }
 }
