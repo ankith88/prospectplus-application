@@ -7,9 +7,13 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
-import { sendNoteToNetSuite } from './netsuite';
+import { sendNoteToNetSuite, sendToNetSuiteForOutcome } from './netsuite';
 
-async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
+async function logActivity(
+  leadId: string,
+  activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string },
+  callbacks?: { onFirebaseSave?: () => void; onNetSuiteSync?: () => void }
+): Promise<string> {
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
         
@@ -24,6 +28,7 @@ async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id'
 
         const docRef = await addDoc(activityRef, activityLog);
         console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
+        callbacks?.onFirebaseSave?.();
         return docRef.id;
     } catch (error) {
         console.error(`Failed to log activity for lead ${leadId}:`, error);
@@ -460,7 +465,7 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
                 leadId: leadId,
             };
         });
-        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -665,10 +670,70 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
     }
 }
 
+async function logCallActivity(
+  leadId: string,
+  callData: {
+    notes: string;
+    outcome: string;
+    reason?: string;
+    author: string;
+    salesRecordInternalId?: string;
+  },
+  callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void }
+): Promise<void> {
+  const notes = `Outcome: ${callData.outcome}${
+    callData.reason ? ` (${callData.reason})` : ''
+  }. Notes: ${callData.notes}`;
+  await logActivity(leadId, {
+    type: 'Call',
+    notes,
+    author: callData.author,
+  });
 
-async function logCallActivity(leadId: string, callData: { notes: string; outcome: string; reason?: string }): Promise<string> {
-    const notes = `Outcome: ${callData.outcome}${callData.reason ? ` (${callData.reason})` : ''}. Notes: ${callData.notes}`;
-    return await logActivity(leadId, { type: 'Call', notes });
+  const outcomeStatusMap: { [key: string]: { status: Lead['status']; reason?: string } } = {
+    'Busy': { status: 'In Progress' },
+    'Call Back/Follow-up': { status: 'High Touch' },
+    'Gatekeeper': { status: 'Connected' },
+    'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
+    'Appointment Booked': { status: 'Qualified' },
+    'Email Interested': { status: 'Pre Qualified' },
+    'No Answer': { status: 'In Progress' },
+    'Not Interested': { status: 'Lost', reason: 'Not Interested' },
+    'Voicemail': { status: 'In Progress' },
+    'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
+    'Not a Fit': { status: 'Unqualified' },
+    'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+    'Reschedule': { status: 'Reschedule' },
+    'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
+  };
+  
+  const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
+  if (status) {
+    await updateLeadStatus(leadId, status, callData.reason || outcomeReason);
+  }
+
+  if (callData.notes) {
+    await logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() }, {
+      onFirebaseSave: () => {}, // Internal call, dialog handles UI
+      onNetSuiteSync: () => {}, // Internal call, dialog handles UI
+    });
+  }
+
+  callbacks.onFirebaseSave();
+  
+  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
+  if (netSuiteOutcomes.includes(callData.outcome)) {
+    await sendToNetSuiteForOutcome({
+        leadId: leadId,
+        outcome: callData.outcome,
+        reason: callData.reason || outcomeReason || '',
+        dialerAssigned: callData.author,
+        notes: callData.notes || '',
+        salesRecordInternalId: callData.salesRecordInternalId || ''
+    });
+  }
+  
+  callbacks.onNetSuiteSync();
 }
 
 async function logNoteActivity(
@@ -691,16 +756,20 @@ async function logNoteActivity(
     
     callbacks.onFirebaseSave();
 
-    await sendNoteToNetSuite({
+    // No longer awaiting this call
+    sendNoteToNetSuite({
         leadId,
         noteId: docRef.id,
         author: newNoteData.author,
         content: newNoteData.content,
+    }).then(() => {
+        console.log(`[Background] NetSuite sync for note ${docRef.id} initiated.`);
+    }).catch(error => {
+        console.error(`[Background] NetSuite sync for note ${docRef.id} failed:`, error);
+        // Here you could add more robust error handling, like logging to a separate "failed jobs" collection
     });
     
     callbacks.onNetSuiteSync();
-    
-    console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}. NetSuite sync complete.`);
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -802,7 +871,7 @@ async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Par
         }
 
         if (changes.length > 0) {
-            await logActivity(leadId, { type: 'Update', notes: changes.join(' ') });
+            await logActivity(leadId, { type: 'Update', notes: changes.join(' ') }, {});
         }
         
         console.log(`Lead ${leadId} details updated.`);
