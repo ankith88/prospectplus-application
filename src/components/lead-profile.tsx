@@ -216,13 +216,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead, data, loadingStates, toast]);
 
-  useEffect(() => {
-    if (lead) {
-      const allSubcollections: (keyof SubcollectionData)[] = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments'];
-      allSubcollections.forEach(name => loadSubcollection(name));
-    }
-  }, [lead, loadSubcollection]);
-
 
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
       if (!lead || !user?.displayName) return;
@@ -652,9 +645,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return (data.activity || []).filter(a => a.type === 'Call' && a.callId);
   }, [data.activity]);
 
-  const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 5);
-  const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 5);
-  const displayedNotes = isNotesExpanded ? (data.notes || []) : (data.notes || []).slice(0, 5);
+  const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 1);
+  const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 1);
+  const displayedNotes = isNotesExpanded ? (data.notes || []) : (data.notes || []).slice(0, 1);
   
   const contactAttempts = useMemo(() => {
     if (!data.activity) return 0;
@@ -903,7 +896,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Card>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <Accordion type="single" collapsible>
+           <Accordion type="single" collapsible onValueChange={() => loadSubcollection('contacts')}>
              <Card>
                <AccordionItem value="contacts" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -1058,7 +1051,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                </AccordionItem>
              </Card>
            </Accordion>
-           <Accordion type="single" collapsible>
+           <Accordion type="single" collapsible onValueChange={() => {}}>
             <Card>
                 <AccordionItem value="address" className="border-b-0">
                     <AccordionTrigger className="p-6">
@@ -1123,7 +1116,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Accordion>
           </div>
           
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible onValueChange={() => { loadSubcollection('activity'); loadSubcollection('transcripts'); }}>
             <Card>
               <AccordionItem value="call-history" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -1186,7 +1179,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           </li>
                         )
                       })}
-                      {callHistory.length > 5 && (
+                      {callHistory.length > 1 && (
                           <Button variant="link" className="w-full mt-2" onClick={() => setIsCallHistoryExpanded(!isCallHistoryExpanded)}>
                               {isCallHistoryExpanded ? 'Show less' : `Show all ${callHistory.length} calls`}
                           </Button>
@@ -1201,7 +1194,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Accordion>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible>
+            <Accordion type="single" collapsible onValueChange={() => loadSubcollection('activity')}>
                 <Card>
                     <AccordionItem value="activity" className="border-b-0">
                         <AccordionTrigger className="p-6">
@@ -1210,7 +1203,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                          <AccordionContent className="px-6">
                             {loadingStates.activity ? (
                                  <div className="flex items-center justify-center p-8"><Loader /></div>
-                            ) : displayedActivities.length > 0 ? (
+                            ) : filteredActivities.length > 0 ? (
                                 <>
                                 <ul className="space-y-4">
                                 {displayedActivities.map((item, index) => (
@@ -1222,7 +1215,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
                                         {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                                         </div>
-                                        {displayedActivities && index < displayedActivities.length - 1 && (
+                                        {filteredActivities && index < filteredActivities.length - 1 && displayedActivities.length > 1 && (
                                         <div className="w-px h-full bg-border"></div>
                                         )}
                                     </div>
@@ -1238,7 +1231,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </li>
                                 ))}
                                 </ul>
-                                {filteredActivities.length > 5 && (
+                                {filteredActivities.length > 1 && (
                                     <Button variant="link" className="w-full mt-2" onClick={() => setIsActivityExpanded(!isActivityExpanded)}>
                                     {isActivityExpanded ? 'Show less' : `Show all ${filteredActivities.length} activities`}
                                     </Button>
@@ -1252,7 +1245,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </Accordion>
             
-            <Accordion type="single" collapsible>
+            <Accordion type="single" collapsible onValueChange={() => loadSubcollection('notes')}>
                 <Card>
                      <AccordionItem value="notes" className="border-b-0">
                         <AccordionTrigger className="p-6">
@@ -1276,7 +1269,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                                 ))}
                                 </div>
-                                {(data.notes || []).length > 5 && (
+                                {(data.notes || []).length > 1 && (
                                     <Button variant="link" className="w-full mt-2" onClick={() => setIsNotesExpanded(!isNotesExpanded)}>
                                         {isNotesExpanded ? 'Show less' : 'Show all notes'}
                                     </Button>
@@ -1331,7 +1324,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible>
+          <Accordion type="single" collapsible onValueChange={() => loadSubcollection('appointments')}>
             <Card>
                  <AccordionItem value="appointments" className="border-b-0">
                      <AccordionTrigger className="p-6">
@@ -1410,7 +1403,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible>
+           <Accordion type="single" collapsible onValueChange={() => loadSubcollection('tasks')}>
             <Card>
                  <AccordionItem value="tasks" className="border-b-0">
                      <AccordionTrigger className="p-6">
