@@ -86,14 +86,15 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     // The server action now handles all steps. We await its completion.
     try {
         const submissionDate = new Date().toISOString();
-        // Simulate Firebase step
-        await new Promise(resolve => setTimeout(resolve, 800)); 
-        setSubmissionState('syncing_netsuite');
-
+        
         // Call the server action which now handles both Firebase and NetSuite
         await onNoteLogged(values.content, submissionDate);
         
-        // Once the server action is complete, we know both steps are done.
+        // To give the user feedback on the multi-step process, we'll simulate the steps on the client.
+        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate firebase time
+        setSubmissionState('syncing_netsuite');
+        await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate netsuite time
+        
         if (startTime) {
           setDuration((Date.now() - startTime) / 1000);
         }

@@ -701,21 +701,26 @@ async function logCallActivity(
   // Firebase operations
   const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
   const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
-  const notePromise = callData.notes ? logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() }) : Promise.resolve();
   
+  // Conditionally create the note logging promise
+  const notePromise = callData.notes 
+      ? logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() })
+      : Promise.resolve();
+
+  // Wait for all Firebase operations to complete
   await Promise.all([activityPromise, statusPromise, notePromise]);
 
-  // NetSuite operation
+  // NetSuite operation for outcome
   const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
   if (netSuiteOutcomes.includes(callData.outcome)) {
-    await sendToNetSuiteForOutcome({
-        leadId: leadId,
-        outcome: callData.outcome,
-        reason: outcomeReason || '',
-        dialerAssigned: callData.author,
-        notes: callData.notes || '',
-        salesRecordInternalId: callData.salesRecordInternalId || ''
-    });
+      await sendToNetSuiteForOutcome({
+          leadId: leadId,
+          outcome: callData.outcome,
+          reason: outcomeReason || '',
+          dialerAssigned: callData.author,
+          notes: callData.notes || '',
+          salesRecordInternalId: callData.salesRecordInternalId || ''
+      });
   }
 }
 
@@ -1262,3 +1267,4 @@ export {
     getLastNote,
     getLastActivity,
 };
+

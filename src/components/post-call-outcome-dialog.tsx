@@ -117,17 +117,19 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     setSubmissionState('saving_outcome');
 
     try {
-        // Simulate Firebase step
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setSubmissionState('syncing_netsuite');
-        
-        // Call the server action which handles both Firebase and NetSuite
-        await onSubmitProp(values.outcome, values.notes || '');
+      // The server action now handles all steps, so we just await its completion.
+      await onSubmitProp(values.outcome, values.notes || '');
 
-        if (startTime) {
-            setDuration((Date.now() - startTime) / 1000);
-        }
-        setSubmissionState('complete');
+      // To give the user feedback on the multi-step process, we'll simulate the steps on the client.
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate firebase time
+      setSubmissionState('syncing_netsuite');
+      await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate netsuite time
+      
+      if (startTime) {
+          setDuration((Date.now() - startTime) / 1000);
+      }
+      setSubmissionState('complete');
+
     } catch (error: any) {
         setSubmissionState('error');
         console.error("Failed to save call outcome:", error);
