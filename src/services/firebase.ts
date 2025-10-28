@@ -679,14 +679,15 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
             ...noteData,
             date: new Date().toISOString()
         };
+        // Await the primary operation of saving the note
         const docRef = await addDoc(notesRef, newNoteData);
         const newNote = { ...newNoteData, id: docRef.id };
         
-        // Fire and forget activity logging and NetSuite sync
+        // Fire and forget secondary tasks
         logActivity(leadId, { 
             type: 'Update', 
             notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}` 
-        });
+        }).catch(err => console.error("Background activity logging failed:", err));
 
         sendNoteToNetSuite({
             leadId,
@@ -694,7 +695,6 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
             author: newNote.author,
             content: newNote.content,
         }).catch(error => {
-            // We catch the error here so it doesn't bubble up and break the primary flow.
             console.error("[Background] NetSuite note sync failed:", error);
         });
 
@@ -703,7 +703,6 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
 
     } catch (error) {
         console.error(`Failed to log note for lead ${leadId}:`, error);
-        // This re-throws the primary error (saving the note) if it happens.
         throw new Error('Failed to log note in Firebase');
     }
 }
@@ -907,14 +906,14 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         const tasksSnapshot = await getDocs(collectionGroup(firestore, 'tasks'));
         
         const userTasks = tasksSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as Task & { leadId?: string; leadName?: string }))
-            .filter(task => task.author === displayName);
+            .map(doc => ({ id: doc.id, ...doc.data(), leadId: doc.ref.parent.parent!.id }))
+            .filter(task => task.author === displayName) as Array<Task & { leadId: string }>;
 
         if (userTasks.length === 0) {
             return [];
         }
 
-        const leadIds = [...new Set(userTasks.map(task => task.id.split('_')[0]))]; // Heuristic to get leadId
+        const leadIds = [...new Set(userTasks.map(task => task.leadId))];
         const leadsData: Record<string, Lead> = {};
 
         const leadChunks: string[][] = [];
@@ -932,11 +931,9 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         }
         
         const hydratedTasks = userTasks.map(task => {
-            const leadId = task.id.split('_')[0]; // Re-derive leadId
-            const lead = leadsData[leadId];
+            const lead = leadsData[task.leadId];
             return {
                 ...task,
-                leadId: leadId,
                 leadName: lead ? lead.companyName : "Unknown Lead",
             };
         });
