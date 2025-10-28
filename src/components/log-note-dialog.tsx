@@ -79,20 +79,21 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setSubmissionState('saving_firebase');
     
     try {
-      // The logNoteActivity function now internally awaits both Firebase and NetSuite.
-      const newNote = await logNoteActivity(lead.id, {
+      await logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
       });
-      // Since the server action now handles both steps, we can just update the UI state.
-      setSubmissionState('syncing_netsuite'); // To show the next step in UI
+      
+      setSubmissionState('syncing_netsuite'); // This state might be skipped visually if the next one is fast
+      
+      // We can consider the process complete for the UI now as the server handles the rest.
+      // A more sophisticated system might use webhooks or polling to confirm NetSuite sync.
       setSubmissionState('complete');
 
       toast({
           title: 'Success',
-          description: 'Note logged and synced successfully.',
+          description: 'Note logged and sync initiated.',
       });
-      // onNoteLogged(newNote); // This will be handled by the real-time listener.
 
     } catch (error) {
       setSubmissionState('error');
@@ -165,7 +166,13 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'syncing_netsuite' || submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        {submissionState === 'saving_firebase' ? (
+                             <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        ) : submissionState === 'complete' ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                            <Loader />
+                        )}
                         <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...
                         </span>
