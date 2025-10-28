@@ -55,17 +55,33 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
     const { leadId, outcome, reason, dialerAssigned, notes, salesRecordInternalId } = payload;
     
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-    const params = new URLSearchParams({
-        script: "2156",
-        deploy: "1",
-        compid: "1048144",
-        "ns-at": "AAEJ7tMQrXaUiyrcK7JhiN0lUSv9b2uOL2FluSjbC6Z3EMXV3Qs",
-        leadID: leadId,
-        outcome: outcome,
-        reason: reason,
-        dialerAssigned: dialerAssigned,
-        notes: notes,
-    });
+    let params: URLSearchParams;
+    
+    if (dialerAssigned === 'Lachlan Ball') {
+        params = new URLSearchParams({
+            script: "2156",
+            deploy: "2",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQnNZU_8ydzRGGa5ahHvXzSQtFIXRXuSENy7Y5LfPM2sc",
+            leadID: leadId,
+            outcome: outcome,
+            reason: reason,
+            dialerAssigned: dialerAssigned,
+            notes: notes,
+        });
+    } else {
+        params = new URLSearchParams({
+            script: "2156",
+            deploy: "1",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQrXaUiyrcK7JhiN0lUSv9b2uOL2FluSjbC6Z3EMXV3Qs",
+            leadID: leadId,
+            outcome: outcome,
+            reason: reason,
+            dialerAssigned: dialerAssigned,
+            notes: notes,
+        });
+    }
 
     if (salesRecordInternalId) {
         params.append('salesrecordid', salesRecordInternalId);
