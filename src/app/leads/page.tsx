@@ -13,7 +13,7 @@ async function getLeadsData() {
   ]);
 
   const activeDialers = fetchedUsers
-    .filter(u => u.role !== 'admin' && u.firstName && u.lastName)
+    .filter(u => u.firstName && u.lastName)
     .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
 
   return { initialLeads: fetchedLeads, initialDialers: activeDialers };
@@ -29,3 +29,4 @@ export default async function LeadsPage() {
     />
   );
 }
+
