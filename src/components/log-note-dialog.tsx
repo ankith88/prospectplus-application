@@ -83,9 +83,11 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
       const newNote = await logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
-      }, () => setSubmissionState('syncing_netsuite')); // Callback to update state
-
+      });
+      // Since the server action now handles both steps, we can just update the UI state.
+      setSubmissionState('syncing_netsuite'); // To show the next step in UI
       setSubmissionState('complete');
+
       toast({
           title: 'Success',
           description: 'Note logged and synced successfully.',
@@ -163,8 +165,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'syncing_netsuite' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                        <span className={submissionState !== 'syncing_netsuite' ? 'text-muted-foreground' : ''}>
+                        {submissionState === 'syncing_netsuite' || submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...
                         </span>
                     </li>

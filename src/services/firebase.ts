@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -672,7 +671,7 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string }, onSyncStart?: () => void): Promise<Note> {
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<Note> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = {
         ...noteData,
@@ -688,9 +687,6 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`
     });
     
-    // Signal that the sync process is about to start
-    onSyncStart?.();
-
     await sendNoteToNetSuite({
         leadId,
         noteId: newNote.id,
@@ -1220,5 +1216,3 @@ export {
     getLastNote,
     getLastActivity,
 };
-
-
