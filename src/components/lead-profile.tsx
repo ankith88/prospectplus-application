@@ -132,6 +132,11 @@ type AllSubcollectionsState = {
   appointments: SubcollectionState<Appointment>;
 }
 
+const salesReps = [
+    { name: 'Ankith Ravindran', url: 'https://calendly.com/ankith-ravindran/15min' },
+    { name: 'Nathan Smith', url: 'https://calendly.com/nathan-smith-mailplus/15min' },
+];
+
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   
