@@ -113,32 +113,36 @@ interface LeadProfileProps {
   initialLead: Lead;
 }
 
-type SubcollectionData = {
-  contacts: Contact[];
-  activity: Activity[];
-  notes: Note[];
-  transcripts: Transcript[];
-  tasks: Task[];
-  appointments: Appointment[];
-}
+const PAGE_SIZE = 5;
 
-const salesReps = [
-    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
-    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
-    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
-]
+type SubcollectionState<T> = {
+  items: T[];
+  loading: boolean;
+  hasMore: boolean;
+  lastDocId: string | null;
+  loaded: boolean;
+};
+
+type AllSubcollectionsState = {
+  contacts: SubcollectionState<Contact>;
+  activity: SubcollectionState<Activity>;
+  notes: SubcollectionState<Note>;
+  transcripts: SubcollectionState<Transcript>;
+  tasks: SubcollectionState<Task>;
+  appointments: SubcollectionState<Appointment>;
+}
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
   
-  const [data, setData] = useState<Partial<SubcollectionData>>({});
-  const [loadingStates, setLoadingStates] = useState({
-    contacts: false,
-    activity: false,
-    notes: false,
-    transcripts: false,
-    tasks: false,
-    appointments: false,
+  const initialSubcollectionState = { items: [], loading: false, hasMore: true, lastDocId: null, loaded: false };
+  const [subcollections, setSubcollections] = useState<AllSubcollectionsState>({
+    contacts: initialSubcollectionState,
+    activity: initialSubcollectionState,
+    notes: initialSubcollectionState,
+    transcripts: initialSubcollectionState,
+    tasks: initialSubcollectionState,
+    appointments: initialSubcollectionState,
   });
   
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
@@ -160,9 +164,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
-  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
-  const [isNotesExpanded, setIsNotesExpanded] = useState(false);
-  const [isCallHistoryExpanded, setIsCallHistoryExpanded] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
 
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
@@ -193,28 +194,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [initialLead]);
 
-  const loadSubcollection = useCallback(async (collectionName: keyof SubcollectionData) => {
-    if (!lead || data[collectionName] || loadingStates[collectionName]) return;
+  const loadSubcollection = useCallback(async (
+    collectionName: keyof AllSubcollectionsState, 
+    loadMore = false
+  ) => {
+    if (!lead) return;
+    
+    const collectionState = subcollections[collectionName];
+    if (collectionState.loading || (!loadMore && collectionState.loaded)) return;
+    if (loadMore && !collectionState.hasMore) return;
 
-    setLoadingStates(prev => ({...prev, [collectionName]: true}));
+    setSubcollections(prev => ({
+      ...prev,
+      [collectionName]: { ...prev[collectionName], loading: true }
+    }));
+
     try {
-        let result: any;
-        switch(collectionName) {
-            case 'contacts': result = await getLeadContacts(lead.id); break;
-            case 'activity': result = await getLeadActivity(lead.id); break;
-            case 'notes': result = await getLeadNotes(lead.id); break;
-            case 'transcripts': result = await getLeadTranscripts(lead.id); break;
-            case 'tasks': result = await getLeadTasks(lead.id); break;
-            case 'appointments': result = await getLeadAppointments(lead.id); break;
+      let result: { items: any[], lastDocId: string | null };
+      const lastDocId = loadMore ? collectionState.lastDocId : null;
+
+      switch(collectionName) {
+        case 'contacts': result = await getLeadContacts(lead.id, PAGE_SIZE, lastDocId); break;
+        case 'activity': result = await getLeadActivity(lead.id, PAGE_SIZE, lastDocId); break;
+        case 'notes': result = await getLeadNotes(lead.id, PAGE_SIZE, lastDocId); break;
+        case 'transcripts': result = await getLeadTranscripts(lead.id, PAGE_SIZE, lastDocId); break;
+        case 'tasks': result = await getLeadTasks(lead.id, PAGE_SIZE, lastDocId); break;
+        case 'appointments': result = await getLeadAppointments(lead.id, PAGE_SIZE, lastDocId); break;
+        default: throw new Error("Invalid collection name");
+      }
+
+      setSubcollections(prev => ({
+        ...prev,
+        [collectionName]: {
+          items: loadMore ? [...prev[collectionName].items, ...result.items] : result.items,
+          loading: false,
+          hasMore: result.items.length === PAGE_SIZE,
+          lastDocId: result.lastDocId,
+          loaded: true,
         }
-        setData(prev => ({ ...prev, [collectionName]: result }));
+      }));
     } catch (error) {
         console.error(`Error loading ${collectionName}:`, error);
         toast({ variant: 'destructive', title: `Error`, description: `Could not load ${collectionName}.` });
-    } finally {
-        setLoadingStates(prev => ({...prev, [collectionName]: false}));
+        setSubcollections(prev => ({
+            ...prev,
+            [collectionName]: { ...prev[collectionName], loading: false }
+        }));
     }
-  }, [lead, data, loadingStates, toast]);
+  }, [lead, subcollections, toast]);
 
 
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
@@ -241,14 +268,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           notes: activityNotes,
           author: user.displayName
       });
-      loadSubcollection('activity');
+      setSubcollections(prev => ({...prev, activity: initialSubcollectionState})); // Reset to force reload
 
       if (notes) {
         await logNoteActivity(lead.id, {
           content: notes,
           author: user.displayName,
         });
-        loadSubcollection('notes');
+        setSubcollections(prev => ({...prev, notes: initialSubcollectionState})); // Reset to force reload
       }
 
       const { status, reason } = outcomeStatusMap[outcome] || {};
@@ -274,7 +301,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             leadId: lead.id,
             leadProfile: lead.profile,
             websiteUrl: lead.websiteUrl,
-            activity: data.activity || []
+            activity: subcollections.activity.items || []
         };
         const scoring = await aiLeadScoring([leadToScore]);
         if (scoring.scoredLeads.length > 0) {
@@ -314,8 +341,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            const updatedContacts = await getLeadContacts(lead.id);
-            setData(prev => ({...prev, contacts: updatedContacts}));
+            setSubcollections(prev => ({...prev, contacts: initialSubcollectionState})); // Reset to force reload
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -332,12 +358,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const addActivity = async (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
         await logActivity(lead.id, newActivity);
-        loadSubcollection('activity');
+        setSubcollections(prev => ({...prev, activity: initialSubcollectionState})); // Reset to force reload
     }
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    setData(prev => ({ ...prev, notes: [newNote, ...(prev.notes || [])]}));
+    setSubcollections(prev => ({...prev, notes: initialSubcollectionState})); // Reset to force reload
     addActivity({
         type: 'Update',
         date: newNote.date,
@@ -346,21 +372,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }
   
   const handleContactAdded = async () => {
-    if (!lead) return;
-    const updatedContacts = await getLeadContacts(lead.id);
-    setData(prev => ({ ...prev, contacts: updatedContacts }));
+    setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
-    if (lead && data.contacts) {
-      const updatedContacts = data.contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
-      setData(prev => ({ ...prev, contacts: updatedContacts }));
-       addActivity({
-          type: 'Update',
-          date: new Date().toISOString(),
-          notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
-       });
-    }
+    setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
+     addActivity({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
+     });
+    
      setIsEditDialogOpen(false);
   };
 
@@ -375,7 +397,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setData(prev => ({ ...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id) }));
+      setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -427,7 +449,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
-        loadSubcollection('transcripts'); // Re-fetch transcripts to update the UI
+        setSubcollections(prev => ({...prev, transcripts: initialSubcollectionState})); // Reset to force reload
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -446,12 +468,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return;
     }
     try {
-        const newTask = await addTaskToLead(lead.id, {
+        await addTaskToLead(lead.id, {
             title: newTaskTitle,
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
-        setData(prev => ({...prev, tasks: [...(prev.tasks || []), newTask]}));
+        setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -462,11 +484,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
-      if (!lead || !data.tasks) return;
+      if (!lead) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
-          const updatedTasks = data.tasks.map(t => t.id === taskId ? { ...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined } : t);
-          setData(prev => ({...prev, tasks: updatedTasks}));
+          setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -475,10 +496,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-      if (!lead || !data.tasks) return;
+      if (!lead) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
-          setData(prev => ({...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId)}));
+          setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -636,30 +657,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = data.contacts && data.contacts.length > 0 ? data.contacts[0] : null;
+  const primaryContact = subcollections.contacts.items && subcollections.contacts.items.length > 0 ? subcollections.contacts.items[0] : null;
   
-  const filteredActivities = useMemo(() => {
-    if (!dateFilter?.from) return data.activity || [];
-    const fromDate = startOfDay(dateFilter.from);
-    const toDate = dateFilter.to ? endOfDay(dateFilter.to) : endOfDay(dateFilter.from);
-    return (data.activity || []).filter(a => {
-        const activityDate = new Date(a.date);
-        return activityDate >= fromDate && activityDate <= toDate;
-    });
-  }, [data.activity, dateFilter]);
-
   const callHistory = useMemo(() => {
-    return (data.activity || []).filter(a => a.type === 'Call' && a.callId);
-  }, [data.activity]);
-
-  const displayedActivities = isActivityExpanded ? filteredActivities : filteredActivities.slice(0, 1);
-  const displayedCallHistory = isCallHistoryExpanded ? callHistory : callHistory.slice(0, 1);
-  const displayedNotes = isNotesExpanded ? (data.notes || []) : (data.notes || []).slice(0, 1);
+    return (subcollections.activity.items || []).filter(a => a.type === 'Call' && a.callId);
+  }, [subcollections.activity.items]);
   
   const contactAttempts = useMemo(() => {
-    if (!data.activity) return 0;
-    return data.activity.filter(a => a.type === 'Call' && a.callId).length;
-  }, [data.activity]);
+    if (!subcollections.activity.loaded) return lead.contactCount || 0; // fallback or initial estimate
+    return (subcollections.activity.items || []).filter(a => a.type === 'Call' && a.callId).length;
+  }, [subcollections.activity, lead.contactCount]);
 
   return (
     <>
@@ -693,7 +700,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={lead.status} />
                 <>
-                  <p className="text-muted-foreground">&bull; {data.contacts?.length || 0} {data.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
+                  <p className="text-muted-foreground">&bull; {subcollections.contacts.items?.length || 0} {subcollections.contacts.items?.length === 1 ? 'Contact' : 'Contacts'}</p>
                   <p className="text-muted-foreground">&bull; Contacted {contactAttempts} {contactAttempts === 1 ? 'time' : 'times'}</p>
                 </>
             </div>
@@ -903,7 +910,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Card>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <Accordion type="single" collapsible onValueChange={() => loadSubcollection('contacts')}>
+           <Accordion type="single" collapsible onValueChange={(value) => value === "contacts" && loadSubcollection('contacts')}>
              <Card>
                <AccordionItem value="contacts" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -913,11 +920,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   </CardTitle>
                 </AccordionTrigger>
                 <AccordionContent className="px-6">
-                {loadingStates.contacts ? (
-                  <div className="py-4 flex justify-center"><Loader /></div>
-                ) : data.contacts && data.contacts.length > 0 ? (
+                {subcollections.contacts.items && subcollections.contacts.items.length > 0 ? (
                   <div className="space-y-4">
-                  {data.contacts.map((contact, index) => {
+                  {subcollections.contacts.items.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                      return (
                       <Card key={contact.id || index} className="relative group/contact">
@@ -1033,9 +1038,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   })}
                   </div>
                 ) : (
-                  <div className="py-4 text-center text-muted-foreground">
-                    No contacts found.
-                  </div>
+                  !subcollections.contacts.loading && <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
+                )}
+                {subcollections.contacts.loading && <div className="flex justify-center p-4"><Loader/></div>}
+                {subcollections.contacts.hasMore && !subcollections.contacts.loading && (
+                    <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('contacts', true)}>Load More</Button>
                 )}
                  <Dialog>
                   <DialogTrigger asChild>
@@ -1123,7 +1130,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Accordion>
           </div>
           
-          <Accordion type="single" collapsible onValueChange={() => { loadSubcollection('activity'); loadSubcollection('transcripts'); }}>
+          <Accordion type="single" collapsible onValueChange={(value) => value === "call-history" && loadSubcollection('transcripts')}>
             <Card>
               <AccordionItem value="call-history" className="border-b-0">
                 <AccordionTrigger className="p-6">
@@ -1133,12 +1140,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   </CardTitle>
                 </AccordionTrigger>
                 <AccordionContent className="px-6">
-                   {loadingStates.activity || loadingStates.transcripts ? (
+                   {subcollections.activity.loading && !subcollections.activity.loaded ? (
                      <div className="flex items-center justify-center p-8"><Loader /></div>
                    ) : callHistory.length > 0 ? (
                     <ul className="space-y-4">
-                      {displayedCallHistory.map((item, index) => {
-                        const transcript = (data.transcripts || []).find(t => t.callId === item.callId);
+                      {callHistory.map((item) => {
+                        const transcript = subcollections.transcripts.items.find(t => t.callId === item.callId);
                         return (
                           <li key={item.id} className="flex gap-4 group">
                             <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
@@ -1186,34 +1193,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           </li>
                         )
                       })}
-                      {callHistory.length > 1 && (
-                          <Button variant="link" className="w-full mt-2" onClick={() => setIsCallHistoryExpanded(!isCallHistoryExpanded)}>
-                              {isCallHistoryExpanded ? 'Show less' : `Show all ${callHistory.length} calls`}
-                          </Button>
+                       {subcollections.activity.hasMore && !subcollections.activity.loading && (
+                        <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('activity', true)}>Load More</Button>
                       )}
                     </ul>
                    ) : (
-                    <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
+                    !subcollections.activity.loading && <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
                    )}
+                   {subcollections.activity.loading && subcollections.activity.items.length > 0 && <div className="flex justify-center p-4"><Loader/></div>}
                 </AccordionContent>
               </AccordionItem>
             </Card>
           </Accordion>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible onValueChange={() => loadSubcollection('activity')}>
+            <Accordion type="single" collapsible onValueChange={(value) => value === "activity" && loadSubcollection('activity')}>
                 <Card>
                     <AccordionItem value="activity" className="border-b-0">
                         <AccordionTrigger className="p-6">
                              <CardTitle>Activity History</CardTitle>
                         </AccordionTrigger>
                          <AccordionContent className="px-6">
-                            {loadingStates.activity ? (
-                                 <div className="flex items-center justify-center p-8"><Loader /></div>
-                            ) : filteredActivities.length > 0 ? (
+                            {subcollections.activity.items.length > 0 ? (
                                 <>
                                 <ul className="space-y-4">
-                                {displayedActivities.map((item, index) => (
+                                {subcollections.activity.items.map((item, index) => (
                                     <li key={item.id} className="flex gap-4 group">
                                     <div className="flex flex-col items-center">
                                         <div className="bg-secondary rounded-full p-2">
@@ -1222,8 +1226,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
                                         {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                                         </div>
-                                        {filteredActivities && index < filteredActivities.length - 1 && displayedActivities.length > 1 && (
-                                        <div className="w-px h-full bg-border"></div>
+                                        {subcollections.activity.items && index < subcollections.activity.items.length - 1 && (
+                                          <div className="w-px h-full bg-border"></div>
                                         )}
                                     </div>
                                     <div className="flex-1 pb-4 min-w-0">
@@ -1238,21 +1242,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </li>
                                 ))}
                                 </ul>
-                                {filteredActivities.length > 1 && (
-                                    <Button variant="link" className="w-full mt-2" onClick={() => setIsActivityExpanded(!isActivityExpanded)}>
-                                    {isActivityExpanded ? 'Show less' : `Show all ${filteredActivities.length} activities`}
-                                    </Button>
+                                {subcollections.activity.hasMore && !subcollections.activity.loading && (
+                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('activity', true)}>Load More</Button>
                                 )}
                                 </>
                             ) : (
-                                 <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                                 !subcollections.activity.loading && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
                             )}
+                            {subcollections.activity.loading && <div className="flex justify-center p-4"><Loader/></div>}
                         </AccordionContent>
                     </AccordionItem>
                 </Card>
             </Accordion>
             
-            <Accordion type="single" collapsible onValueChange={() => loadSubcollection('notes')}>
+            <Accordion type="single" collapsible onValueChange={(value) => value === 'notes' && loadSubcollection('notes')}>
                 <Card>
                      <AccordionItem value="notes" className="border-b-0">
                         <AccordionTrigger className="p-6">
@@ -1262,12 +1265,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </CardTitle>
                         </AccordionTrigger>
                         <AccordionContent className="px-6">
-                            {loadingStates.notes ? (
-                                <div className="flex items-center justify-center p-8"><Loader /></div>
-                            ) : displayedNotes.length > 0 ? (
+                            {subcollections.notes.items.length > 0 ? (
                                 <>
                                 <div className="space-y-4">
-                                {displayedNotes.map(note => (
+                                {subcollections.notes.items.map(note => (
                                 <div key={note.id} className="text-sm border-l-2 pl-4">
                                     <p className="whitespace-pre-wrap">{note.content}</p>
                                     <p className="text-xs text-muted-foreground mt-2">
@@ -1276,15 +1277,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                                 ))}
                                 </div>
-                                {(data.notes || []).length > 1 && (
-                                    <Button variant="link" className="w-full mt-2" onClick={() => setIsNotesExpanded(!isNotesExpanded)}>
-                                        {isNotesExpanded ? 'Show less' : 'Show all notes'}
-                                    </Button>
+                                {subcollections.notes.hasMore && !subcollections.notes.loading && (
+                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('notes', true)}>Load More</Button>
                                 )}
                                 </>
                             ) : (
-                                <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
+                                !subcollections.notes.loading && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
                             )}
+                             {subcollections.notes.loading && <div className="flex justify-center p-4"><Loader/></div>}
                         </AccordionContent>
                      </AccordionItem>
                 </Card>
@@ -1302,8 +1302,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                            const updatedTranscripts = (data.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)
-                            setData(prev => ({...prev, transcripts: updatedTranscripts}));
+                           setSubcollections(prev => ({...prev, transcripts: initialSubcollectionState})); // Reset to force reload
                         }}
                       />
                   )}
@@ -1331,7 +1330,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible onValueChange={() => loadSubcollection('appointments')}>
+          <Accordion type="single" collapsible onValueChange={(value) => value === 'appointments' && loadSubcollection('appointments')}>
             <Card>
                  <AccordionItem value="appointments" className="border-b-0">
                      <AccordionTrigger className="p-6">
@@ -1341,31 +1340,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardTitle>
                      </AccordionTrigger>
                      <AccordionContent className="px-6">
-                        {loadingStates.appointments ? (
-                             <div className="flex items-center justify-center p-8"><Loader /></div>
-                        ) : (data.appointments || []).length > 0 ? (
-                          (data.appointments || []).map(appointment => (
-                            <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                              <div className="flex items-center gap-4">
-                                  <div className="text-center">
-                                      <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
-                                      <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
-                                  </div>
-                                  <div>
-                                      <p className="text-sm font-medium">
-                                          Appointment with {appointment.assignedTo}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                          <Clock className="w-3 h-3" />
-                                          {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                      </p>
-                                  </div>
+                        {subcollections.appointments.items.length > 0 ? (
+                          <>
+                            {subcollections.appointments.items.map(appointment => (
+                              <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                <div className="flex items-center gap-4">
+                                    <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
+                                        <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium">
+                                            Appointment with {appointment.assignedTo}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Clock className="w-3 h-3" />
+                                            {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                        </p>
+                                    </div>
+                                </div>
                               </div>
-                            </div>
-                          ))
+                            ))}
+                             {subcollections.appointments.hasMore && !subcollections.appointments.loading && (
+                                <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('appointments', true)}>Load More</Button>
+                            )}
+                          </>
                         ) : (
-                            <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
+                            !subcollections.appointments.loading && <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
                         )}
+                        {subcollections.appointments.loading && <div className="flex justify-center p-4"><Loader/></div>}
                     </AccordionContent>
                  </AccordionItem>
             </Card>
@@ -1410,7 +1413,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible onValueChange={() => loadSubcollection('tasks')}>
+           <Accordion type="single" collapsible onValueChange={(value) => value === "tasks" && loadSubcollection('tasks')}>
             <Card>
                  <AccordionItem value="tasks" className="border-b-0">
                      <AccordionTrigger className="p-6">
@@ -1448,10 +1451,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button type="submit">Add Task</Button>
                         </form>
                         <div className="space-y-2">
-                            {loadingStates.tasks ? (
-                                <div className="flex items-center justify-center p-8"><Loader /></div>
-                            ) : (data.tasks || []).length > 0 ? (
-                                (data.tasks || []).map(task => (
+                            {subcollections.tasks.items.length > 0 ? (
+                              <>
+                                {subcollections.tasks.items.map(task => (
                                     <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
                                         <Checkbox
                                             id={`task-${task.id}`}
@@ -1468,10 +1470,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                ))
+                                ))}
+                                 {subcollections.tasks.hasMore && !subcollections.tasks.loading && (
+                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('tasks', true)}>Load More</Button>
+                                )}
+                              </>
                             ) : (
-                                <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
+                                !subcollections.tasks.loading && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
                             )}
+                             {subcollections.tasks.loading && <div className="flex justify-center p-4"><Loader/></div>}
                         </div>
                     </AccordionContent>
                  </AccordionItem>

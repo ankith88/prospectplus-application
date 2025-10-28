@@ -7,7 +7,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNoteToNetSuite } from './netsuite';
 
 async function logActivity(leadId: string, activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }): Promise<string> {
@@ -184,8 +184,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-          transformedLead.contacts = await getLeadContacts(docSnapshot.id);
-          transformedLead.contactCount = transformedLead.contacts.length;
+          const { items } = await getLeadContacts(docSnapshot.id);
+          transformedLead.contacts = items;
+          transformedLead.contactCount = items.length;
         }
 
         return transformedLead;
@@ -306,41 +307,43 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
     }
 }
 
+async function getPagedLeadSubCollection<T>(
+    leadId: string, 
+    collectionName: string, 
+    orderByField: string, 
+    limitNum: number, 
+    lastDocId: string | null
+): Promise<{ items: T[], lastDocId: string | null }> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, collectionName);
+        let q = query(ref, orderBy(orderByField, 'desc'), limit(limitNum));
 
-async function getLeadSubCollection<T extends Activity>(leadId: string, collectionName: 'activity'): Promise<T[]> {
-  try {
-    const ref = collection(firestore, 'leads', leadId, collectionName);
-    const q = query(ref, orderBy('date', 'desc'));
-    const snapshot = await getDocs(q);
-    const items = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as T));
-    return items;
-  } catch (error) {
-    console.error(`Failed to fetch ${collectionName} for lead ${leadId}:`, error);
-    return [];
-  }
+        if (lastDocId) {
+            const lastDocSnapshot = await getDoc(doc(ref, lastDocId));
+            if (lastDocSnapshot.exists()) {
+                q = query(q, startAfter(lastDocSnapshot));
+            }
+        }
+        
+        const snapshot = await getDocs(q);
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+        const newLastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+        
+        return { items, lastDocId: newLastDocId };
+
+    } catch (error) {
+        console.error(`Failed to fetch paginated ${collectionName} for lead ${leadId}:`, error);
+        return { items: [], lastDocId: null };
+    }
 }
 
-async function getLeadContacts(leadId: string): Promise<Contact[]> {
-  try {
-    const ref = collection(firestore, 'leads', leadId, 'contacts');
-    const snapshot = await getDocs(ref);
-    const items = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as Contact));
-    return items;
-  } catch (error) {
-    console.error(`Failed to fetch contacts for lead ${leadId}:`, error);
-    return [];
-  }
+
+async function getLeadContacts(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Contact[], lastDocId: string | null }> {
+    return getPagedLeadSubCollection<Contact>(leadId, 'contacts', documentId(), limitNum, lastDocId);
 }
 
-
-async function getLeadActivity(leadId: string): Promise<Activity[]> {
-    return getLeadSubCollection<Activity>(leadId, 'activity');
+async function getLeadActivity(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Activity[], lastDocId: string | null }> {
+    return getPagedLeadSubCollection<Activity>(leadId, 'activity', 'date', limitNum, lastDocId);
 }
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
@@ -418,36 +421,12 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
 }
 
 
-async function getLeadNotes(leadId: string): Promise<Note[]> {
-    try {
-        const ref = collection(firestore, 'leads', leadId, 'notes');
-        const q = query(ref, orderBy('date', 'desc'));
-        const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Note));
-        return items;
-    } catch (error) {
-        console.error(`Failed to fetch notes for lead ${leadId}:`, error);
-        return [];
-    }
+async function getLeadNotes(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Note[], lastDocId: string | null }> {
+    return getPagedLeadSubCollection<Note>(leadId, 'notes', 'date', limitNum, lastDocId);
 }
 
-async function getLeadAppointments(leadId: string): Promise<Appointment[]> {
-    try {
-        const ref = collection(firestore, 'leads', leadId, 'appointments');
-        const q = query(ref, orderBy('duedate', 'desc'));
-        const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Appointment));
-        return items;
-    } catch (error) {
-        console.error(`Failed to fetch appointments for lead ${leadId}:`, error);
-        return [];
-    }
+async function getLeadAppointments(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Appointment[], lastDocId: string | null }> {
+    return getPagedLeadSubCollection<Appointment>(leadId, 'appointments', 'duedate', limitNum, lastDocId);
 }
 
 async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
@@ -579,20 +558,8 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
     }
 }
 
-async function getLeadTranscripts(leadId: string): Promise<Transcript[]> {
-    try {
-        const ref = collection(firestore, 'leads', leadId, 'transcripts');
-        const q = query(ref, orderBy('date', 'desc'));
-        const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Transcript));
-        return items;
-    } catch (error) {
-        console.error(`Failed to fetch transcripts for lead ${leadId}:`, error);
-        return [];
-    }
+async function getLeadTranscripts(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Transcript[], lastDocId: string | null }> {
+    return getPagedLeadSubCollection<Transcript>(leadId, 'transcripts', 'date', limitNum, lastDocId);
 }
 
 
@@ -912,26 +879,30 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
 }
 
 // Task Management Functions
-async function getLeadTasks(leadId: string): Promise<Task[]> {
+async function getLeadTasks(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Task[], lastDocId: string | null }> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'tasks');
-        const q = query(ref, orderBy('dueDate', 'asc'));
+        let q = query(ref, orderBy('dueDate', 'asc'), limit(limitNum));
+
+        if (lastDocId) {
+            const lastDocSnapshot = await getDoc(doc(ref, lastDocId));
+            if (lastDocSnapshot.exists()) {
+                q = query(q, startAfter(lastDocSnapshot));
+            }
+        }
+
         const snapshot = await getDocs(q);
         const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Task));
-        // Sort by completion status, then due date
-        items.sort((a, b) => {
-            if (a.isCompleted !== b.isCompleted) {
-                return a.isCompleted ? 1 : -1;
-            }
-            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        });
-        return items;
+        
+        const newLastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+        
+        return { items, lastDocId: newLastDocId };
     } catch (error) {
         console.error(`Failed to fetch tasks for lead ${leadId}:`, error);
-        return [];
+        return { items: [], lastDocId: null };
     }
 }
 
@@ -1225,7 +1196,6 @@ export {
     updateLeadDetails,
     logActivity,
     getLeadFromFirebase,
-    getLeadSubCollection,
     getLeadContacts,
     getLeadActivity,
     getLeadNotes,
