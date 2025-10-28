@@ -1220,3 +1220,4 @@ export {
     getLastNote,
     getLastActivity,
 };
+
