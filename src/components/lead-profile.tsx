@@ -116,8 +116,9 @@ interface LeadProfileProps {
 }
 
 const salesReps = [
-    { name: 'Ankith Ravindran', url: 'https://calendly.com/ankith-ravindran/15min' },
-    { name: 'Nathan Smith', url: 'https://calendly.com/nathan-smith-mailplus/15min' },
+    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
+    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
+    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
 ];
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
@@ -1383,5 +1384,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
