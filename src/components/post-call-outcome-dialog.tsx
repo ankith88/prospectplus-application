@@ -42,7 +42,7 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string) => Promise<void> // Make it async
+  onSubmit: (outcome: string, notes: string) => Promise<void>
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'syncing_netsuite' | 'complete' | 'error';
@@ -108,7 +108,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     setSubmissionState('saving_outcome');
 
     try {
-        // This now awaits the full completion before setting state to 'complete'
         await onSubmitProp(values.outcome, values.notes || '');
         setSubmissionState('complete');
         toast({
@@ -131,8 +130,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         if (submissionState === 'idle' || submissionState === 'error' || submissionState === 'complete') {
             if (!open) {
                 resetAndClose();
-            } else {
-                onClose(); // This seems incorrect, should be handled by trigger
             }
         }
     }}>
@@ -204,6 +201,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                         {submissionState === 'saving_outcome' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
                         <span className={submissionState !== 'saving_outcome' ? 'text-muted-foreground' : ''}>
                             Updating lead status...
+                        </span>
+                    </li>
+                     <li className="flex items-center gap-3">
+                        {submissionState === 'saving_outcome' || submissionState === 'syncing_netsuite' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                        <span className={submissionState !== 'syncing_netsuite' ? 'text-muted-foreground' : ''}>
+                           Syncing to NetSuite...
                         </span>
                     </li>
                 </ul>
