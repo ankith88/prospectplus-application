@@ -69,6 +69,18 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
             dialerAssigned: dialerAssigned,
             notes: notes,
         });
+    } else if (dialerAssigned === 'Lalaine Revilla') {
+        params = new URLSearchParams({
+            script: "2156",
+            deploy: "3",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQtjnGS0_7N6bf6_oVhlxLQscg10d91PP0UkV_be_flEM",
+            leadID: leadId,
+            outcome: outcome,
+            reason: reason,
+            dialerAssigned: dialerAssigned,
+            notes: notes,
+        });
     } else {
         params = new URLSearchParams({
             script: "2156",
