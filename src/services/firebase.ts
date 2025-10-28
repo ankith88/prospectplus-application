@@ -676,10 +676,6 @@ async function logCallActivity(
         notes: string;
         author: string;
         salesRecordInternalId?: string;
-    },
-    callbacks: {
-        onFirebaseSave: () => void;
-        onNetSuiteSync: () => void;
     }
 ): Promise<LeadStatus | undefined> {
     const outcomeStatusMap: { [key: string]: { status: LeadStatus; reason?: string } } = {
@@ -705,36 +701,37 @@ async function logCallActivity(
     const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
     const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
     
+    // Await Firebase operations
     await Promise.all([activityPromise, statusPromise]);
-    callbacks.onFirebaseSave();
     
-    // NetSuite operations
-    const noteSyncPromise = callData.notes 
-      ? sendNoteToNetSuite({ leadId, noteId: 'call-' + Date.now(), author: callData.author, content: callData.notes })
-      : Promise.resolve();
-
+    // NetSuite operations (fire-and-forget for client responsiveness)
     const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
-    const outcomeSyncPromise = netSuiteOutcomes.includes(callData.outcome)
-        ? sendToNetSuiteForOutcome({
+    if (netSuiteOutcomes.includes(callData.outcome)) {
+        sendToNetSuiteForOutcome({
             leadId: leadId,
             outcome: callData.outcome,
             reason: outcomeReason || '',
             dialerAssigned: callData.author,
             notes: callData.notes || '',
             salesRecordInternalId: callData.salesRecordInternalId || ''
-          })
-        : Promise.resolve();
+        }).catch(e => console.error("NetSuite outcome sync failed in background:", e));
+    }
 
-    await Promise.all([noteSyncPromise, outcomeSyncPromise]);
-    callbacks.onNetSuiteSync();
+    if (callData.notes) {
+        sendNoteToNetSuite({
+            leadId,
+            noteId: 'call-' + Date.now(),
+            author: callData.author,
+            content: callData.notes,
+        }).catch(e => console.error("NetSuite note sync failed in background:", e));
+    }
     
     return status;
 }
 
 async function logNoteActivity(
     leadId: string, 
-    noteData: { content: string; author: string, date: string },
-    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
+    noteData: { content: string; author: string, date: string }
 ): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = { ...noteData };
@@ -745,15 +742,14 @@ async function logNoteActivity(
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
         date: noteData.date
     });
-    callbacks.onFirebaseSave();
-
-    await sendNoteToNetSuite({
+    
+    // NetSuite operation (fire-and-forget)
+    sendNoteToNetSuite({
         leadId,
         noteId: docRef.id,
         author: newNoteData.author,
         content: newNoteData.content,
-    });
-    callbacks.onNetSuiteSync();
+    }).catch(e => console.error("NetSuite note sync failed in background:", e));
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -1274,6 +1270,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 

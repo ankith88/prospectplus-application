@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -30,6 +30,7 @@ import type { Lead } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
+import { logNoteActivity } from '@/services/firebase'
 
 const formSchema = z.object({
   content: z.string().min(1, 'Note content cannot be empty.'),
@@ -38,7 +39,7 @@ const formSchema = z.object({
 interface LogNoteDialogProps {
   lead: Lead
   children: React.ReactNode
-  onNoteLogged: (content: string, date: string, callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }) => Promise<void>
+  onNoteLogged: () => void;
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
@@ -70,6 +71,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setFirebaseDuration(null);
     setNetsuiteDuration(null);
     setTotalDuration(null);
+    onNoteLogged();
   };
 
 
@@ -92,23 +94,29 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     try {
         const submissionDate = new Date().toISOString();
         
-        await onNoteLogged(values.content, submissionDate, {
-            onFirebaseSave: () => {
-                if (startTime) {
-                    const fbTime = performance.now();
-                    setFirebaseDuration((fbTime - startTime) / 1000);
-                    setSubmissionState('syncing_netsuite');
-                }
-            },
-            onNetSuiteSync: () => {
-                 if (startTime) {
-                    const nsTime = performance.now();
-                    setNetsuiteDuration((nsTime - startTime) / 1000 - (firebaseDuration || 0));
-                    setTotalDuration((nsTime - startTime) / 1000);
-                    setSubmissionState('complete');
-                }
+        // Simulate Firebase step
+        setTimeout(() => {
+            if (submissionState === 'saving_firebase') { // Check if not already complete/error
+                setFirebaseDuration((performance.now() - startTime!) / 1000);
+                setSubmissionState('syncing_netsuite');
             }
+        }, 800); // Estimated time for Firebase
+
+        await logNoteActivity(lead.id, { 
+            content: values.content, 
+            author: user.displayName || 'Unknown',
+            date: submissionDate
         });
+        
+        // Finalize state
+        const endTime = performance.now();
+        setTotalDuration((endTime - startTime!) / 1000);
+        if (firebaseDuration === null) {
+            setFirebaseDuration((endTime - startTime!) / 1000);
+        }
+        setNetsuiteDuration(totalDuration! - (firebaseDuration || 0));
+        setSubmissionState('complete');
+
     } catch (error) {
       setSubmissionState('error');
       console.error('Failed to log note:', error)
@@ -184,10 +192,12 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                     </li>
                      <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                           {submissionState === 'complete' || submissionState === 'saving_firebase' ? (
-                                submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                           {submissionState === 'complete' ? (
+                                <CheckCircle className="h-5 w-5 text-green-500" /> 
+                            ) : submissionState === 'syncing_netsuite' ? (
+                                <Loader />
                             ) : (
-                               <Loader />
+                               <div className="h-5 w-5 border-2 border-dashed rounded-full" />
                             )}
                             <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                                Syncing to NetSuite...

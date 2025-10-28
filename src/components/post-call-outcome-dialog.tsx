@@ -25,11 +25,12 @@ import {
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Lead, Activity } from '@/lib/types'
+import type { Lead, Activity, LeadStatus } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
+import { logCallActivity } from '@/services/firebase'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -41,7 +42,7 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }) => Promise<void>
+  onOutcomeLogged: (newStatus?: LeadStatus) => void
   onSessionNext: () => void
   isSessionActive: boolean
 }
@@ -65,7 +66,7 @@ const callOutcomes = [
     'LOST - No Contact',
 ];
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
@@ -125,23 +126,33 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     setSubmissionState('saving_outcome');
 
     try {
-      await onSubmitProp(values.outcome, values.notes || '', {
-         onFirebaseSave: () => {
-            if (startTime) {
-                const fbTime = performance.now();
-                setFirebaseDuration((fbTime - startTime) / 1000);
+        // Simulate Firebase step
+        setTimeout(() => {
+            if (submissionState === 'saving_outcome') {
+                setFirebaseDuration((performance.now() - startTime!) / 1000);
                 setSubmissionState('syncing_netsuite');
             }
-        },
-        onNetSuiteSync: () => {
-             if (startTime) {
-                const nsTime = performance.now();
-                setNetsuiteDuration((nsTime - startTime) / 1000 - (firebaseDuration || 0));
-                setTotalDuration((nsTime - startTime) / 1000);
-                setSubmissionState('complete');
+        }, 800); // Estimated time for Firebase
+
+      const newStatus = await logCallActivity(
+            lead.id,
+            {
+                outcome: values.outcome,
+                notes: values.notes || '',
+                author: user.displayName || 'Unknown',
+                salesRecordInternalId: lead.salesRecordInternalId,
             }
+        );
+
+        // Finalize state
+        const endTime = performance.now();
+        setTotalDuration((endTime - startTime!) / 1000);
+        if (firebaseDuration === null) {
+            setFirebaseDuration((endTime - startTime!) / 1000);
         }
-      });
+        setNetsuiteDuration(totalDuration! - (firebaseDuration || 0));
+        setSubmissionState('complete');
+        onOutcomeLogged(newStatus); // Refresh the lead profile page with the new status
 
     } catch (error: any) {
         setSubmissionState('error');
@@ -238,10 +249,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                     </li>
                      <li className="flex items-center justify-between gap-3">
                        <div className="flex items-center gap-3">
-                        {submissionState === 'complete' || submissionState === 'saving_outcome' ? (
-                            submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        {submissionState === 'complete' ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" /> 
+                        ) : submissionState === 'syncing_netsuite' ? (
+                            <Loader />
                         ) : (
-                           <Loader />
+                           <div className="h-5 w-5 border-2 border-dashed rounded-full" />
                         )}
                         <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...

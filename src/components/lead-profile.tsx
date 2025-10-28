@@ -211,41 +211,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead]);
 
 
-  const handleCallLogged = async (
-    outcome: string, 
-    notes: string, 
-    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
-) => {
-    if (!lead || !user?.displayName) return;
-
-    try {
-        const newStatus = await logCallActivity(
-            lead.id,
-            {
-                outcome,
-                notes,
-                author: user.displayName,
-                salesRecordInternalId: lead.salesRecordInternalId,
-            },
-            callbacks
-        );
-
-        if (newStatus) {
-            setLead(prev => prev ? { ...prev, status: newStatus } : null);
-        }
-
-        if (isSessionActive) {
-            const currentLeadId = lead.id;
+  const handleCallLogged = (newStatus?: LeadStatus) => {
+    if (newStatus) {
+        setLead(prev => prev ? { ...prev, status: newStatus } : null);
+    }
+    
+    if (isSessionActive) {
+        const currentLeadId = lead?.id;
+        if(currentLeadId) {
             const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
             localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
             setSessionLeads(updatedSessionLeads);
         }
-    } catch (error) {
-        console.error('Failed to log call outcome:', error);
-        throw error; 
     }
 };
-
 
 
   const handleCalculateScore = async () => {
@@ -315,27 +294,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleNoteLogged = async (
-    noteContent: string, 
-    date: string, 
-    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
-) => {
-    if (!lead || !user) return;
-    try {
-        await logNoteActivity(
-            lead.id, 
-            { 
-                content: noteContent, 
-                author: user.displayName || 'Unknown',
-                date: date
-            },
-            callbacks
-        );
-    } catch (error) {
-        console.error("Failed to log note in profile:", error);
-        throw error;
-    }
-};
+  const handleNoteLogged = () => {
+    // The real-time listener will update notes. We just need to trigger a re-render if needed,
+    // but onSnapshot handles it. This callback is primarily for closing the dialog now.
+  };
   
   const handleContactAdded = async () => {
     // Real-time listener will update the state
@@ -646,7 +608,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }}
         lead={lead}
         callActivity={lastCallActivity}
-        onSubmit={handleCallLogged}
+        onOutcomeLogged={handleCallLogged}
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
     />
