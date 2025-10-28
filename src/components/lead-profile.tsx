@@ -211,40 +211,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead]);
 
 
-  const handleCallLogged = async (outcome: string, notes: string) => {
-      if (!lead || !user?.displayName) return;
-      
-      try {
-        await logCallActivity(
-          lead.id,
-          {
-            outcome,
-            notes,
-            author: user.displayName,
-            salesRecordInternalId: lead.salesRecordInternalId,
-          }
+  const handleCallLogged = async (
+    outcome: string, 
+    notes: string, 
+    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
+) => {
+    if (!lead || !user?.displayName) return;
+
+    try {
+        const newStatus = await logCallActivity(
+            lead.id,
+            {
+                outcome,
+                notes,
+                author: user.displayName,
+                salesRecordInternalId: lead.salesRecordInternalId,
+            },
+            callbacks
         );
 
-        const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
-          'Appointment Booked': { status: 'Qualified' },
-          'Email Interested': { status: 'Pre Qualified' },
-        };
-        const { status } = outcomeStatusMap[outcome] || {};
-        if (status) {
-            setLead(prev => prev ? { ...prev, status } : null);
+        if (newStatus) {
+            setLead(prev => prev ? { ...prev, status: newStatus } : null);
         }
 
         if (isSessionActive) {
-          const currentLeadId = lead.id;
-          const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
-          localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-          setSessionLeads(updatedSessionLeads);
+            const currentLeadId = lead.id;
+            const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
+            localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+            setSessionLeads(updatedSessionLeads);
         }
-      } catch (error) {
+    } catch (error) {
         console.error('Failed to log call outcome:', error);
-        throw error; // Re-throw to be handled by the dialog
-      }
-  };
+        throw error; 
+    }
+};
+
 
 
   const handleCalculateScore = async () => {
@@ -314,7 +315,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleNoteLogged = async (noteContent: string, date: string) => {
+  const handleNoteLogged = async (
+    noteContent: string, 
+    date: string, 
+    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
+) => {
     if (!lead || !user) return;
     try {
         await logNoteActivity(
@@ -323,13 +328,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 content: noteContent, 
                 author: user.displayName || 'Unknown',
                 date: date
-            }
+            },
+            callbacks
         );
     } catch (error) {
         console.error("Failed to log note in profile:", error);
-        throw error; // Re-throw to be caught by the dialog
+        throw error;
     }
-  };
+};
   
   const handleContactAdded = async () => {
     // Real-time listener will update the state

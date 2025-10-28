@@ -41,7 +41,7 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string) => Promise<void>
+  onSubmit: (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }) => Promise<void>
   onSessionNext: () => void
   isSessionActive: boolean
 }
@@ -68,7 +68,9 @@ const callOutcomes = [
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [startTime, setStartTime] = useState<number | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
+  const [netsuiteDuration, setNetsuiteDuration] = useState<number | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -85,7 +87,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     form.reset();
     setSubmissionState('idle');
     setStartTime(null);
-    setDuration(null);
+    setFirebaseDuration(null);
+    setNetsuiteDuration(null);
+    setTotalDuration(null);
     onClose();
   };
 
@@ -97,7 +101,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
       });
       setSubmissionState('idle');
       setStartTime(null);
-      setDuration(null);
+      setFirebaseDuration(null);
+      setNetsuiteDuration(null);
+      setTotalDuration(null);
     }
   }, [isOpen, callActivity, form]);
 
@@ -112,23 +118,30 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         return;
     }
     
-    setStartTime(Date.now());
-    setDuration(null);
+    setStartTime(performance.now());
+    setFirebaseDuration(null);
+    setNetsuiteDuration(null);
+    setTotalDuration(null);
     setSubmissionState('saving_outcome');
 
     try {
-      // The server action now handles all steps, so we just await its completion.
-      await onSubmitProp(values.outcome, values.notes || '');
-
-      // To give the user feedback on the multi-step process, we'll simulate the steps on the client.
-      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate firebase time
-      setSubmissionState('syncing_netsuite');
-      await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate netsuite time
-      
-      if (startTime) {
-          setDuration((Date.now() - startTime) / 1000);
-      }
-      setSubmissionState('complete');
+      await onSubmitProp(values.outcome, values.notes || '', {
+         onFirebaseSave: () => {
+            if (startTime) {
+                const fbTime = performance.now();
+                setFirebaseDuration((fbTime - startTime) / 1000);
+                setSubmissionState('syncing_netsuite');
+            }
+        },
+        onNetSuiteSync: () => {
+             if (startTime) {
+                const nsTime = performance.now();
+                setNetsuiteDuration((nsTime - startTime) / 1000 - (firebaseDuration || 0));
+                setTotalDuration((nsTime - startTime) / 1000);
+                setSubmissionState('complete');
+            }
+        }
+      });
 
     } catch (error: any) {
         setSubmissionState('error');
@@ -214,13 +227,17 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
         ) : (
             <div className="py-8">
                 <ul className="space-y-4">
-                    <li className="flex items-center gap-3">
-                        {submissionState === 'saving_outcome' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                    <li className="flex items-center justify-between gap-3">
+                       <div className="flex items-center gap-3">
+                         {submissionState === 'saving_outcome' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
                         <span className={submissionState !== 'saving_outcome' ? 'text-muted-foreground' : ''}>
                             Updating lead status...
                         </span>
+                       </div>
+                        {firebaseDuration !== null && <span className="text-xs text-muted-foreground">{firebaseDuration.toFixed(2)}s</span>}
                     </li>
-                     <li className="flex items-center gap-3">
+                     <li className="flex items-center justify-between gap-3">
+                       <div className="flex items-center gap-3">
                         {submissionState === 'complete' || submissionState === 'saving_outcome' ? (
                             submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
                         ) : (
@@ -229,12 +246,14 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                         <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...
                         </span>
+                       </div>
+                        {netsuiteDuration !== null && <span className="text-xs text-muted-foreground">{netsuiteDuration.toFixed(2)}s</span>}
                     </li>
                 </ul>
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8 flex w-full items-center justify-between">
                         <p className="text-sm text-muted-foreground">
-                            {duration !== null ? `Completed in ${duration.toFixed(2)}s` : ''}
+                            {totalDuration !== null ? `Total time: ${totalDuration.toFixed(2)}s` : ''}
                         </p>
                         <div className="flex gap-2">
                            <Button variant="secondary" onClick={resetAndClose}>Done</Button>

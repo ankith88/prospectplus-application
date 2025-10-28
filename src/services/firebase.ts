@@ -670,83 +670,90 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
 }
 
 async function logCallActivity(
-  leadId: string,
-  callData: {
-    outcome: string;
-    notes: string;
-    author: string;
-    salesRecordInternalId?: string;
-  }
-): Promise<void> {
-  const outcomeStatusMap: { [key: string]: { status: Lead['status']; reason?: string } } = {
-    'Busy': { status: 'In Progress' },
-    'Call Back/Follow-up': { status: 'High Touch' },
-    'Gatekeeper': { status: 'Connected' },
-    'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
-    'Appointment Booked': { status: 'Qualified' },
-    'Email Interested': { status: 'Pre Qualified' },
-    'No Answer': { status: 'In Progress' },
-    'Not Interested': { status: 'Lost', reason: 'Not Interested' },
-    'Voicemail': { status: 'In Progress' },
-    'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-    'Not a Fit': { status: 'Unqualified' },
-    'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
-    'Reschedule': { status: 'Reschedule' },
-    'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
-  };
+    leadId: string,
+    callData: {
+        outcome: string;
+        notes: string;
+        author: string;
+        salesRecordInternalId?: string;
+    },
+    callbacks: {
+        onFirebaseSave: () => void;
+        onNetSuiteSync: () => void;
+    }
+): Promise<LeadStatus | undefined> {
+    const outcomeStatusMap: { [key: string]: { status: LeadStatus; reason?: string } } = {
+        'Busy': { status: 'In Progress' },
+        'Call Back/Follow-up': { status: 'High Touch' },
+        'Gatekeeper': { status: 'Connected' },
+        'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
+        'Appointment Booked': { status: 'Qualified' },
+        'Email Interested': { status: 'Pre Qualified' },
+        'No Answer': { status: 'In Progress' },
+        'Not Interested': { status: 'Lost', reason: 'Not Interested' },
+        'Voicemail': { status: 'In Progress' },
+        'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
+        'Not a Fit': { status: 'Unqualified' },
+        'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
+        'Reschedule': { status: 'Reschedule' },
+        'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
+    };
 
-  const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
-  const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes}`;
+    const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
+    const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
 
-  // Firebase operations
-  const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
-  const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
-  
-  // Conditionally create the note logging promise. This will also handle NetSuite sync for the note.
-  const notePromise = callData.notes 
-      ? logNoteActivity(leadId, { content: callData.notes, author: callData.author, date: new Date().toISOString() })
+    const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
+    const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
+    
+    await Promise.all([activityPromise, statusPromise]);
+    callbacks.onFirebaseSave();
+    
+    // NetSuite operations
+    const noteSyncPromise = callData.notes 
+      ? sendNoteToNetSuite({ leadId, noteId: 'call-' + Date.now(), author: callData.author, content: callData.notes })
       : Promise.resolve();
 
-  // Wait for all Firebase operations to complete
-  await Promise.all([activityPromise, statusPromise, notePromise]);
+    const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
+    const outcomeSyncPromise = netSuiteOutcomes.includes(callData.outcome)
+        ? sendToNetSuiteForOutcome({
+            leadId: leadId,
+            outcome: callData.outcome,
+            reason: outcomeReason || '',
+            dialerAssigned: callData.author,
+            notes: callData.notes || '',
+            salesRecordInternalId: callData.salesRecordInternalId || ''
+          })
+        : Promise.resolve();
 
-  // NetSuite operation for the outcome itself.
-  const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
-  if (netSuiteOutcomes.includes(callData.outcome)) {
-      await sendToNetSuiteForOutcome({
-          leadId: leadId,
-          outcome: callData.outcome,
-          reason: outcomeReason || '',
-          dialerAssigned: callData.author,
-          notes: callData.notes || '',
-          salesRecordInternalId: callData.salesRecordInternalId || ''
-      });
-  }
+    await Promise.all([noteSyncPromise, outcomeSyncPromise]);
+    callbacks.onNetSuiteSync();
+    
+    return status;
 }
 
 async function logNoteActivity(
     leadId: string, 
-    noteData: { content: string; author: string, date: string }
+    noteData: { content: string; author: string, date: string },
+    callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }
 ): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
-    const newNoteData = {
-        ...noteData
-    };
+    const newNoteData = { ...noteData };
 
     const docRef = await addDoc(notesRef, newNoteData);
-    
     await logActivity(leadId, {
         type: 'Update',
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
         date: noteData.date
     });
-    
+    callbacks.onFirebaseSave();
+
     await sendNoteToNetSuite({
         leadId,
         noteId: docRef.id,
         author: newNoteData.author,
         content: newNoteData.content,
     });
+    callbacks.onNetSuiteSync();
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -1267,5 +1274,6 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 

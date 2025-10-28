@@ -38,7 +38,7 @@ const formSchema = z.object({
 interface LogNoteDialogProps {
   lead: Lead
   children: React.ReactNode
-  onNoteLogged: (content: string, date: string) => Promise<void>
+  onNoteLogged: (content: string, date: string, callbacks: { onFirebaseSave: () => void; onNetSuiteSync: () => void; }) => Promise<void>
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
@@ -48,7 +48,9 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
   const [isOpen, setIsOpen] = useState(false)
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [startTime, setStartTime] = useState<number | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
+  const [netsuiteDuration, setNetsuiteDuration] = useState<number | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number | null>(null);
 
   const { toast } = useToast()
   const { user } = useAuth();
@@ -65,7 +67,9 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     form.reset();
     setSubmissionState('idle');
     setStartTime(null);
-    setDuration(null);
+    setFirebaseDuration(null);
+    setNetsuiteDuration(null);
+    setTotalDuration(null);
   };
 
 
@@ -79,26 +83,32 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         return;
     }
 
-    setStartTime(Date.now());
-    setDuration(null);
+    setStartTime(performance.now());
+    setFirebaseDuration(null);
+    setNetsuiteDuration(null);
+    setTotalDuration(null);
     setSubmissionState('saving_firebase');
     
-    // The server action now handles all steps. We await its completion.
     try {
         const submissionDate = new Date().toISOString();
         
-        // Call the server action which now handles both Firebase and NetSuite
-        await onNoteLogged(values.content, submissionDate);
-        
-        // To give the user feedback on the multi-step process, we'll simulate the steps on the client.
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate firebase time
-        setSubmissionState('syncing_netsuite');
-        await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate netsuite time
-        
-        if (startTime) {
-          setDuration((Date.now() - startTime) / 1000);
-        }
-        setSubmissionState('complete');
+        await onNoteLogged(values.content, submissionDate, {
+            onFirebaseSave: () => {
+                if (startTime) {
+                    const fbTime = performance.now();
+                    setFirebaseDuration((fbTime - startTime) / 1000);
+                    setSubmissionState('syncing_netsuite');
+                }
+            },
+            onNetSuiteSync: () => {
+                 if (startTime) {
+                    const nsTime = performance.now();
+                    setNetsuiteDuration((nsTime - startTime) / 1000 - (firebaseDuration || 0));
+                    setTotalDuration((nsTime - startTime) / 1000);
+                    setSubmissionState('complete');
+                }
+            }
+        });
     } catch (error) {
       setSubmissionState('error');
       console.error('Failed to log note:', error)
@@ -163,28 +173,34 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
           ) : (
              <div className="py-8">
                 <ul className="space-y-4">
-                    <li className="flex items-center gap-3">
-                        {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                        <span className={submissionState !== 'saving_firebase' ? 'text-muted-foreground' : ''}>
-                            Saving to ProspectPlus...
-                        </span>
+                    <li className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                            <span className={submissionState !== 'saving_firebase' ? 'text-muted-foreground' : ''}>
+                                Saving to ProspectPlus...
+                            </span>
+                        </div>
+                        {firebaseDuration !== null && <span className="text-xs text-muted-foreground">{firebaseDuration.toFixed(2)}s</span>}
                     </li>
-                     <li className="flex items-center gap-3">
-                        {submissionState === 'complete' || submissionState === 'saving_firebase' ? (
-                            submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
-                        ) : (
-                           <Loader />
-                        )}
-                        <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
-                           Syncing to NetSuite...
-                        </span>
+                     <li className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                           {submissionState === 'complete' || submissionState === 'saving_firebase' ? (
+                                submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                            ) : (
+                               <Loader />
+                            )}
+                            <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
+                               Syncing to NetSuite...
+                            </span>
+                        </div>
+                        {netsuiteDuration !== null && <span className="text-xs text-muted-foreground">{netsuiteDuration.toFixed(2)}s</span>}
                     </li>
                 </ul>
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8">
                         <div className="flex w-full items-center justify-between">
                             <p className="text-sm text-muted-foreground">
-                                {duration !== null ? `Completed in ${duration.toFixed(2)}s` : ''}
+                                {totalDuration !== null ? `Total time: ${totalDuration.toFixed(2)}s` : ''}
                             </p>
                             <Button onClick={resetAndClose}>Done</Button>
                         </div>
