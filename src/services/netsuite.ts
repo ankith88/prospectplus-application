@@ -293,6 +293,17 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
             author,
             content,
         });
+    } else if (author === 'Elmarez Guerrero') {
+        params = new URLSearchParams({
+            script: "2163",
+            deploy: "4",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQBSNXuoMj6A0jNf6iUisGtdzB5tPq0z95mU7EFjmfJA0",
+            leadID: leadId,
+            noteID: noteId,
+            author,
+            content,
+        });
     } else {
         params = new URLSearchParams({
             script: "2163",
@@ -485,3 +496,5 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
+
+    
