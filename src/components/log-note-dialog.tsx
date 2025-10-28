@@ -62,12 +62,14 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         return;
     }
     try {
-      const newNote = await logNoteActivity(lead.id, {
+      // Fire and forget: don't await the result
+      logNoteActivity(lead.id, {
         content: values.content,
         author: user.displayName || user.email || 'Unknown User',
       });
       
-      onNoteLogged(newNote);
+      // The onNoteLogged callback will be triggered by the real-time listener,
+      // so we don't need to call it manually here.
 
       toast({
         title: 'Success',
