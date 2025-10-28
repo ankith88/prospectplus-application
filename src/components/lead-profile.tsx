@@ -211,7 +211,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead]);
 
 
-  const handleCallLogged = async (outcome: string, notes: string) => {
+  const handleCallLogged = async (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => {
       if (!lead || !user?.displayName) return;
 
       const outcomeStatusMap: { [key: string]: { status: Lead['status'], reason?: string } } = {
@@ -235,49 +235,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       
       const { status, reason } = outcomeStatusMap[outcome] || {};
 
-      // Await all critical operations
+      // Await all critical Firebase operations
       await Promise.all([
           logActivity(lead.id, {
               type: 'Call',
               notes: `Call logged manually. Outcome: ${outcome}. Notes: ${notes}`,
-              author: user.displayName
+              author: user.displayName,
+              date: new Date().toISOString()
           }),
-          notes ? logNoteActivity(lead.id, { content: notes, author: user.displayName }) : Promise.resolve(),
+          notes ? logNoteActivity(lead.id, { content: notes, author: user.displayName, date: new Date().toISOString() }) : Promise.resolve(),
           status ? updateLeadStatus(lead.id, status, reason) : Promise.resolve(),
-          netSuiteOutcomes.includes(outcome) ? sendToNetSuiteForOutcome({
-              leadId: lead.id,
-              outcome: outcome,
-              reason: reason || '',
-              dialerAssigned: user?.displayName || '',
-              notes: notes || '',
-              salesRecordInternalId: lead.salesRecordInternalId || ''
-          }) : Promise.resolve(),
       ]);
+      
+      callbacks.onFirebaseSave();
+      
+      callbacks.onNetSuiteSync();
+      if (netSuiteOutcomes.includes(outcome)) {
+        await sendToNetSuiteForOutcome({
+            leadId: lead.id,
+            outcome: outcome,
+            reason: reason || '',
+            dialerAssigned: user?.displayName || '',
+            notes: notes || '',
+            salesRecordInternalId: lead.salesRecordInternalId || ''
+        });
+      }
 
       if (status) {
           setLead(prev => prev ? { ...prev, status } : null);
       }
       
-      setShowPostCallDialog(false);
-      setIsLogOutcomeOpen(false);
-      setLastCallActivity(null);
-
-      // Handle session navigation after all awaits are complete
+      // Remove lead from session if active
       if (isSessionActive) {
         const currentLeadId = lead.id;
         const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
-        
         localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-
-        if (updatedSessionLeads.length > 0) {
-            const currentIndex = sessionLeads.indexOf(currentLeadId);
-            const nextLeadId = updatedSessionLeads[currentIndex] || updatedSessionLeads[0];
-            router.push(`/leads/${nextLeadId}`);
-        } else {
-            localStorage.removeItem('dialingSessionLeads');
-            toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
-            router.push('/leads');
-        }
+        setSessionLeads(updatedSessionLeads); // Update state for nextLeadId calculation
       }
   };
 
@@ -349,10 +342,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleNoteLogged = (newNote: Note) => {
-    // This function can now be simplified as the heavy lifting is done in the dialog
-    // The real-time listener will update the UI automatically
-  }
+  const handleNoteLogged = async (noteContent: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => {
+    if (!lead || !user) return;
+    try {
+        await logNoteActivity(
+            lead.id, 
+            { 
+                content: noteContent, 
+                author: user.displayName || 'Unknown',
+                date: new Date().toISOString()
+            }
+        );
+        callbacks.onFirebaseSave();
+        callbacks.onNetSuiteSync();
+    } catch (error) {
+        console.error("Failed to log note in profile:", error);
+        throw error; // Re-throw to be caught by the dialog
+    }
+  };
   
   const handleContactAdded = async () => {
     // Real-time listener will update the state
@@ -548,23 +555,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || !isSessionActive || sessionLeads.length === 0) {
       return { nextLeadId: null, hasNextLead: false };
     }
-    const currentIndex = sessionLeads.indexOf(lead.id);
-    if (currentIndex === -1) {
-      // Current lead is not in session, maybe it was just actioned. Find next logical lead.
-      if (sessionLeads.length > 0) {
-          return { nextLeadId: sessionLeads[0], hasNextLead: true };
-      }
-      return { nextLeadId: null, hasNextLead: false };
+    // If the current lead is no longer in the session list, the next lead is the first one.
+    if (!sessionLeads.includes(lead.id)) {
+      return { nextLeadId: sessionLeads[0], hasNextLead: true };
     }
+
+    const currentIndex = sessionLeads.indexOf(lead.id);
+
     // If there are more leads after the current one
     if (currentIndex < sessionLeads.length - 1) {
       return { nextLeadId: sessionLeads[currentIndex + 1], hasNextLead: true };
     }
-    // If it's the last lead, but there are others (looping)
-    if (sessionLeads.length > 1) {
-      return { nextLeadId: sessionLeads[0], hasNextLead: true };
-    }
-    // Only one lead left, which is the current one
+    
+    // It's the last lead in the session.
     return { nextLeadId: null, hasNextLead: false };
 }, [lead, sessionLeads, isSessionActive]);
 
@@ -572,7 +575,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (nextLeadId) {
       router.push(`/leads/${nextLeadId}`);
     } else {
-      toast({ title: "No more leads", description: "You are at the end of your dialing session."});
+      localStorage.removeItem('dialingSessionLeads');
+      toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
+      router.push('/leads');
     }
   };
 
@@ -666,6 +671,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         lead={lead}
         callActivity={lastCallActivity}
         onSubmit={handleCallLogged}
+        onSessionNext={handleNextLead}
+        isSessionActive={isSessionActive}
     />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -675,7 +682,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             Back to All Leads
           </Link>
         </Button>
-        <Button onClick={handleNextLead} disabled={!hasNextLead}>
+        <Button onClick={handleNextLead} disabled={!isSessionActive}>
             <SkipForward className="mr-2 h-4 w-4" />
             Next in Session
         </Button>

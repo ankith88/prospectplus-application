@@ -643,7 +643,7 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
         await updateDoc(leadRef, updateData);
 
         const note = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
-        await logActivity(leadId, { type: 'Update', notes: note });
+        await logActivity(leadId, { type: 'Update', notes: note, date: new Date().toISOString() });
         console.log(`Lead ${leadId} status updated to ${status}`);
     } catch (error) {
         console.error(`Failed to update lead status for ${leadId}:`, error);
@@ -671,31 +671,32 @@ async function logCallActivity(leadId: string, callData: { notes: string; outcom
     return await logActivity(leadId, { type: 'Call', notes });
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string }): Promise<Note> {
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = {
-        ...noteData,
-        date: new Date().toISOString()
+        ...noteData
     };
 
-    // All operations are awaited to ensure completion before returning.
     const docRef = await addDoc(notesRef, newNoteData);
     const newNote = { ...newNoteData, id: docRef.id };
     
     await logActivity(leadId, {
         type: 'Update',
-        notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`
+        notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
+        date: noteData.date
     });
     
-    await sendNoteToNetSuite({
+    // Fire-and-forget the NetSuite sync
+    sendNoteToNetSuite({
         leadId,
         noteId: newNote.id,
         author: newNote.author,
         content: newNote.content,
+    }).catch(error => {
+        console.error(`[Background Sync Failed] Could not sync note ${newNote.id} to NetSuite:`, error);
     });
 
-    console.log(`Note logged with ID: ${docRef.id} and synced for lead ${leadId}`);
-    return newNote;
+    console.log(`Note logged with ID: ${docRef.id} for lead ${leadId}. NetSuite sync initiated.`);
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {

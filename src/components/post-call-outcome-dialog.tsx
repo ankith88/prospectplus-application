@@ -25,9 +25,8 @@ import {
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Lead, Activity, Contact } from '@/lib/types'
+import type { Lead, Activity } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
@@ -42,7 +41,9 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onSubmit: (outcome: string, notes: string) => Promise<void>
+  onSubmit: (outcome: string, notes: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => Promise<void>
+  onSessionNext: () => void
+  isSessionActive: boolean
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'syncing_netsuite' | 'complete' | 'error';
@@ -64,7 +65,7 @@ const callOutcomes = [
     'LOST - No Contact',
 ];
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onSubmit: onSubmitProp, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const { toast } = useToast();
   const { user } = useAuth();
@@ -108,12 +109,15 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
     setSubmissionState('saving_outcome');
 
     try {
-        await onSubmitProp(values.outcome, values.notes || '');
-        setSubmissionState('complete');
-        toast({
-            title: 'Success!',
-            description: 'Call outcome logged successfully.',
+        await onSubmitProp(values.outcome, values.notes || '', {
+          onFirebaseSave: () => {
+            // This is now handled implicitly by the state change below
+          },
+          onNetSuiteSync: () => {
+             setSubmissionState('syncing_netsuite');
+          }
         });
+        setSubmissionState('complete');
     } catch (error: any) {
         setSubmissionState('error');
         console.error("Failed to save call outcome:", error);
@@ -127,10 +131,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (submissionState === 'idle' || submissionState === 'error' || submissionState === 'complete') {
-            if (!open) {
-                resetAndClose();
-            }
+        if (!open) {
+          resetAndClose();
         }
     }}>
       <DialogContent 
@@ -185,6 +187,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                   </FormItem>
                 )}
               />
+               {submissionState === 'error' && (
+                <p className="text-sm text-destructive">An error occurred. Please try again or contact support.</p>
+              )}
               
               <DialogFooter>
                   <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
@@ -204,8 +209,14 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'saving_outcome' || submissionState === 'syncing_netsuite' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                        <span className={submissionState !== 'syncing_netsuite' ? 'text-muted-foreground' : ''}>
+                        {submissionState === 'complete' ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : submissionState === 'saving_outcome' ? (
+                            <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        ) : (
+                           <Loader />
+                        )}
+                        <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                            Syncing to NetSuite...
                         </span>
                     </li>
@@ -213,6 +224,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onS
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8">
                         <Button onClick={resetAndClose}>Done</Button>
+                        {isSessionActive && (
+                            <Button onClick={() => { resetAndClose(); onSessionNext(); }}>Next in Session</Button>
+                        )}
                      </DialogFooter>
                 )}
             </div>

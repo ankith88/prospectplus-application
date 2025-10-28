@@ -27,7 +27,6 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import type { Lead, Note } from '@/lib/types'
-import { logNoteActivity } from '@/services/firebase'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
@@ -39,7 +38,7 @@ const formSchema = z.object({
 interface LogNoteDialogProps {
   lead: Lead
   children: React.ReactNode
-  onNoteLogged: (newNote: Note) => void
+  onNoteLogged: (content: string, callbacks: { onFirebaseSave: () => void, onNetSuiteSync: () => void }) => Promise<void>
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
@@ -79,22 +78,16 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setSubmissionState('saving_firebase');
     
     try {
-      await logNoteActivity(lead.id, {
-        content: values.content,
-        author: user.displayName || user.email || 'Unknown User',
-      });
-      
-      setSubmissionState('syncing_netsuite'); // This state might be skipped visually if the next one is fast
-      
-      // We can consider the process complete for the UI now as the server handles the rest.
-      // A more sophisticated system might use webhooks or polling to confirm NetSuite sync.
-      setSubmissionState('complete');
-
-      toast({
-          title: 'Success',
-          description: 'Note logged and sync initiated.',
-      });
-
+        await onNoteLogged(values.content, {
+            onFirebaseSave: () => {
+                setSubmissionState('syncing_netsuite');
+            },
+            onNetSuiteSync: () => {
+                // This callback is now just for show, the main await handles completion
+            }
+        });
+        
+        setSubmissionState('complete');
     } catch (error) {
       setSubmissionState('error');
       console.error('Failed to log note:', error)
@@ -108,7 +101,9 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (submissionState !== 'idle' && submissionState !== 'error') return;
+        if (submissionState !== 'idle' && submissionState !== 'error') {
+            if (open) return; // prevent closing while in progress
+        }
         setIsOpen(open);
         if (!open) {
             resetAndClose();
@@ -116,7 +111,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     }}>
         <DialogTrigger asChild>{children}</DialogTrigger>
         <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
-             if (submissionState !== 'idle' && submissionState !== 'error') {
+             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
                 e.preventDefault();
              }
         }}>
@@ -147,9 +142,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                     <p className="text-sm text-destructive">An error occurred. Please try again.</p>
                   )}
                   <DialogFooter>
-                      <DialogClose asChild>
-                          <Button type="button" variant="outline">Cancel</Button>
-                      </DialogClose>
+                      <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
                       <Button type="submit" disabled={form.formState.isSubmitting}>
                         Log Note
                       </Button>
@@ -166,11 +159,11 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                         </span>
                     </li>
                      <li className="flex items-center gap-3">
-                        {submissionState === 'saving_firebase' ? (
-                             <div className="h-5 w-5 border-2 border-dashed rounded-full" />
-                        ) : submissionState === 'complete' ? (
+                        {submissionState === 'complete' ? (
                             <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
+                        ) : submissionState === 'saving_firebase' ? (
+                            <div className="h-5 w-5 border-2 border-dashed rounded-full" />
+                        ): (
                             <Loader />
                         )}
                         <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
