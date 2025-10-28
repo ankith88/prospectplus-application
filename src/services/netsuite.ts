@@ -282,6 +282,17 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
             author,
             content,
         });
+    } else if (author === 'Lalaine Revilla') {
+        params = new URLSearchParams({
+            script: "2163",
+            deploy: "3",
+            compid: "1048144",
+            "ns-at": "AAEJ7tMQFFIRCUzYAfnhpgPpDPcn8IxetvArSVKqte6lc-Oo9wU",
+            leadID: leadId,
+            noteID: noteId,
+            author,
+            content,
+        });
     } else {
         params = new URLSearchParams({
             script: "2163",
