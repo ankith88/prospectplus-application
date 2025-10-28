@@ -113,25 +113,6 @@ interface LeadProfileProps {
   initialLead: Lead;
 }
 
-const PAGE_SIZE = 5;
-
-type SubcollectionState<T> = {
-  items: T[];
-  loading: boolean;
-  hasMore: boolean;
-  lastDocId: string | null;
-  loaded: boolean;
-};
-
-type AllSubcollectionsState = {
-  contacts: SubcollectionState<Contact>;
-  activity: SubcollectionState<Activity>;
-  notes: SubcollectionState<Note>;
-  transcripts: SubcollectionState<Transcript>;
-  tasks: SubcollectionState<Task>;
-  appointments: SubcollectionState<Appointment>;
-}
-
 const salesReps = [
     { name: 'Ankith Ravindran', url: 'https://calendly.com/ankith-ravindran/15min' },
     { name: 'Nathan Smith', url: 'https://calendly.com/nathan-smith-mailplus/15min' },
@@ -139,21 +120,18 @@ const salesReps = [
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
-  
-  const initialSubcollectionState = { items: [], loading: false, hasMore: true, lastDocId: null, loaded: false };
-  const [subcollections, setSubcollections] = useState<AllSubcollectionsState>({
-    contacts: initialSubcollectionState,
-    activity: initialSubcollectionState,
-    notes: initialSubcollectionState,
-    transcripts: initialSubcollectionState,
-    tasks: initialSubcollectionState,
-    appointments: initialSubcollectionState,
-  });
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
+  const [loadingSubcollections, setLoadingSubcollections] = useState(true);
   
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
@@ -199,54 +177,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [initialLead]);
 
-  const loadSubcollection = useCallback(async (
-    collectionName: keyof AllSubcollectionsState, 
-    loadMore = false
-  ) => {
+  useEffect(() => {
     if (!lead) return;
-    
-    const collectionState = subcollections[collectionName];
-    if (collectionState.loading || (!loadMore && collectionState.loaded)) return;
-    if (loadMore && !collectionState.hasMore) return;
 
-    setSubcollections(prev => ({
-      ...prev,
-      [collectionName]: { ...prev[collectionName], loading: true }
-    }));
+    setLoadingSubcollections(true);
 
-    try {
-      let result: { items: any[], lastDocId: string | null };
-      const lastDocId = loadMore ? collectionState.lastDocId : null;
+    const unsubscribes = [
+      onSnapshot(query(collection(firestore, 'leads', lead.id, 'contacts')), snapshot => {
+        setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact)));
+      }),
+      onSnapshot(query(collection(firestore, 'leads', lead.id, 'activity'), orderBy('date', 'desc')), snapshot => {
+        setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity)));
+      }),
+      onSnapshot(query(collection(firestore, 'leads', lead.id, 'notes'), orderBy('date', 'desc')), snapshot => {
+        setNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note)));
+      }),
+      onSnapshot(query(collection(firestore, 'leads', lead.id, 'transcripts'), orderBy('date', 'desc')), snapshot => {
+        setTranscripts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transcript)));
+      }),
+      onSnapshot(query(collection(firestore, 'leads', lead.id, 'tasks'), orderBy('dueDate', 'asc')), snapshot => {
+        setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
+      }),
+       onSnapshot(query(collection(firestore, 'leads', lead.id, 'appointments'), orderBy('duedate', 'desc')), snapshot => {
+        setAppointments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment)));
+      }),
+    ];
 
-      switch(collectionName) {
-        case 'contacts': result = await getLeadContacts(lead.id, PAGE_SIZE, lastDocId); break;
-        case 'activity': result = await getLeadActivity(lead.id, PAGE_SIZE, lastDocId); break;
-        case 'notes': result = await getLeadNotes(lead.id, PAGE_SIZE, lastDocId); break;
-        case 'transcripts': result = await getLeadTranscripts(lead.id, PAGE_SIZE, lastDocId); break;
-        case 'tasks': result = await getLeadTasks(lead.id, PAGE_SIZE, lastDocId); break;
-        case 'appointments': result = await getLeadAppointments(lead.id, PAGE_SIZE, lastDocId); break;
-        default: throw new Error("Invalid collection name");
-      }
+    setLoadingSubcollections(false);
 
-      setSubcollections(prev => ({
-        ...prev,
-        [collectionName]: {
-          items: loadMore ? [...prev[collectionName].items, ...result.items] : result.items,
-          loading: false,
-          hasMore: result.items.length === PAGE_SIZE,
-          lastDocId: result.lastDocId,
-          loaded: true,
-        }
-      }));
-    } catch (error) {
-        console.error(`Error loading ${collectionName}:`, error);
-        toast({ variant: 'destructive', title: `Error`, description: `Could not load ${collectionName}.` });
-        setSubcollections(prev => ({
-            ...prev,
-            [collectionName]: { ...prev[collectionName], loading: false }
-        }));
-    }
-  }, [lead, subcollections, toast]);
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [lead]);
 
 
   const handleCallLogged = async (outcome: string, notes: string, contact?: any) => {
@@ -273,14 +233,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           notes: activityNotes,
           author: user.displayName
       });
-      setSubcollections(prev => ({...prev, activity: initialSubcollectionState})); // Reset to force reload
 
       if (notes) {
         await logNoteActivity(lead.id, {
           content: notes,
           author: user.displayName,
         });
-        setSubcollections(prev => ({...prev, notes: initialSubcollectionState})); // Reset to force reload
       }
 
       const { status, reason } = outcomeStatusMap[outcome] || {};
@@ -306,7 +264,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             leadId: lead.id,
             leadProfile: lead.profile,
             websiteUrl: lead.websiteUrl,
-            activity: subcollections.activity.items || []
+            activity: activities || []
         };
         const scoring = await aiLeadScoring([leadToScore]);
         if (scoring.scoredLeads.length > 0) {
@@ -346,7 +304,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            setSubcollections(prev => ({...prev, contacts: initialSubcollectionState})); // Reset to force reload
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -363,12 +320,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const addActivity = async (newActivity: Omit<Activity, 'id'>) => {
     if (lead) {
         await logActivity(lead.id, newActivity);
-        setSubcollections(prev => ({...prev, activity: initialSubcollectionState})); // Reset to force reload
     }
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    setSubcollections(prev => ({...prev, notes: initialSubcollectionState})); // Reset to force reload
     addActivity({
         type: 'Update',
         date: newNote.date,
@@ -377,11 +332,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }
   
   const handleContactAdded = async () => {
-    setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
+    // Real-time listener will update the state
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
-    setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
      addActivity({
         type: 'Update',
         date: new Date().toISOString(),
@@ -402,7 +356,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setSubcollections(prev => ({ ...prev, contacts: initialSubcollectionState })); // Reset to force reload
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -454,7 +407,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
-        setSubcollections(prev => ({...prev, transcripts: initialSubcollectionState})); // Reset to force reload
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -478,7 +430,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
-        setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -492,7 +443,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
-          setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -504,7 +454,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
-          setSubcollections(prev => ({...prev, tasks: initialSubcollectionState})); // Reset to force reload
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -530,7 +479,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } catch (error: any) {
         console.error("[Client] Error calling NetSuite server action:", error);
         toast({ variant: "destructive", title: "Error", description: `A client-side error occurred while sending to NetSuite: ${error.message}` });
-        // Decide if you want to stop the process if NetSuite fails. For now, we continue.
     }
     
     // Step 2: Save to Firebase, regardless of NetSuite outcome.
@@ -605,7 +553,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleRepSelection = (repName: string, repUrl: string, contact?: Contact) => {
     if (!lead) return;
 
-    // Open the Calendly link immediately
     let finalUrl: string;
     if (contact) {
         finalUrl = getContactCalendlyLink(contact, repUrl) || '#';
@@ -614,20 +561,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     window.open(finalUrl, '_blank');
     
-    // Update the UI optimistically
     setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
     toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
 
-    // Update Firebase in the background
     updateLeadSalesRep(lead.id, repName, repUrl)
         .then(() => {
             console.log(`Lead ${lead.id} successfully assigned to ${repName} in the background.`);
         })
         .catch(error => {
             console.error("Failed to assign sales rep in the background:", error);
-            // Optionally, you could show a toast here to inform the user of the background failure.
             toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
-            // You might want to revert the optimistic UI update here, though it could be jarring.
         });
   };
 
@@ -662,16 +605,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = subcollections.contacts.items && subcollections.contacts.items.length > 0 ? subcollections.contacts.items[0] : null;
+  const primaryContact = contacts && contacts.length > 0 ? contacts[0] : null;
   
   const callHistory = useMemo(() => {
-    return (subcollections.activity.items || []).filter(a => a.type === 'Call' && a.callId);
-  }, [subcollections.activity.items]);
+    return (activities || []).filter(a => a.type === 'Call' && a.callId);
+  }, [activities]);
   
   const contactAttempts = useMemo(() => {
-    if (!subcollections.activity.loaded) return lead.contactCount || 0; // fallback or initial estimate
-    return (subcollections.activity.items || []).filter(a => a.type === 'Call' && a.callId).length;
-  }, [subcollections.activity, lead.contactCount]);
+    return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
+  }, [activities]);
 
   return (
     <>
@@ -705,7 +647,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={lead.status} />
                 <>
-                  <p className="text-muted-foreground">&bull; {subcollections.contacts.items?.length || 0} {subcollections.contacts.items?.length === 1 ? 'Contact' : 'Contacts'}</p>
+                  <p className="text-muted-foreground">&bull; {contacts?.length || 0} {contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
                   <p className="text-muted-foreground">&bull; Contacted {contactAttempts} {contactAttempts === 1 ? 'time' : 'times'}</p>
                 </>
             </div>
@@ -915,19 +857,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Card>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <Accordion type="single" collapsible onValueChange={(value) => value === "contacts" && loadSubcollection('contacts')}>
-             <Card>
-               <AccordionItem value="contacts" className="border-b-0">
-                <AccordionTrigger className="p-6">
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-muted-foreground" />
-                    Contacts
-                  </CardTitle>
-                </AccordionTrigger>
-                <AccordionContent className="px-6">
-                {subcollections.contacts.items && subcollections.contacts.items.length > 0 ? (
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-muted-foreground" />
+                        Contacts
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                {contacts.length > 0 ? (
                   <div className="space-y-4">
-                  {subcollections.contacts.items.map((contact, index) => {
+                  {contacts.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                      return (
                       <Card key={contact.id || index} className="relative group/contact">
@@ -1043,11 +983,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   })}
                   </div>
                 ) : (
-                  !subcollections.contacts.loading && <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
-                )}
-                {subcollections.contacts.loading && <div className="flex justify-center p-4"><Loader/></div>}
-                {subcollections.contacts.hasMore && !subcollections.contacts.loading && (
-                    <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('contacts', true)}>Load More</Button>
+                  <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
                 )}
                  <Dialog>
                   <DialogTrigger asChild>
@@ -1066,234 +1002,200 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
                   </DialogContent>
                 </Dialog>
-                </AccordionContent>
-               </AccordionItem>
+                </CardContent>
              </Card>
-           </Accordion>
-           <Accordion type="single" collapsible onValueChange={() => {}}>
             <Card>
-                <AccordionItem value="address" className="border-b-0">
-                    <AccordionTrigger className="p-6">
-                        <CardTitle className="flex items-center gap-2">
-                            <Building2 className="w-5 h-5 text-muted-foreground" />
-                            Address
-                        </CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6">
-                        <div className="space-y-2 text-sm">
-                            <div className="flex items-start gap-3">
-                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                                <div className="flex-1">
-                                    <p className="text-muted-foreground break-words">{fullAddress}</p>
-                                    <div className="flex items-center gap-1 mt-1">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
-                                            <Search className="w-3 h-3" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
-                                            <Clipboard className="w-3 h-3" />
-                                        </Button>
-                                    </div>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                        Address
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2 text-sm">
+                        <div className="flex items-start gap-3">
+                            <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-muted-foreground break-words">{fullAddress}</p>
+                                <div className="flex items-center gap-1 mt-1">
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
+                                        <Search className="w-3 h-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
+                                        <Clipboard className="w-3 h-3" />
+                                    </Button>
                                 </div>
                             </div>
-                            {fullAddress !== 'No address available' && (
-                                <div className="h-48 w-full rounded-md overflow-hidden border">
-                                    <iframe
-                                        width="100%"
-                                        height="100%"
-                                        frameBorder="0"
-                                        style={{ border: 0 }}
-                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                            fullAddress
-                                        )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                                        allowFullScreen
-                                        aria-hidden="false"
-                                        tabIndex={0}
-                                    ></iframe>
-                                </div>
-                            )}
-                             <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="w-full">
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit Address
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Edit Address</DialogTitle>
-                                    </DialogHeader>
-                                    <AddressAutocomplete
-                                        defaultValue={lead.address}
-                                        onAddressSelect={handleAddressSave}
-                                    />
-                                </DialogContent>
-                            </Dialog>
                         </div>
-                    </AccordionContent>
-                </AccordionItem>
+                        {fullAddress !== 'No address available' && (
+                            <div className="h-48 w-full rounded-md overflow-hidden border">
+                                <iframe
+                                    width="100%"
+                                    height="100%"
+                                    frameBorder="0"
+                                    style={{ border: 0 }}
+                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                                        fullAddress
+                                    )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                                    allowFullScreen
+                                    aria-hidden="false"
+                                    tabIndex={0}
+                                ></iframe>
+                            </div>
+                        )}
+                            <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="w-full">
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit Address
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Edit Address</DialogTitle>
+                                </DialogHeader>
+                                <AddressAutocomplete
+                                    defaultValue={lead.address}
+                                    onAddressSelect={handleAddressSave}
+                                />
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                </CardContent>
             </Card>
-           </Accordion>
           </div>
           
-          <Accordion type="single" collapsible onValueChange={(value) => value === "call-history" && loadSubcollection('transcripts')}>
-            <Card>
-              <AccordionItem value="call-history" className="border-b-0">
-                <AccordionTrigger className="p-6">
-                  <CardTitle className="flex items-center gap-2">
-                    <PhoneCall className="w-5 h-5 text-muted-foreground" />
-                    Call History
-                  </CardTitle>
-                </AccordionTrigger>
-                <AccordionContent className="px-6">
-                   {subcollections.activity.loading && !subcollections.activity.loaded ? (
-                     <div className="flex items-center justify-center p-8"><Loader /></div>
-                   ) : callHistory.length > 0 ? (
-                    <ul className="space-y-4">
-                      {callHistory.map((item) => {
-                        const transcript = subcollections.transcripts.items.find(t => t.callId === item.callId);
-                        return (
-                          <li key={item.id} className="flex gap-4 group">
-                            <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
-                                <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                              </div>
-                              <div className="text-sm text-muted-foreground break-words">
-                                {item.notes}
-                              </div>
-                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                                <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
-                                  <Hash className="w-3 h-3 flex-shrink-0" />
-                                  <span>Call ID: {item.callId}</span>
-                                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                        <Clipboard className="w-2.5 h-2.5" />
-                                    </Button>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {transcript ? (
-                                        <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
-                                            <FileText className="mr-2 h-4 w-4" />
-                                            View Transcript
-                                        </Button>
-                                    ) : (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                        disabled={fetchingTranscriptId === item.callId}
-                                      >
-                                        {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
-                                      </Button>
-                                    )}
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                      <Voicemail className="mr-2 h-4 w-4" />
-                                      Recording
-                                    </Button>
-                                </div>
-                              </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PhoneCall className="w-5 h-5 text-muted-foreground" />
+                Call History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+                {callHistory.length > 0 ? (
+                <ul className="space-y-4">
+                    {callHistory.map((item) => {
+                    const transcript = transcripts.find(t => t.callId === item.callId);
+                    return (
+                        <li key={item.id} className="flex gap-4 group">
+                        <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
+                            <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
                             </div>
-                          </li>
-                        )
-                      })}
-                       {subcollections.activity.hasMore && !subcollections.activity.loading && (
-                        <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('activity', true)}>Load More</Button>
-                      )}
-                    </ul>
-                   ) : (
-                    !subcollections.activity.loading && <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
-                   )}
-                   {subcollections.activity.loading && subcollections.activity.items.length > 0 && <div className="flex justify-center p-4"><Loader/></div>}
-                </AccordionContent>
-              </AccordionItem>
-            </Card>
-          </Accordion>
+                            <div className="text-sm text-muted-foreground break-words">
+                            {item.notes}
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                                <Hash className="w-3 h-3 flex-shrink-0" />
+                                <span>Call ID: {item.callId}</span>
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                    <Clipboard className="w-2.5 h-2.5" />
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {transcript ? (
+                                    <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        View Transcript
+                                    </Button>
+                                ) : (
+                                    <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                    disabled={fetchingTranscriptId === item.callId}
+                                    >
+                                    {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
+                                    </Button>
+                                )}
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                    <Voicemail className="mr-2 h-4 w-4" />
+                                    Recording
+                                </Button>
+                            </div>
+                            </div>
+                        </div>
+                        </li>
+                    )
+                    })}
+                </ul>
+                ) : (
+                <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
+                )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Accordion type="single" collapsible onValueChange={(value) => value === "activity" && loadSubcollection('activity')}>
-                <Card>
-                    <AccordionItem value="activity" className="border-b-0">
-                        <AccordionTrigger className="p-6">
-                             <CardTitle>Activity History</CardTitle>
-                        </AccordionTrigger>
-                         <AccordionContent className="px-6">
-                            {subcollections.activity.items.length > 0 ? (
-                                <>
-                                <ul className="space-y-4">
-                                {subcollections.activity.items.map((item, index) => (
-                                    <li key={item.id} className="flex gap-4 group">
-                                    <div className="flex flex-col items-center">
-                                        <div className="bg-secondary rounded-full p-2">
-                                        {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                                        {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                                        {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                                        {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                                        </div>
-                                        {subcollections.activity.items && index < subcollections.activity.items.length - 1 && (
-                                          <div className="w-px h-full bg-border"></div>
-                                        )}
+            <Card>
+                <CardHeader>
+                        <CardTitle>Activity History</CardTitle>
+                </CardHeader>
+                    <CardContent>
+                        {activities.length > 0 ? (
+                            <ul className="space-y-4">
+                            {activities.map((item, index) => (
+                                <li key={item.id} className="flex gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="bg-secondary rounded-full p-2">
+                                    {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                                     </div>
-                                    <div className="flex-1 pb-4 min-w-0">
-                                        <div className="flex items-start justify-between gap-2">
-                                        <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                                        <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground break-words">
-                                        {item.notes}
-                                        </div>
+                                    {activities && index < activities.length - 1 && (
+                                        <div className="w-px h-full bg-border"></div>
+                                    )}
+                                </div>
+                                <div className="flex-1 pb-4 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                    <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                                    <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
                                     </div>
-                                    </li>
-                                ))}
-                                </ul>
-                                {subcollections.activity.hasMore && !subcollections.activity.loading && (
-                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('activity', true)}>Load More</Button>
-                                )}
-                                </>
-                            ) : (
-                                 !subcollections.activity.loading && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
-                            )}
-                            {subcollections.activity.loading && <div className="flex justify-center p-4"><Loader/></div>}
-                        </AccordionContent>
-                    </AccordionItem>
-                </Card>
-            </Accordion>
+                                    <div className="text-sm text-muted-foreground break-words">
+                                    {item.notes}
+                                    </div>
+                                </div>
+                                </li>
+                            ))}
+                            </ul>
+                        ) : (
+                                !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                        )}
+                        {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
+                    </CardContent>
+            </Card>
             
-            <Accordion type="single" collapsible onValueChange={(value) => value === 'notes' && loadSubcollection('notes')}>
-                <Card>
-                     <AccordionItem value="notes" className="border-b-0">
-                        <AccordionTrigger className="p-6">
-                            <CardTitle className="flex items-center gap-2">
-                                <BookText className="w-5 h-5 text-muted-foreground" />
-                                Notes
-                            </CardTitle>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-6">
-                            {subcollections.notes.items.length > 0 ? (
-                                <>
-                                <div className="space-y-4">
-                                {subcollections.notes.items.map(note => (
-                                <div key={note.id} className="text-sm border-l-2 pl-4">
-                                    <p className="whitespace-pre-wrap">{note.content}</p>
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                    {new Date(note.date).toLocaleString()} by {note.author}
-                                    </p>
-                                </div>
-                                ))}
-                                </div>
-                                {subcollections.notes.hasMore && !subcollections.notes.loading && (
-                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('notes', true)}>Load More</Button>
-                                )}
-                                </>
-                            ) : (
-                                !subcollections.notes.loading && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
-                            )}
-                             {subcollections.notes.loading && <div className="flex justify-center p-4"><Loader/></div>}
-                        </AccordionContent>
-                     </AccordionItem>
-                </Card>
-            </Accordion>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <BookText className="w-5 h-5 text-muted-foreground" />
+                        Notes
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {notes.length > 0 ? (
+                        <div className="space-y-4">
+                        {notes.map(note => (
+                        <div key={note.id} className="text-sm border-l-2 pl-4">
+                            <p className="whitespace-pre-wrap">{note.content}</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                            {new Date(note.date).toLocaleString()} by {note.author}
+                            </p>
+                        </div>
+                        ))}
+                        </div>
+                    ) : (
+                        !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
+                    )}
+                        {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
+                </CardContent>
+            </Card>
           </div>
           
           <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
@@ -1307,7 +1209,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                           setSubcollections(prev => ({...prev, transcripts: initialSubcollectionState})); // Reset to force reload
+                           // Real-time listener will handle update
                         }}
                       />
                   )}
@@ -1335,49 +1237,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Accordion type="single" collapsible onValueChange={(value) => value === 'appointments' && loadSubcollection('appointments')}>
-            <Card>
-                 <AccordionItem value="appointments" className="border-b-0">
-                     <AccordionTrigger className="p-6">
-                        <CardTitle className="flex items-center gap-2">
-                            <Calendar className="w-5 h-5 text-muted-foreground" />
-                            Appointments
-                        </CardTitle>
-                     </AccordionTrigger>
-                     <AccordionContent className="px-6">
-                        {subcollections.appointments.items.length > 0 ? (
-                          <>
-                            {subcollections.appointments.items.map(appointment => (
-                              <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                <div className="flex items-center gap-4">
-                                    <div className="text-center">
-                                        <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
-                                        <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium">
-                                            Appointment with {appointment.assignedTo}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                        </p>
-                                    </div>
+          <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-muted-foreground" />
+                        Appointments
+                    </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                    {appointments.length > 0 ? (
+                        <>
+                        {appointments.map(appointment => (
+                            <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                            <div className="flex items-center gap-4">
+                                <div className="text-center">
+                                    <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
+                                    <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
                                 </div>
-                              </div>
-                            ))}
-                             {subcollections.appointments.hasMore && !subcollections.appointments.loading && (
-                                <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('appointments', true)}>Load More</Button>
-                            )}
-                          </>
-                        ) : (
-                            !subcollections.appointments.loading && <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
-                        )}
-                        {subcollections.appointments.loading && <div className="flex justify-center p-4"><Loader/></div>}
-                    </AccordionContent>
-                 </AccordionItem>
-            </Card>
-          </Accordion>
+                                <div>
+                                    <p className="text-sm font-medium">
+                                        Appointment with {appointment.assignedTo}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                    </p>
+                                </div>
+                            </div>
+                            </div>
+                        ))}
+                        </>
+                    ) : (
+                        !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
+                    )}
+                    {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
+                </CardContent>
+          </Card>
           
            <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -1418,77 +1313,70 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           <Accordion type="single" collapsible onValueChange={(value) => value === "tasks" && loadSubcollection('tasks')}>
-            <Card>
-                 <AccordionItem value="tasks" className="border-b-0">
-                     <AccordionTrigger className="p-6">
-                        <CardTitle className="flex items-center gap-2">
-                            <ListTodo className="w-5 h-5 text-muted-foreground" />
-                            Tasks & Reminders
-                        </CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6">
-                        <form onSubmit={handleAddTask} className="flex flex-col sm:flex-row gap-2 mb-4">
-                            <Input 
-                                placeholder="Add a new task..." 
-                                value={newTaskTitle}
-                                onChange={(e) => setNewTaskTitle(e.target.value)}
-                            />
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className="min-w-[150px] justify-start text-left font-normal"
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {newTaskDueDate ? format(newTaskDueDate, "PPP") : <span>Set date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <CalendarPicker
-                                        mode="single"
-                                        selected={newTaskDueDate}
-                                        onSelect={setNewTaskDueDate}
-                                        initialFocus
+           <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <ListTodo className="w-5 h-5 text-muted-foreground" />
+                        Tasks & Reminders
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleAddTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <Input 
+                            placeholder="Add a new task..." 
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                        />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className="min-w-[150px] justify-start text-left font-normal"
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {newTaskDueDate ? format(newTaskDueDate, "PPP") : <span>Set date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <CalendarPicker
+                                    mode="single"
+                                    selected={newTaskDueDate}
+                                    onSelect={setNewTaskDueDate}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Button type="submit">Add Task</Button>
+                    </form>
+                    <div className="space-y-2">
+                        {tasks.length > 0 ? (
+                            <>
+                            {tasks.map(task => (
+                                <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
+                                    <Checkbox
+                                        id={`task-${task.id}`}
+                                        checked={task.isCompleted}
+                                        onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
                                     />
-                                </PopoverContent>
-                            </Popover>
-                            <Button type="submit">Add Task</Button>
-                        </form>
-                        <div className="space-y-2">
-                            {subcollections.tasks.items.length > 0 ? (
-                              <>
-                                {subcollections.tasks.items.map(task => (
-                                    <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
-                                        <Checkbox
-                                            id={`task-${task.id}`}
-                                            checked={task.isCompleted}
-                                            onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
-                                        />
-                                        <label htmlFor={`task-${task.id}`} className="flex-1 text-sm font-medium data-[completed=true]:line-through data-[completed=true]:text-muted-foreground" data-completed={task.isCompleted}>
-                                            {task.title}
-                                            <p className="text-xs text-muted-foreground">
-                                                Due: {format(new Date(task.dueDate), "PP")}
-                                            </p>
-                                        </label>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                                 {subcollections.tasks.hasMore && !subcollections.tasks.loading && (
-                                  <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => loadSubcollection('tasks', true)}>Load More</Button>
-                                )}
-                              </>
-                            ) : (
-                                !subcollections.tasks.loading && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
-                            )}
-                             {subcollections.tasks.loading && <div className="flex justify-center p-4"><Loader/></div>}
-                        </div>
-                    </AccordionContent>
-                 </AccordionItem>
-            </Card>
-           </Accordion>
+                                    <label htmlFor={`task-${task.id}`} className="flex-1 text-sm font-medium data-[completed=true]:line-through data-[completed=true]:text-muted-foreground" data-completed={task.isCompleted}>
+                                        {task.title}
+                                        <p className="text-xs text-muted-foreground">
+                                            Due: {format(new Date(task.dueDate), "PP")}
+                                        </p>
+                                    </label>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            </>
+                        ) : (
+                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
+                        )}
+                            {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
+                    </div>
+                </CardContent>
+           </Card>
           
         </div>
       </main>
@@ -1501,3 +1389,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
