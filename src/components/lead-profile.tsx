@@ -42,6 +42,7 @@ import {
   Clock,
   SkipForward,
   ChevronDown,
+  History,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
@@ -80,6 +81,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddContactForm } from '@/components/add-contact-form'
 import { EditContactForm } from '@/components/edit-contact-form'
 import { LogNoteDialog } from '@/components/log-note-dialog'
@@ -1068,77 +1070,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <PhoneCall className="w-5 h-5 text-muted-foreground" />
-                Call History
+                <History className="w-5 h-5 text-muted-foreground" />
+                History
               </CardTitle>
             </CardHeader>
             <CardContent>
-                {callHistory.length > 0 ? (
-                <ul className="space-y-4">
-                    {callHistory.map((item) => {
-                    const transcript = transcripts.find(t => t.callId === item.callId);
-                    return (
-                        <li key={item.id} className="flex gap-4 group">
-                        <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
-                            <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                            </div>
-                            <div className="text-sm text-muted-foreground break-words">
-                            {item.notes}
-                            </div>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
-                                <Hash className="w-3 h-3 flex-shrink-0" />
-                                <span>Call ID: {item.callId}</span>
-                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                    <Clipboard className="w-2.5 h-2.5" />
-                                </Button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {transcript ? (
-                                    <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        View Transcript
-                                    </Button>
-                                ) : (
-                                    <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                    disabled={fetchingTranscriptId === item.callId}
-                                    >
-                                    {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
-                                    </Button>
-                                )}
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                    <Voicemail className="mr-2 h-4 w-4" />
-                                    Recording
-                                </Button>
-                            </div>
-                            </div>
-                        </div>
-                        </li>
-                    )
-                    })}
-                </ul>
-                ) : (
-                <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
-                )}
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-                <CardHeader>
-                        <CardTitle>Activity History</CardTitle>
-                </CardHeader>
-                    <CardContent>
-                        {activities.length > 0 ? (
-                            <ul className="space-y-4">
+                <Tabs defaultValue="activity">
+                    <TabsList>
+                        <TabsTrigger value="activity">Activity History</TabsTrigger>
+                        <TabsTrigger value="calls">Call History</TabsTrigger>
+                        <TabsTrigger value="notes">Notes</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="activity">
+                         {activities.length > 0 ? (
+                            <ul className="space-y-4 mt-4">
                             {activities.map((item, index) => (
                                 <li key={item.id} className="flex gap-4 group">
                                 <div className="flex flex-col items-center">
@@ -1165,38 +1110,87 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             ))}
                             </ul>
                         ) : (
-                                !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
                         )}
                         {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
-                    </CardContent>
-            </Card>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <BookText className="w-5 h-5 text-muted-foreground" />
-                        Notes
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {notes.length > 0 ? (
-                        <div className="space-y-4">
-                        {notes.map(note => (
-                        <div key={note.id} className="text-sm border-l-2 pl-4">
-                            <p className="whitespace-pre-wrap">{note.content}</p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                            {new Date(note.date).toLocaleString()} by {note.author}
-                            </p>
-                        </div>
-                        ))}
-                        </div>
-                    ) : (
-                        !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
-                    )}
+                    </TabsContent>
+                    <TabsContent value="calls">
+                         {callHistory.length > 0 ? (
+                            <ul className="space-y-4 mt-4">
+                                {callHistory.map((item) => {
+                                const transcript = transcripts.find(t => t.callId === item.callId);
+                                return (
+                                    <li key={item.id} className="flex gap-4 group">
+                                    <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
+                                        <div className="flex items-start justify-between gap-2">
+                                        <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
+                                        <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground break-words">
+                                        {item.notes}
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
+                                            <Hash className="w-3 h-3 flex-shrink-0" />
+                                            <span>Call ID: {item.callId}</span>
+                                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
+                                                <Clipboard className="w-2.5 h-2.5" />
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {transcript ? (
+                                                <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
+                                                    <FileText className="mr-2 h-4 w-4" />
+                                                    View Transcript
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleGetTranscriptForCall(item.callId!)}
+                                                disabled={fetchingTranscriptId === item.callId}
+                                                >
+                                                {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
+                                                </Button>
+                                            )}
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
+                                                <Voicemail className="mr-2 h-4 w-4" />
+                                                Recording
+                                            </Button>
+                                        </div>
+                                        </div>
+                                    </div>
+                                    </li>
+                                )
+                                })}
+                            </ul>
+                            ) : (
+                            <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
+                            )}
+                    </TabsContent>
+                    <TabsContent value="notes">
+                        {notes.length > 0 ? (
+                            <div className="space-y-4 mt-4">
+                            {notes.map(note => (
+                            <div key={note.id} className="text-sm border-l-2 pl-4">
+                                <p className="whitespace-pre-wrap">{note.content}</p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                {new Date(note.date).toLocaleString()} by {note.author}
+                                </p>
+                            </div>
+                            ))}
+                            </div>
+                        ) : (
+                            !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
+                        )}
                         {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
-                </CardContent>
-            </Card>
-          </div>
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+          </Card>
           
           <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
               <DialogContent className="max-w-2xl">
@@ -1389,5 +1383,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
