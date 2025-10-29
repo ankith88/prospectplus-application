@@ -434,35 +434,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     console.log('[Client] handleDiscoverySave triggered.');
 
-    // Step 1: Call NetSuite and handle its response.
+    // Step 1: Immediately save to Firebase and update UI
     try {
-        console.log('[Client] Preparing to call NetSuite server action...');
-        const nsResult = await sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: discoveryData });
-        console.log('[Client] NetSuite call finished. Result:', nsResult);
-
-        if (nsResult.success) {
-            toast({ title: 'NetSuite Updated', description: 'Discovery data sent to NetSuite.' });
-        } else {
-            toast({ variant: 'destructive', title: 'NetSuite Error', description: `Failed to send to NetSuite: ${nsResult.message}`, duration: 10000 });
-        }
-    } catch (error: any) {
-        console.error("[Client] Error calling NetSuite server action:", error);
-        toast({ variant: "destructive", title: "Error", description: `A client-side error occurred while sending to NetSuite: ${error.message}` });
-    }
-    
-    // Step 2: Save to Firebase, regardless of NetSuite outcome.
-    try {
-        console.log('[Client] Preparing to save to Firebase...');
-        await updateLeadDiscoveryData(lead.id, discoveryData);
-        setLead(prev => prev ? { ...prev, discoveryData: discoveryData } : null);
-        toast({ title: 'Success', description: 'Discovery questions saved to Firebase.' });
-        console.log('[Client] Firebase save successful.');
+      console.log('[Client] Preparing to save to Firebase...');
+      await updateLeadDiscoveryData(lead.id, discoveryData);
+      setLead(prev => prev ? { ...prev, discoveryData: discoveryData } : null);
+      toast({ title: 'Success', description: 'Discovery questions saved.' });
+      console.log('[Client] Firebase save successful.');
+      setIsDiscoveryQuestionsOpen(false);
     } catch (error: any) {
         console.error("[Client] Failed to save discovery data to Firebase:", error);
         toast({ variant: "destructive", title: "Firebase Error", description: `Failed to save discovery data: ${error.message}` });
-    } finally {
-        setIsDiscoveryQuestionsOpen(false);
+        return; // Stop if Firebase save fails
     }
+    
+    // Step 2: Trigger NetSuite sync in the background (fire-and-forget)
+    console.log('[Client] Triggering NetSuite sync in the background...');
+    sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: discoveryData })
+      .then(nsResult => {
+          if (nsResult.success) {
+              console.log(`[Client BG] NetSuite sync successful for lead ${lead.id}`);
+          } else {
+              console.error(`[Client BG] NetSuite sync failed for lead ${lead.id}: ${nsResult.message}`);
+          }
+      })
+      .catch(error => {
+          console.error(`[Client BG] Uncaught error during NetSuite sync for lead ${lead.id}:`, error);
+      });
   };
 
   const handleDiscoveryClose = (open: boolean) => {
@@ -863,43 +861,55 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <p className="font-semibold">{contact.name}</p>
                             <p className="text-sm text-muted-foreground">{contact.title}</p>
                           </div>
-                           <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DialogTrigger asChild>
-                                    <DropdownMenuItem onSelect={() => {setSelectedContact(contact); setIsEditDialogOpen(true);}}>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit
-                                    </DropdownMenuItem>
-                                </DialogTrigger>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      <span>Delete</span>
-                                    </DropdownMenuItem>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
+                           <Dialog>
+                            <AlertDialog>
+                                <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                    <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
+                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                        </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                        </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                </DropdownMenuContent>
+                                </DropdownMenu>
+                                <AlertDialogContent>
                                     <AlertDialogHeader>
-                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                      <AlertDialogDescription>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
                                         This will permanently delete the contact {contact.name}. This action cannot be undone.
-                                      </AlertDialogDescription>
+                                        </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
                                         Delete
-                                      </AlertDialogAction>
+                                        </AlertDialogAction>
                                     </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                             <DialogContent>
+                               <DialogHeader>
+                                 <DialogTitle>Edit Contact</DialogTitle>
+                               </DialogHeader>
+                               {selectedContact && (
+                                <EditContactForm
+                                  leadId={lead.id}
+                                  contact={selectedContact}
+                                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
+                                />
+                               )}
+                             </DialogContent>
+                           </Dialog>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm">
                             <div className="flex items-center gap-3">
@@ -1193,24 +1203,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       />
                   )}
               </DialogContent>
-          </Dialog>
-
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-             <DialogContent>
-               <DialogHeader>
-                 <DialogTitle>Edit Contact</DialogTitle>
-                 <DialogDescription>
-                   Update the details for the contact.
-                 </DialogDescription>
-               </DialogHeader>
-               {selectedContact && (
-                <EditContactForm
-                  leadId={lead.id}
-                  contact={selectedContact}
-                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
-                />
-               )}
-             </DialogContent>
           </Dialog>
 
         </div>
