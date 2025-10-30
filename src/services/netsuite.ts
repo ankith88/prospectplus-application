@@ -3,7 +3,17 @@
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
-import fetch, { AbortError } from 'node-fetch';
+import fetch from 'node-fetch';
+
+const TIMEOUT_DURATION = 20000; // 20 seconds for all requests
+
+class AbortError extends Error {
+    constructor(message = 'The request was aborted.') {
+        super(message);
+        this.name = 'AbortError';
+    }
+}
+
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -119,9 +129,11 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(url, { signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -135,12 +147,12 @@ export async function sendToNetSuiteForOutcome(payload: NetSuiteOutcomePayload):
         return { success: true, message: `Outcome for lead ${leadId} sent to NetSuite.` };
 
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
           console.error(`[NetSuite API] Request for lead outcome ${leadId} timed out.`);
           return { success: false, message: 'The request to NetSuite timed out.' };
         }
         console.error("[NetSuite API] Error sending outcome:", error);
-        throw error;
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
 
@@ -194,9 +206,11 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { method: 'GET', signal: controller.signal });
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -210,7 +224,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
         console.log(`[NetSuite Service] Successfully sent discovery data for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Discovery data sent to NetSuite.' };
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
             console.error(`[NetSuite Service] Request for discovery data on lead ${leadId} timed out.`);
             return { success: false, message: 'The request to NetSuite timed out.' };
         }
@@ -262,9 +276,11 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { method: 'GET', signal: controller.signal });
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -278,7 +294,7 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
         console.log(`[NetSuite Contact Service] Successfully sent contact data for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Contact data sent to NetSuite.' };
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
             console.error(`[NetSuite Contact Service] Request for contact on lead ${leadId} timed out.`);
             return { success: false, message: 'The request to NetSuite timed out.' };
         }
@@ -366,9 +382,11 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { method: 'GET', signal: controller.signal });
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -382,7 +400,7 @@ export async function sendNoteToNetSuite(payload: NetSuiteNotePayload): Promise<
         console.log(`[NetSuite Note Service] Successfully sent note for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Note sent to NetSuite.' };
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
             console.error(`[NetSuite Note Service] Request for note ${noteId} on lead ${leadId} timed out.`);
             return { success: false, message: 'The request to NetSuite timed out.' };
         }
@@ -436,9 +454,11 @@ export async function sendActivityToNetSuite(payload: NetSuiteActivityPayload): 
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { method: 'GET', signal: controller.signal });
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -452,7 +472,7 @@ export async function sendActivityToNetSuite(payload: NetSuiteActivityPayload): 
         console.log(`[NetSuite Activity Service] Successfully sent activity for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Activity sent to NetSuite.' };
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
             console.error(`[NetSuite Activity Service] Request for activity on lead ${leadId} timed out.`);
             return { success: false, message: 'The request to NetSuite timed out.' };
         }
@@ -512,9 +532,11 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
 
-        const response = await fetch(url, { method: 'GET', signal: controller.signal });
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
 
         clearTimeout(timeout);
 
@@ -528,7 +550,7 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
         console.log(`[NetSuite Lead Update Service] Successfully sent update for lead ${leadId}. Response: ${responseBody}`);
         return { success: true, message: 'Lead details sent to NetSuite.' };
     } catch (error: any) {
-        if (error instanceof AbortError) {
+        if (error.name === 'AbortError') {
             console.error(`[NetSuite Lead Update Service] Request for lead update ${leadId} timed out.`);
             return { success: false, message: 'The request to NetSuite timed out.' };
         }
@@ -539,5 +561,6 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 }
 
     
+
 
 
