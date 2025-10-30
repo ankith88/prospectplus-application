@@ -704,27 +704,7 @@ async function logCallActivity(
     // Await Firebase operations
     await Promise.all([activityPromise, statusPromise]);
     
-    // NetSuite operations (fire-and-forget for client responsiveness)
-    const netSuiteOutcomes = ['Disconnected', 'Not Interested', 'Wrong Number', 'DNC - Stop List', 'Not a Fit', 'Email Interested', 'LOST - No Contact'];
-    if (netSuiteOutcomes.includes(callData.outcome)) {
-        sendToNetSuiteForOutcome({
-            leadId: leadId,
-            outcome: callData.outcome,
-            reason: outcomeReason || '',
-            dialerAssigned: callData.author,
-            notes: callData.notes || '',
-            salesRecordInternalId: callData.salesRecordInternalId || ''
-        }).catch(e => console.error("NetSuite outcome sync failed in background:", e));
-    }
-
-    if (callData.notes) {
-        sendNoteToNetSuite({
-            leadId,
-            noteId: 'call-' + Date.now(),
-            author: callData.author,
-            content: callData.notes,
-        }).catch(e => console.error("NetSuite note sync failed in background:", e));
-    }
+    // NetSuite operations are removed
     
     return status;
 }
@@ -736,20 +716,14 @@ async function logNoteActivity(
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = { ...noteData };
 
-    const docRef = await addDoc(notesRef, newNoteData);
+    await addDoc(notesRef, newNoteData);
     await logActivity(leadId, {
         type: 'Update',
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
         date: noteData.date
     });
     
-    // NetSuite operation (fire-and-forget)
-    sendNoteToNetSuite({
-        leadId,
-        noteId: docRef.id,
-        author: newNoteData.author,
-        content: newNoteData.content,
-    }).catch(e => console.error("NetSuite note sync failed in background:", e));
+    // NetSuite operation removed
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -1270,6 +1244,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 
