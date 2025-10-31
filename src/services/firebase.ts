@@ -754,8 +754,6 @@ async function logNoteActivity(
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
         date: noteData.date
     });
-    
-    // NetSuite operation removed
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
@@ -1276,6 +1274,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 
