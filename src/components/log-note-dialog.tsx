@@ -173,7 +173,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                      <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                            {submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />}
-                            <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
+                            <span className={submissionState === 'complete' ? '' : 'text-muted-foreground'}>
                                Saved
                             </span>
                         </div>
