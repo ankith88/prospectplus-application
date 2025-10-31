@@ -722,7 +722,7 @@ async function logCallActivity(
         'Not Interested': { status: 'Lost', reason: 'Not Interested' },
         'Voicemail': { status: 'In Progress' },
         'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-        'Not a Fit': { status: 'Unqualified' },
+        'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
         'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
         'Reschedule': { status: 'Reschedule' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
@@ -1189,6 +1189,35 @@ async function shareCallReview(leadId: string, activityId: string, sharedWith: s
     }
 }
 
+async function getSharedCallsForUser(displayName: string): Promise<CallActivity[]> {
+    try {
+        const q = query(
+            collectionGroup(firestore, 'activity'),
+            where('review.sharedWith', 'array-contains', displayName)
+        );
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return [];
+        }
+
+        const calls = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                id: doc.id,
+                leadId,
+                ...data,
+            } as CallActivity;
+        });
+        
+        return calls;
+
+    } catch (error) {
+        console.error(`Failed to get shared calls for ${displayName}:`, error);
+        throw new Error('Service Unavailable');
+    }
+}
+
 async function getLastNote(leadId: string): Promise<Note | null> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'notes');
@@ -1269,6 +1298,7 @@ export {
     shareCallReview,
     getLastNote,
     getLastActivity,
+    getSharedCallsForUser,
 };
 
 
