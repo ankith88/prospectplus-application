@@ -9,8 +9,8 @@ export default async function LeadProfilePage({
 }: {
   params: { id: string }
 }) {
-  // Fetch only the core lead data on initial load. Sub-collections will be fetched on-demand.
-  const lead: Lead | null = await getLeadFromFirebase(id, false);
+  // Fetch the lead and all its sub-collections on the server.
+  const lead: Lead | null = await getLeadFromFirebase(id, true);
 
   if (!lead) {
     notFound();

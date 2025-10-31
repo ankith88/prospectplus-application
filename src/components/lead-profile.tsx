@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -51,7 +52,6 @@ import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity } from '@/services/firebase'
-import { sendToNetSuiteForOutcome, sendDiscoveryDataToNetSuite, sendLeadUpdateToNetSuite } from '@/services/netsuite'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -123,14 +123,14 @@ const salesReps = [
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead | null>(initialLead);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(initialLead.contacts || []);
+  const [activities, setActivities] = useState<Activity[]>(initialLead.activity || []);
+  const [notes, setNotes] = useState<Note[]>(initialLead.notes || []);
+  const [transcripts, setTranscripts] = useState<Transcript[]>(initialLead.transcripts || []);
+  const [tasks, setTasks] = useState<Task[]>(initialLead.tasks || []);
+  const [appointments, setAppointments] = useState<Appointment[]>(initialLead.appointments || []);
 
-  const [loadingSubcollections, setLoadingSubcollections] = useState(true);
+  const [loadingSubcollections, setLoadingSubcollections] = useState(false);
   
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
@@ -181,35 +181,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [initialLead]);
 
   useEffect(() => {
-    if (!lead) return;
+    if (!initialLead) return;
 
-    setLoadingSubcollections(true);
+    // The data is now pre-fetched on the server, so we just set it to state.
+    // Real-time updates can be re-introduced with targeted listeners if needed.
+    setLead(initialLead);
+    setContacts(initialLead.contacts || []);
+    setActivities(initialLead.activity || []);
+    setNotes(initialLead.notes || []);
+    setTranscripts(initialLead.transcripts || []);
+    setTasks(initialLead.tasks || []);
+    setAppointments(initialLead.appointments || []);
 
-    const unsubscribes = [
-      onSnapshot(query(collection(firestore, 'leads', lead.id, 'contacts')), snapshot => {
-        setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact)));
-      }),
-      onSnapshot(query(collection(firestore, 'leads', lead.id, 'activity'), orderBy('date', 'desc')), snapshot => {
-        setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity)));
-      }),
-      onSnapshot(query(collection(firestore, 'leads', lead.id, 'notes'), orderBy('date', 'desc')), snapshot => {
-        setNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Note)));
-      }),
-      onSnapshot(query(collection(firestore, 'leads', lead.id, 'transcripts'), orderBy('date', 'desc')), snapshot => {
-        setTranscripts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transcript)));
-      }),
-      onSnapshot(query(collection(firestore, 'leads', lead.id, 'tasks'), orderBy('dueDate', 'asc')), snapshot => {
-        setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
-      }),
-       onSnapshot(query(collection(firestore, 'leads', lead.id, 'appointments'), orderBy('duedate', 'desc')), snapshot => {
-        setAppointments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment)));
-      }),
-    ];
-
-    setLoadingSubcollections(false);
-
-    return () => unsubscribes.forEach(unsub => unsub());
-  }, [lead]);
+  }, [initialLead]);
 
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
@@ -276,7 +260,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found, saved, and synced.` });
+            setContacts(prev => [...prev, ...result.contacts!]);
+            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
         }
@@ -291,17 +276,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const addActivity = async (newActivity: Omit<Activity, 'id' | 'date'>) => {
     if (lead) {
-        await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
+        const newActivityId = await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
+        setActivities(prev => [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...prev] as Activity[]);
     }
   };
 
-  const handleNoteLogged = () => {
-    // The real-time listener will update notes. We just need to trigger a re-render if needed,
-    // but onSnapshot handles it. This callback is primarily for closing the dialog now.
+  const handleNoteLogged = (newNote: Note) => {
+    setNotes(prev => [newNote, ...prev]);
   };
   
-  const handleContactAdded = async () => {
-    // Real-time listener will update the state
+  const handleContactAdded = async (newContact: Contact) => {
+    setContacts(prev => [newContact, ...prev]);
   };
 
   const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
@@ -310,7 +295,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
         author: user?.displayName,
      });
-    
+     setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
      setIsEditDialogOpen(false);
   };
 
@@ -325,6 +310,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
+      setContacts(prev => prev.filter(c => c.id !== contact.id));
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -376,6 +362,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       if (result.transcriptFound) {
         toast({ title: "Success", description: "Transcript fetched and logged." });
+        const newTranscript = {
+          id: 'temp-' + callId,
+          callId: callId,
+          date: new Date().toISOString(),
+          content: '{"utterances":[]}', // Placeholder
+          author: lead.dialerAssigned
+        };
+        setTranscripts(prev => [newTranscript, ...prev]);
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -394,11 +388,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return;
     }
     try {
-        await addTaskToLead(lead.id, {
+        const newTask = await addTaskToLead(lead.id, {
             title: newTaskTitle,
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
+        setTasks(prev => [newTask, ...prev].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -412,6 +407,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
+          setTasks(prev => prev.map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t));
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -423,6 +419,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
+          setTasks(prev => prev.filter(t => t.id !== taskId));
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -448,19 +445,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return; // Stop if Firebase save fails
     }
     
-    // Step 2: Trigger NetSuite sync in the background (fire-and-forget)
-    console.log('[Client] Triggering NetSuite sync in the background...');
-    sendDiscoveryDataToNetSuite({ leadId: lead.id, discoveryData: discoveryData })
-      .then(nsResult => {
-          if (nsResult.success) {
-              console.log(`[Client BG] NetSuite sync successful for lead ${lead.id}`);
-          } else {
-              console.error(`[Client BG] NetSuite sync failed for lead ${lead.id}: ${nsResult.message}`);
-          }
-      })
-      .catch(error => {
-          console.error(`[Client BG] Uncaught error during NetSuite sync for lead ${lead.id}:`, error);
-      });
+    // Step 2: Trigger NetSuite sync in the background (fire-and-forget) - This is now removed
   };
 
   const handleDiscoveryClose = (open: boolean) => {
@@ -473,13 +458,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       await updateLeadDetails(lead.id, lead, { address: newAddress });
       setLead(prev => prev ? { ...prev, address: newAddress } : null);
       toast({ title: "Success", description: "Address updated successfully." });
-      
-      const nsResult = await sendLeadUpdateToNetSuite({ leadId: lead.id, address: newAddress });
-      if (nsResult.success) {
-          toast({ title: "NetSuite Updated", description: "Address sent to NetSuite." });
-      } else {
-          toast({ variant: "destructive", title: "NetSuite Sync Failed", description: nsResult.message });
-      }
     } catch (error) {
       console.error("Failed to update address:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to update address." });
@@ -855,127 +833,127 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   {contacts.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                      return (
-                      <Card key={contact.id || index} className="relative group/contact">
-                        <CardHeader className="flex-row items-start justify-between pb-2">
-                          <div>
-                            <p className="font-semibold">{contact.name}</p>
-                            <p className="text-sm text-muted-foreground">{contact.title}</p>
-                          </div>
-                           <Dialog>
-                            <AlertDialog>
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                    <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
-                                            <Edit className="mr-2 h-4 w-4" /> Edit
-                                        </DropdownMenuItem>
-                                    </DialogTrigger>
-                                    <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
-                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                        </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                        This will permanently delete the contact {contact.name}. This action cannot be undone.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                        Delete
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                             <DialogContent>
-                               <DialogHeader>
-                                 <DialogTitle>Edit Contact</DialogTitle>
-                               </DialogHeader>
-                               {selectedContact && (
-                                <EditContactForm
-                                  leadId={lead.id}
-                                  contact={selectedContact}
-                                  onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
-                                />
-                               )}
-                             </DialogContent>
-                           </Dialog>
-                        </CardHeader>
-                        <CardContent className="space-y-3 text-sm">
-                            <div className="flex items-center gap-3">
-                                <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                                  {contact.email}
-                                </a>
-                            </div>
-                             <div className="flex items-center gap-3">
-                                <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <div className="flex items-center gap-1">
-                                    <span className="break-all">{contact.phone}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
-                                        <PhoneCall className="w-3 h-3" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                         <CardFooter>
-                           <div className="flex w-full items-center gap-0.5">
-                                {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      asChild
-                                      className={cn("flex-grow rounded-r-none")}
-                                    >
-                                      <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                                        <Calendar className="mr-2 h-4 w-4" />
-                                        Schedule with {lead.salesRepAssigned}
+                      <Dialog key={contact.id || index}>
+                          <Card className="relative group/contact">
+                              <CardHeader className="flex-row items-start justify-between pb-2">
+                                  <div>
+                                      <p className="font-semibold">{contact.name}</p>
+                                      <p className="text-sm text-muted-foreground">{contact.title}</p>
+                                  </div>
+                                  <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6">
+                                              <MoreVertical className="h-4 w-4" />
+                                          </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent>
+                                          <DialogTrigger asChild>
+                                              <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
+                                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                              </DropdownMenuItem>
+                                          </DialogTrigger>
+                                          <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                  </DropdownMenuItem>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent>
+                                                  <AlertDialogHeader>
+                                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                      <AlertDialogDescription>
+                                                          This will permanently delete the contact {contact.name}. This action cannot be undone.
+                                                      </AlertDialogDescription>
+                                                  </AlertDialogHeader>
+                                                  <AlertDialogFooter>
+                                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                      <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                                          Delete
+                                                      </AlertDialogAction>
+                                                  </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                          </AlertDialog>
+                                      </DropdownMenuContent>
+                                  </DropdownMenu>
+                              </CardHeader>
+                              <CardContent className="space-y-3 text-sm">
+                                  <div className="flex items-center gap-3">
+                                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                                          {contact.email}
                                       </a>
-                                    </Button>
-                                ) : (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm" className="flex-grow">
-                                                <Calendar className="mr-2 h-4 w-4" />
-                                                Schedule Appointment
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                            {salesReps.map(rep => (
-                                                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                    {rep.name}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                )}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
-                                            <ChevronDown className="h-4 w-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
-                                            <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                Schedule with {rep.name}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                         </CardFooter>
-                      </Card>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                      <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                                      <div className="flex items-center gap-1">
+                                          <span className="break-all">{contact.phone}</span>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                              <PhoneCall className="w-3 h-3" />
+                                          </Button>
+                                      </div>
+                                  </div>
+                              </CardContent>
+                              <CardFooter>
+                                  <div className="flex w-full items-center gap-0.5">
+                                      {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
+                                          <Button
+                                              variant="outline"
+                                              size="sm"
+                                              asChild
+                                              className={cn("flex-grow rounded-r-none")}
+                                          >
+                                              <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                                                  <Calendar className="mr-2 h-4 w-4" />
+                                                  Schedule with {lead.salesRepAssigned}
+                                              </a>
+                                          </Button>
+                                      ) : (
+                                          <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                  <Button variant="outline" size="sm" className="flex-grow">
+                                                      <Calendar className="mr-2 h-4 w-4" />
+                                                      Schedule Appointment
+                                                  </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent>
+                                                  {salesReps.map(rep => (
+                                                      <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
+                                                          {rep.name}
+                                                      </DropdownMenuItem>
+                                                  ))}
+                                              </DropdownMenuContent>
+                                          </DropdownMenu>
+                                      )}
+                                      <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                              <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
+                                                  <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                              {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
+                                                  <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
+                                                      Schedule with {rep.name}
+                                                  </DropdownMenuItem>
+                                              ))}
+                                          </DropdownMenuContent>
+                                      </DropdownMenu>
+                                  </div>
+                              </CardFooter>
+                          </Card>
+                          <DialogContent>
+                              <DialogHeader>
+                                  <DialogTitle>Edit Contact</DialogTitle>
+                              </DialogHeader>
+                              {selectedContact && (
+                                  <EditContactForm
+                                      leadId={lead.id}
+                                      contact={selectedContact}
+                                      onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
+                                  />
+                              )}
+                          </DialogContent>
+                      </Dialog>
                      )
                   })}
                   </div>
@@ -1198,7 +1176,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                           // Real-time listener will handle update
+                           setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t));
                         }}
                       />
                   )}

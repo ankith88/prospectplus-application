@@ -8,7 +8,6 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
-import { sendNoteToNetSuite, sendToNetSuiteForOutcome } from './netsuite';
 
 async function logActivity(
   leadId: string,
@@ -187,9 +186,29 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-          const { items } = await getLeadContacts(docSnapshot.id);
-          transformedLead.contacts = items;
-          transformedLead.contactCount = items.length;
+            const [
+                contacts,
+                activities,
+                notes,
+                transcripts,
+                tasks,
+                appointments
+            ] = await Promise.all([
+                getLeadSubCollection<Contact>(leadId, 'contacts', documentId()),
+                getLeadSubCollection<Activity>(leadId, 'activity', 'date'),
+                getLeadSubCollection<Note>(leadId, 'notes', 'date'),
+                getLeadSubCollection<Transcript>(leadId, 'transcripts', 'date'),
+                getLeadSubCollection<Task>(leadId, 'tasks', 'dueDate', 'asc'),
+                getLeadSubCollection<Appointment>(leadId, 'appointments', 'duedate')
+            ]);
+
+            transformedLead.contacts = contacts;
+            transformedLead.activity = activities;
+            transformedLead.notes = notes;
+            transformedLead.transcripts = transcripts;
+            transformedLead.tasks = tasks;
+            transformedLead.appointments = appointments;
+            transformedLead.contactCount = contacts.length;
         }
 
         return transformedLead;
@@ -309,6 +328,19 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
         return [];
     }
 }
+
+async function getLeadSubCollection<T>(leadId: string, collectionName: string, orderByField: string, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
+    try {
+        const ref = collection(firestore, 'leads', leadId, collectionName);
+        const q = query(ref, orderBy(orderByField, orderDirection));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+    } catch (error) {
+        console.error(`Failed to fetch sub-collection ${collectionName} for lead ${leadId}:`, error);
+        return [];
+    }
+}
+
 
 async function getPagedLeadSubCollection<T>(
     leadId: string, 
@@ -1244,6 +1276,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 
