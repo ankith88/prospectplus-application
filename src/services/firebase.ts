@@ -19,6 +19,7 @@ async function logActivity(
         const activityLog: Partial<Activity> = {
             ...activity,
             date: activity.date || new Date().toISOString(),
+            syncedWithNetSuite: false,
         };
 
         if (activity.author) {
@@ -744,7 +745,7 @@ async function logNoteActivity(
     noteData: { content: string; author: string, date: string }
 ): Promise<void> {
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
-    const newNoteData = { ...noteData };
+    const newNoteData = { ...noteData, syncedWithNetSuite: false };
 
     const docRef = await addDoc(notesRef, newNoteData);
     
@@ -1282,3 +1283,6 @@ export {
 
 
 
+
+
+    

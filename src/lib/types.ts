@@ -37,6 +37,7 @@ export interface Activity {
   author?: string
   review?: Review;
   isReviewed?: boolean;
+  syncedWithNetSuite?: boolean;
 }
 
 export interface Note {
@@ -44,6 +45,7 @@ export interface Note {
     date: string;
     author: string;
     content: string;
+    syncedWithNetSuite?: boolean;
 }
 
 export interface Task {
@@ -161,3 +163,5 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin';
 }
+
+    
