@@ -10,7 +10,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { logActivity, findActivityByCallId, updateActivity, logTranscriptActivity } from '@/services/firebase';
-import { sendActivityToNetSuite } from '@/services/netsuite';
 import type { Lead, Activity } from '@/lib/types';
 
 /**
@@ -47,17 +46,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string,
       if (!querySnapshot.empty) {
         const doc = querySnapshot.docs[0];
         return { id: doc.id, data: doc.data() as Lead };
-      }
-
-      // Fallback search in contacts subcollection
-      const allLeadsSnapshot = await getDocs(leadsRef);
-      for (const leadDoc of allLeadsSnapshot.docs) {
-          const contactsRef = collection(firestore, 'leads', leadDoc.id, 'contacts');
-          const contactsQuery = query(contactsRef, where('phone', '==', num), limit(1));
-          const contactsSnapshot = await getDocs(contactsQuery);
-          if (!contactsSnapshot.empty) {
-              return { id: leadDoc.id, data: leadDoc.data() as Lead };
-          }
       }
   }
 
@@ -175,15 +163,6 @@ export async function POST(
           await logActivity(leadInfo.id, activityData);
           console.log(`Successfully logged new activity for lead ${leadInfo.id} and call ${callId}`);
       }
-
-      // Send to NetSuite - This call is now removed.
-        // try {
-        //     await sendActivityToNetSuite({ leadId: leadInfo.id, activity: activityData });
-        //     console.log(`Activity for call ID ${callId} successfully sent to NetSuite.`);
-        // } catch (nsError) {
-        //     console.error(`Failed to send activity for call ID ${callId} to NetSuite:`, nsError);
-        //     // Do not block the webhook response for NetSuite errors
-        // }
     }
 
     return new NextResponse('Webhook processed successfully', { status: 200 });

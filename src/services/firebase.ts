@@ -736,8 +736,6 @@ async function logCallActivity(
     // Await Firebase operations
     await Promise.all([activityPromise, statusPromise]);
     
-    // NetSuite operations are removed
-    
     return status;
 }
 
@@ -897,7 +895,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   }
    variations.add(phoneNumber);
 
-
   for (const num of Array.from(variations)) {
       const q = query(leadsRef, where('customerPhone', '==', num), limit(1));
       const querySnapshot = await getDocs(q);
@@ -905,17 +902,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
       if (!querySnapshot.empty) {
         const doc = querySnapshot.docs[0];
         return { id: doc.id };
-      }
-
-      // Fallback search in contacts subcollection
-      const allLeadsSnapshot = await getDocs(leadsRef);
-      for (const leadDoc of allLeadsSnapshot.docs) {
-          const contactsRef = collection(firestore, 'leads', leadDoc.id, 'contacts');
-          const contactsQuery = query(contactsRef, where('phone', '==', num), limit(1));
-          const contactsSnapshot = await getDocs(contactsQuery);
-          if (!contactsSnapshot.empty) {
-              return { id: leadDoc.id };
-          }
       }
   }
 
@@ -1274,6 +1260,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 
