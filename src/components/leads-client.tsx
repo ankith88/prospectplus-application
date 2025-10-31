@@ -833,19 +833,23 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
               <Accordion type="multiple" className="w-full space-y-2">
                 {Object.entries(groupedAssignedLeads).map(([dialer, statusGroups]) => (
                   <AccordionItem value={dialer} key={dialer}>
-                    <AccordionTrigger className="bg-muted px-4 rounded-md">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                            checked={Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
-                            onCheckedChange={(checked) => handleSelectAllInAssignedGroup(Object.values(statusGroups).flat(), checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mr-2"
-                            aria-label={`Select all leads for ${dialer}`}
-                        />
-                        <span className="font-semibold">{dialer}</span>
-                        <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
-                      </div>
-                    </AccordionTrigger>
+                    <div className="bg-muted px-4 rounded-md flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                              checked={Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
+                              onCheckedChange={(checked) => handleSelectAllInAssignedGroup(Object.values(statusGroups).flat(), checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              id={`select-all-${dialer}`}
+                              aria-label={`Select all leads for ${dialer}`}
+                          />
+                          <AccordionTrigger className="py-2 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{dialer}</span>
+                              <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
+                            </div>
+                          </AccordionTrigger>
+                        </div>
+                    </div>
                     <AccordionContent className="pt-2">
                        <Accordion type="multiple" className="w-full space-y-1">
                           {Object.entries(statusGroups).map(([status, leads]) => {
@@ -857,19 +861,22 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
 
                               return (
                                 <AccordionItem value={status} key={status}>
-                                  <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
+                                  <div className="bg-secondary/50 px-4 rounded-md flex items-center">
+                                    <Checkbox
+                                        checked={paginatedLeads.length > 0 && areAllInGroupSelected}
+                                        onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        id={`select-all-${dialer}-${status}`}
+                                        className="mr-2"
+                                        aria-label={`Select all leads for ${dialer} with status ${status}`}
+                                    />
+                                    <AccordionTrigger className="py-2 text-sm flex-1">
                                       <div className="flex items-center gap-2">
-                                           <Checkbox
-                                              checked={paginatedLeads.length > 0 && areAllInGroupSelected}
-                                              onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="mr-2"
-                                              aria-label={`Select all leads for ${dialer} with status ${status}`}
-                                          />
                                           <LeadStatusBadge status={status as LeadStatus} />
                                           <Badge variant="outline">{leads.length} Leads</Badge>
                                       </div>
-                                  </AccordionTrigger>
+                                    </AccordionTrigger>
+                                  </div>
                                   <AccordionContent className="p-2">
                                      <Table>
                                         <TableHeader>
@@ -1132,3 +1139,5 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     </>
   )
 }
+
+    
