@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogClose,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Form,
@@ -163,8 +164,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                 <ul className="space-y-4">
                     <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                            <span className={'text-muted-foreground'}>
+                            {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
+                            <span className={submissionState === 'saving_firebase' ? '' : 'text-muted-foreground'}>
                                 Saving to ProspectPlus...
                             </span>
                         </div>
