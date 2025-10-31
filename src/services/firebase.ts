@@ -939,11 +939,14 @@ async function getLeadTasks(leadId: string, limitNum: number = 10, lastDocId: st
 
 async function getAllUserTasks(displayName: string): Promise<Array<Task & { leadId: string; leadName: string }>> {
     try {
-        const tasksSnapshot = await getDocs(collectionGroup(firestore, 'tasks'));
+        const tasksQuery = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
+        const tasksSnapshot = await getDocs(tasksQuery);
         
-        const userTasks = tasksSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data(), leadId: doc.ref.parent.parent!.id }))
-            .filter(task => task.author === displayName) as Array<Task & { leadId: string }>;
+        const userTasks = tasksSnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data(), 
+            leadId: doc.ref.parent.parent!.id 
+        })) as Array<Task & { leadId: string }>;
 
         if (userTasks.length === 0) {
             return [];
@@ -1005,9 +1008,14 @@ async function getAllTasks(): Promise<Array<Task & { leadId: string }>> {
 
 async function addTaskToLead(leadId: string, taskData: { title: string; dueDate: string; author: string }): Promise<Task> {
     try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        const leadData = leadSnap.data();
+
         const tasksRef = collection(firestore, 'leads', leadId, 'tasks');
         const newTask: Omit<Task, 'id'> = {
             ...taskData,
+            dialerAssigned: leadData?.dialerAssigned || null,
             isCompleted: false,
             createdAt: new Date().toISOString(),
         };
@@ -1261,6 +1269,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 

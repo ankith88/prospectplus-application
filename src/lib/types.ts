@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -53,6 +54,7 @@ export interface Task {
     createdAt: string;
     completedAt?: string;
     author: string;
+    dialerAssigned?: string;
 }
 
 export type AppointmentStatus = 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
