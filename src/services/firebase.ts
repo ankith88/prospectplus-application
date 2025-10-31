@@ -746,7 +746,8 @@ async function logNoteActivity(
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = { ...noteData };
 
-    await addDoc(notesRef, newNoteData);
+    const docRef = await addDoc(notesRef, newNoteData);
+    
     await logActivity(leadId, {
         type: 'Update',
         notes: `Note added: ${noteData.content.substring(0, 100)}${noteData.content.length > 100 ? '...' : ''}`,
@@ -1260,6 +1261,7 @@ export {
     getLastNote,
     getLastActivity,
 };
+
 
 
 
