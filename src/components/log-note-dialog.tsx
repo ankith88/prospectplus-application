@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import type { Lead } from '@/lib/types'
+import type { Lead, Note } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
@@ -39,18 +39,15 @@ const formSchema = z.object({
 interface LogNoteDialogProps {
   lead: Lead
   children: React.ReactNode
-  onNoteLogged: () => void;
+  onNoteLogged: (newNote: Note) => void;
 }
 
-type SubmissionStatus = 'idle' | 'saving_firebase' | 'syncing_netsuite' | 'complete' | 'error';
+type SubmissionStatus = 'idle' | 'saving_firebase' | 'complete' | 'error';
 
 
 export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
-  const [netsuiteDuration, setNetsuiteDuration] = useState<number | null>(null);
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
 
   const { toast } = useToast()
@@ -67,16 +64,12 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setIsOpen(false);
     form.reset();
     setSubmissionState('idle');
-    setStartTime(null);
-    setFirebaseDuration(null);
-    setNetsuiteDuration(null);
     setTotalDuration(null);
-    onNoteLogged();
   };
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) {
+    if (!user?.displayName) {
         toast({
             variant: 'destructive',
             title: 'Error',
@@ -85,36 +78,24 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         return;
     }
 
-    setStartTime(performance.now());
-    setFirebaseDuration(null);
-    setNetsuiteDuration(null);
+    const startTime = performance.now();
     setTotalDuration(null);
     setSubmissionState('saving_firebase');
     
     try {
         const submissionDate = new Date().toISOString();
-        
-        // Simulate Firebase step
-        setTimeout(() => {
-            if (submissionState === 'saving_firebase') { // Check if not already complete/error
-                setFirebaseDuration((performance.now() - startTime!) / 1000);
-                setSubmissionState('syncing_netsuite');
-            }
-        }, 800); // Estimated time for Firebase
-
-        await logNoteActivity(lead.id, { 
+        const newNote = { 
             content: values.content, 
-            author: user.displayName || 'Unknown',
-            date: submissionDate
-        });
+            author: user.displayName,
+            date: submissionDate,
+            id: '' // will be replaced by firebase
+        };
         
-        // Finalize state
+        await logNoteActivity(lead.id, newNote);
+        onNoteLogged(newNote);
+        
         const endTime = performance.now();
-        setTotalDuration((endTime - startTime!) / 1000);
-        if (firebaseDuration === null) {
-            setFirebaseDuration((endTime - startTime!) / 1000);
-        }
-        setNetsuiteDuration(totalDuration! - (firebaseDuration || 0));
+        setTotalDuration((endTime - startTime) / 1000);
         setSubmissionState('complete');
 
     } catch (error) {
@@ -130,8 +111,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
-            if (open) return; // prevent closing while in progress
+        if (submissionState === 'saving_firebase') {
+             if (open) return;
         }
         setIsOpen(open);
         if (!open) {
@@ -140,14 +121,14 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     }}>
         <DialogTrigger asChild>{children}</DialogTrigger>
         <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
-             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
+             if (submissionState === 'saving_firebase') {
                 e.preventDefault();
              }
         }}>
           <DialogHeader>
             <DialogTitle>Log a Note</DialogTitle>
             <DialogDescription>
-              Add a note for {lead.companyName}. This will be saved in the activity history and synced to NetSuite.
+              Add a note for {lead.companyName}. This will be saved in the activity history.
             </DialogDescription>
           </DialogHeader>
           
@@ -188,22 +169,14 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                                 Saving to ProspectPlus...
                             </span>
                         </div>
-                        {firebaseDuration !== null && <span className="text-xs text-muted-foreground">{firebaseDuration.toFixed(2)}s</span>}
                     </li>
                      <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                           {submissionState === 'complete' ? (
-                                <CheckCircle className="h-5 w-5 text-green-500" /> 
-                            ) : submissionState === 'syncing_netsuite' ? (
-                                <Loader />
-                            ) : (
-                               <div className="h-5 w-5 border-2 border-dashed rounded-full" />
-                            )}
+                           {submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />}
                             <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
-                               Syncing to NetSuite...
+                               Saved
                             </span>
                         </div>
-                        {netsuiteDuration !== null && <span className="text-xs text-muted-foreground">{netsuiteDuration.toFixed(2)}s</span>}
                     </li>
                 </ul>
                 {submissionState === 'complete' && (
