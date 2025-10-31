@@ -69,6 +69,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [myLeadsPagination, setMyLeadsPagination] = useState<Record<string, number>>({});
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
+  const [isStartingDialing, setIsStartingDialing] = useState(false);
 
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
@@ -321,8 +322,10 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
   };
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
-    if (leads.length === 0) return;
+    if (leads.length === 0 || isStartingDialing) return;
     
+    setIsStartingDialing(true);
+
     let sortedLeadIds = leads.map(l => l.id);
 
     if (startingFromLeadId) {
@@ -676,11 +679,11 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                                 e.stopPropagation();
                                 handleStartDialing(leads);
                             }}
-                            disabled={leads.length === 0}
+                            disabled={leads.length === 0 || isStartingDialing}
                              className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
                         >
-                            <PlayCircle className="mr-2 h-4 w-4" />
-                            Start Dialing
+                            {isStartingDialing ? <Loader /> : <PlayCircle className="mr-2 h-4 w-4" />}
+                            {isStartingDialing ? 'Starting...' : 'Start Dialing'}
                         </Button>
                       </div>
                     <AccordionContent className="pt-2">
