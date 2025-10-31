@@ -12,7 +12,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
@@ -88,7 +87,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
             content: values.content, 
             author: user.displayName,
             date: submissionDate,
-            id: '' // will be replaced by firebase
+            id: 'temp-' + Date.now() + Math.random(), // Temporary unique ID for optimistic update
         };
         
         await logNoteActivity(lead.id, newNote);
@@ -164,8 +163,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                 <ul className="space-y-4">
                     <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                            {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                            <span className={submissionState !== 'saving_firebase' ? 'text-muted-foreground' : ''}>
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                            <span className={'text-muted-foreground'}>
                                 Saving to ProspectPlus...
                             </span>
                         </div>
