@@ -155,6 +155,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
+  const [loadingBack, setLoadingBack] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -430,23 +431,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleDiscoverySave = async (discoveryData: DiscoveryData) => {
     if (!lead) return;
-    console.log('[Client] handleDiscoverySave triggered.');
-
-    // Step 1: Immediately save to Firebase and update UI
     try {
-      console.log('[Client] Preparing to save to Firebase...');
       await updateLeadDiscoveryData(lead.id, discoveryData);
       setLead(prev => prev ? { ...prev, discoveryData: discoveryData } : null);
       toast({ title: 'Success', description: 'Discovery questions saved.' });
-      console.log('[Client] Firebase save successful.');
       setIsDiscoveryQuestionsOpen(false);
     } catch (error: any) {
         console.error("[Client] Failed to save discovery data to Firebase:", error);
         toast({ variant: "destructive", title: "Firebase Error", description: `Failed to save discovery data: ${error.message}` });
-        return; // Stop if Firebase save fails
     }
-    
-    // Step 2: Trigger NetSuite sync in the background (fire-and-forget) - This is now removed
   };
 
   const handleDiscoveryClose = (open: boolean) => {
@@ -496,6 +489,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
       router.push('/leads');
     }
+  };
+
+  const handleBackToLeads = () => {
+    setLoadingBack(true);
+    router.push('/leads');
   };
 
   const getCalendlyLink = (url: string) => {
@@ -593,11 +591,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" asChild>
-          <Link href="/leads">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to All Leads
-          </Link>
+        <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
+          {loadingBack ? <Loader /> : <ArrowLeft className="mr-2 h-4 w-4" />}
+          Back to All Leads
         </Button>
         <Button onClick={handleNextLead} disabled={!isSessionActive || loadingNextLead}>
             {loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}
