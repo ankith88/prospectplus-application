@@ -188,7 +188,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
 
     // Flatten the discoveryData object into query parameters
     for (const [key, value] of Object.entries(discoveryData)) {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value) {
             if (Array.isArray(value)) {
                 if (value.length > 0) {
                     params.append(key, value.join(','));
@@ -561,6 +561,7 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 }
 
     
+
 
 
 
