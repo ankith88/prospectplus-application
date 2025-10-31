@@ -1201,7 +1201,7 @@ async function getLastNote(leadId: string): Promise<Note | null> {
         return { id: doc.id, ...doc.data() } as Note;
     } catch (error) {
         console.error(`Failed to fetch last note for lead ${leadId}:`, error);
-        return null;
+        throw new Error('Service Unavailable');
     }
 }
 
@@ -1217,7 +1217,7 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
         return { id: doc.id, ...doc.data() } as Activity;
     } catch (error) {
         console.error(`Failed to fetch last activity for lead ${leadId}:`, error);
-        return null;
+        throw new Error('Service Unavailable');
     }
 }
 
