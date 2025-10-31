@@ -154,6 +154,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [loadingNextLead, setLoadingNextLead] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -289,10 +290,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setContacts(prev => [newContact, ...prev]);
   };
 
-  const handleContactUpdated = (updatedContact: Contact, oldContact: Contact) => {
+  const handleContactUpdated = (updatedContact: Contact) => {
      addActivity({
         type: 'Update',
-        notes: `Contact ${oldContact.name} updated to ${updatedContact.name}.`,
+        notes: `Contact ${updatedContact.name} updated.`,
         author: user?.displayName,
      });
      setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
@@ -487,6 +488,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 }, [lead, sessionLeads, isSessionActive]);
 
   const handleNextLead = () => {
+    setLoadingNextLead(true);
     if (nextLeadId) {
       router.push(`/leads/${nextLeadId}`);
     } else {
@@ -597,9 +599,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             Back to All Leads
           </Link>
         </Button>
-        <Button onClick={handleNextLead} disabled={!isSessionActive}>
-            <SkipForward className="mr-2 h-4 w-4" />
-            Next in Session
+        <Button onClick={handleNextLead} disabled={!isSessionActive || loadingNextLead}>
+            {loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}
+            {loadingNextLead ? 'Loading...' : 'Next in Session'}
         </Button>
       </div>
 
@@ -949,7 +951,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   <EditContactForm
                                       leadId={lead.id}
                                       contact={selectedContact}
-                                      onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact, selectedContact)}
+                                      onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact)}
                                   />
                               )}
                           </DialogContent>
