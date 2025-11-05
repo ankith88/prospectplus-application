@@ -1260,7 +1260,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           <Card>
+           {/* <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ListTodo className="w-5 h-5 text-muted-foreground" />
@@ -1323,7 +1323,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </div>
                 </CardContent>
-           </Card>
+           </Card> */}
           
         </div>
       </main>

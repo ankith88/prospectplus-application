@@ -137,14 +137,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-             <SidebarMenuItem>
+             {/* <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/tasks")} tooltip="My Tasks">
                 <Link href="/tasks">
                   <ListTodo />
                   <span>My Tasks</span>
                 </Link>
               </SidebarMenuButton>
-            </SidebarMenuItem>
+            </SidebarMenuItem> */}
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
                 <Link href="/appointments">
@@ -200,7 +200,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 lg:gap-4">
            <UniversalSearch />
-           <TaskReminderBell />
+           {/* <TaskReminderBell /> */}
            <SharedReviewBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>

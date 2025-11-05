@@ -26,6 +26,7 @@ const mailTransport = nodemailer.createTransport({
 /**
  * A scheduled function that runs every hour to check for due tasks.
  */
+/*
 export const taskReminder = functions
   .runWith({ memory: "512MB", timeoutSeconds: 300 })
   .pubsub.schedule("every 60 minutes")
@@ -113,3 +114,4 @@ export const taskReminder = functions
 
     return null;
   });
+*/
