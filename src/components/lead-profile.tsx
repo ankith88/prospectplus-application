@@ -44,6 +44,7 @@ import {
   SkipForward,
   ChevronDown,
   History,
+  XCircle,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
@@ -164,12 +165,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   useEffect(() => {
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
     if (sessionLeadIds) {
-      setSessionLeads(JSON.parse(sessionLeadIds));
-      setIsSessionActive(true);
+      const leads = JSON.parse(sessionLeadIds);
+      setSessionLeads(leads);
+      // Only set session as active if the current lead is in the session
+      if (initialLead && leads.includes(initialLead.id)) {
+        setIsSessionActive(true);
+      } else {
+        setIsSessionActive(false);
+      }
     } else {
       setIsSessionActive(false);
     }
-  }, [lead]);
+  }, [initialLead]);
   
   useEffect(() => {
     if (initialLead.aiScore) {
@@ -496,6 +503,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       router.push('/leads');
     }
   };
+  
+  const handleEndSession = () => {
+    localStorage.removeItem('dialingSessionLeads');
+    setIsSessionActive(false);
+    setSessionLeads([]);
+    toast({ title: 'Dialing Session Ended', description: 'You can start a new session from the leads page.' });
+  };
 
   const handleBackToLeads = () => {
     setLoadingBack(true);
@@ -601,10 +615,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           {loadingBack ? <Loader /> : <ArrowLeft className="mr-2 h-4 w-4" />}
           Back to All Leads
         </Button>
-        <Button onClick={handleNextLead} disabled={!isSessionActive || loadingNextLead}>
-            {loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}
-            {loadingNextLead ? 'Loading...' : 'Next in Session'}
-        </Button>
+        {isSessionActive && (
+          <div className="flex items-center gap-2">
+              <Button onClick={handleEndSession} variant="destructive">
+                  <XCircle className="mr-2 h-4 w-4" />
+                  End Session
+              </Button>
+              <Button onClick={handleNextLead} disabled={loadingNextLead}>
+                  {loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}
+                  {loadingNextLead ? 'Loading...' : 'Next in Session'}
+              </Button>
+          </div>
+        )}
       </div>
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

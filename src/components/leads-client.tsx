@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -25,7 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -69,6 +70,7 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
   const [myLeadsPagination, setMyLeadsPagination] = useState<Record<string, number>>({});
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
   const [isStartingDialing, setIsStartingDialing] = useState(false);
+  const [isSessionActive, setIsSessionActive] = useState(false);
 
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
@@ -85,6 +87,11 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     entityId: '',
     leadId: '',
   });
+  
+  useEffect(() => {
+    const sessionExists = localStorage.getItem('dialingSessionLeads') !== null;
+    setIsSessionActive(sessionExists);
+  }, []);
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -345,7 +352,14 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     }
     
     localStorage.setItem('dialingSessionLeads', JSON.stringify(sortedLeadIds));
+    setIsSessionActive(true);
     router.push(`/leads/${sortedLeadIds[0]}`);
+  };
+
+  const handleEndSession = () => {
+    localStorage.removeItem('dialingSessionLeads');
+    setIsSessionActive(false);
+    toast({ title: 'Dialing Session Ended' });
   };
 
 
@@ -648,6 +662,12 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
         <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>My Assigned Leads</CardTitle>
             <div className="flex items-center gap-2">
+                {isSessionActive && (
+                  <Button onClick={handleEndSession} variant="destructive" size="sm">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    End Session
+                  </Button>
+                )}
                 {selectedMyLeads.length > 0 && (
                 <Button onClick={handleBulkUnassign} variant="outline" size="sm">
                     <UserX className="mr-2 h-4 w-4" />
