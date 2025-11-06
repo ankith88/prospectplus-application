@@ -287,7 +287,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setNotes(prev => [newNote, ...prev]);
   };
   
-  const handleContactAdded = async (newContact: Contact) => {
+  const handleContactAdded = (newContactData: any) => {
+    const newContact: Contact = {
+        id: 'temp-' + Date.now(), // Temporary ID for rendering
+        name: `${newContactData.firstName} ${newContactData.lastName}`,
+        title: newContactData.title,
+        email: newContactData.email,
+        phone: newContactData.phone,
+    };
     setContacts(prev => [newContact, ...prev]);
   };
 
@@ -536,7 +543,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const getContactCalendlyLink = (contact: Contact, baseUrl: string) => {
-    if (!baseUrl) return null;
+    if (!baseUrl || !contact.name) return null;
     const nameParts = contact.name.split(' ');
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
