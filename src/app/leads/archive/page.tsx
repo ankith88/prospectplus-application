@@ -22,6 +22,14 @@ async function getArchivedLeadsData() {
             };
         })
     );
+    
+    // Sort by last activity date, newest to oldest
+    leadsWithLastActivity.sort((a, b) => {
+        const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
+        const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
+        return dateB - dateA;
+    });
+
 
     return leadsWithLastActivity;
 }

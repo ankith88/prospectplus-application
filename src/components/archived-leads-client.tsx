@@ -31,7 +31,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
@@ -40,7 +40,7 @@ import { useToast } from '@/hooks/use-toast'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'discoveryScore';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'industryCategory' | 'discoveryScore' | 'lastActivityDate';
 
 type ExpandedLeadDetails = {
     note: Note | null;
@@ -59,7 +59,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'lastActivityDate', direction: 'descending' });
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -118,7 +118,9 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
         let dateMatch = true;
         if (filters.date?.from && lead.activity?.[0]) {
             const lastActivityDate = new Date(lead.activity[0].date);
-            dateMatch = lastActivityDate >= filters.date.from && lastActivityDate <= (filters.date.to || filters.date.from)
+            const fromDate = startOfDay(filters.date.from);
+            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
         return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch;
@@ -135,6 +137,9 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
         if (sortConfig.key === 'discoveryScore') {
           aValue = a.discoveryData?.score ?? -1;
           bValue = b.discoveryData?.score ?? -1;
+        } else if (sortConfig.key === 'lastActivityDate') {
+          aValue = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
+          bValue = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
         } else {
           aValue = a[sortConfig.key] ?? '';
           bValue = b[sortConfig.key] ?? '';
@@ -370,7 +375,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                             <Input id="industry" value={filters.industryCategory} onChange={(e) => handleFilterChange('industryCategory', e.target.value)} />
                         </div>
                          <div className="space-y-2">
-                            <Label htmlFor="date">Date (Last Activity)</Label>
+                            <Label htmlFor="date">Date Archived</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
                                 <Button
@@ -461,6 +466,12 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                    </TableHead>
                    <TableHead>Routing Tag</TableHead>
                   <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('lastActivityDate')} className="group -ml-4">
+                      Date Archived
+                      {getSortIndicator('lastActivityDate')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">
                       Franchisee
                       {getSortIndicator('franchisee')}
@@ -484,7 +495,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
               <TableBody>
                 {loading || isRefreshing ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
                   paginatedLeads.map((lead) => (
@@ -511,6 +522,9 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                           </Badge>
                         ) : 'N/A'}
                       </TableCell>
+                      <TableCell>
+                        {lead.activity?.[0]?.date ? format(new Date(lead.activity[0].date), 'dd MMM yyyy') : 'N/A'}
+                      </TableCell>
                       <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
                       <TableCell>{lead.dialerAssigned ?? 'N/A'}</TableCell>
                       <TableCell>
@@ -525,7 +539,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                     </TableRow>
                      {expandedDetails[lead.id] && (
                         <TableRow>
-                            <TableCell colSpan={8} className="p-0">
+                            <TableCell colSpan={9} className="p-0">
                                 <div className="p-4 bg-secondary/50">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                         <div>
@@ -557,7 +571,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
