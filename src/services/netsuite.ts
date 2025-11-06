@@ -256,6 +256,10 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
 
+    const nameParts = contact.name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ');
+
     const params = new URLSearchParams({
         script: "2162",
         deploy: "1",
@@ -263,7 +267,8 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
         "ns-at": "AAEJ7tMQiABijVECkP4VMN5S4EQRn4vSKQ0EnMiG99-nTlSJ1ck",
         leadID: leadId,
         contactid: contact.id,
-        name: contact.name,
+        firstname: firstName,
+        lastname: lastName,
         email: contact.email,
         phone: contact.phone,
         title: contact.title,
@@ -561,6 +566,7 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 }
 
     
+
 
 
 
