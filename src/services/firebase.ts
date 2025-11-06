@@ -1178,58 +1178,6 @@ async function addCallReview(leadId: string, activityId: string, reviewData: { r
     }
 }
 
-async function shareCallReview(leadId: string, activityId: string, sharedWith: string[]): Promise<void> {
-    try {
-        const activityRef = doc(firestore, 'leads', leadId, 'activity', activityId);
-        const activityDoc = await getDoc(activityRef);
-        if (!activityDoc.exists() || !activityDoc.data()?.review) {
-            throw new Error('Review does not exist for this call.');
-        }
-
-        await updateDoc(activityRef, {
-            'review.sharedWith': sharedWith,
-        });
-
-        console.log(`Review for activity ${activityId} shared with:`, sharedWith);
-    } catch (error) {
-        console.error(`Failed to share review for activity ${activityId}:`, error);
-        throw new Error('Failed to share review in Firebase');
-    }
-}
-
-async function getSharedCallsForUser(displayName: string): Promise<CallActivity[]> {
-    try {
-        const q = query(
-            collectionGroup(firestore, 'activity'),
-            where('review.sharedWith', 'array-contains', displayName)
-        );
-        const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            return [];
-        }
-
-        const calls = snapshot.docs.map(doc => {
-            const data = doc.data();
-            const leadId = doc.ref.parent.parent!.id;
-            return {
-                id: doc.id,
-                leadId,
-                ...data,
-            } as CallActivity;
-        });
-        
-        return calls;
-
-    } catch (error: any) {
-        if (error.code === 'failed-precondition') {
-             console.error(`Failed to get shared calls for ${displayName}: Missing Firestore index.`, error.message);
-             throw new Error(`The query requires an index. Please create it in your Firebase console. Details: ${error.message}`);
-        }
-        console.error(`Failed to get shared calls for ${displayName}:`, error);
-        throw new Error(`An unexpected error occurred while fetching shared calls.`);
-    }
-}
-
 async function getLastNote(leadId: string): Promise<Note | null> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'notes');
@@ -1307,10 +1255,8 @@ export {
     getAllUsers,
     bulkUpdateLeadDialerRep,
     addCallReview,
-    shareCallReview,
     getLastNote,
     getLastActivity,
-    getSharedCallsForUser,
 };
 
 
@@ -1328,3 +1274,4 @@ export {
 
 
     
+

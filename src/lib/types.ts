@@ -24,7 +24,6 @@ export interface Review {
   date: string;
   notes: string;
   category?: ReviewCategory;
-  sharedWith?: string[];
 }
 
 export interface Activity {
@@ -91,6 +90,7 @@ export interface Contact {
   title: string
   email: string
   phone: string
+  syncedWithNetSuite?: boolean;
 }
 
 export interface Address {
@@ -163,5 +163,3 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin';
 }
-
-    

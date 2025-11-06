@@ -22,9 +22,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Share2, Users, ArrowUpDown } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllCallActivities, getAllTranscripts, addCallReview, shareCallReview, getAllUsers } from '@/services/firebase'
+import { getAllCallActivities, getAllTranscripts, addCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,8 +77,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const [reviewCategory, setReviewCategory] = useState<ReviewCategory | "">("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [viewingReview, setViewingReview] = useState<Review | null>(null);
-  const [sharingCall, setSharingCall] = useState<CallActivity | null>(null);
-  const [sharedWithUsers, setSharedWithUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
 
@@ -147,11 +145,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     return minutes * 60 + seconds;
   };
   
-  const callsSharedWithMe = useMemo(() => {
-    if (!userProfile?.displayName) return [];
-    return allCalls.filter(call => call.review?.sharedWith?.includes(userProfile.displayName!));
-  }, [allCalls, userProfile]);
-
   const filteredCalls = useMemo(() => {
     // Group calls by callId to ensure uniqueness
     const uniqueCallsMap = new Map<string, CallActivity>();
@@ -292,7 +285,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category', 'Shared With'];
+    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.dialerAssigned || 'Unassigned'),
@@ -305,7 +298,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         escapeCsvCell(call.review?.reviewer || ''),
         escapeCsvCell(call.review?.notes || ''),
         escapeCsvCell(call.review?.category || ''),
-        escapeCsvCell(call.review?.sharedWith?.join(', ') || ''),
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -366,22 +358,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to submit review." });
     } finally {
       setIsSubmittingReview(false);
-    }
-  };
-  
-  const handleSaveSharing = async () => {
-    if (!sharingCall || !sharingCall.review) return;
-    try {
-        await shareCallReview(sharingCall.leadId, sharingCall.id, sharedWithUsers);
-        toast({ title: "Success", description: "Sharing settings updated." });
-        setAllCalls(prev => prev.map(c => 
-            c.id === sharingCall.id 
-            ? { ...c, review: { ...c.review!, sharedWith: sharedWithUsers } } 
-            : c
-        ));
-        setSharingCall(null);
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: "Failed to update sharing settings." });
     }
   };
 
@@ -504,15 +480,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
                         {call.isReviewed ? 'Edit Review' : 'Add Review'}
                     </Button>
                 )}
-                 {userProfile?.role === 'admin' && call.review && (
-                    <Button variant="outline" size="sm" onClick={() => {
-                        setSharingCall(call);
-                        setSharedWithUsers(call.review?.sharedWith || []);
-                    }}>
-                        <Share2 className="mr-2 h-4 w-4" />
-                        Share
-                    </Button>
-                )}
                 </div>
             </TableCell>
         </TableRow>
@@ -526,36 +493,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         <h1 className="text-3xl font-bold tracking-tight">All Calls</h1>
         <p className="text-muted-foreground">Review all call activities.</p>
       </header>
-
-       {callsSharedWithMe.length > 0 && (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-primary">
-                        <Users className="h-5 w-5" />
-                        Shared With Me for Coaching
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Lead</TableHead>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Reviewed By</TableHead>
-                                    <TableHead>Review Category</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {callsSharedWithMe.map(renderCallRow)}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-        )}
 
        <Collapsible>
           <Card>
@@ -853,41 +790,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
             </div>
             <DialogFooter>
                 <Button onClick={() => setViewingReview(null)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-    
-     <Dialog open={!!sharingCall} onOpenChange={(open) => { if(!open) setSharingCall(null); }}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Share Call Review</DialogTitle>
-                <DialogDescription>Share the review for the call with {sharingCall?.leadName} with other users for coaching.</DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="h-64 my-4">
-                <div className="space-y-2">
-                    {allDialers.map(dialer => (
-                        <div key={dialer.uid} className="flex items-center space-x-2">
-                            <Checkbox
-                                id={`share-${dialer.uid}`}
-                                checked={sharedWithUsers.includes(dialer.displayName!)}
-                                onCheckedChange={(checked) => {
-                                    if (checked) {
-                                        setSharedWithUsers(prev => [...prev, dialer.displayName!]);
-                                    } else {
-                                        setSharedWithUsers(prev => prev.filter(name => name !== dialer.displayName));
-                                    }
-                                }}
-                            />
-                            <Label htmlFor={`share-${dialer.uid}`} className="font-normal">
-                                {dialer.displayName}
-                            </Label>
-                        </div>
-                    ))}
-                </div>
-            </ScrollArea>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setSharingCall(null)}>Cancel</Button>
-                <Button onClick={handleSaveSharing}>Save Sharing</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
