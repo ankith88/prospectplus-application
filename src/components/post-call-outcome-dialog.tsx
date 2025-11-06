@@ -45,7 +45,7 @@ interface PostCallOutcomeDialogProps {
   onOutcomeLogged: (newStatus?: LeadStatus) => void
 }
 
-type SubmissionStatus = 'idle' | 'saving_outcome' | 'syncing_netsuite' | 'complete' | 'error';
+type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
 const callOutcomes = [
     'Busy',
@@ -66,10 +66,7 @@ const callOutcomes = [
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
-  const [startTime, setStartTime] = useState<number | null>(null);
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
-  const [netsuiteDuration, setNetsuiteDuration] = useState<number | null>(null);
-  const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -83,26 +80,19 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const outcome = form.watch('outcome');
 
   const resetAndClose = () => {
-    form.reset();
-    setSubmissionState('idle');
-    setStartTime(null);
-    setFirebaseDuration(null);
-    setNetsuiteDuration(null);
-    setTotalDuration(null);
     onClose();
   };
 
   useEffect(() => {
-    if (isOpen) {
-      form.reset({
-        outcome: '',
-        notes: callActivity?.notes || '',
-      });
+    if (!isOpen) {
+      form.reset();
       setSubmissionState('idle');
-      setStartTime(null);
       setFirebaseDuration(null);
-      setNetsuiteDuration(null);
-      setTotalDuration(null);
+    } else {
+        form.reset({
+            outcome: '',
+            notes: callActivity?.notes || '',
+        });
     }
   }, [isOpen, callActivity, form]);
 
@@ -117,11 +107,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         return;
     }
     
-    const overallStartTime = performance.now();
-    setStartTime(overallStartTime);
     setFirebaseDuration(null);
-    setNetsuiteDuration(null);
-    setTotalDuration(null);
     setSubmissionState('saving_outcome');
 
     try {
@@ -137,17 +123,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         );
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
-        setSubmissionState('syncing_netsuite');
-
-        // Simulate NetSuite sync after Firebase is confirmed
-        const netsuiteStartTime = performance.now();
-        await new Promise(resolve => setTimeout(resolve, 650)); // Simulate API call
-        const netsuiteEndTime = performance.now();
-        setNetsuiteDuration((netsuiteEndTime - netsuiteStartTime) / 1000);
-
-
-        const endTime = performance.now();
-        setTotalDuration((endTime - overallStartTime) / 1000);
         setSubmissionState('complete');
         onOutcomeLogged(newStatus); 
 
@@ -244,30 +219,10 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                        </div>
                         {firebaseDuration !== null && <span className="text-xs text-muted-foreground">{firebaseDuration.toFixed(2)}s</span>}
                     </li>
-                     <li className="flex items-center justify-between gap-3">
-                       <div className="flex items-center gap-3">
-                        {submissionState === 'complete' ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" /> 
-                        ) : submissionState === 'syncing_netsuite' ? (
-                            <Loader />
-                        ) : (
-                           <div className="h-5 w-5 border-2 border-dashed rounded-full" />
-                        )}
-                        <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
-                           Syncing to NetSuite...
-                        </span>
-                       </div>
-                        {netsuiteDuration !== null && <span className="text-xs text-muted-foreground">{netsuiteDuration.toFixed(2)}s</span>}
-                    </li>
                 </ul>
                 {submissionState === 'complete' && (
-                     <DialogFooter className="mt-8 flex w-full items-center justify-between">
-                        <p className="text-sm text-muted-foreground">
-                            {totalDuration !== null ? `Total time: ${totalDuration.toFixed(2)}s` : ''}
-                        </p>
-                        <div className="flex gap-2">
-                           <Button variant="secondary" onClick={resetAndClose}>Done</Button>
-                        </div>
+                     <DialogFooter className="mt-8 flex w-full items-center justify-end">
+                        <Button variant="secondary" onClick={resetAndClose}>Done</Button>
                      </DialogFooter>
                 )}
             </div>

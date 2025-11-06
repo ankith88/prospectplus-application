@@ -62,13 +62,10 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
   
   const resetAndClose = () => {
     setIsOpen(false);
-    form.reset();
-    setSubmissionState('idle');
-    setTotalDuration(null);
   };
   
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
         form.reset();
         setSubmissionState('idle');
         setTotalDuration(null);
@@ -119,13 +116,10 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (submissionState === 'saving_firebase') {
-             if (open) return;
+        if (submissionState === 'saving_firebase' && !open) {
+             return;
         }
         setIsOpen(open);
-        if (!open) {
-            resetAndClose();
-        }
     }}>
         <DialogTrigger asChild>{children}</DialogTrigger>
         <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
@@ -173,28 +167,18 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                     <li className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                            <span className={submissionState === 'saving_firebase' ? '' : 'text-muted-foreground'}>
+                            <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
                                 Saving to ProspectPlus...
                             </span>
                         </div>
-                    </li>
-                     <li className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                           {submissionState === 'complete' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <div className="h-5 w-5 border-2 border-dashed rounded-full" />}
-                            <span className={submissionState === 'complete' ? '' : 'text-muted-foreground'}>
-                               Saved
-                            </span>
-                        </div>
+                         {submissionState === 'complete' && totalDuration !== null && (
+                            <span className="text-xs text-muted-foreground">{totalDuration.toFixed(2)}s</span>
+                        )}
                     </li>
                 </ul>
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8">
-                        <div className="flex w-full items-center justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                {totalDuration !== null ? `Total time: ${totalDuration.toFixed(2)}s` : ''}
-                            </p>
-                            <Button onClick={resetAndClose}>Done</Button>
-                        </div>
+                        <Button onClick={resetAndClose}>Done</Button>
                      </DialogFooter>
                 )}
              </div>
