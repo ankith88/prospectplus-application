@@ -54,26 +54,6 @@ export function EditContactForm({ leadId, contact, onContactUpdated }: EditConta
         description: "Contact updated successfully.",
       })
       onContactUpdated(updatedContactData);
-
-      // Call NetSuite
-      const nsResult = await sendContactToNetSuite({ 
-        leadId, 
-        contact: updatedContactData
-      });
-
-      if (nsResult.success) {
-        toast({
-          title: "NetSuite Updated",
-          description: "Contact information sent to NetSuite.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "NetSuite Sync Failed",
-          description: nsResult.message,
-        });
-      }
-
     } catch (error) {
       console.error("Failed to update contact:", error)
       toast({

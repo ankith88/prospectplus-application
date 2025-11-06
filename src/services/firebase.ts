@@ -797,7 +797,11 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
 async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
-    await updateDoc(contactRef, contactData);
+    const updatePayload = {
+        ...contactData,
+        syncedWithNetSuite: false,
+    };
+    await updateDoc(contactRef, updatePayload);
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.` });
     console.log(`Contact ${contactId} updated for lead ${leadId}`);
   } catch (error) {

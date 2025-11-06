@@ -90,7 +90,7 @@ const summarizeWebsitePrompt = ai.definePrompt({
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Also generates a company description. Saves new contacts to Firebase and syncs to NetSuite.',
+    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Also generates a company description. Saves new contacts to Firebase.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
@@ -218,14 +218,6 @@ export const prospectWebsiteTool = ai.defineTool(
                 const contactId = await addContactToLead(leadId, contactData);
                 const newContactWithId: Contact = { ...contactData, id: contactId };
                 savedContacts.push(newContactWithId);
-                
-                // Wrap NetSuite call in a try/catch to prevent it from crashing the whole tool
-                try {
-                    await sendContactToNetSuite({ leadId, contact: newContactWithId });
-                } catch (netsuiteError) {
-                    console.error(`[Non-critical] Failed to sync contact ${contact.email} for lead ${leadId} to NetSuite:`, netsuiteError);
-                    // Do not re-throw; allow the main function to continue.
-                }
             }
         }
 
