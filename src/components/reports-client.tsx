@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -484,6 +485,10 @@ export default function ReportsClientPage({
     const showRate = relevantAppointments > 0 ? (totalCompleted / relevantAppointments) * 100 : 0;
     const noShowRate = relevantAppointments > 0 ? (totalNoShows / relevantAppointments) * 100 : 0;
 
+    const completedAppointments = uniqueAppointments.filter(a => a.appointmentStatus === 'Completed');
+    const completedAppointmentsWon = completedAppointments.filter(a => a.leadStatus === 'Won').length;
+    const wonFromCompletedRate = completedAppointments.length > 0 ? (completedAppointmentsWon / completedAppointments.length) * 100 : 0;
+
     const leadsWithDemoCompleted = filteredLeads.filter(l => l.demoCompleted === 'Yes');
     const totalDemosConducted = leadsWithDemoCompleted.length;
     const demosWon = leadsWithDemoCompleted.filter(l => l.status === 'Won').length;
@@ -570,6 +575,7 @@ export default function ReportsClientPage({
       appointmentsByAssigneeData,
       appointmentOutcomesByAssigneeData,
       allStatuses,
+      wonFromCompletedRate: parseFloat(wonFromCompletedRate.toFixed(2)),
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
@@ -1188,7 +1194,7 @@ export default function ReportsClientPage({
             <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
             <p className="text-muted-foreground">Metrics related to booked appointments.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                  <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
                  <StatCard 
                     title="Appointments to Won Leads" 
@@ -1209,6 +1215,7 @@ export default function ReportsClientPage({
                     description={`${stats.lostAppointmentRate.toFixed(2)}% of total appointments`} 
                 />
                  <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Ratio of appointments to calls" />
+                 <StatCard title="Won from Completed" value={`${stats.wonFromCompletedRate}%`} icon={TrendingUp} description="%% of completed appointments that resulted in a 'Won' status" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(2)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
