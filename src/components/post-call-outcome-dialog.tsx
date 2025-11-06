@@ -270,9 +270,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                         </p>
                         <div className="flex gap-2">
                            <Button variant="secondary" onClick={resetAndClose}>Done</Button>
-                            {isSessionActive && (
-                                <Button onClick={() => { resetAndClose(); onSessionNext(); }}>Next in Session</Button>
-                            )}
                         </div>
                      </DialogFooter>
                 )}
