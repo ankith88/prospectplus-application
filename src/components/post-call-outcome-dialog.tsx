@@ -43,8 +43,6 @@ interface PostCallOutcomeDialogProps {
   isOpen: boolean
   onClose: () => void
   onOutcomeLogged: (newStatus?: LeadStatus) => void
-  onSessionNext: () => void
-  isSessionActive: boolean
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'syncing_netsuite' | 'complete' | 'error';
@@ -66,7 +64,7 @@ const callOutcomes = [
     'LOST - No Contact',
 ];
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
@@ -119,22 +117,16 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         return;
     }
     
-    setStartTime(performance.now());
+    const overallStartTime = performance.now();
+    setStartTime(overallStartTime);
     setFirebaseDuration(null);
     setNetsuiteDuration(null);
     setTotalDuration(null);
     setSubmissionState('saving_outcome');
 
     try {
-        // Simulate Firebase step
-        setTimeout(() => {
-            if (submissionState === 'saving_outcome') {
-                setFirebaseDuration((performance.now() - startTime!) / 1000);
-                setSubmissionState('syncing_netsuite');
-            }
-        }, 800); // Estimated time for Firebase
-
-      const newStatus = await logCallActivity(
+        const firebaseStartTime = performance.now();
+        const newStatus = await logCallActivity(
             lead.id,
             {
                 outcome: values.outcome,
@@ -143,16 +135,21 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 salesRecordInternalId: lead.salesRecordInternalId,
             }
         );
+        const firebaseEndTime = performance.now();
+        setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
+        setSubmissionState('syncing_netsuite');
 
-        // Finalize state
+        // Simulate NetSuite sync after Firebase is confirmed
+        const netsuiteStartTime = performance.now();
+        await new Promise(resolve => setTimeout(resolve, 650)); // Simulate API call
+        const netsuiteEndTime = performance.now();
+        setNetsuiteDuration((netsuiteEndTime - netsuiteStartTime) / 1000);
+
+
         const endTime = performance.now();
-        setTotalDuration((endTime - startTime!) / 1000);
-        if (firebaseDuration === null) {
-            setFirebaseDuration((endTime - startTime!) / 1000);
-        }
-        setNetsuiteDuration(totalDuration! - (firebaseDuration || 0));
+        setTotalDuration((endTime - overallStartTime) / 1000);
         setSubmissionState('complete');
-        onOutcomeLogged(newStatus); // Refresh the lead profile page with the new status
+        onOutcomeLogged(newStatus); 
 
     } catch (error: any) {
         setSubmissionState('error');
