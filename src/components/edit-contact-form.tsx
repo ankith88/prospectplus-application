@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { updateContactInLead } from "@/services/firebase"
-import { sendContactToNetSuite } from "@/services/netsuite"
 import type { Contact } from "@/lib/types"
 
 const formSchema = z.object({
@@ -30,9 +29,10 @@ interface EditContactFormProps {
   leadId: string
   contact: Contact
   onContactUpdated: (contact: Contact) => void
+  onClose: () => void;
 }
 
-export function EditContactForm({ leadId, contact, onContactUpdated }: EditContactFormProps) {
+export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: EditContactFormProps) {
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -54,6 +54,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated }: EditConta
         description: "Contact updated successfully.",
       })
       onContactUpdated(updatedContactData);
+      onClose();
     } catch (error) {
       console.error("Failed to update contact:", error)
       toast({
@@ -120,6 +121,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated }: EditConta
           )}
         />
         <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
             </Button>

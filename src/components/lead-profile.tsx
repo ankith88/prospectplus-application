@@ -305,7 +305,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         author: user?.displayName,
      });
      setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
-     setIsEditDialogOpen(false);
   };
 
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
@@ -838,7 +837,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   {contacts.map((contact, index) => {
                      const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                      return (
-                      <Dialog key={contact.id || index}>
+                      <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
                           <Card className="relative group/contact">
                               <CardHeader className="flex-row items-start justify-between pb-2">
                                   <div>
@@ -954,7 +953,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                   <EditContactForm
                                       leadId={lead.id}
                                       contact={selectedContact}
-                                      onContactUpdated={(updatedContact) => handleContactUpdated(updatedContact)}
+                                      onContactUpdated={handleContactUpdated}
+                                      onClose={() => setSelectedContact(null)}
                                   />
                               )}
                           </DialogContent>
