@@ -72,6 +72,8 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
     franchisee: '',
     industryCategory: '',
     date: undefined as DateRange | undefined,
+    entityId: '',
+    leadId: '',
   });
 
   useEffect(() => {
@@ -104,6 +106,8 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
       franchisee: '',
       industryCategory: '',
       date: undefined,
+      entityId: '',
+      leadId: '',
     });
     setCurrentPage(1);
   };
@@ -123,7 +127,10 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch;
+        const entityIdMatch = filters.entityId ? (lead.entityId || '').includes(filters.entityId) : true;
+        const leadIdMatch = filters.leadId ? lead.id.includes(filters.leadId) : true;
+
+        return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch && entityIdMatch && leadIdMatch;
     });
   }, [allLeads, filters]);
 
@@ -347,6 +354,14 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="entityId">Customer ID</Label>
+                            <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="leadId">NetSuite Internal ID</Label>
+                            <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>

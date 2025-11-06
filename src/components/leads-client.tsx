@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -83,6 +82,8 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     status: 'all',
     franchisee: '',
     industryCategory: '',
+    entityId: '',
+    leadId: '',
   });
 
   useEffect(() => {
@@ -127,6 +128,8 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       status: 'all',
       franchisee: '',
       industryCategory: '',
+      entityId: '',
+      leadId: '',
     });
   };
 
@@ -137,7 +140,10 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status);
-      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
+      const entityIdMatch = filters.entityId ? (lead.entityId || '').includes(filters.entityId) : true;
+      const leadIdMatch = filters.leadId ? lead.id.includes(filters.leadId) : true;
+
+      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && entityIdMatch && leadIdMatch;
     });
 
     if (sortConfig !== null) {
@@ -597,6 +603,14 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="entityId">Customer ID</Label>
+                            <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="leadId">NetSuite Internal ID</Label>
+                            <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
@@ -1142,5 +1156,3 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     </>
   )
 }
-
-    

@@ -90,6 +90,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
     reviewedBy: 'all',
     reviewCategory: 'all',
+    entityId: '',
+    leadId: '',
   });
 
   const router = useRouter();
@@ -132,7 +134,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all', entityId: '', leadId: '' });
      setCurrentPage(1);
   };
   
@@ -197,8 +199,11 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         const reviewCategoryMatch = filters.reviewCategory === 'all' || call.review?.category === filters.reviewCategory;
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
+        
+        const entityIdMatch = filters.entityId ? (call as any).entityId?.includes(filters.entityId) : true;
+        const leadIdMatch = filters.leadId ? call.leadId.includes(filters.leadId) : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch && entityIdMatch && leadIdMatch;
     });
   }, [allCalls, filters, userProfile]);
   
@@ -513,6 +518,14 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="entityId">Customer ID</Label>
+                        <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="leadId">NetSuite Internal ID</Label>
+                        <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                     </div>
                     {userProfile?.role === 'admin' && (
                        <>
