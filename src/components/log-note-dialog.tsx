@@ -66,6 +66,14 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
     setSubmissionState('idle');
     setTotalDuration(null);
   };
+  
+  useEffect(() => {
+    if (isOpen) {
+        form.reset();
+        setSubmissionState('idle');
+        setTotalDuration(null);
+    }
+  }, [isOpen, form]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
