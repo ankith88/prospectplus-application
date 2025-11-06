@@ -43,6 +43,8 @@ interface PostCallOutcomeDialogProps {
   isOpen: boolean
   onClose: () => void
   onOutcomeLogged: (newStatus?: LeadStatus) => void
+  onSessionNext?: () => void;
+  isSessionActive?: boolean;
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
@@ -121,6 +123,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 salesRecordInternalId: lead.salesRecordInternalId,
             }
         );
+        
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
         setSubmissionState('complete');
