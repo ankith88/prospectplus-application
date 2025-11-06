@@ -798,8 +798,8 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     const updatePayload = {
-        ...contactData,
-        syncedWithNetSuite: false,
+      ...contactData,
+      syncedWithNetSuite: false, // Always set to false on edit
     };
     await updateDoc(contactRef, updatePayload);
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.` });

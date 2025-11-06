@@ -11,7 +11,7 @@ import { Button } from './ui/button'
 import { useEffect, useState } from 'react'
 import type { Activity } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
-import { getAllCallActivities } from '@/services/firebase'
+import { getSharedCallsForUser } from '@/services/firebase'
 import { Badge } from './ui/badge'
 import { Loader } from './ui/loader'
 import { format } from 'date-fns'
@@ -28,10 +28,7 @@ export function SharedReviewBell() {
       if (!userProfile?.displayName) return
       setLoading(true)
       try {
-        const allCalls = await getAllCallActivities()
-        const sharedWithMe = allCalls.filter(
-          (call) => call.review?.sharedWith?.includes(userProfile.displayName!)
-        )
+        const sharedWithMe = await getSharedCallsForUser(userProfile.displayName);
         setCalls(sharedWithMe)
       } catch (error) {
         console.error('Failed to fetch shared calls:', error)
