@@ -602,7 +602,11 @@ async function getLeadTranscripts(leadId: string, limitNum: number = 10, lastDoc
 async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): Promise<string> {
   try {
     const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
-    const docRef = await addDoc(contactsRef, contact);
+    const newContactData = {
+      ...contact,
+      syncedWithNetSuite: false,
+    };
+    const docRef = await addDoc(contactsRef, newContactData);
     await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
     
     // Update contact count

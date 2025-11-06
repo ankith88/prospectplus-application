@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { addContactToLead } from "@/services/firebase"
-import { sendContactToNetSuite } from "@/services/netsuite"
 import { DialogClose } from "./ui/dialog"
 import { useRef } from "react"
 import type { Contact } from "@/lib/types"
@@ -57,7 +56,7 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
         email: values.email,
         phone: values.phone,
       }
-      const contactId = await addContactToLead(leadId, contactData)
+      await addContactToLead(leadId, contactData)
       toast({
         title: "Success",
         description: "Contact added successfully.",
@@ -65,25 +64,6 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
       onContactAdded(values)
       form.reset()
       closeButtonRef.current?.click();
-
-      // Call NetSuite
-      const nsResult = await sendContactToNetSuite({ 
-        leadId, 
-        contact: { ...contactData, id: contactId } 
-      });
-
-      if (nsResult.success) {
-        toast({
-          title: "NetSuite Updated",
-          description: "Contact information sent to NetSuite.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "NetSuite Sync Failed",
-          description: nsResult.message,
-        });
-      }
 
     } catch (error) {
       console.error("Failed to add contact:", error)
