@@ -1220,9 +1220,13 @@ async function getSharedCallsForUser(displayName: string): Promise<CallActivity[
         
         return calls;
 
-    } catch (error) {
+    } catch (error: any) {
+        if (error.code === 'failed-precondition') {
+             console.error(`Failed to get shared calls for ${displayName}: Missing Firestore index.`, error.message);
+             throw new Error(`The query requires an index. Please create it in your Firebase console. Details: ${error.message}`);
+        }
         console.error(`Failed to get shared calls for ${displayName}:`, error);
-        throw new Error('Service Unavailable');
+        throw new Error(`An unexpected error occurred while fetching shared calls.`);
     }
 }
 

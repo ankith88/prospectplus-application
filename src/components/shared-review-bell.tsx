@@ -30,8 +30,11 @@ export function SharedReviewBell() {
       try {
         const sharedWithMe = await getSharedCallsForUser(userProfile.displayName);
         setCalls(sharedWithMe)
-      } catch (error) {
-        console.error('Failed to fetch shared calls:', error)
+      } catch (error: any) {
+        // Don't log expected "Missing Index" errors, but log others.
+        if (!error.message.includes('requires an index')) {
+            console.error('Failed to fetch shared calls:', error)
+        }
       } finally {
         setLoading(false)
       }
