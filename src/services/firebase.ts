@@ -298,6 +298,59 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
+async function getArchivedLeads(): Promise<Lead[]> {
+    try {
+        console.log(`Fetching archived leads from Firebase...`);
+        const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
+        
+        const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatuses));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            console.log("No archived leads found in Firebase.");
+            return [];
+        }
+
+        const leadsWithLastActivity = await Promise.all(
+            snapshot.docs.map(async (doc) => {
+                const data = doc.data();
+                const companyName = data.companyName || 'Unknown Company';
+                
+                const transformedLead: Lead = {
+                    id: doc.id,
+                    entityId: data['customerEntityId'] || data['internalid'],
+                    salesRecordInternalId: data.salesRecordInternalId,
+                    companyName: companyName,
+                    status: safeGetStatus(data.customerStatus),
+                    statusReason: data.statusReason,
+                    profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+                    franchisee: data.franchisee,
+                    dialerAssigned: data.dialerAssigned,
+                    industryCategory: data.industryCategory,
+                    discoveryData: data.discoveryData,
+                };
+                
+                const lastActivity = await getLastActivity(doc.id);
+                transformedLead.activity = lastActivity ? [lastActivity] : [];
+                
+                return transformedLead;
+            })
+        );
+
+        leadsWithLastActivity.sort((a, b) => {
+            const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
+            const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        return leadsWithLastActivity;
+    } catch (error) {
+        console.error("Firebase fetch for archived leads failed:", error);
+        return [];
+    }
+}
+
+
 async function getAllLeadsForReport(): Promise<Lead[]> {
     console.log('[getAllLeadsForReport] Starting to fetch all leads for reporting...');
     try {
@@ -1212,6 +1265,7 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
 
 export { 
     getLeadsFromFirebase,
+    getArchivedLeads,
     addContactToLead,
     updateLeadSalesRep,
     updateLeadDialerRep,
@@ -1274,4 +1328,3 @@ export {
 
 
     
-

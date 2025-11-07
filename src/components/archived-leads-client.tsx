@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, getLastNote, getLastActivity } from '@/services/firebase'
+import { getArchivedLeads } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
@@ -85,30 +86,8 @@ export default function ArchivedLeadsClientPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-        const allLeadsData = await getLeadsFromFirebase({ summary: true });
-        const archivedLeads = allLeadsData.filter(lead => 
-            ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status)
-        );
-
-        // Fetch the last activity for each archived lead in parallel
-        const leadsWithLastActivity = await Promise.all(
-            archivedLeads.map(async (lead) => {
-                const lastActivity = await getLastActivity(lead.id);
-                return {
-                    ...lead,
-                    activity: lastActivity ? [lastActivity] : [], // Embed last activity
-                };
-            })
-        );
-        
-        // Sort by last activity date, newest to oldest
-        leadsWithLastActivity.sort((a, b) => {
-            const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
-            const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
-            return dateB - dateA;
-        });
-
-        setAllLeads(leadsWithLastActivity);
+        const archivedLeads = await getArchivedLeads();
+        setAllLeads(archivedLeads);
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch archived leads.' });
     } finally {
