@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -49,16 +48,10 @@ type ExpandedLeadDetails = {
     loading: boolean;
 };
 
-interface LeadsClientPageProps {
-    initialLeads: LeadWithDetails[];
-    initialDialers: UserProfile[];
-}
-
-
-export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsClientPageProps) {
-  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>(initialLeads);
-  const [allDialers, setAllDialers] = useState<UserProfile[]>(initialDialers);
-  const [loading, setLoading] = useState(false);
+export default function LeadsClientPage() {
+  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedMyLeads, setSelectedMyLeads] = useState<string[]>([]);
   const [selectedAllLeads, setSelectedAllLeads] = useState<string[]>([]);
@@ -84,8 +77,6 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
     status: 'all',
     franchisee: '',
     industryCategory: '',
-    entityId: '',
-    leadId: '',
   });
   
   useEffect(() => {
@@ -98,17 +89,37 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       router.push('/signin');
       return;
     }
+    
+    if (user) {
+        fetchData();
+    }
+
   }, [user, authLoading, router]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+        const [fetchedLeads, fetchedUsers] = await Promise.all([
+            getLeadsFromFirebase({ summary: true }),
+            getAllUsers()
+        ]);
+        setAllLeads(fetchedLeads);
+        const dialers = fetchedUsers
+            .filter(u => u.firstName && u.lastName)
+            .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
+        setAllDialers(dialers);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
+    } finally {
+        setLoading(false);
+    }
+  }
+
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    router.refresh();
+    fetchData().finally(() => setIsRefreshing(false));
   };
-  
-  useEffect(() => {
-    setIsRefreshing(false);
-    setAllLeads(initialLeads);
-  }, [initialLeads]);
   
   const requestSort = (key: SortableLeadKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -135,8 +146,6 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       status: 'all',
       franchisee: '',
       industryCategory: '',
-      entityId: '',
-      leadId: '',
     });
   };
 
@@ -147,10 +156,8 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status);
-      const entityIdMatch = filters.entityId ? (lead.entityId || '').includes(filters.entityId) : true;
-      const leadIdMatch = filters.leadId ? lead.id.includes(filters.leadId) : true;
 
-      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch && entityIdMatch && leadIdMatch;
+      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
     });
 
     if (sortConfig !== null) {
@@ -364,17 +371,17 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
 
 
   const handleBulkUnassign = async () => {
-    if (selectedForReassignment.length === 0) return;
+    if (selectedMyLeads.length === 0) return;
     try {
-      const promises = selectedForReassignment.map(leadId => updateLeadDialerRep(leadId, null));
+      const promises = selectedMyLeads.map(leadId => updateLeadDialerRep(leadId, null));
       await Promise.all(promises);
       
       const updatedLeads = allLeads.map(lead =>
-        selectedForReassignment.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
+        selectedMyLeads.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
       );
       setAllLeads(updatedLeads);
-      toast({ title: "Success", description: `${selectedForReassignment.length} lead(s) unassigned.` });
-      setSelectedForReassignment([]);
+      toast({ title: "Success", description: `${selectedMyLeads.length} lead(s) unassigned.` });
+      setSelectedMyLeads([]);
     } catch (error) {
       console.error("Failed to bulk unassign leads:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
@@ -617,14 +624,6 @@ export default function LeadsClientPage({ initialLeads, initialDialers }: LeadsC
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="entityId">Customer ID</Label>
-                            <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="leadId">NetSuite Internal ID</Label>
-                            <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>

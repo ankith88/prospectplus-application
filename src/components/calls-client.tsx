@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -57,18 +56,13 @@ const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunit
 
 type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
 
-interface CallsClientPageProps {
-  initialCalls: CallActivity[];
-  initialTranscripts: Transcript[];
-}
-
 const CALLS_PER_PAGE = 50;
 
-export default function CallsClientPage({ initialCalls, initialTranscripts }: CallsClientPageProps) {
-  const [allCalls, setAllCalls] = useState<CallActivity[]>(initialCalls);
-  const [allTranscripts, setAllTranscripts] = useState<Transcript[]>(initialTranscripts);
+export default function CallsClientPage() {
+  const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
+  const [allTranscripts, setAllTranscripts] = useState<Transcript[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(false); // Data is pre-loaded
+  const [loading, setLoading] = useState(true);
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
@@ -90,8 +84,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
     reviewedBy: 'all',
     reviewCategory: 'all',
-    entityId: '',
-    leadId: '',
   });
 
   const router = useRouter();
@@ -99,8 +91,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   const { toast } = useToast();
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const [fetchedCalls, fetchedTranscripts, fetchedUsers] = await Promise.all([
         getAllCallActivities(),
         getAllTranscripts(),
@@ -125,7 +117,10 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
       router.push('/signin');
       return;
     }
-    fetchData(); // Fetch all data on initial load
+    
+    if(user) {
+        fetchData();
+    }
   }, [user, authLoading, router]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
@@ -134,7 +129,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all', entityId: '', leadId: '' });
+    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all' });
      setCurrentPage(1);
   };
   
@@ -199,11 +194,8 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
         const reviewCategoryMatch = filters.reviewCategory === 'all' || call.review?.category === filters.reviewCategory;
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
-        
-        const entityIdMatch = filters.entityId ? (call as any).entityId?.includes(filters.entityId) : true;
-        const leadIdMatch = filters.leadId ? call.leadId.includes(filters.leadId) : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch && entityIdMatch && leadIdMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
   }, [allCalls, filters, userProfile]);
   
@@ -375,7 +367,7 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
+  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
 
   const ReviewCategoryBadge = ({ category }: { category?: ReviewCategory }) => {
     if (!category) return <span className="text-muted-foreground">N/A</span>;
@@ -518,14 +510,6 @@ export default function CallsClientPage({ initialCalls, initialTranscripts }: Ca
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="entityId">Customer ID</Label>
-                        <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="leadId">NetSuite Internal ID</Label>
-                        <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                     </div>
                     {userProfile?.role === 'admin' && (
                        <>

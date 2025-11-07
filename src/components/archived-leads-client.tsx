@@ -50,13 +50,9 @@ type ExpandedLeadDetails = {
 
 const LEADS_PER_PAGE = 100;
 
-interface ArchivedLeadsClientPageProps {
-  initialLeads: LeadWithDetails[];
-}
-
-export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsClientPageProps) {
-  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>(initialLeads);
-  const [loading, setLoading] = useState(false);
+export default function ArchivedLeadsClientPage() {
+  const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortableLeadKeys; direction: 'ascending' | 'descending' } | null>({ key: 'lastActivityDate', direction: 'descending' });
@@ -72,26 +68,58 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
     franchisee: '',
     industryCategory: '',
     date: undefined as DateRange | undefined,
-    entityId: '',
-    leadId: '',
   });
 
   useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
+      return;
     }
+    
+    if (user) {
+        fetchData();
+    }
+
   }, [user, authLoading, router]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+        const allLeadsData = await getLeadsFromFirebase({ summary: true });
+        const archivedLeads = allLeadsData.filter(lead => 
+            ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status)
+        );
+
+        // Fetch the last activity for each archived lead in parallel
+        const leadsWithLastActivity = await Promise.all(
+            archivedLeads.map(async (lead) => {
+                const lastActivity = await getLastActivity(lead.id);
+                return {
+                    ...lead,
+                    activity: lastActivity ? [lastActivity] : [], // Embed last activity
+                };
+            })
+        );
+        
+        // Sort by last activity date, newest to oldest
+        leadsWithLastActivity.sort((a, b) => {
+            const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
+            const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        setAllLeads(leadsWithLastActivity);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch archived leads.' });
+    } finally {
+        setLoading(false);
+    }
+  }
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    router.refresh();
-    // The loading state will be reset by the page reloading
+    fetchData().finally(() => setIsRefreshing(false));
   };
-  
-  useEffect(() => {
-    setIsRefreshing(false);
-    setAllLeads(initialLeads); // Update state when new initialLeads are passed
-  }, [initialLeads]);
 
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
@@ -106,8 +134,6 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
       franchisee: '',
       industryCategory: '',
       date: undefined,
-      entityId: '',
-      leadId: '',
     });
     setCurrentPage(1);
   };
@@ -127,10 +153,7 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        const entityIdMatch = filters.entityId ? (lead.entityId || '').includes(filters.entityId) : true;
-        const leadIdMatch = filters.leadId ? lead.id.includes(filters.leadId) : true;
-
-        return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch && entityIdMatch && leadIdMatch;
+        return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -354,14 +377,6 @@ export default function ArchivedLeadsClientPage({ initialLeads }: ArchivedLeadsC
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="entityId">Customer ID</Label>
-                            <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="leadId">NetSuite Internal ID</Label>
-                            <Input id="leadId" value={filters.leadId} onChange={(e) => handleFilterChange('leadId', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>

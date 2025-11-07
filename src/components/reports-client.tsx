@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -22,7 +21,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getAllCallActivities, getAllLeadsForReport, getAllAppointments } from '@/services/firebase';
+import { getAllCallActivities, getAllLeadsForReport, getAllAppointments, getAllUsers } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
@@ -57,24 +56,12 @@ const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
 
-interface ReportsClientPageProps {
-  initialCalls: CallActivity[];
-  initialLeads: Lead[];
-  initialAppointments: AppointmentWithLead[];
-  initialDialers: string[];
-}
-
-export default function ReportsClientPage({
-  initialCalls,
-  initialLeads,
-  initialAppointments,
-  initialDialers
-}: ReportsClientPageProps) {
-  const [allCalls, setAllCalls] = useState<CallActivity[]>(initialCalls);
-  const [allLeads, setAllLeads] = useState<Lead[]>(initialLeads);
-  const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>(initialAppointments);
-  const [allDialers, setAllDialers] = useState<string[]>(initialDialers);
-  const [loading, setLoading] = useState(false);
+export default function ReportsClientPage() {
+  const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
+  const [allDialers, setAllDialers] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -109,28 +96,45 @@ export default function ReportsClientPage({
   }, [allAppointments]);
 
   useEffect(() => {
+    if (!user && !authLoading) {
+      router.push('/signin');
+      return;
+    }
+    
+    if (user) {
+        fetchData();
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
       handleFilterChange('dialerAssigned', userProfile.displayName);
     }
   }, [userProfile]);
   
   const fetchData = async () => {
-    setIsRefreshing(true);
-    toast({ title: 'Refreshing data...', description: 'Fetching the latest information from the database.' });
+    setLoading(true);
+    toast({ title: 'Loading Report Data...', description: 'Fetching the latest information from the database.' });
     try {
-        const [refreshedCalls, refreshedLeads, refreshedAppointments] = await Promise.all([
+        const [refreshedCalls, refreshedLeads, refreshedAppointments, refreshedUsers] = await Promise.all([
             getAllCallActivities(),
             getAllLeadsForReport(),
-            getAllAppointments()
+            getAllAppointments(),
+            getAllUsers(),
         ]);
         setAllCalls(refreshedCalls);
         setAllLeads(refreshedLeads);
         setAllAppointments(refreshedAppointments);
-        toast({ title: 'Success', description: 'Report data has been updated.' });
+        const dialers = refreshedUsers
+            .filter(u => u.role !== 'admin' && u.displayName)
+            .map(u => u.displayName!);
+        setAllDialers(dialers);
+        toast({ title: 'Success', description: 'Report data has been loaded.' });
     } catch (error) {
         console.error("Failed to refresh data:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest data.' });
     } finally {
+        setLoading(false);
         setIsRefreshing(false);
     }
   };
@@ -589,7 +593,7 @@ export default function ReportsClientPage({
     filters.duration !== 'all' ||
     filters.appointmentAssignedTo !== 'all';
 
-  if (authLoading || !userProfile) {
+  if (authLoading || !userProfile || loading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -627,9 +631,9 @@ export default function ReportsClientPage({
                     <CardTitle>Filters</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button onClick={fetchData} variant="outline" disabled={isRefreshing}>
-                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                    <Button onClick={fetchData} variant="outline" disabled={isRefreshing || loading}>
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
+                        {isRefreshing || loading ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
                     <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm">
@@ -1293,5 +1297,3 @@ export default function ReportsClientPage({
     </div>
   );
 }
-
-    
