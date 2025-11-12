@@ -1075,42 +1075,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="activity">
+                <Tabs defaultValue="notes">
                     <TabsList>
-                        <TabsTrigger value="activity">Activity History</TabsTrigger>
-                        <TabsTrigger value="calls">Call History</TabsTrigger>
                         <TabsTrigger value="notes">Notes</TabsTrigger>
+                        <TabsTrigger value="calls">Call History</TabsTrigger>
+                        <TabsTrigger value="activity">Activity History</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="activity">
-                         {activities.length > 0 ? (
-                            <ul className="space-y-4 mt-4">
-                            {activities.map((item, index) => (
-                                <li key={item.id} className="flex gap-4 group">
-                                <div className="flex flex-col items-center">
-                                    <div className="bg-secondary rounded-full p-2">
-                                    {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                                    </div>
-                                    {activities && index < activities.length - 1 && (
-                                        <div className="w-px h-full bg-border"></div>
-                                    )}
-                                </div>
-                                <div className="flex-1 pb-4 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                    <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                                    <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                                    </div>
-                                    <div className="text-sm text-muted-foreground break-words">
-                                    {item.notes}
-                                    </div>
-                                </div>
-                                </li>
+                    <TabsContent value="notes">
+                        {notes.length > 0 ? (
+                            <div className="space-y-4 mt-4">
+                            {notes.map(note => (
+                            <div key={note.id} className="text-sm border-l-2 pl-4">
+                                <p className="whitespace-pre-wrap">{note.content}</p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                {new Date(note.date).toLocaleString()} by {note.author}
+                                </p>
+                            </div>
                             ))}
-                            </ul>
+                            </div>
                         ) : (
-                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                            !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
                         )}
                         {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </TabsContent>
@@ -1171,20 +1155,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
                             )}
                     </TabsContent>
-                    <TabsContent value="notes">
-                        {notes.length > 0 ? (
-                            <div className="space-y-4 mt-4">
-                            {notes.map(note => (
-                            <div key={note.id} className="text-sm border-l-2 pl-4">
-                                <p className="whitespace-pre-wrap">{note.content}</p>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(note.date).toLocaleString()} by {note.author}
-                                </p>
-                            </div>
+                    <TabsContent value="activity">
+                         {activities.length > 0 ? (
+                            <ul className="space-y-4 mt-4">
+                            {activities.map((item, index) => (
+                                <li key={item.id} className="flex gap-4 group">
+                                <div className="flex flex-col items-center">
+                                    <div className="bg-secondary rounded-full p-2">
+                                    {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                                    </div>
+                                    {activities && index < activities.length - 1 && (
+                                        <div className="w-px h-full bg-border"></div>
+                                    )}
+                                </div>
+                                <div className="flex-1 pb-4 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                    <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                                    <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                                    </div>
+                                    <div className="text-sm text-muted-foreground break-words">
+                                    {item.notes}
+                                    </div>
+                                </div>
+                                </li>
                             ))}
-                            </div>
+                            </ul>
                         ) : (
-                            !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
+                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
                         )}
                         {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </TabsContent>
