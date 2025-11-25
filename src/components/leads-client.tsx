@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -155,7 +156,7 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
-      const isArchived = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status);
+      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'].includes(lead.status);
 
       return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
     });
