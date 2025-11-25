@@ -301,9 +301,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
+        const archivedStatusesForQuery = ['Lost', 'Qualified', 'Signed', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
         
-        const q = query(collection(firestore, 'leads'), where('status', 'in', archivedStatuses));
+        const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
