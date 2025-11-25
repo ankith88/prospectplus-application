@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import { useEffect, useState, useMemo } from 'react';
@@ -829,7 +830,7 @@ export default function ReportsClientPage() {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             dataKey="value"
                         >
@@ -840,13 +841,13 @@ export default function ReportsClientPage() {
                         <Tooltip content={<ChartTooltipContent
                             formatter={(value, name) => (
                                 <div className="flex flex-col">
-                                    <span className="font-medium">{name}</span>
+                                    <span className="font-medium">{name === 'Won' ? 'Signed' : name}</span>
                                     <span className="text-muted-foreground">{value} leads</span>
                                 </div>
                             )}
                             />}
                         />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} />
+                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value}/>
                     </PieChart>
                 </ChartContainer>
             ) : (
@@ -896,9 +897,9 @@ export default function ReportsClientPage() {
                       <XAxis type="number" stackId="a" />
                       <YAxis dataKey="name" type="category" width={100} />
                       <Tooltip />
-                      <Legend />
+                      <Legend formatter={(value) => value === 'Won' ? 'Signed' : value} />
                       {stats.allStatuses.map((status, index) => (
-                        <Bar key={status} dataKey={status} stackId="a" fill={STATUS_COLORS[status] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        <Bar key={status} dataKey={status} stackId="a" name={status === 'Won' ? 'Signed' : status} fill={STATUS_COLORS[status] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>

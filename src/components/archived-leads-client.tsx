@@ -367,7 +367,7 @@ export default function ArchivedLeadsClientPage() {
                                     <SelectItem value="all">All Archived</SelectItem>
                                     <SelectItem value="Qualified">Qualified</SelectItem>
                                     <SelectItem value="Pre Qualified">Pre Qualified</SelectItem>
-                                    <SelectItem value="Won">Won</SelectItem>
+                                    <SelectItem value="Won">Signed</SelectItem>
                                     <SelectItem value="Lost">Lost</SelectItem>
                                     <SelectItem value="LPO Review">LPO Review</SelectItem>
                                     <SelectItem value="Unqualified">Unqualified</SelectItem>
