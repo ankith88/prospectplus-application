@@ -1124,15 +1124,32 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
 }
 
 async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Promise<void> {
-    try {
-        const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, { discoveryData: data });
-        await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.' });
-        console.log(`Discovery data for lead ${leadId} updated.`);
-    } catch (error) {
-        console.error(`Failed to update discovery data for lead ${leadId}:`, error);
-        throw new Error('Failed to update discovery data in Firebase');
+  // This function is now a wrapper. The logic is moved to the server action.
+  const { sendDiscoveryDataToNetSuite } = await import('@/services/netsuite');
+  
+  try {
+    // 1. Save to Firebase
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, { discoveryData: data });
+    await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.' });
+    console.log(`[Firebase] Discovery data for lead ${leadId} updated.`);
+    
+    // 2. Send to NetSuite
+    console.log(`[NetSuite] Triggering NetSuite sync for lead ${leadId}...`);
+    const nsResult = await sendDiscoveryDataToNetSuite({ leadId, discoveryData: data });
+
+    if (nsResult.success) {
+      console.log(`[NetSuite] Successfully synced discovery data for lead ${leadId}.`);
+    } else {
+      console.error(`[NetSuite] Failed to sync discovery data for lead ${leadId}: ${nsResult.message}`);
+      // We throw an error here so the client knows the NetSuite part failed.
+      throw new Error(`NetSuite sync failed: ${nsResult.message}`);
     }
+
+  } catch (error) {
+    console.error(`Failed to update discovery data for lead ${leadId}:`, error);
+    throw new Error(`Failed to update discovery data: ${error}`);
+  }
 }
 
 async function addScorecard(leadId: string, data: any): Promise<any> {
@@ -1277,19 +1294,44 @@ interface NewLeadData {
 async function createNewLead(data: NewLeadData): Promise<string> {
   const { contact, ...companyData } = data;
   try {
+    // Round-robin assignment logic
+    const allUsers = await getAllUsers();
+    const dialers = allUsers.filter(u => u.role === 'user' && u.displayName).sort((a, b) => a.displayName!.localeCompare(b.displayName!));
+    let assignedDialer: string | undefined = undefined;
+
+    if (dialers.length > 0) {
+        // Find the most recently created lead to determine the last assigned dialer
+        const recentLeadQuery = query(collection(firestore, 'leads'), orderBy('createdAt', 'desc'), limit(1));
+        const recentLeadSnapshot = await getDocs(recentLeadQuery);
+        
+        let nextDialerIndex = 0;
+        if (!recentLeadSnapshot.empty) {
+            const lastLead = recentLeadSnapshot.docs[0].data();
+            const lastDialer = lastLead.dialerAssigned;
+            if (lastDialer) {
+                const lastDialerIndex = dialers.findIndex(d => d.displayName === lastDialer);
+                if (lastDialerIndex !== -1) {
+                    nextDialerIndex = (lastDialerIndex + 1) % dialers.length;
+                }
+            }
+        }
+        assignedDialer = dialers[nextDialerIndex].displayName;
+    }
+
     const leadRef = await addDoc(collection(firestore, 'leads'), {
       ...companyData,
       status: 'New',
       createdAt: new Date().toISOString(),
       contactCount: 1,
-      syncedWithNetSuite: false,
+      dialerAssigned: assignedDialer,
+      syncedWithNetSuite: false, 
     });
 
     await addContactToLead(leadRef.id, contact);
 
     await logActivity(leadRef.id, {
         type: 'Update',
-        notes: 'Lead created in ProspectPlus.'
+        notes: `Lead created and assigned to ${assignedDialer || 'unassigned'}.`
     });
 
     return leadRef.id;
