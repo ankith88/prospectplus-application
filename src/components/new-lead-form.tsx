@@ -137,9 +137,7 @@ export function NewLeadForm() {
             <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> Address*</CardTitle>
           </CardHeader>
           <CardContent>
-            <AddressAutocomplete
-              onAddressSelect={(address) => form.setValue('address', address)}
-            />
+            <AddressAutocomplete />
           </CardContent>
         </Card>
 
