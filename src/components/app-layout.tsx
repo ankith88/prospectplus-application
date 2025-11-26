@@ -128,6 +128,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
+            {userProfile?.role && ['admin', 'lead gen'].includes(userProfile.role) && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
+                  <Link href="/leads/new">
+                    <PlusCircle />
+                    <span>New Lead</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads")} tooltip="Leads">
                 <Link href="/leads">
@@ -187,18 +197,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
-          {userProfile?.role && ['admin', 'lead gen'].includes(userProfile.role) && (
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
-                  <Link href="/leads/new">
-                    <PlusCircle />
-                    <span>New Lead</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          )}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>

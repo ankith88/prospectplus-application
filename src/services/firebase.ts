@@ -1282,6 +1282,7 @@ async function createNewLead(data: NewLeadData): Promise<string> {
       status: 'New',
       createdAt: new Date().toISOString(),
       contactCount: 1,
+      syncedWithNetSuite: false,
     });
 
     await addContactToLead(leadRef.id, contact);
