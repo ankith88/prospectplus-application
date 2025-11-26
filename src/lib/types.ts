@@ -100,6 +100,8 @@ export interface Address {
   state: string
   zip: string
   country: string
+  lat?: number;
+  lng?: number;
 }
 
 export interface DiscoveryData {

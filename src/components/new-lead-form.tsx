@@ -46,6 +46,8 @@ const formSchema = z.object({
     state: z.string().min(1, 'State is required.'),
     zip: z.string().min(1, 'Postcode is required.'),
     country: z.string().min(1, 'Country is required.'),
+    lat: z.number().optional(),
+    lng: z.number().optional(),
   }),
 
   // Contact

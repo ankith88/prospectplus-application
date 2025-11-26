@@ -36,6 +36,11 @@ export function AddressAutocomplete({}: AddressAutocompleteProps) {
             setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '');
             setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.long_name || 'Australia');
 
+            if (place.geometry?.location) {
+              setValue('address.lat', place.geometry.location.lat());
+              setValue('address.lng', place.geometry.location.lng());
+            }
+
             // Trigger validation for the address fields
             await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
         });

@@ -600,6 +600,12 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     if (address.address1) {
         params.append('billaddr2', address.address1);
     }
+    if (address.lat) {
+        params.append('custentity_addr_lat', String(address.lat));
+    }
+    if (address.lng) {
+        params.append('custentity_addr_long', String(address.lng));
+    }
 
     const url = `${baseUrl}?${params.toString()}`;
 
@@ -644,10 +650,3 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
 }
     
-
-
-
-
-
-
-
