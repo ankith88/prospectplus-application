@@ -301,7 +301,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery = ['Lost', 'Qualified', 'Signed', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
+        const archivedStatusesForQuery = ['Lost', 'Qualified', 'Won', 'Signed', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
         
         const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
@@ -1263,6 +1263,41 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
     }
 }
 
+interface NewLeadData {
+  companyName: string;
+  websiteUrl?: string;
+  industryCategory?: string;
+  franchisee?: string;
+  customerServiceEmail?: string;
+  customerPhone?: string;
+  address: Address;
+  contact: Omit<Contact, 'id'>;
+}
+
+async function createNewLead(data: NewLeadData): Promise<string> {
+  const { contact, ...companyData } = data;
+  try {
+    const leadRef = await addDoc(collection(firestore, 'leads'), {
+      ...companyData,
+      status: 'New',
+      createdAt: new Date().toISOString(),
+      contactCount: 1,
+    });
+
+    await addContactToLead(leadRef.id, contact);
+
+    await logActivity(leadRef.id, {
+        type: 'Update',
+        notes: 'Lead created in ProspectPlus.'
+    });
+
+    return leadRef.id;
+  } catch (error) {
+    console.error('Failed to create new lead:', error);
+    throw new Error('Failed to create new lead in Firebase.');
+  }
+}
+
 export { 
     getLeadsFromFirebase,
     getArchivedLeads,
@@ -1311,6 +1346,7 @@ export {
     addCallReview,
     getLastNote,
     getLastActivity,
+    createNewLead,
 };
 
 

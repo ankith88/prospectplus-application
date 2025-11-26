@@ -1,0 +1,174 @@
+
+'use client';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { AddressAutocomplete } from './address-autocomplete';
+import type { Address } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { createNewLead } from '@/services/firebase';
+import { Loader } from './ui/loader';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin } from 'lucide-react';
+
+const formSchema = z.object({
+  // Company
+  companyName: z.string().min(2, 'Company name is required'),
+  websiteUrl: z.string().url().optional().or(z.literal('')),
+  industryCategory: z.string().optional(),
+  franchisee: z.string().optional(),
+  customerServiceEmail: z.string().email().optional().or(z.literal('')),
+  customerPhone: z.string().optional(),
+
+  // Address
+  address: z.object({
+    address1: z.string().optional(),
+    street: z.string().min(1, 'Street name is required.'),
+    city: z.string().min(1, 'Suburb is required.'),
+    state: z.string().min(1, 'State is required.'),
+    zip: z.string().min(1, 'Postcode is required.'),
+    country: z.string().min(1, 'Country is required.'),
+  }),
+
+  // Contact
+  contact: z.object({
+    name: z.string().min(1, 'Contact name is required'),
+    title: z.string().min(1, 'Title is required'),
+    email: z.string().email('Invalid email address'),
+    phone: z.string().min(1, 'Phone number is required'),
+  }),
+});
+
+export function NewLeadForm() {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      companyName: '',
+      websiteUrl: '',
+      industryCategory: '',
+      franchisee: '',
+      customerServiceEmail: '',
+      customerPhone: '',
+      address: {
+        address1: '',
+        street: '',
+        city: '',
+        state: '',
+        zip: '',
+        country: 'Australia',
+      },
+      contact: {
+        name: '',
+        title: '',
+        email: '',
+        phone: '',
+      },
+    },
+  });
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    try {
+      const newLeadId = await createNewLead(values);
+      toast({
+        title: 'Lead Created',
+        description: `${values.companyName} has been successfully created.`,
+      });
+      router.push(`/leads/${newLeadId}`);
+    } catch (error) {
+      console.error('Failed to create lead:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to create lead. Please try again.',
+      });
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" /> Company Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField control={form.control} name="companyName" render={({ field }) => (
+                <FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="websiteUrl" render={({ field }) => (
+                <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="industryCategory" render={({ field }) => (
+                <FormItem><FormLabel>Industry</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="franchisee" render={({ field }) => (
+                <FormItem><FormLabel>Franchisee</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
+                <FormItem><FormLabel>Company Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="customerPhone" render={({ field }) => (
+                <FormItem><FormLabel>Company Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> Address*</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AddressAutocomplete
+              onAddressSelect={(address) => form.setValue('address', address)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <FormField control={form.control} name="contact.name" render={({ field }) => (
+                <FormItem><FormLabel>Full Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+             <FormField control={form.control} name="contact.title" render={({ field }) => (
+                <FormItem><FormLabel>Title*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+             <FormField control={form.control} name="contact.email" render={({ field }) => (
+                <FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+             <FormField control={form.control} name="contact.phone" render={({ field }) => (
+                <FormItem><FormLabel>Phone*</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <Loader /> : 'Create Lead'}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

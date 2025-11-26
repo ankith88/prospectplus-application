@@ -161,5 +161,5 @@ export interface UserProfile {
     displayName?: string;
     phoneNumber: string;
     aircallUserId?: string;
-    role?: 'user' | 'admin';
+    role?: 'user' | 'admin' | 'lead gen';
 }
