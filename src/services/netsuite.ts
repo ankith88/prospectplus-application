@@ -565,7 +565,92 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
     }
 }
 
+
+interface NewLeadData {
+  companyName: string;
+  websiteUrl?: string;
+  industryCategory?: string;
+  franchisee?: string;
+  customerServiceEmail?: string;
+  customerPhone?: string;
+  address: Address;
+  contact: Omit<Contact, 'id'>;
+}
+
+export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; message: string }> {
+    const { companyName, websiteUrl, industryCategory, franchisee, customerServiceEmail, customerPhone, address, contact } = payload;
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+    const params = new URLSearchParams({
+        script: "2194",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQ6MIVXCrzpiLKSEmYLRVtAlRSAOWEC4Dyr1D-_83sS4g",
+        companyname: companyName,
+        website: websiteUrl || '',
+        category: industryCategory || '',
+        custentity_franchise_area: franchisee || '',
+        email: customerServiceEmail || '',
+        phone: customerPhone || '',
+        billaddr1: address.street,
+        billcity: address.city,
+        billstate: address.state,
+        billzip: address.zip,
+        billcountry: address.country,
+        custentity_primary_contact_name: contact.name,
+        custentity_primary_contact_title: contact.title,
+        custentity_primary_contact_email: contact.email,
+        custentity_primary_contact_phone: contact.phone,
+    });
     
+    if (address.address1) {
+        params.append('billaddr2', address.address1);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite New Lead Service] Sending new lead "${companyName}" to NetSuite...`);
+    console.log(`[NetSuite New Lead Service] URL: ${url}`);
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), TIMEOUT_DURATION);
+
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite New Lead Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Message: ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite New Lead Service] Successfully sent new lead. Response: ${responseBody}`);
+        
+        if (responseBody.trim().toLowerCase() === 'success:true') {
+             return { success: true, message: 'Lead created in NetSuite.' };
+        } else {
+             // Try to parse JSON for a more structured error message
+             try {
+                const jsonResponse = JSON.parse(responseBody);
+                return { success: false, message: jsonResponse.message || responseBody };
+             } catch(e) {
+                return { success: false, message: responseBody };
+             }
+        }
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.error(`[NetSuite New Lead Service] Request for new lead timed out.`);
+            return { success: false, message: 'The request to NetSuite timed out.' };
+        }
+        console.error("[NetSuite New Lead Service] A fatal error occurred during fetch:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+    
+
 
 
 

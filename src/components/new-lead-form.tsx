@@ -86,20 +86,30 @@ export function NewLeadForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
     try {
-      const newLeadId = await createNewLead(values);
-      toast({
-        title: 'Lead Created',
-        description: `${values.companyName} has been successfully created.`,
-      });
-      router.push(`/leads/${newLeadId}`);
-    } catch (error) {
+      const result = await createNewLead(values);
+
+      if (result.success) {
+        toast({
+            title: 'Lead Created',
+            description: `${values.companyName} has been successfully created.`,
+        });
+        router.push(`/leads/${result.leadId}`);
+      } else {
+        toast({
+            variant: 'destructive',
+            title: 'NetSuite Error',
+            description: result.message || 'Failed to create lead in NetSuite.',
+        });
+      }
+    } catch (error: any) {
       console.error('Failed to create lead:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to create lead. Please try again.',
+        description: error.message || 'An unexpected error occurred.',
       });
-      setIsSubmitting(false);
+    } finally {
+        setIsSubmitting(false);
     }
   }
 

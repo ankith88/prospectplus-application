@@ -8,6 +8,7 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
+import { sendNewLeadToNetSuite } from './netsuite';
 
 async function logActivity(
   leadId: string,
@@ -301,9 +302,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery = ['Lost', 'Qualified', 'Won', 'Signed', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
+        const archivedStatusesForQuery: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
         
-        const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
+        const q = query(collection(firestore, 'leads'), where('status', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
@@ -1291,16 +1292,20 @@ interface NewLeadData {
   contact: Omit<Contact, 'id'>;
 }
 
-async function createNewLead(data: NewLeadData): Promise<string> {
+async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
   const { contact, ...companyData } = data;
+  
+  const nsResult = await sendNewLeadToNetSuite(data);
+  if (!nsResult.success) {
+      return { success: false, message: nsResult.message };
+  }
+
   try {
-    // Round-robin assignment logic
     const allUsers = await getAllUsers();
     const dialers = allUsers.filter(u => u.role === 'user' && u.displayName).sort((a, b) => a.displayName!.localeCompare(b.displayName!));
     let assignedDialer: string | undefined = undefined;
 
     if (dialers.length > 0) {
-        // Find the most recently created lead to determine the last assigned dialer
         const recentLeadQuery = query(collection(firestore, 'leads'), orderBy('createdAt', 'desc'), limit(1));
         const recentLeadSnapshot = await getDocs(recentLeadQuery);
         
@@ -1334,10 +1339,11 @@ async function createNewLead(data: NewLeadData): Promise<string> {
         notes: `Lead created and assigned to ${assignedDialer || 'unassigned'}.`
     });
 
-    return leadRef.id;
+    return { success: true, leadId: leadRef.id };
   } catch (error) {
-    console.error('Failed to create new lead:', error);
-    throw new Error('Failed to create new lead in Firebase.');
+    console.error('Failed to create new lead in Firebase:', error);
+    // Here you might want to add logic to rollback the NetSuite creation if possible
+    return { success: false, message: 'Failed to save lead to Firebase after NetSuite creation.' };
   }
 }
 
