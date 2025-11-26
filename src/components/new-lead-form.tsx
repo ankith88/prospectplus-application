@@ -13,6 +13,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
@@ -23,6 +30,7 @@ import { useState } from 'react';
 import { createNewLead } from '@/services/firebase';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin } from 'lucide-react';
+import { industryCategories } from '@/lib/constants';
 
 const formSchema = z.object({
   // Company
@@ -127,9 +135,30 @@ export function NewLeadForm() {
             <FormField control={form.control} name="websiteUrl" render={({ field }) => (
                 <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
             )}/>
-            <FormField control={form.control} name="industryCategory" render={({ field }) => (
-                <FormItem><FormLabel>Industry</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
+            <FormField
+              control={form.control}
+              name="industryCategory"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an industry" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {industryCategories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField control={form.control} name="franchisee" render={({ field }) => (
                 <FormItem><FormLabel>Franchisee</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
