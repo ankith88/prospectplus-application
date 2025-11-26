@@ -37,9 +37,6 @@ const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
-  franchisee: z.string().optional(),
-  customerServiceEmail: z.string().email().optional().or(z.literal('')),
-  customerPhone: z.string().optional(),
 
   // Address
   address: z.object({
@@ -71,9 +68,6 @@ export function NewLeadForm() {
       companyName: '',
       websiteUrl: '',
       industryCategory: '',
-      franchisee: '',
-      customerServiceEmail: '',
-      customerPhone: '',
       address: {
         address1: '',
         street: '',
@@ -159,15 +153,6 @@ export function NewLeadForm() {
                 </FormItem>
               )}
             />
-            <FormField control={form.control} name="franchisee" render={({ field }) => (
-                <FormItem><FormLabel>Franchisee</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
-                <FormItem><FormLabel>Company Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={form.control} name="customerPhone" render={({ field }) => (
-                <FormItem><FormLabel>Company Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
           </CardContent>
         </Card>
 

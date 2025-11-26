@@ -570,15 +570,12 @@ interface NewLeadData {
   companyName: string;
   websiteUrl?: string;
   industryCategory?: string;
-  franchisee?: string;
-  customerServiceEmail?: string;
-  customerPhone?: string;
   address: Address;
   contact: Omit<Contact, 'id'>;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; message: string }> {
-    const { companyName, websiteUrl, industryCategory, franchisee, customerServiceEmail, customerPhone, address, contact } = payload;
+    const { companyName, websiteUrl, industryCategory, address, contact } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -589,9 +586,6 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         companyname: companyName,
         website: websiteUrl || '',
         category: industryCategory || '',
-        custentity_franchise_area: franchisee || '',
-        email: customerServiceEmail || '',
-        phone: customerPhone || '',
         billaddr1: address.street,
         billcity: address.city,
         billstate: address.state,
@@ -650,6 +644,7 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
 }
     
+
 
 
 
