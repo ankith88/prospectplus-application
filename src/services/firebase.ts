@@ -1,6 +1,7 @@
 
 
 
+
 'use server';
 
 /**
@@ -1300,62 +1301,8 @@ async function createNewLead(data: NewLeadData): Promise<{ success: boolean; lea
   const { contact, ...companyData } = data;
   
   const nsResult = await sendNewLeadToNetSuite(data);
-  if (!nsResult.success) {
-      return { success: false, message: nsResult.message };
-  }
-
-  return { success: true };
-
-  // try {
-    // const allUsers = await getAllUsers();
-    // const dialers = allUsers.filter(u => u.role === 'user' && u.displayName).sort((a, b) => a.displayName!.localeCompare(b.displayName!));
-    // let assignedDialer: string | undefined = undefined;
-
-    // if (dialers.length > 0) {
-        // const recentLeadQuery = query(collection(firestore, 'leads'), orderBy('createdAt', 'desc'), limit(1));
-        // const recentLeadSnapshot = await getDocs(recentLeadQuery);
-        
-        // let nextDialerIndex = 0;
-        // if (!recentLeadSnapshot.empty) {
-            // const lastLead = recentLeadSnapshot.docs[0].data();
-            // const lastDialer = lastLead.dialerAssigned;
-            // if (lastDialer) {
-                // const lastDialerIndex = dialers.findIndex(d => d.displayName === lastDialer);
-                // if (lastDialerIndex !== -1) {
-                    // nextDialerIndex = (lastDialerIndex + 1) % dialers.length;
-                // }
-            // }
-        // }
-        // assignedDialer = dialers[nextDialerIndex].displayName;
-    // }
-
-    // const leadRef = await addDoc(collection(firestore, 'leads'), {
-    //   ...companyData,
-    //   status: 'New',
-    //   createdAt: new Date().toISOString(),
-    //   contactCount: 1,
-    //   dialerAssigned: assignedDialer,
-    //   syncedWithNetSuite: false, 
-    // });
-
-    // await addContactToLead(leadRef.id, {
-    //     name: `${contact.firstName} ${contact.lastName}`,
-    //     title: contact.title,
-    //     email: contact.email,
-    //     phone: contact.phone,
-    // });
-
-    // await logActivity(leadRef.id, {
-    //     type: 'Update',
-    //     notes: `Lead created and assigned to ${assignedDialer || 'unassigned'}.`
-    // });
-
-    // return { success: true, leadId: leadRef.id };
-  // } catch (error) {
-    // console.error('Failed to create new lead in Firebase:', error);
-    // Here you might want to add logic to rollback the NetSuite creation if possible
-    // return { success: false, message: 'Failed to save lead to Firebase after NetSuite creation.' };
-  // }
+  
+  return nsResult;
 }
 
 export { 

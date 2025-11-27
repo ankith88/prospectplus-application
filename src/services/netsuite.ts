@@ -1,5 +1,6 @@
 
 
+
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
@@ -580,7 +581,7 @@ interface NewLeadData {
   };
 }
 
-export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; message: string }> {
+export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string }> {
     const { companyName, websiteUrl, industryCategory, address, contact } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
@@ -635,17 +636,17 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         const responseBody = await response.text();
         console.log(`[NetSuite New Lead Service] Successfully sent new lead. Response: ${responseBody}`);
         
-        if (responseBody.trim().toLowerCase() === 'success:true') {
-             return { success: true, message: 'Lead created in NetSuite.' };
-        } else {
-             // Try to parse JSON for a more structured error message
-             try {
-                const jsonResponse = JSON.parse(responseBody);
-                return { success: false, message: jsonResponse.message || responseBody };
-             } catch(e) {
-                return { success: false, message: responseBody };
-             }
-        }
+        try {
+            const jsonResponse = JSON.parse(responseBody);
+            if (jsonResponse.success === "true" && jsonResponse.leadID) {
+                 return { success: true, leadId: jsonResponse.leadID, message: 'Lead created in NetSuite.' };
+            } else {
+                return { success: false, message: jsonResponse.message || 'An unknown error occurred in NetSuite.' };
+            }
+         } catch(e) {
+            return { success: false, message: `Failed to parse NetSuite response: ${responseBody}` };
+         }
+
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.error(`[NetSuite New Lead Service] Request for new lead timed out.`);

@@ -98,12 +98,12 @@ export function NewLeadForm() {
     try {
       const result = await createNewLead(values);
 
-      if (result.success) {
+      if (result.success && result.leadId) {
         toast({
             title: 'Lead Created',
             description: `${values.companyName} has been successfully sent to NetSuite.`,
         });
-        form.reset();
+        router.push(`/leads/${result.leadId}`);
       } else {
         toast({
             variant: 'destructive',
