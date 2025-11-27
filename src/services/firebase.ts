@@ -302,7 +302,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed'];
         
         const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
@@ -1286,7 +1286,13 @@ interface NewLeadData {
   websiteUrl?: string;
   industryCategory?: string;
   address: Address;
-  contact: Omit<Contact, 'id'>;
+  contact: {
+    firstName: string;
+    lastName: string;
+    title: string;
+    email: string;
+    phone: string;
+  };
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
@@ -1329,7 +1335,12 @@ async function createNewLead(data: NewLeadData): Promise<{ success: boolean; lea
       syncedWithNetSuite: false, 
     });
 
-    await addContactToLead(leadRef.id, contact);
+    await addContactToLead(leadRef.id, {
+        name: `${contact.firstName} ${contact.lastName}`,
+        title: contact.title,
+        email: contact.email,
+        phone: contact.phone,
+    });
 
     await logActivity(leadRef.id, {
         type: 'Update',

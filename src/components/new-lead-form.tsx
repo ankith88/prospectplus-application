@@ -32,6 +32,10 @@ import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
 
+const phoneRegex = new RegExp(
+  /^(\+61|0061|0)?\s?4[0-9]{2}\s?[0-9]{3}\s?[0-9]{3}$|^(\+61|0061|0)?\s?[2378]\s?[0-9]{4}\s?[0-9]{4}$/
+);
+
 const formSchema = z.object({
   // Company
   companyName: z.string().min(2, 'Company name is required'),
@@ -52,10 +56,11 @@ const formSchema = z.object({
 
   // Contact
   contact: z.object({
-    name: z.string().min(1, 'Contact name is required'),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
     title: z.string().min(1, 'Title is required'),
     email: z.string().email('Invalid email address'),
-    phone: z.string().min(1, 'Phone number is required'),
+    phone: z.string().regex(phoneRegex, 'Invalid Australian phone number'),
   }),
 });
 
@@ -79,7 +84,8 @@ export function NewLeadForm() {
         country: 'Australia',
       },
       contact: {
-        name: '',
+        firstName: '',
+        lastName: '',
         title: '',
         email: '',
         phone: '',
@@ -172,8 +178,11 @@ export function NewLeadForm() {
             <CardTitle className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <FormField control={form.control} name="contact.name" render={({ field }) => (
-                <FormItem><FormLabel>Full Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+             <FormField control={form.control} name="contact.firstName" render={({ field }) => (
+                <FormItem><FormLabel>First Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+             <FormField control={form.control} name="contact.lastName" render={({ field }) => (
+                <FormItem><FormLabel>Last Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
              <FormField control={form.control} name="contact.title" render={({ field }) => (
                 <FormItem><FormLabel>Title*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
