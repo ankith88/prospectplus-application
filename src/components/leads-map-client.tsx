@@ -37,7 +37,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory'>;
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory'> & { address: NonNullable<Lead['address']> };
 
 
 export default function LeadsMapClient() {
@@ -62,8 +62,8 @@ export default function LeadsMapClient() {
       setLoadingLeads(true)
       const allLeads = await getLeadsFromFirebase({ summary: true })
       const leadsWithLocation = allLeads.filter(
-        (lead) => lead.address && lead.address.lat && lead.address.lng
-      ) as MapLead[]
+        (lead): lead is MapLead => !!lead.address && typeof lead.address.lat === 'number' && typeof lead.address.lng === 'number'
+      );
       setLeads(leadsWithLocation)
       setLoadingLeads(false)
     }
@@ -169,14 +169,14 @@ export default function LeadsMapClient() {
             {filteredLeads.map((lead) => (
                 <MarkerF
                 key={lead.id}
-                position={{ lat: lead.address!.lat!, lng: lead.address!.lng! }}
+                position={{ lat: lead.address.lat!, lng: lead.address.lng! }}
                 onClick={() => onMarkerClick(lead)}
                 />
             ))}
 
             {selectedLead && (
                 <InfoWindow
-                position={{ lat: selectedLead.address!.lat!, lng: selectedLead.address!.lng! }}
+                position={{ lat: selectedLead.address.lat!, lng: selectedLead.address.lng! }}
                 onCloseClick={onInfoWindowClose}
                 >
                 <div className="space-y-2 p-2 max-w-xs">
