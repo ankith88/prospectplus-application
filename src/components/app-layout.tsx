@@ -25,7 +25,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -146,14 +146,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-             {/* <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/tasks")} tooltip="My Tasks">
-                <Link href="/tasks">
-                  <ListTodo />
-                  <span>My Tasks</span>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Leads Map">
+                <Link href="/leads/map">
+                  <Map />
+                  <span>Leads Map</span>
                 </Link>
               </SidebarMenuButton>
-            </SidebarMenuItem> */}
+            </SidebarMenuItem>
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
                 <Link href="/appointments">
@@ -211,7 +211,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 lg:gap-4">
            <UniversalSearch />
-           {/* <TaskReminderBell /> */}
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
