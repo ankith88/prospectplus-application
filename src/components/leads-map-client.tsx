@@ -45,7 +45,7 @@ export default function LeadsMapClient() {
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
   const [filters, setFilters] = useState({
-    franchisee: '',
+    franchisee: 'all',
     status: 'all',
     industry: 'all',
   });
@@ -73,7 +73,7 @@ export default function LeadsMapClient() {
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-        const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
+        const franchiseeMatch = filters.franchisee === 'all' ? true : lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
         const industryMatch = filters.industry === 'all' ? true : lead.industryCategory === filters.industry;
         return franchiseeMatch && statusMatch && industryMatch;
@@ -125,7 +125,7 @@ export default function LeadsMapClient() {
                             <SelectValue placeholder="Select Franchisee" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">All Franchisees</SelectItem>
+                            <SelectItem value="all">All Franchisees</SelectItem>
                             {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                         </SelectContent>
                     </Select>
