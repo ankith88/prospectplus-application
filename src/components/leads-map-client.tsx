@@ -42,6 +42,31 @@ type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchi
     longitude: number;
 };
 
+const getPinColor = (status: LeadStatus): string => {
+    const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
+    const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
+    const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
+    const blueStatuses: LeadStatus[] = ['New'];
+    const purpleStatuses: LeadStatus[] = ['LPO Review'];
+
+    if (greenStatuses.includes(status)) {
+        return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
+    }
+    if (yellowStatuses.includes(status)) {
+        return 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
+    }
+     if (redStatuses.includes(status)) {
+        return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png';
+    }
+    if (blueStatuses.includes(status)) {
+        return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+    }
+     if (purpleStatuses.includes(status)) {
+        return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
+    }
+    return 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png'; // Default
+};
+
 
 export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
@@ -197,6 +222,7 @@ export default function LeadsMapClient() {
                 key={lead.id}
                 position={{ lat: lead.latitude, lng: lead.longitude }}
                 onClick={() => onMarkerClick(lead)}
+                icon={{ url: getPinColor(lead.status) }}
                 />
             ))}
 
