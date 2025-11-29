@@ -136,6 +136,8 @@ export interface Lead {
   contacts?: Contact[]
   contactCount?: number
   address?: Address
+  latitude?: number;
+  longitude?: number;
   franchisee?: string
   websiteUrl?: string
   industryCategory?: string

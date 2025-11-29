@@ -2,6 +2,7 @@
 
 
 
+
 'use server';
 
 /**
@@ -171,6 +172,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
+          latitude: data.latitude,
+          longitude: data.longitude,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
           industryCategory: data.industryCategory,
@@ -272,6 +275,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
+          latitude: data.latitude,
+          longitude: data.longitude,
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
           industryCategory: data.industryCategory,
@@ -1298,11 +1303,58 @@ interface NewLeadData {
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
-  const { contact, ...companyData } = data;
+  // const { contact, ...companyData } = data;
   
   const nsResult = await sendNewLeadToNetSuite(data);
   
   return nsResult;
+  
+  // if (nsResult.success && nsResult.leadId) {
+  //   try {
+  //     // // Round-robin assignment for dialer
+  //     // const users = await getAllUsers();
+  //     // const dialers = users.filter(u => u.role === 'user' && u.displayName).map(u => u.displayName!);
+      
+  //     // if (dialers.length === 0) {
+  //     //     throw new Error("No dialers available for assignment.");
+  //     // }
+
+  //     // // This is a simple way to get the last assigned user. A more robust system
+  //     // // might store this index in a separate config document in Firestore.
+  //     // const allLeads = await getLeadsFromFirebase({ summary: true });
+  //     // allLeads.sort((a,b) => (a.activity?.[0]?.date || '') > (b.activity?.[0]?.date || '') ? -1 : 1);
+      
+  //     // const lastAssignedDialer = allLeads.find(l => l.dialerAssigned)?.dialerAssigned;
+  //     // const lastIndex = lastAssignedDialer ? dialers.indexOf(lastAssignedDialer) : -1;
+  //     // const nextDialerIndex = (lastIndex + 1) % dialers.length;
+  //     // const assignedDialer = dialers[nextDialerIndex];
+
+  //     // const newLeadRef = doc(firestore, "leads", nsResult.leadId);
+  //     // await setDoc(newLeadRef, {
+  //     //     ...companyData,
+  //     //     dialerAssigned: assignedDialer,
+  //     //     status: 'New',
+  //     //     syncedWithNetSuite: true,
+  //     //     id: nsResult.leadId,
+  //     // });
+
+  //     // const contactRef = collection(newLeadRef, 'contacts');
+  //     // await addDoc(contactRef, {
+  //     //     ...data.contact,
+  //     //     name: `${data.contact.firstName} ${data.contact.lastName}`,
+  //     //     syncedWithNetSuite: true,
+  //     // });
+
+  //     // await logActivity(nsResult.leadId, { type: 'Update', notes: 'Lead created and synced from NetSuite.'});
+      
+  //     return { success: true, leadId: nsResult.leadId, message: "Lead created in NetSuite and Firebase." };
+  //   } catch (firebaseError: any) {
+  //       console.error('Firebase Error after NetSuite success:', firebaseError);
+  //       return { success: false, message: `Lead created in NetSuite, but failed to save to Firebase: ${firebaseError.message}` };
+  //   }
+  // } else {
+  //   return nsResult; // Return the error from NetSuite
+  // }
 }
 
 export { 
@@ -1371,3 +1423,4 @@ export {
 
 
     
+

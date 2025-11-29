@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
-import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 
@@ -37,7 +36,10 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory'> & { address: NonNullable<Lead['address']> };
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory'> & {
+    latitude: number;
+    longitude: number;
+};
 
 
 export default function LeadsMapClient() {
@@ -61,9 +63,13 @@ export default function LeadsMapClient() {
     const fetchLeads = async () => {
       setLoadingLeads(true)
       const allLeads = await getLeadsFromFirebase({ summary: true })
+      
       const leadsWithLocation = allLeads.filter(
-        (lead): lead is MapLead => !!lead.address && typeof lead.address.lat === 'number' && typeof lead.address.lng === 'number'
+        (lead): lead is MapLead => 
+            typeof lead.latitude === 'number' && 
+            typeof lead.longitude === 'number'
       );
+
       setLeads(leadsWithLocation)
       setLoadingLeads(false)
     }
@@ -73,9 +79,9 @@ export default function LeadsMapClient() {
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-        const franchiseeMatch = filters.franchisee === 'all' ? true : lead.franchisee === filters.franchisee;
+        const franchiseeMatch = filters.franchisee === 'all' || !lead.franchisee ? true : lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
-        const industryMatch = filters.industry === 'all' ? true : lead.industryCategory === filters.industry;
+        const industryMatch = filters.industry === 'all' || !lead.industryCategory ? true : lead.industryCategory === filters.industry;
         return franchiseeMatch && statusMatch && industryMatch;
     });
   }, [leads, filters]);
@@ -109,6 +115,15 @@ export default function LeadsMapClient() {
         <Loader />
       </div>
     )
+  }
+
+  const formatAddress = (address?: { street?: string; city?: string; state?: string }) => {
+    if (!address) return 'Address not available';
+    return [
+        address.street,
+        address.city,
+        address.state,
+    ].filter(Boolean).join(', ');
   }
 
   return (
@@ -169,14 +184,14 @@ export default function LeadsMapClient() {
             {filteredLeads.map((lead) => (
                 <MarkerF
                 key={lead.id}
-                position={{ lat: lead.address.lat!, lng: lead.address.lng! }}
+                position={{ lat: lead.latitude, lng: lead.longitude }}
                 onClick={() => onMarkerClick(lead)}
                 />
             ))}
 
             {selectedLead && (
                 <InfoWindow
-                position={{ lat: selectedLead.address.lat!, lng: selectedLead.address.lng! }}
+                position={{ lat: selectedLead.latitude, lng: selectedLead.longitude }}
                 onCloseClick={onInfoWindowClose}
                 >
                 <div className="space-y-2 p-2 max-w-xs">
@@ -186,11 +201,7 @@ export default function LeadsMapClient() {
                         {selectedLead.industryCategory && <span className="text-sm text-muted-foreground">{selectedLead.industryCategory}</span>}
                     </div>
                     <p className="text-sm">
-                    {[
-                        selectedLead.address?.street,
-                        selectedLead.address?.city,
-                        selectedLead.address?.state,
-                    ].filter(Boolean).join(', ')}
+                        {formatAddress(selectedLead.address)}
                     </p>
                     <Button size="sm" onClick={() => router.push(`/leads/${selectedLead.id}`)}>
                     View Profile
