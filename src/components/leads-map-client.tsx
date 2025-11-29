@@ -24,6 +24,7 @@ import {
 } from './ui/select'
 import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
+import { Badge } from './ui/badge'
 
 const containerStyle = {
   width: '100%',
@@ -68,8 +69,6 @@ export default function LeadsMapClient() {
         .filter(lead => 
             lead.latitude != null && 
             lead.longitude != null &&
-            lead.latitude !== 0 &&
-            lead.longitude !== 0 &&
             !isNaN(parseFloat(String(lead.latitude))) &&
             !isNaN(parseFloat(String(lead.longitude)))
         )
@@ -139,7 +138,10 @@ export default function LeadsMapClient() {
     <div className="flex flex-col gap-4 flex-grow">
         <Card>
             <CardHeader>
-                <CardTitle>Filters</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    <span>Filters</span>
+                    <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                  <div className="space-y-2">
