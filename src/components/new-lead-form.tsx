@@ -25,8 +25,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
 import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { createNewLead } from '@/services/firebase';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin } from 'lucide-react';
@@ -64,9 +64,33 @@ const formSchema = z.object({
   }),
 });
 
+function parseAddress(fullAddress: string): Partial<Address> {
+    if (!fullAddress) return {};
+    const parts = fullAddress.split(',').map(p => p.trim());
+    const address: Partial<Address> = {};
+
+    if (parts.length > 0) {
+        address.street = parts[0];
+    }
+    if (parts.length > 1) {
+        const lastPart = parts[parts.length - 1];
+        const stateZipMatch = lastPart.match(/([A-Z]{2,3})\s+(\d{4})$/);
+        if (stateZipMatch) {
+            address.state = stateZipMatch[1];
+            address.zip = stateZipMatch[2];
+            address.city = parts[parts.length - 2] || '';
+        } else {
+             address.city = lastPart;
+        }
+    }
+    return address;
+}
+
+
 export function NewLeadForm() {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -92,6 +116,31 @@ export function NewLeadForm() {
       },
     },
   });
+
+  useEffect(() => {
+    const companyName = searchParams.get('companyName');
+    const fullAddress = searchParams.get('address');
+    const lat = searchParams.get('lat');
+    const lng = searchParams.get('lng');
+
+    if (companyName) {
+        form.setValue('companyName', companyName);
+    }
+    if (fullAddress) {
+        const parsed = parseAddress(fullAddress);
+        if(parsed.street) form.setValue('address.street', parsed.street);
+        if(parsed.city) form.setValue('address.city', parsed.city);
+        if(parsed.state) form.setValue('address.state', parsed.state);
+        if(parsed.zip) form.setValue('address.zip', parsed.zip);
+    }
+    if (lat) {
+        form.setValue('address.lat', parseFloat(lat));
+    }
+    if (lng) {
+        form.setValue('address.lng', parseFloat(lng));
+    }
+
+  }, [searchParams, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);

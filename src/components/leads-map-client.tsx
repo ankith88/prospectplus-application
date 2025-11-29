@@ -24,6 +24,8 @@ import {
 import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
+import { useRouter } from 'next/navigation'
+import { Building, Search, Briefcase } from 'lucide-react'
 
 const containerStyle = {
   width: '100%',
@@ -68,6 +70,13 @@ export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
+  const [prospects, setProspects] = useState<google.maps.places.PlaceResult[]>([]);
+  const [selectedProspect, setSelectedProspect] = useState<google.maps.places.PlaceResult | null>(null);
+  const [isSearchingNearby, setIsSearchingNearby] = useState(false);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const router = useRouter();
+
+
   const [filters, setFilters] = useState({
     franchisee: 'all',
     status: 'all',
@@ -77,6 +86,7 @@ export default function LeadsMapClient() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: ['places']
   })
 
   useEffect(() => {
@@ -106,7 +116,7 @@ export default function LeadsMapClient() {
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-        const franchiseeMatch = filters.franchisee === 'all' || !lead.franchisee ? true : lead.franchisee === filters.franchisee;
+        const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
         const industryMatch = filters.industry === 'all' || !lead.industryCategory ? true : lead.industryCategory === filters.industry;
         return franchiseeMatch && statusMatch && industryMatch;
@@ -115,10 +125,17 @@ export default function LeadsMapClient() {
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead)
+    setSelectedProspect(null)
   }, [])
+
+  const onProspectMarkerClick = useCallback((prospect: google.maps.places.PlaceResult) => {
+    setSelectedProspect(prospect);
+    setSelectedLead(null);
+  }, []);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null)
+    setSelectedProspect(null);
   }, [])
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
@@ -134,6 +151,42 @@ export default function LeadsMapClient() {
     const statuses = new Set(leads.map(lead => lead.status));
     return Array.from(statuses);
   }, [leads]);
+  
+  const handleFindNearby = () => {
+    if (!map || !selectedLead || !selectedLead.industryCategory) return;
+
+    setIsSearchingNearby(true);
+    setProspects([]);
+    setSelectedProspect(null);
+
+    const placesService = new google.maps.places.PlacesService(map);
+    const request: google.maps.places.PlaceSearchRequest = {
+        location: { lat: selectedLead.latitude!, lng: selectedLead.longitude! },
+        radius: 2000, // 2km radius
+        keyword: selectedLead.industryCategory,
+    };
+    
+    placesService.nearbySearch(request, (results, status) => {
+        setIsSearchingNearby(false);
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+             const existingLeadNames = new Set(leads.map(l => l.companyName.toLowerCase()));
+             const newProspects = results.filter(r => r.name && !existingLeadNames.has(r.name.toLowerCase()));
+            setProspects(newProspects);
+        }
+    });
+  };
+
+  const handleCreateLeadFromProspect = (prospect: google.maps.places.PlaceResult) => {
+    const queryParams = new URLSearchParams();
+    if (prospect.name) queryParams.append('companyName', prospect.name);
+    if (prospect.vicinity) queryParams.append('address', prospect.vicinity);
+    if (prospect.geometry?.location) {
+        queryParams.append('lat', prospect.geometry.location.lat().toString());
+        queryParams.append('lng', prospect.geometry.location.lng().toString());
+    }
+    
+    router.push(`/leads/new?${queryParams.toString()}`);
+  };
 
 
   if (!isLoaded || loadingLeads) {
@@ -144,8 +197,9 @@ export default function LeadsMapClient() {
     )
   }
 
-  const formatAddress = (address?: { street?: string; city?: string; state?: string }) => {
+  const formatAddress = (address?: { street?: string; city?: string; state?: string } | string) => {
     if (!address) return 'Address not available';
+    if (typeof address === 'string') return address;
     return [
         address.street,
         address.city,
@@ -206,6 +260,7 @@ export default function LeadsMapClient() {
             mapContainerStyle={containerStyle}
             center={center}
             zoom={4}
+            onLoad={setMap}
             options={{
                 streetViewControl: false,
                 mapTypeControl: false,
@@ -214,15 +269,25 @@ export default function LeadsMapClient() {
             {filteredLeads.map((lead) => (
                 <MarkerF
                 key={lead.id}
-                position={{ lat: lead.latitude, lng: lead.longitude }}
+                position={{ lat: lead.latitude!, lng: lead.longitude! }}
                 onClick={() => onMarkerClick(lead)}
                 icon={{ url: getPinColor(lead.status) }}
                 />
             ))}
+             {prospects.map((prospect) => (
+                prospect.geometry?.location && (
+                    <MarkerF
+                        key={prospect.place_id}
+                        position={prospect.geometry.location}
+                        onClick={() => onProspectMarkerClick(prospect)}
+                        icon={{ url: 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png' }}
+                    />
+                )
+             ))}
 
             {selectedLead && (
                 <InfoWindow
-                position={{ lat: selectedLead.latitude, lng: selectedLead.longitude }}
+                position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
                 onCloseClick={onInfoWindowClose}
                 >
                 <div className="space-y-2 p-2 max-w-xs">
@@ -234,12 +299,34 @@ export default function LeadsMapClient() {
                     <p className="text-sm">
                         {formatAddress(selectedLead.address)}
                     </p>
-                    <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
-                    View Profile
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
+                            <Briefcase className="mr-2 h-4 w-4" />
+                            View Profile
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby || !selectedLead.industryCategory}>
+                            {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
+                        </Button>
+                    </div>
                 </div>
                 </InfoWindow>
             )}
+
+            {selectedProspect && selectedProspect.geometry?.location && (
+                <InfoWindow
+                    position={selectedProspect.geometry.location}
+                    onCloseClick={onInfoWindowClose}
+                >
+                    <div className="space-y-2 p-2 max-w-xs">
+                        <h3 className="font-bold text-lg">{selectedProspect.name}</h3>
+                        <p className="text-sm">{selectedProspect.vicinity}</p>
+                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(selectedProspect)}>
+                            <Building className="mr-2 h-4 w-4" /> Create Lead
+                        </Button>
+                    </div>
+                </InfoWindow>
+            )}
+
             </GoogleMap>
         </div>
     </div>
