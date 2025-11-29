@@ -176,7 +176,7 @@ export default function LeadsMapClient() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Industries</SelectItem>
-                            {industryCategories.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                            {industryCategories.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
                         </SelectContent>
                     </Select>
                  </div>
