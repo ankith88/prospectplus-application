@@ -64,11 +64,20 @@ export default function LeadsMapClient() {
       setLoadingLeads(true)
       const allLeads = await getLeadsFromFirebase({ summary: true })
       
-      const leadsWithLocation = allLeads.filter(
-        (lead): lead is MapLead => 
-            typeof lead.latitude === 'number' && 
-            typeof lead.longitude === 'number'
-      );
+      const leadsWithLocation: MapLead[] = allLeads
+        .filter(lead => 
+            lead.latitude != null && 
+            lead.longitude != null &&
+            lead.latitude !== 0 &&
+            lead.longitude !== 0 &&
+            !isNaN(parseFloat(String(lead.latitude))) &&
+            !isNaN(parseFloat(String(lead.longitude)))
+        )
+        .map(lead => ({
+          ...lead,
+          latitude: parseFloat(String(lead.latitude)),
+          longitude: parseFloat(String(lead.longitude)),
+        }));
 
       setLeads(leadsWithLocation)
       setLoadingLeads(false)
