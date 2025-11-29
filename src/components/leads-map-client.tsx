@@ -13,7 +13,6 @@ import type { Lead, LeadStatus } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
-import { useRouter } from 'next/navigation'
 import { LeadStatusBadge } from './lead-status-badge'
 import {
   Select,
@@ -37,10 +36,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory'> & {
-    latitude: number;
-    longitude: number;
-};
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude'>;
 
 const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -77,8 +73,6 @@ export default function LeadsMapClient() {
     status: 'all',
     industry: 'all',
   });
-
-  const router = useRouter()
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -240,7 +234,7 @@ export default function LeadsMapClient() {
                     <p className="text-sm">
                         {formatAddress(selectedLead.address)}
                     </p>
-                    <Button size="sm" onClick={() => router.push(`/leads/${selectedLead.id}`)}>
+                    <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
                     View Profile
                     </Button>
                 </div>
