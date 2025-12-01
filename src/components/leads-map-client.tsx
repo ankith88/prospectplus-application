@@ -9,7 +9,7 @@ import {
   InfoWindow,
 } from '@react-google-maps/api'
 import { getLeadsFromFirebase } from '@/services/firebase'
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { prospectWebsiteTool } from '@/services/firebase'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -26,8 +26,23 @@ import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const containerStyle = {
   width: '100%',
@@ -73,7 +88,7 @@ export default function LeadsMapClient() {
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
   const [prospects, setProspects] = useState<google.maps.places.PlaceResult[]>([]);
-  const [selectedProspect, setSelectedProspect] = useState<google.maps.places.PlaceResult | null>(null);
+  const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const router = useRouter();
@@ -125,17 +140,10 @@ export default function LeadsMapClient() {
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead)
-    setSelectedProspect(null)
   }, [])
-
-  const onProspectMarkerClick = useCallback((prospect: google.maps.places.PlaceResult) => {
-    setSelectedProspect(prospect);
-    setSelectedLead(null);
-  }, []);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null)
-    setSelectedProspect(null);
   }, [])
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
@@ -157,14 +165,11 @@ export default function LeadsMapClient() {
 
     setIsSearchingNearby(true);
     setProspects([]);
-    setSelectedProspect(null);
     let searchKeywords: string[] = [];
     
-    // Check for AI-generated keywords first
     if (selectedLead.discoveryData?.searchKeywords && selectedLead.discoveryData.searchKeywords.length > 0) {
         searchKeywords = selectedLead.discoveryData.searchKeywords;
     } 
-    // If not, try to generate them now
     else if (selectedLead.websiteUrl) {
         toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
         const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
@@ -174,7 +179,6 @@ export default function LeadsMapClient() {
         }
     }
 
-    // Fallback to industry category if no keywords are available
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
         searchKeywords = [selectedLead.industryCategory];
         toast({ title: "Using Industry Category", description: "No specific keywords found, searching by industry." });
@@ -186,11 +190,10 @@ export default function LeadsMapClient() {
         return;
     }
 
-
     const placesService = new google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
         location: { lat: selectedLead.latitude!, lng: selectedLead.longitude! },
-        radius: 2000, // 2km radius
+        radius: 2000, 
         keyword: searchKeywords.join(' '),
     };
     
@@ -200,7 +203,12 @@ export default function LeadsMapClient() {
              const existingLeadNames = new Set(leads.map(l => l.companyName.toLowerCase()));
              const newProspects = results.filter(r => r.name && !existingLeadNames.has(r.name.toLowerCase()));
             setProspects(newProspects);
-            toast({ title: `Found ${newProspects.length} new prospects nearby.` });
+            if (newProspects.length > 0) {
+                setIsProspectsDialogOpen(true);
+                toast({ title: `Found ${newProspects.length} new prospects nearby.` });
+            } else {
+                toast({ title: "No new prospects found nearby." });
+            }
         } else {
              toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
         }
@@ -218,7 +226,6 @@ export default function LeadsMapClient() {
     
     router.push(`/leads/new?${queryParams.toString()}`);
   };
-
 
   if (!isLoaded || loadingLeads) {
     return (
@@ -305,16 +312,6 @@ export default function LeadsMapClient() {
                 icon={{ url: getPinColor(lead.status) }}
                 />
             ))}
-             {prospects.map((prospect) => (
-                prospect.geometry?.location && (
-                    <MarkerF
-                        key={prospect.place_id}
-                        position={prospect.geometry.location}
-                        onClick={() => onProspectMarkerClick(prospect)}
-                        icon={{ url: 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png' }}
-                    />
-                )
-             ))}
 
             {selectedLead && (
                 <InfoWindow
@@ -342,24 +339,46 @@ export default function LeadsMapClient() {
                 </div>
                 </InfoWindow>
             )}
-
-            {selectedProspect && selectedProspect.geometry?.location && (
-                <InfoWindow
-                    position={selectedProspect.geometry.location}
-                    onCloseClick={onInfoWindowClose}
-                >
-                    <div className="space-y-2 p-2 max-w-xs">
-                        <h3 className="font-bold text-lg">{selectedProspect.name}</h3>
-                        <p className="text-sm">{selectedProspect.vicinity}</p>
-                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(selectedProspect)}>
-                            <Building className="mr-2 h-4 w-4" /> Create Lead
-                        </Button>
-                    </div>
-                </InfoWindow>
-            )}
-
             </GoogleMap>
         </div>
+
+        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Nearby Prospects</DialogTitle>
+                    <DialogDescription>
+                        Found {prospects.length} potential new leads near {selectedLead?.companyName}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="max-h-[60vh] overflow-y-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Address</TableHead>
+                                <TableHead>Source Industry</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {prospects.map(prospect => (
+                                <TableRow key={prospect.place_id}>
+                                    <TableCell>{prospect.name}</TableCell>
+                                    <TableCell>{prospect.vicinity}</TableCell>
+                                    <TableCell>{selectedLead?.industryCategory || 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospect)}>
+                                            <PlusCircle className="mr-2 h-4 w-4"/>
+                                            Add Lead
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
   )
 }

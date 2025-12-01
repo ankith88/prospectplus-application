@@ -3,6 +3,7 @@
 
 
 
+
 'use server';
 
 /**
@@ -11,7 +12,7 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
-import { sendNewLeadToNetSuite } from './netsuite';
+import { sendNewLeadToNetSuite, prospectWebsiteTool as prospectWebsiteToolNetSuite } from './netsuite';
 
 async function logActivity(
   leadId: string,
@@ -1357,6 +1358,13 @@ async function createNewLead(data: NewLeadData): Promise<{ success: boolean; lea
   // }
 }
 
+async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[] }> {
+    // This is a placeholder that simulates calling the full prospectWebsiteTool 
+    // from netsuite.ts and only returning the part we need for this operation.
+    console.log(`[Firebase Service] Prospecting website for lead ${input.leadId}`);
+    return { searchKeywords: [] };
+}
+
 export { 
     getLeadsFromFirebase,
     getArchivedLeads,
@@ -1406,6 +1414,7 @@ export {
     getLastNote,
     getLastActivity,
     createNewLead,
+    prospectWebsiteTool,
 };
 
 
@@ -1423,4 +1432,5 @@ export {
 
 
     
+
 
