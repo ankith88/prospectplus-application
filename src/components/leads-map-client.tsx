@@ -8,7 +8,8 @@ import {
   MarkerF,
   InfoWindow,
 } from '@react-google-maps/api'
-import { getLeadsFromFirebase } from '@/services/firebase'
+import { getLeadsFromFirebase, updateLeadDetails } from '@/services/firebase'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -26,6 +27,7 @@ import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
 import { Building, Search, Briefcase } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 const containerStyle = {
   width: '100%',
@@ -38,7 +40,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude'>;
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData'>;
 
 const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -75,6 +77,7 @@ export default function LeadsMapClient() {
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
 
 
   const [filters, setFilters] = useState({
@@ -89,30 +92,68 @@ export default function LeadsMapClient() {
     libraries: ['places']
   })
 
+  const geocodeAddress = useCallback((address: string): Promise<google.maps.LatLngLiteral> => {
+      return new Promise((resolve, reject) => {
+        if (!window.google) {
+          reject('Google Maps API not loaded');
+          return;
+        }
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: address }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+            resolve({
+              lat: results[0].geometry.location.lat(),
+              lng: results[0].geometry.location.lng(),
+            });
+          } else {
+            reject(`Geocode was not successful for the following reason: ${status}`);
+          }
+        });
+      });
+  }, []);
+
   useEffect(() => {
     const fetchLeads = async () => {
-      setLoadingLeads(true)
-      const allLeads = await getLeadsFromFirebase({ summary: true })
-      
-      const leadsWithLocation: MapLead[] = allLeads
-        .filter(lead => 
-            lead.latitude != null && 
-            lead.longitude != null &&
-            !isNaN(parseFloat(String(lead.latitude))) &&
-            !isNaN(parseFloat(String(lead.longitude)))
-        )
-        .map(lead => ({
-          ...lead,
-          latitude: parseFloat(String(lead.latitude)),
-          longitude: parseFloat(String(lead.longitude)),
-        }));
+      setLoadingLeads(true);
+      const allLeads = await getLeadsFromFirebase({ summary: true });
 
-      setLeads(leadsWithLocation)
-      setLoadingLeads(false)
+      const geocodingPromises = allLeads.map(async (lead) => {
+        let lat = lead.latitude ? parseFloat(String(lead.latitude)) : null;
+        let lng = lead.longitude ? parseFloat(String(lead.longitude)) : null;
+
+        if ((!lat || !lng) && lead.address) {
+          try {
+            const fullAddress = [lead.address.street, lead.address.city, lead.address.state, lead.address.zip].filter(Boolean).join(', ');
+            const coords = await geocodeAddress(fullAddress);
+            lat = coords.lat;
+            lng = coords.lng;
+            // Fire-and-forget update to Firebase
+            updateLeadDetails(lead.id, lead, { address: { ...lead.address, lat, lng } });
+          } catch (error) {
+            console.error(`Could not geocode address for lead ${lead.id}:`, error);
+          }
+        }
+        
+        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+            return {
+                ...lead,
+                latitude: lat,
+                longitude: lng,
+            };
+        }
+        return null;
+      });
+
+      const resolvedLeads = (await Promise.all(geocodingPromises)).filter((l): l is MapLead => l !== null);
+      
+      setLeads(resolvedLeads);
+      setLoadingLeads(false);
     }
 
-    fetchLeads()
-  }, [])
+    if (isLoaded) {
+      fetchLeads();
+    }
+  }, [isLoaded, geocodeAddress]);
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -152,18 +193,46 @@ export default function LeadsMapClient() {
     return Array.from(statuses);
   }, [leads]);
   
-  const handleFindNearby = () => {
-    if (!map || !selectedLead || !selectedLead.industryCategory) return;
+  const handleFindNearby = async () => {
+    if (!map || !selectedLead) return;
 
     setIsSearchingNearby(true);
     setProspects([]);
     setSelectedProspect(null);
+    let searchKeywords: string[] = [];
+    
+    // Check for AI-generated keywords first
+    if (selectedLead.discoveryData?.searchKeywords && selectedLead.discoveryData.searchKeywords.length > 0) {
+        searchKeywords = selectedLead.discoveryData.searchKeywords;
+    } 
+    // If not, try to generate them now
+    else if (selectedLead.websiteUrl) {
+        toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
+        const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
+        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+            searchKeywords = prospectResult.searchKeywords;
+            toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
+        }
+    }
+
+    // Fallback to industry category if no keywords are available
+    if (searchKeywords.length === 0 && selectedLead.industryCategory) {
+        searchKeywords = [selectedLead.industryCategory];
+        toast({ title: "Using Industry Category", description: "No specific keywords found, searching by industry." });
+    }
+
+    if (searchKeywords.length === 0) {
+        toast({ variant: "destructive", title: "Cannot Search", description: "No industry or keywords available for this lead." });
+        setIsSearchingNearby(false);
+        return;
+    }
+
 
     const placesService = new google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
         location: { lat: selectedLead.latitude!, lng: selectedLead.longitude! },
         radius: 2000, // 2km radius
-        keyword: selectedLead.industryCategory,
+        keyword: searchKeywords.join(' '),
     };
     
     placesService.nearbySearch(request, (results, status) => {
@@ -172,6 +241,9 @@ export default function LeadsMapClient() {
              const existingLeadNames = new Set(leads.map(l => l.companyName.toLowerCase()));
              const newProspects = results.filter(r => r.name && !existingLeadNames.has(r.name.toLowerCase()));
             setProspects(newProspects);
+            toast({ title: `Found ${newProspects.length} new prospects nearby.` });
+        } else {
+             toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
         }
     });
   };
@@ -304,7 +376,7 @@ export default function LeadsMapClient() {
                             <Briefcase className="mr-2 h-4 w-4" />
                             View Profile
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby || !selectedLead.industryCategory}>
+                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby || (!selectedLead.industryCategory && !selectedLead.websiteUrl)}>
                             {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
                         </Button>
                     </div>
@@ -332,3 +404,5 @@ export default function LeadsMapClient() {
     </div>
   )
 }
+
+    

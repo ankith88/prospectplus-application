@@ -35,6 +35,7 @@ const ProspectWebsiteOutputSchema = z.object({
   contacts: z.array(ContactSchema).optional().describe("Contacts found on the website."),
   siteAnalysis: z.string().optional().describe("A brief analysis of the website content for shipping-related keywords."),
   companyDescription: z.string().optional().describe("A brief description of the company's business based on website content."),
+  searchKeywords: z.array(z.string()).optional().describe("A list of specific keywords describing the company's core business for a more precise search."),
 });
 
 const ProspectWebsiteInputSchema = z.object({
@@ -71,13 +72,13 @@ function extractNameFromEmail(email: string): string {
 const summarizeWebsitePrompt = ai.definePrompt({
     name: 'summarizeWebsitePrompt',
     input: { schema: z.object({ siteContent: z.string() }) },
-    output: { schema: z.object({ summary: z.string().describe("A detailed description of the company's business, what they sell, and their target customers, based on the website content.") }) },
-    prompt: `You are an expert business analyst. Based on the following website content, provide a detailed description of the company. 
-
-    Your description should cover:
-    1. The company's core business and mission.
-    2. The key products or services they offer.
-    3. Their primary target audience or customer base.
+    output: { schema: z.object({ 
+        summary: z.string().describe("A detailed description of the company's business, what they sell, and their target customers, based on the website content."),
+        keywords: z.array(z.string()).describe("A list of 3-5 specific keywords that accurately describe the company's core business, suitable for a Google Maps search (e.g., 'handmade leather goods', 'organic pet food', 'construction safety equipment').")
+    }) },
+    prompt: `You are an expert business analyst. Based on the following website content, provide:
+    1. A detailed description of the company's business, what they sell, and their target audience.
+    2. A list of 3-5 specific keywords that accurately describe the company's core business, suitable for a targeted search.
 
     Website Content:
     """
@@ -90,21 +91,22 @@ const summarizeWebsitePrompt = ai.definePrompt({
 export const prospectWebsiteTool = ai.defineTool(
   {
     name: 'prospectWebsite',
-    description: 'Analyzes a website to extract social media links and contact information using the Hunter.io API. Also generates a company description. Saves new contacts to Firebase.',
+    description: 'Analyzes a website to extract social media links, contact information (using Hunter.io API), and generates a company description with relevant search keywords. Saves new contacts to Firebase.',
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
   async ({ leadId, websiteUrl }) => {
     let companyDescription = '';
+    let searchKeywords: string[] = [];
     
-    // Step 1: Fetch and analyze website content for a description. This is non-critical.
+    // Step 1: Fetch and analyze website content for a description and keywords. This is non-critical.
     try {
         const controller = new AbortController();
         const timeout = setTimeout(() => {
             controller.abort();
         }, 10000); // 10-second timeout
 
-        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal });
+        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal as any });
         
         clearTimeout(timeout);
 
@@ -118,8 +120,9 @@ export const prospectWebsiteTool = ai.defineTool(
             
             if (textContent) {
                 const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
-                if (output?.summary) {
-                    companyDescription = output.summary;
+                if (output) {
+                    if (output.summary) companyDescription = output.summary;
+                    if (output.keywords) searchKeywords = output.keywords;
                 }
             }
         }
@@ -153,7 +156,7 @@ export const prospectWebsiteTool = ai.defineTool(
 
         let response;
         try {
-            response = await fetch(hunterUrl, { signal: controller.signal });
+            response = await fetch(hunterUrl, { signal: controller.signal as any });
         } finally {
             clearTimeout(timeout);
         }
@@ -186,13 +189,21 @@ export const prospectWebsiteTool = ai.defineTool(
                 contacts: [],
                 siteAnalysis: "Could not find associated lead in Firebase.",
                 companyDescription: companyDescription,
+                searchKeywords: searchKeywords,
             };
         }
         
-        // Update the company description in Firestore if a new one was generated
-        if (companyDescription) {
-            await updateDoc(doc(firestore, 'leads', leadId), { companyDescription });
+        const updateData: Partial<Lead> = {};
+        if (companyDescription) updateData.companyDescription = companyDescription;
+        if (searchKeywords.length > 0) {
+            // Assuming discoveryData exists and we are adding keywords to it.
+            // Adjust if the data model is different.
+            updateData.discoveryData = { ...lead.discoveryData, searchKeywords };
         }
+        if (Object.keys(updateData).length > 0) {
+            await updateDoc(doc(firestore, 'leads', leadId), updateData);
+        }
+
         
         const getContactKey = (contact: {email?: string | null, phone?: string | null}) => (contact.email || '').toLowerCase();
         
@@ -226,6 +237,7 @@ export const prospectWebsiteTool = ai.defineTool(
             contacts: savedContacts,
             siteAnalysis: `Found and saved ${savedContacts.length} new contacts via Hunter.io.`,
             companyDescription: companyDescription,
+            searchKeywords: searchKeywords,
         };
 
     } catch (error: any) {
@@ -238,3 +250,5 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
+
+    
