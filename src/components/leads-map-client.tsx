@@ -26,7 +26,7 @@ import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -56,6 +56,12 @@ const center = {
 }
 
 type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData'>;
+
+type ProspectWithLeadInfo = {
+    place: google.maps.places.PlaceResult;
+    existingLead?: MapLead;
+};
+
 
 const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -87,7 +93,7 @@ export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
-  const [prospects, setProspects] = useState<google.maps.places.PlaceResult[]>([]);
+  const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([]);
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -201,11 +207,16 @@ export default function LeadsMapClient() {
         setIsSearchingNearby(false);
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
              const existingLeadNames = new Set(leads.map(l => l.companyName.toLowerCase()));
-             const newProspects = results.filter(r => r.name && !existingLeadNames.has(r.name.toLowerCase()));
-            setProspects(newProspects);
-            if (newProspects.length > 0) {
+             const prospectsWithLeadInfo = results.map(place => {
+                const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+                return { place, existingLead };
+             });
+
+            setProspects(prospectsWithLeadInfo);
+            
+            if (prospectsWithLeadInfo.length > 0) {
                 setIsProspectsDialogOpen(true);
-                toast({ title: `Found ${newProspects.length} new prospects nearby.` });
+                toast({ title: `Found ${prospectsWithLeadInfo.length} prospects nearby.` });
             } else {
                 toast({ title: "No new prospects found nearby." });
             }
@@ -347,7 +358,7 @@ export default function LeadsMapClient() {
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
-                        Found {prospects.length} potential new leads near {selectedLead?.companyName}.
+                        Found {prospects.length} potential leads near {selectedLead?.companyName}.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="max-h-[60vh] overflow-y-auto">
@@ -361,16 +372,23 @@ export default function LeadsMapClient() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {prospects.map(prospect => (
-                                <TableRow key={prospect.place_id}>
-                                    <TableCell>{prospect.name}</TableCell>
-                                    <TableCell>{prospect.vicinity}</TableCell>
+                            {prospects.map(prospectInfo => (
+                                <TableRow key={prospectInfo.place.place_id}>
+                                    <TableCell>{prospectInfo.place.name}</TableCell>
+                                    <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                     <TableCell>{selectedLead?.industryCategory || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospect)}>
-                                            <PlusCircle className="mr-2 h-4 w-4"/>
-                                            Add Lead
-                                        </Button>
+                                        {prospectInfo.existingLead ? (
+                                            <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                View Lead
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)}>
+                                                <PlusCircle className="mr-2 h-4 w-4"/>
+                                                Add Lead
+                                            </Button>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
