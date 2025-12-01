@@ -8,7 +8,7 @@ import {
   MarkerF,
   InfoWindow,
 } from '@react-google-maps/api'
-import { getLeadsFromFirebase, updateLeadDetails } from '@/services/firebase'
+import { getLeadsFromFirebase } from '@/services/firebase'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -92,68 +92,27 @@ export default function LeadsMapClient() {
     libraries: ['places']
   })
 
-  const geocodeAddress = useCallback((address: string): Promise<google.maps.LatLngLiteral> => {
-      return new Promise((resolve, reject) => {
-        if (!window.google) {
-          reject('Google Maps API not loaded');
-          return;
-        }
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: address }, (results, status) => {
-          if (status === 'OK' && results?.[0]) {
-            resolve({
-              lat: results[0].geometry.location.lat(),
-              lng: results[0].geometry.location.lng(),
-            });
-          } else {
-            reject(`Geocode was not successful for the following reason: ${status}`);
-          }
-        });
-      });
-  }, []);
-
   useEffect(() => {
     const fetchLeads = async () => {
       setLoadingLeads(true);
       const allLeads = await getLeadsFromFirebase({ summary: true });
 
-      const geocodingPromises = allLeads.map(async (lead) => {
-        let lat = lead.latitude ? parseFloat(String(lead.latitude)) : null;
-        let lng = lead.longitude ? parseFloat(String(lead.longitude)) : null;
-
-        if ((!lat || !lng) && lead.address) {
-          try {
-            const fullAddress = [lead.address.street, lead.address.city, lead.address.state, lead.address.zip].filter(Boolean).join(', ');
-            const coords = await geocodeAddress(fullAddress);
-            lat = coords.lat;
-            lng = coords.lng;
-            // Fire-and-forget update to Firebase
-            updateLeadDetails(lead.id, lead, { address: { ...lead.address, lat, lng } });
-          } catch (error) {
-            console.error(`Could not geocode address for lead ${lead.id}:`, error);
-          }
-        }
-        
-        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-            return {
-                ...lead,
-                latitude: lat,
-                longitude: lng,
-            };
-        }
-        return null;
-      });
-
-      const resolvedLeads = (await Promise.all(geocodingPromises)).filter((l): l is MapLead => l !== null);
+      const leadsWithCoords = allLeads.filter(
+        (lead) => lead.latitude != null && lead.longitude != null && !isNaN(parseFloat(String(lead.latitude))) && !isNaN(parseFloat(String(lead.longitude)))
+      ).map(lead => ({
+          ...lead,
+          latitude: parseFloat(String(lead.latitude)),
+          longitude: parseFloat(String(lead.longitude)),
+      }));
       
-      setLeads(resolvedLeads);
+      setLeads(leadsWithCoords as MapLead[]);
       setLoadingLeads(false);
     }
 
     if (isLoaded) {
       fetchLeads();
     }
-  }, [isLoaded, geocodeAddress]);
+  }, [isLoaded]);
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -404,5 +363,3 @@ export default function LeadsMapClient() {
     </div>
   )
 }
-
-    
