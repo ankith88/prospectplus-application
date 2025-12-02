@@ -26,7 +26,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -44,6 +44,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from './ui/input';
+import { Switch } from './ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+
 
 const containerStyle = {
   width: '100%',
@@ -104,17 +107,18 @@ export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
-  const [hoveredLead, setHoveredLead] = useState<MapLead | null>(null);
-  const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null);
-  const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([]);
-  const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
-  const [isSearchingNearby, setIsSearchingNearby] = useState(false);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [prospectSearchQuery, setProspectSearchQuery] = useState('');
-  const router = useRouter();
-  const { toast } = useToast();
+  const [hoveredLead, setHoveredLead] = useState<MapLead | null>(null)
+  const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null)
+  const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
+  const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false)
+  const [isSearchingNearby, setIsSearchingNearby] = useState(false)
+  const [map, setMap] = useState<google.maps.Map | null>(null)
+  const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [prospectSearchQuery, setProspectSearchQuery] = useState('')
+  const [isQuickAddMode, setIsQuickAddMode] = useState(false)
+  const router = useRouter()
+  const { toast } = useToast()
 
 
   const [filters, setFilters] = useState({
@@ -166,8 +170,8 @@ export default function LeadsMapClient() {
   }, [])
 
   const onInfoWindowClose = useCallback(() => {
-    setSelectedLead(null)
-    setClickedKmlFeature(null)
+    setSelectedLead(null);
+    setClickedKmlFeature(null);
   }, []);
 
   const onKmlLayerClick = useCallback((e: google.maps.KmlMouseEvent) => {
@@ -179,6 +183,37 @@ export default function LeadsMapClient() {
       setClickedKmlFeature({ featureData, latLng: e.latLng! });
     }
   }, []);
+  
+  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
+    if (!isQuickAddMode || !e.latLng) return;
+
+    toast({ title: 'Finding address...', description: 'Geocoding the selected location.' });
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location: e.latLng }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+            const place = results[0];
+            const getAddressComponent = (type: string, useShortName = false) => {
+                const component = place.address_components?.find(c => c.types.includes(type));
+                return useShortName ? component?.short_name : component?.long_name || '';
+            }
+
+            const addressParams = new URLSearchParams({
+                street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
+                city: getAddressComponent('locality') || getAddressComponent('postal_town'),
+                state: getAddressComponent('administrative_area_level_1', true),
+                zip: getAddressComponent('postal_code'),
+                lat: e.latLng!.lat().toString(),
+                lng: e.latLng!.lng().toString(),
+            });
+
+            setIsQuickAddMode(false);
+            router.push(`/leads/new?${addressParams.toString()}`);
+        } else {
+            toast({ variant: 'destructive', title: 'Geocoding Failed', description: `Could not find address for this location. Status: ${status}` });
+        }
+    });
+  }, [isQuickAddMode, router, toast]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -441,6 +476,7 @@ export default function LeadsMapClient() {
 
   return (
     <div className="flex flex-col gap-4 flex-grow">
+      <TooltipProvider>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
                 <CardHeader>
@@ -504,163 +540,187 @@ export default function LeadsMapClient() {
                             <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
                         </div>
                     </div>
+                    <div className="space-y-2 flex flex-col pt-3">
+                      <Label>Quick Add</Label>
+                       <Tooltip>
+                            <TooltipTrigger asChild>
+                               <span className="flex items-center space-x-2">
+                                    <Switch
+                                        checked={isQuickAddMode}
+                                        onCheckedChange={setIsQuickAddMode}
+                                        aria-label="Toggle Quick Add Mode"
+                                    />
+                                    <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
+                                        Click map to add a lead
+                                    </Label>
+                               </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>When enabled, click on the map to create a new lead at that location.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
                 </CardContent>
             </Card>
         </div>
-        <div className="flex-grow">
-            <GoogleMap
-            mapContainerStyle={containerStyle}
-            center={center}
-            zoom={4}
-            onLoad={setMap}
-            options={{
-                streetViewControl: false,
-                mapTypeControl: false,
-            }}
-            >
-            <KmlLayer
-                url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
-                options={{ preserveViewport: true, suppressInfoWindows: true }}
-                onClick={onKmlLayerClick}
-            />
-            {filteredLeads.map((lead) => (
-                <MarkerF
-                key={lead.id}
-                position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                onClick={() => onMarkerClick(lead)}
-                onMouseOver={() => setHoveredLead(lead)}
-                onMouseOut={() => setHoveredLead(null)}
-                icon={{ url: getPinColor(lead.status) }}
-                />
-            ))}
+      </TooltipProvider>
+      <div className="flex-grow">
+          <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={center}
+          zoom={4}
+          onLoad={setMap}
+          onClick={onMapClick}
+          options={{
+              streetViewControl: false,
+              mapTypeControl: false,
+              clickableIcons: isQuickAddMode, // Disable clicking on default POIs unless in quick add mode
+              cursor: isQuickAddMode ? 'crosshair' : 'default',
+          }}
+          >
+          <KmlLayer
+              url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
+              options={{ preserveViewport: true, suppressInfoWindows: true }}
+              onClick={onKmlLayerClick}
+          />
+          {filteredLeads.map((lead) => (
+              <MarkerF
+              key={lead.id}
+              position={{ lat: lead.latitude!, lng: lead.longitude! }}
+              onClick={() => onMarkerClick(lead)}
+              onMouseOver={() => setHoveredLead(lead)}
+              onMouseOut={() => setHoveredLead(null)}
+              icon={{ url: getPinColor(lead.status) }}
+              />
+          ))}
 
-            {myLocation && (
-                <MarkerF
-                    position={myLocation}
-                    icon={{
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 8,
-                        fillColor: '#4285F4',
-                        fillOpacity: 1,
-                        strokeColor: 'white',
-                        strokeWeight: 2,
-                    }}
-                />
-            )}
+          {myLocation && (
+              <MarkerF
+                  position={myLocation}
+                  icon={{
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 8,
+                      fillColor: '#4285F4',
+                      fillOpacity: 1,
+                      strokeColor: 'white',
+                      strokeWeight: 2,
+                  }}
+              />
+          )}
 
-            {selectedLead && (
-                <InfoWindowF
-                position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
-                onCloseClick={onInfoWindowClose}
-                options={infoWindowOptions}
-                >
-                <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
-                    <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                        <LeadStatusBadge status={selectedLead.status} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                        {selectedLead.industryCategory || 'N/A'}
-                    </p>
-                    <p className="text-sm">
-                        {formatAddress(selectedLead.address)}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
-                            <Briefcase className="mr-2 h-4 w-4" />
-                            View Profile
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                            {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
-                        </Button>
-                    </div>
-                </div>
-                </InfoWindowF>
-            )}
+          {selectedLead && (
+              <InfoWindowF
+              position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+              onCloseClick={onInfoWindowClose}
+              options={infoWindowOptions}
+              >
+              <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
+                  <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                      <LeadStatusBadge status={selectedLead.status} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                      {selectedLead.industryCategory || 'N/A'}
+                  </p>
+                  <p className="text-sm">
+                      {formatAddress(selectedLead.address)}
+                  </p>
+                  <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
+                          <Briefcase className="mr-2 h-4 w-4" />
+                          View Profile
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                          {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
+                      </Button>
+                  </div>
+              </div>
+              </InfoWindowF>
+          )}
 
-            {hoveredLead && !selectedLead && (
-                <InfoWindowF
-                    position={{ lat: hoveredLead.latitude!, lng: hoveredLead.longitude! }}
-                    onCloseClick={() => setHoveredLead(null)}
-                    options={{...infoWindowOptions, disableAutoPan: true }}
-                >
-                    <div className="p-1">
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">{hoveredLead.companyName}</span>
-                            <LeadStatusBadge status={hoveredLead.status} />
-                        </div>
-                    </div>
-                </InfoWindowF>
-            )}
+          {hoveredLead && !selectedLead && (
+              <InfoWindowF
+                  position={{ lat: hoveredLead.latitude!, lng: hoveredLead.longitude! }}
+                  onCloseClick={() => setHoveredLead(null)}
+                  options={{...infoWindowOptions, disableAutoPan: true }}
+              >
+                  <div className="p-1">
+                      <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{hoveredLead.companyName}</span>
+                          <LeadStatusBadge status={hoveredLead.status} />
+                      </div>
+                  </div>
+              </InfoWindowF>
+          )}
 
-            {clickedKmlFeature && (
-                <InfoWindowF
-                    position={clickedKmlFeature.latLng}
-                    onCloseClick={onInfoWindowClose}
-                >
-                    <div className="p-2">
-                        <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
-                    </div>
-                </InfoWindowF>
-            )}
-            </GoogleMap>
-        </div>
+          {clickedKmlFeature && (
+              <InfoWindowF
+                  position={clickedKmlFeature.latLng}
+                  onCloseClick={onInfoWindowClose}
+              >
+                  <div className="p-2">
+                      <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
+                  </div>
+              </InfoWindowF>
+          )}
+          </GoogleMap>
+      </div>
 
-        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-6xl">
-                <DialogHeader>
-                    <DialogTitle>Nearby Prospects</DialogTitle>
-                    <DialogDescription>
-                        Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="max-h-[60vh] overflow-y-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Company Name</TableHead>
-                                <TableHead>Address</TableHead>
-                                <TableHead>Phone</TableHead>
-                                <TableHead>Website</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {prospects.map(prospectInfo => (
-                                <TableRow key={prospectInfo.place.place_id}>
-                                    <TableCell>{prospectInfo.place.name}</TableCell>
-                                    <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                    <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
-                                    <TableCell>
-                                        {prospectInfo.place.website ? (
-                                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
-                                                <LinkIcon className="h-3 w-3" />
-                                                <span>Visit</span>
-                                            </a>
-                                        ) : (
-                                            'N/A'
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        {prospectInfo.existingLead ? (
-                                            <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                                <Eye className="mr-2 h-4 w-4" />
-                                                View Lead
-                                            </Button>
-                                        ) : (
-                                            <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                                {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
-                                                {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            </DialogContent>
-        </Dialog>
+      <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+          <DialogContent className="max-w-6xl">
+              <DialogHeader>
+                  <DialogTitle>Nearby Prospects</DialogTitle>
+                  <DialogDescription>
+                      Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[60vh] overflow-y-auto">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Company Name</TableHead>
+                              <TableHead>Address</TableHead>
+                              <TableHead>Phone</TableHead>
+                              <TableHead>Website</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {prospects.map(prospectInfo => (
+                              <TableRow key={prospectInfo.place.place_id}>
+                                  <TableCell>{prospectInfo.place.name}</TableCell>
+                                  <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                                  <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
+                                  <TableCell>
+                                      {prospectInfo.place.website ? (
+                                          <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
+                                              <LinkIcon className="h-3 w-3" />
+                                              <span>Visit</span>
+                                          </a>
+                                      ) : (
+                                          'N/A'
+                                      )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                      {prospectInfo.existingLead ? (
+                                          <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                              <Eye className="mr-2 h-4 w-4" />
+                                              View Lead
+                                          </Button>
+                                      ) : (
+                                          <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                              {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                                              {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
+                                          </Button>
+                                      )}
+                                  </TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
   )
 }

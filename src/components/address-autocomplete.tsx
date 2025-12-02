@@ -34,7 +34,7 @@ export function AddressAutocomplete({}: AddressAutocompleteProps) {
             setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '');
             setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '');
             setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '');
-            setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.long_name || 'Australia');
+            setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU');
 
             if (place.geometry?.location) {
               setValue('address.lat', place.geometry.location.lat());

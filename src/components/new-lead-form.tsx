@@ -26,10 +26,10 @@ import { AddressAutocomplete } from './address-autocomplete';
 import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { createNewLead } from '@/services/firebase';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createNewLead, prospectWebsiteTool } from '@/services/firebase';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
 
 const phoneRegex = new RegExp(
@@ -60,7 +60,7 @@ const formSchema = z.object({
     lastName: z.string().min(1, 'Last name is required'),
     title: z.string().min(1, 'Title is required'),
     email: z.string().email('Invalid email address'),
-    phone: z.string().regex(phoneRegex, 'Invalid Australian phone number'),
+    phone: z.string().optional(),
   }),
 });
 
@@ -92,6 +92,9 @@ export function NewLeadForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProspecting, setIsProspecting] = useState(false);
+
+  const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -108,39 +111,116 @@ export function NewLeadForm() {
         country: 'Australia',
       },
       contact: {
-        firstName: '',
+        firstName: 'Info',
         lastName: '',
-        title: '',
+        title: 'Primary Contact',
         email: '',
         phone: '',
       },
     },
   });
 
+  const setupAutocomplete = useCallback(() => {
+    if (!window.google || !autocompleteInputRef.current) return;
+
+    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        types: ['establishment'],
+        componentRestrictions: { country: 'au' },
+    });
+
+    autocomplete.addListener('place_changed', async () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+
+        form.setValue('companyName', place.name || '');
+        form.setValue('websiteUrl', place.website || '');
+        if(place.formatted_phone_number) form.setValue('contact.phone', place.formatted_phone_number);
+
+        const getAddressComponent = (type: string, useShortName = false) => {
+            const component = place.address_components?.find(c => c.types.includes(type));
+            return useShortName ? component?.short_name : component?.long_name || '';
+        }
+
+        const street_number = getAddressComponent('street_number');
+        const route = getAddressComponent('route');
+
+        form.setValue('address.street', `${street_number} ${route}`.trim());
+        form.setValue('address.city', getAddressComponent('locality') || getAddressComponent('postal_town'));
+        form.setValue('address.state', getAddressComponent('administrative_area_level_1', true));
+        form.setValue('address.zip', getAddressComponent('postal_code'));
+        form.setValue('address.country', getAddressComponent('country', true));
+        if (place.geometry?.location) {
+          form.setValue('address.lat', place.geometry.location.lat());
+          form.setValue('address.lng', place.geometry.location.lng());
+        }
+
+        form.setValue('contact.lastName', place.name || '');
+        const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+        if (websiteDomain) {
+            form.setValue('contact.email', `info@${websiteDomain}`);
+        }
+    });
+  }, [form]);
+
+  useEffect(() => {
+    setupAutocomplete();
+  }, [setupAutocomplete]);
+
+
   useEffect(() => {
     const companyName = searchParams.get('companyName');
-    const fullAddress = searchParams.get('address');
+    const street = searchParams.get('street');
+    const city = searchParams.get('city');
+    const state = searchParams.get('state');
+    const zip = searchParams.get('zip');
     const lat = searchParams.get('lat');
     const lng = searchParams.get('lng');
 
-    if (companyName) {
-        form.setValue('companyName', companyName);
-    }
-    if (fullAddress) {
-        const parsed = parseAddress(fullAddress);
-        if(parsed.street) form.setValue('address.street', parsed.street);
-        if(parsed.city) form.setValue('address.city', parsed.city);
-        if(parsed.state) form.setValue('address.state', parsed.state);
-        if(parsed.zip) form.setValue('address.zip', parsed.zip);
-    }
-    if (lat) {
-        form.setValue('address.lat', parseFloat(lat));
-    }
-    if (lng) {
-        form.setValue('address.lng', parseFloat(lng));
-    }
+    if (companyName) form.setValue('companyName', companyName);
+    if (street) form.setValue('address.street', street);
+    if (city) form.setValue('address.city', city);
+    if (state) form.setValue('address.state', state);
+    if (zip) form.setValue('address.zip', zip);
+    if (lat) form.setValue('address.lat', parseFloat(lat));
+    if (lng) form.setValue('address.lng', parseFloat(lng));
 
   }, [searchParams, form]);
+  
+  const handleAiProspect = async () => {
+    const websiteUrl = form.getValues('websiteUrl');
+    if (!websiteUrl) {
+      toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to prospect.' });
+      return;
+    }
+    setIsProspecting(true);
+    try {
+      // Use a temporary leadId for the tool, it's only used for association and not critical if lead doesn't exist yet
+      const tempLeadId = 'new-lead-prospecting';
+      const result = await prospectWebsiteTool({ leadId: tempLeadId, websiteUrl });
+      
+      if (result.companyDescription) {
+        // Maybe we can add a field for this later. For now, just log it.
+        console.log('AI Company Description:', result.companyDescription);
+      }
+
+      if (result.contacts && result.contacts.length > 0) {
+        const primaryContact = result.contacts[0];
+        form.setValue('contact.name', primaryContact.name || '');
+        form.setValue('contact.title', primaryContact.title || '');
+        form.setValue('contact.email', primaryContact.email || '');
+        form.setValue('contact.phone', primaryContact.phone || '');
+        toast({ title: 'Contact Found!', description: `Filled contact details for ${primaryContact.name}.` });
+      } else {
+        toast({ title: 'No Contacts Found', description: 'AI could not find specific contacts on the website.' });
+      }
+    } catch (error) {
+      console.error('AI Prospecting failed', error);
+      toast({ variant: 'destructive', title: 'AI Prospecting Failed', description: 'Could not retrieve information from the website.' });
+    } finally {
+      setIsProspecting(false);
+    }
+  };
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
@@ -150,14 +230,22 @@ export function NewLeadForm() {
       if (result.success && result.leadId) {
         toast({
             title: 'Lead Created',
-            description: `Lead for ${values.companyName} has been created successfully.`,
+            description: `${values.companyName} created. AI prospecting will run in the background.`,
         });
+
+        // Fire-and-forget the AI prospecting tool after successful creation
+        if (values.websiteUrl) {
+           prospectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
+            .then(() => console.log(`Background AI prospecting initiated for lead ${result.leadId}`))
+            .catch(err => console.error(`Background AI prospecting failed for lead ${result.leadId}:`, err));
+        }
+
         router.push(`/leads/${result.leadId}`);
       } else {
         toast({
             variant: 'destructive',
-            title: 'NetSuite Error',
-            description: result.message || 'Failed to create lead in NetSuite.',
+            title: 'Creation Failed',
+            description: result.message || 'Failed to create lead.',
         });
       }
     } catch (error: any) {
@@ -175,6 +263,34 @@ export function NewLeadForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+         <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Find a Business
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+             <FormField
+              control={form.control}
+              name="companyName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company Name*</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      ref={autocompleteInputRef}
+                      placeholder="Start typing a company name or address..."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+         </Card>
+      
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" /> Company Details</CardTitle>
@@ -224,7 +340,12 @@ export function NewLeadForm() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</span>
+              <Button type="button" variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting}>
+                {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</>}
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
              <FormField control={form.control} name="contact.firstName" render={({ field }) => (
@@ -240,7 +361,7 @@ export function NewLeadForm() {
                 <FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
              <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                <FormItem><FormLabel>Phone*</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
           </CardContent>
         </Card>

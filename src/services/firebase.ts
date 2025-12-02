@@ -1,9 +1,4 @@
 
-
-
-
-
-
 'use server';
 
 /**
@@ -12,7 +7,7 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
-import { sendNewLeadToNetSuite, prospectWebsiteTool as prospectWebsiteToolNetSuite } from './netsuite';
+import { sendNewLeadToNetSuite } from './netsuite';
 
 async function logActivity(
   leadId: string,
@@ -1299,7 +1294,7 @@ interface NewLeadData {
     lastName: string;
     title: string;
     email: string;
-    phone: string;
+    phone?: string;
   };
 }
 
@@ -1309,60 +1304,13 @@ async function createNewLead(data: NewLeadData): Promise<{ success: boolean; lea
   const nsResult = await sendNewLeadToNetSuite(data);
   
   return nsResult;
-  
-  // if (nsResult.success && nsResult.leadId) {
-  //   try {
-  //     // // Round-robin assignment for dialer
-  //     // const users = await getAllUsers();
-  //     // const dialers = users.filter(u => u.role === 'user' && u.displayName).map(u => u.displayName!);
-      
-  //     // if (dialers.length === 0) {
-  //     //     throw new Error("No dialers available for assignment.");
-  //     // }
-
-  //     // // This is a simple way to get the last assigned user. A more robust system
-  //     // // might store this index in a separate config document in Firestore.
-  //     // const allLeads = await getLeadsFromFirebase({ summary: true });
-  //     // allLeads.sort((a,b) => (a.activity?.[0]?.date || '') > (b.activity?.[0]?.date || '') ? -1 : 1);
-      
-  //     // const lastAssignedDialer = allLeads.find(l => l.dialerAssigned)?.dialerAssigned;
-  //     // const lastIndex = lastAssignedDialer ? dialers.indexOf(lastAssignedDialer) : -1;
-  //     // const nextDialerIndex = (lastIndex + 1) % dialers.length;
-  //     // const assignedDialer = dialers[nextDialerIndex];
-
-  //     // const newLeadRef = doc(firestore, "leads", nsResult.leadId);
-  //     // await setDoc(newLeadRef, {
-  //     //     ...companyData,
-  //     //     dialerAssigned: assignedDialer,
-  //     //     status: 'New',
-  //     //     syncedWithNetSuite: true,
-  //     //     id: nsResult.leadId,
-  //     // });
-
-  //     // const contactRef = collection(newLeadRef, 'contacts');
-  //     // await addDoc(contactRef, {
-  //     //     ...data.contact,
-  //     //     name: `${data.contact.firstName} ${data.contact.lastName}`,
-  //     //     syncedWithNetSuite: true,
-  //     // });
-
-  //     // await logActivity(nsResult.leadId, { type: 'Update', notes: 'Lead created and synced from NetSuite.'});
-      
-  //     return { success: true, leadId: nsResult.leadId, message: "Lead created in NetSuite and Firebase." };
-  //   } catch (firebaseError: any) {
-  //       console.error('Firebase Error after NetSuite success:', firebaseError);
-  //       return { success: false, message: `Lead created in NetSuite, but failed to save to Firebase: ${firebaseError.message}` };
-  //   }
-  // } else {
-  //   return nsResult; // Return the error from NetSuite
-  // }
 }
 
-async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[] }> {
+async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
     // This is a placeholder that simulates calling the full prospectWebsiteTool 
     // from netsuite.ts and only returning the part we need for this operation.
     console.log(`[Firebase Service] Prospecting website for lead ${input.leadId}`);
-    return { searchKeywords: [] };
+    return { searchKeywords: [], contacts: [] };
 }
 
 export { 
@@ -1432,5 +1380,3 @@ export {
 
 
     
-
-

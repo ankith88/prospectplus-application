@@ -1,11 +1,9 @@
 
-
-
-
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
 import fetch from 'node-fetch';
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 
 const TIMEOUT_DURATION = 20000; // 20 seconds for all requests
 
@@ -578,7 +576,7 @@ interface NewLeadData {
     lastName: string;
     title: string;
     email: string;
-    phone: string;
+    phone?: string;
   };
 }
 
@@ -602,7 +600,7 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         custentity_primary_contact_name: `${contact.firstName} ${contact.lastName}`,
         custentity_primary_contact_title: contact.title,
         custentity_primary_contact_email: contact.email,
-        custentity_primary_contact_phone: contact.phone,
+        custentity_primary_contact_phone: contact.phone || '',
     });
     
     if (address.address1) {
@@ -658,3 +656,6 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
 }
     
+export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
+    return await aiProspectWebsiteTool(input);
+}

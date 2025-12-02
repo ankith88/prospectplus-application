@@ -5,13 +5,12 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { addContactToLead, getLeadFromFirebase, updateLeadDetails } from '@/services/firebase';
-import { sendContactToNetSuite } from '@/services/netsuite';
+import { addContactToLead, updateLeadDetails } from '@/services/firebase';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
 import type { AbortError } from 'node-fetch';
-import type { Contact } from '@/lib/types';
-import { doc, updateDoc } from 'firebase/firestore';
+import type { Contact, Lead } from '@/lib/types';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 
 const SocialLinksSchema = z.object({
@@ -181,8 +180,21 @@ export const prospectWebsiteTool = ai.defineTool(
 
         console.log(`Found ${foundContacts.length} potential contacts from Hunter.io.`);
 
-        const lead = await getLeadFromFirebase(leadId, true);
-        if (!lead) {
+        // If the lead doesn't exist yet, we just return the found data without saving.
+        if (leadId === 'new-lead-prospecting') {
+            return {
+                logoUrl: hunterData?.data?.logo_url,
+                contacts: foundContacts,
+                siteAnalysis: `Found ${foundContacts.length} potential contacts via Hunter.io.`,
+                companyDescription: companyDescription,
+                searchKeywords: searchKeywords,
+            };
+        }
+
+        const leadDocRef = doc(firestore, 'leads', leadId);
+        const leadDoc = await getDoc(leadDocRef);
+        
+        if (!leadDoc.exists()) {
             console.error(`Could not find lead with ID ${leadId}. Skipping contact processing.`);
             return {
                 logoUrl: hunterData?.data?.logo_url,
@@ -192,16 +204,15 @@ export const prospectWebsiteTool = ai.defineTool(
                 searchKeywords: searchKeywords,
             };
         }
+        const lead = leadDoc.data() as Lead;
         
         const updateData: Partial<Lead> = {};
         if (companyDescription) updateData.companyDescription = companyDescription;
         if (searchKeywords.length > 0) {
-            // Assuming discoveryData exists and we are adding keywords to it.
-            // Adjust if the data model is different.
             updateData.discoveryData = { ...lead.discoveryData, searchKeywords };
         }
         if (Object.keys(updateData).length > 0) {
-            await updateDoc(doc(firestore, 'leads', leadId), updateData);
+            await updateDoc(leadDocRef, updateData);
         }
 
         
@@ -250,5 +261,3 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
-
-    
