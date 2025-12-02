@@ -285,6 +285,26 @@ export default function LeadsMapClient() {
         address.state,
     ].filter(Boolean).join(', ');
   }
+  
+  const infoWindowOptions = {
+    pixelOffset: new google.maps.Size(0, -30),
+    disableAutoPan: false,
+    content: `
+      <style>
+        .gm-ui-hover-effect {
+            display: none !important;
+        }
+        .gm-style-iw-d {
+            overflow: hidden !important;
+            padding: 0 !important;
+        }
+        .gm-style-iw-c {
+            padding: 0 !important;
+            border-radius: 8px !important;
+        }
+      </style>
+    `,
+  };
 
   return (
     <div className="flex flex-col gap-4 flex-grow">
@@ -402,9 +422,10 @@ export default function LeadsMapClient() {
                 <InfoWindow
                     position={clickedKmlFeature.latLng}
                     onCloseClick={() => setClickedKmlFeature(null)}
+                    options={infoWindowOptions}
                 >
-                    <div className="p-1">
-                        <h4 className="font-semibold text-base">{clickedKmlFeature.featureData.name}</h4>
+                    <div className="p-2">
+                        <h4 className="font-semibold text-sm">{clickedKmlFeature.featureData.name}</h4>
                     </div>
                 </InfoWindow>
             )}
