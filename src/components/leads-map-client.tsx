@@ -25,10 +25,9 @@ import {
   SelectValue,
 } from './ui/select'
 import { Label } from './ui/label'
-import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -45,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Input } from './ui/input';
 
 const containerStyle = {
   width: '100%',
@@ -79,7 +79,7 @@ const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
-    const blueStatuses: Lead[] = ['New'];
+    const blueStatuses: LeadStatus[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
 
     if (greenStatuses.includes(status)) {
@@ -110,6 +110,9 @@ export default function LeadsMapClient() {
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [prospectSearchQuery, setProspectSearchQuery] = useState('');
   const router = useRouter();
   const { toast } = useToast();
 
@@ -212,11 +215,55 @@ export default function LeadsMapClient() {
     });
   }, [map]);
 
-  const handleFindNearby = async () => {
-    if (!map || !selectedLead) return;
-
+  const findProspects = useCallback((location: google.maps.LatLngLiteral, keyword: string) => {
+    if (!map) return;
     setIsSearchingNearby(true);
     setProspects([]);
+    
+    const placesService = new google.maps.places.PlacesService(map);
+    const request: google.maps.places.PlaceSearchRequest = {
+        location,
+        radius: 2000, 
+        keyword,
+    };
+
+    placesService.nearbySearch(request, async (results, status) => {
+        setIsSearchingNearby(false);
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+
+            const detailedProspects = await Promise.all(
+                openProspects.map(async (place) => {
+                    const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+                    let detailedPlace = place;
+                    if (place.place_id && (!place.website || !place.formatted_phone_number || !place.business_status)) {
+                        const details = await getPlaceDetails(place.place_id);
+                        if (details) {
+                            detailedPlace = { ...place, ...details };
+                        }
+                    }
+                    return { place: detailedPlace, existingLead };
+                })
+            );
+
+            setProspects(detailedProspects);
+            
+            if (detailedProspects.length > 0) {
+                setIsProspectsDialogOpen(true);
+                toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
+            } else {
+                toast({ title: "No new prospects found nearby." });
+            }
+        } else {
+             toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
+        }
+    });
+  }, [map, leads, getPlaceDetails, toast]);
+  
+  const handleFindNearby = async () => {
+    if (!selectedLead || !map) return;
+
+    setIsSearchingNearby(true);
     let searchKeywords: string[] = [];
     
     if (selectedLead.discoveryData?.searchKeywords && selectedLead.discoveryData.searchKeywords.length > 0) {
@@ -245,48 +292,47 @@ export default function LeadsMapClient() {
         setIsSearchingNearby(false);
         return;
     }
-
-    const placesService = new google.maps.places.PlacesService(map);
-    const request: google.maps.places.PlaceSearchRequest = {
-        location: { lat: selectedLead.latitude!, lng: selectedLead.longitude! },
-        radius: 2000, 
-        keyword: searchKeywords.join(' '),
-    };
     
-    placesService.nearbySearch(request, async (results, status) => {
-        setIsSearchingNearby(false);
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
-
-            const detailedProspects = await Promise.all(
-                openProspects.map(async (place) => {
-                    const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
-                    let detailedPlace = place;
-                    // Fetch details only if needed, and place_id exists
-                    if (place.place_id && (!place.website || !place.formatted_phone_number || !place.business_status)) {
-                        const details = await getPlaceDetails(place.place_id);
-                        if (details) {
-                            detailedPlace = { ...place, ...details };
-                        }
-                    }
-                    return { place: detailedPlace, existingLead };
-                })
-            );
-
-            setProspects(detailedProspects);
-            
-            if (detailedProspects.length > 0) {
-                setIsProspectsDialogOpen(true);
-                toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
-            } else {
-                toast({ title: "No new prospects found nearby." });
-            }
-        } else {
-             toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
-        }
-    });
+    findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
   };
 
+
+  const handleFindProspectsNearMe = () => {
+    if (!myLocation) {
+        toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position.' });
+        return;
+    }
+    if (!prospectSearchQuery) {
+        toast({ variant: 'destructive', title: 'Search term required', description: 'Please enter a business type to search for (e.g., "cafe", "warehouse").' });
+        return;
+    }
+    findProspects(myLocation, prospectSearchQuery);
+  };
+
+  const handleShowMyLocation = () => {
+    setLocationError(null);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const pos = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+                setMyLocation(pos);
+                map?.panTo(pos);
+                map?.setZoom(15);
+            },
+            () => {
+                setLocationError('Geolocation permission denied. Please enable it in your browser settings.');
+                toast({ variant: 'destructive', title: 'Location Error', description: 'Could not get your location.' });
+            }
+        );
+    } else {
+        setLocationError('Geolocation is not supported by this browser.');
+        toast({ variant: 'destructive', title: 'Location Error', description: 'Geolocation is not supported by this browser.' });
+    }
+  };
+  
     const handleCreateLeadFromProspect = async (prospect: google.maps.places.PlaceResult) => {
         if (!prospect.name || !prospect.vicinity || !prospect.geometry?.location) {
             toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
@@ -408,11 +454,11 @@ export default function LeadsMapClient() {
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <span>Filters</span>
+                    <span>Filters & Actions</span>
                     <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
                  <div className="space-y-2">
                     <Label htmlFor="franchisee">Franchisee</Label>
                     <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
@@ -449,6 +495,19 @@ export default function LeadsMapClient() {
                         </SelectContent>
                     </Select>
                  </div>
+                  <div className="space-y-2">
+                    <Label>Actions</Label>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleShowMyLocation} variant="outline"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
+                    </div>
+                  </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                    <div className="flex items-center gap-2">
+                      <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                      <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                    </div>
+                 </div>
             </CardContent>
         </Card>
         <div className="flex-grow">
@@ -476,17 +535,33 @@ export default function LeadsMapClient() {
                 />
             ))}
 
+            {myLocation && (
+                <MarkerF
+                    position={myLocation}
+                    icon={{
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 8,
+                        fillColor: '#4285F4',
+                        fillOpacity: 1,
+                        strokeColor: 'white',
+                        strokeWeight: 2,
+                    }}
+                />
+            )}
+
             {selectedLead && (
                 <InfoWindow
                 position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
                 onCloseClick={onInfoWindowClose}
                 >
                 <div className="space-y-2 p-2 max-w-xs">
-                    <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
                     <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
                         <LeadStatusBadge status={selectedLead.status} />
-                        {selectedLead.industryCategory && <span className="text-sm text-muted-foreground">{selectedLead.industryCategory}</span>}
                     </div>
+                    <p className="text-sm text-muted-foreground">
+                        {selectedLead.industryCategory || 'N/A'}
+                    </p>
                     <p className="text-sm">
                         {formatAddress(selectedLead.address)}
                     </p>
@@ -495,7 +570,7 @@ export default function LeadsMapClient() {
                             <Briefcase className="mr-2 h-4 w-4" />
                             View Profile
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby || (!selectedLead.industryCategory && !selectedLead.websiteUrl)}>
+                        <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
                             {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
                         </Button>
                     </div>
@@ -527,7 +602,7 @@ export default function LeadsMapClient() {
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
-                        Found {prospects.length} potential leads near {selectedLead?.companyName}.
+                        Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="max-h-[60vh] overflow-y-auto">
