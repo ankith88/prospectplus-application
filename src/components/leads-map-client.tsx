@@ -63,6 +63,16 @@ type ProspectWithLeadInfo = {
     existingLead?: MapLead;
 };
 
+type KmlFeatureData = {
+  name: string;
+  description: string;
+}
+
+type ClickedKmlFeature = {
+  featureData: KmlFeatureData;
+  latLng: google.maps.LatLng;
+}
+
 
 const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -94,6 +104,7 @@ export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
+  const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null);
   const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([]);
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false);
@@ -154,6 +165,16 @@ export default function LeadsMapClient() {
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null)
   }, [])
+
+  const onKmlLayerClick = useCallback((e: google.maps.KmlMouseEvent) => {
+    if (e.featureData) {
+      const featureData = {
+        name: e.featureData.name || 'Unknown Territory',
+        description: e.featureData.description || ''
+      };
+      setClickedKmlFeature({ featureData, latLng: e.latLng! });
+    }
+  }, []);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -338,6 +359,7 @@ export default function LeadsMapClient() {
             <KmlLayer
                 url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E"
                 options={{ preserveViewport: true, suppressInfoWindows: true }}
+                onClick={onKmlLayerClick}
             />
             {filteredLeads.map((lead) => (
                 <MarkerF
@@ -372,6 +394,17 @@ export default function LeadsMapClient() {
                         </Button>
                     </div>
                 </div>
+                </InfoWindow>
+            )}
+
+            {clickedKmlFeature && (
+                <InfoWindow
+                    position={clickedKmlFeature.latLng}
+                    onCloseClick={() => setClickedKmlFeature(null)}
+                >
+                    <div className="p-2">
+                        <h4 className="font-bold">{clickedKmlFeature.featureData.name}</h4>
+                    </div>
                 </InfoWindow>
             )}
             </GoogleMap>
