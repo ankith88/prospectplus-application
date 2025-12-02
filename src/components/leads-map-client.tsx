@@ -105,6 +105,7 @@ export default function LeadsMapClient() {
     franchisee: 'all',
     status: 'all',
     industry: 'all',
+    state: 'all',
   });
 
   const { isLoaded } = useJsApiLoader({
@@ -140,7 +141,8 @@ export default function LeadsMapClient() {
         const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
         const industryMatch = filters.industry === 'all' || !lead.industryCategory ? true : lead.industryCategory === filters.industry;
-        return franchiseeMatch && statusMatch && industryMatch;
+        const stateMatch = filters.state === 'all' || lead.address?.state === filters.state;
+        return franchiseeMatch && statusMatch && industryMatch && stateMatch;
     });
   }, [leads, filters]);
 
@@ -164,6 +166,11 @@ export default function LeadsMapClient() {
   const uniqueStatuses = useMemo(() => {
     const statuses = new Set(leads.map(lead => lead.status));
     return Array.from(statuses);
+  }, [leads]);
+
+  const uniqueStates = useMemo(() => {
+    const states = new Set(leads.map(lead => lead.address?.state).filter(Boolean));
+    return Array.from(states as string[]);
   }, [leads]);
   
   const handleFindNearby = async () => {
@@ -265,7 +272,7 @@ export default function LeadsMapClient() {
                     <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                  <div className="space-y-2">
                     <Label htmlFor="franchisee">Franchisee</Label>
                     <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
@@ -299,6 +306,18 @@ export default function LeadsMapClient() {
                         <SelectContent>
                             <SelectItem value="all">All Industries</SelectItem>
                             {industryCategories.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                 </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
+                        <SelectTrigger id="state">
+                            <SelectValue placeholder="Select State" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All States</SelectItem>
+                            {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
                     </Select>
                  </div>
