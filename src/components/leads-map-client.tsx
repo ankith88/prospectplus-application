@@ -117,7 +117,6 @@ export default function LeadsMapClient() {
   const [filters, setFilters] = useState({
     franchisee: 'all',
     status: 'all',
-    industry: 'all',
     state: 'all',
   });
 
@@ -153,9 +152,8 @@ export default function LeadsMapClient() {
     return leads.filter(lead => {
         const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
-        const industryMatch = filters.industry === 'all' || !lead.industryCategory ? true : lead.industryCategory === filters.industry;
         const stateMatch = filters.state === 'all' || lead.address?.state === filters.state;
-        return franchiseeMatch && statusMatch && industryMatch && stateMatch;
+        return franchiseeMatch && statusMatch && stateMatch;
     });
   }, [leads, filters]);
 
@@ -342,7 +340,7 @@ export default function LeadsMapClient() {
         try {
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
-                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been successfully created.` });
+                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
                 await fetchLeads(); // Refresh leads on the map
                 // Update the prospect in the dialog to show it's now an existing lead
                 setProspects(prev => prev.map(p => p.place.place_id === placeId
@@ -439,18 +437,6 @@ export default function LeadsMapClient() {
                         </SelectContent>
                     </Select>
                  </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="industry">Industry</Label>
-                    <Select value={filters.industry} onValueChange={(value) => handleFilterChange('industry', value)}>
-                        <SelectTrigger id="industry">
-                            <SelectValue placeholder="Select Industry" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Industries</SelectItem>
-                            {industryCategories.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                 </div>
                   <div className="space-y-2">
                     <Label htmlFor="state">State</Label>
                     <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
@@ -527,7 +513,9 @@ export default function LeadsMapClient() {
                         className="custom-iw-container"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="custom-iw-content">{clickedKmlFeature.featureData.name}</div>
+                      <div className="custom-iw-content" style={{ display: 'flex', alignItems: 'center' }}>
+                          <span>{clickedKmlFeature.featureData.name}</span>
+                      </div>
                     </div>
                 </InfoWindow>
             )}
