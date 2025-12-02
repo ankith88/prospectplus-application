@@ -28,7 +28,7 @@ import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -79,7 +79,7 @@ const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
-    const blueStatuses: LeadStatus[] = ['New'];
+    const blueStatuses: Lead[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
 
     if (greenStatuses.includes(status)) {
@@ -165,6 +165,7 @@ export default function LeadsMapClient() {
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null)
+    setClickedKmlFeature(null)
   }, [])
 
   const onKmlLayerClick = useCallback((e: google.maps.KmlMouseEvent) => {
@@ -196,6 +197,23 @@ export default function LeadsMapClient() {
     return Array.from(states as string[]);
   }, [leads]);
   
+  const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult | null> => {
+    if (!map) return Promise.resolve(null);
+    const placesService = new google.maps.places.PlacesService(map);
+    return new Promise((resolve) => {
+        placesService.getDetails({
+            placeId,
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id']
+        }, (place, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                resolve(place);
+            } else {
+                resolve(null);
+            }
+        });
+    });
+  }, [map]);
+
   const handleFindNearby = async () => {
     if (!map || !selectedLead) return;
 
@@ -237,20 +255,28 @@ export default function LeadsMapClient() {
         keyword: searchKeywords.join(' '),
     };
     
-    placesService.nearbySearch(request, (results, status) => {
+    placesService.nearbySearch(request, async (results, status) => {
         setIsSearchingNearby(false);
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-             const existingLeadNames = new Set(leads.map(l => l.companyName.toLowerCase()));
-             const prospectsWithLeadInfo = results.map(place => {
-                const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
-                return { place, existingLead };
-             });
+            const detailedProspects = await Promise.all(
+                results.map(async (place) => {
+                    const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+                    let detailedPlace = place;
+                    if (place.place_id && (!place.website || !place.formatted_phone_number)) {
+                        const details = await getPlaceDetails(place.place_id);
+                        if (details) {
+                            detailedPlace = { ...place, ...details };
+                        }
+                    }
+                    return { place: detailedPlace, existingLead };
+                })
+            );
 
-            setProspects(prospectsWithLeadInfo);
+            setProspects(detailedProspects);
             
-            if (prospectsWithLeadInfo.length > 0) {
+            if (detailedProspects.length > 0) {
                 setIsProspectsDialogOpen(true);
-                toast({ title: `Found ${prospectsWithLeadInfo.length} prospects nearby.` });
+                toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
             } else {
                 toast({ title: "No new prospects found nearby." });
             }
@@ -273,24 +299,8 @@ export default function LeadsMapClient() {
         }
 
         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
-
-        const getPlaceDetails = (service: google.maps.places.PlacesService, request: google.maps.places.PlaceDetailsRequest): Promise<google.maps.places.PlaceResult | null> => {
-            return new Promise((resolve) => {
-                service.getDetails(request, (place, status) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK) {
-                        resolve(place);
-                    } else {
-                        resolve(null);
-                    }
-                });
-            });
-        };
-
-        const placesService = new google.maps.places.PlacesService(map!);
-        const details = await getPlaceDetails(placesService, {
-            placeId,
-            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry']
-        });
+        
+        const details = prospect; // We have already fetched details
 
         if (!details) {
             toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch prospect details.' });
@@ -299,7 +309,10 @@ export default function LeadsMapClient() {
         }
 
         const addressComponents = details.address_components;
-        const getAddressComponent = (type: string) => addressComponents?.find(c => c.types.includes(type))?.long_name || '';
+        const getAddressComponent = (type: string, useShortName = false) => {
+            const component = addressComponents?.find(c => c.types.includes(type));
+            return useShortName ? component?.short_name : component?.long_name || '';
+        }
 
         const newLeadData = {
             companyName: details.name || prospect.name,
@@ -307,8 +320,8 @@ export default function LeadsMapClient() {
             industryCategory: selectedLead?.industryCategory || '',
             address: {
                 street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
-                city: getAddressComponent('locality'),
-                state: getAddressComponent('administrative_area_level_1'),
+                city: getAddressComponent('locality') || getAddressComponent('postal_town'),
+                state: getAddressComponent('administrative_area_level_1', true),
                 zip: getAddressComponent('postal_code'),
                 country: 'Australia',
                 lat: details.geometry?.location?.lat(),
@@ -383,9 +396,8 @@ export default function LeadsMapClient() {
         .gm-style-iw-d { overflow: hidden !important; padding: 0 !important; }
         .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: none !important; background-color: transparent !important; }
         .gm-style-iw > button { display: none !important; }
-        .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); }
-        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 8px;}
-        .custom-iw-close { cursor: pointer; width: 16px; height: 16px; }
+        .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); font-family: sans-serif; }
+        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 8px; white-space: nowrap; }
       </style>
     `,
   };
@@ -505,14 +517,14 @@ export default function LeadsMapClient() {
             {clickedKmlFeature && (
                 <InfoWindow
                     position={clickedKmlFeature.latLng}
-                    onCloseClick={() => setClickedKmlFeature(null)}
+                    onCloseClick={onInfoWindowClose}
                     options={infoWindowOptions}
                 >
                     <div
                         className="custom-iw-container"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <span className="custom-iw-content">{clickedKmlFeature.featureData.name}</span>
+                        <div className="custom-iw-content">{clickedKmlFeature.featureData.name}</div>
                     </div>
                 </InfoWindow>
             )}
@@ -520,7 +532,7 @@ export default function LeadsMapClient() {
         </div>
 
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-6xl">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
@@ -533,7 +545,8 @@ export default function LeadsMapClient() {
                             <TableRow>
                                 <TableHead>Company Name</TableHead>
                                 <TableHead>Address</TableHead>
-                                <TableHead>Phone Number</TableHead>
+                                <TableHead>Phone</TableHead>
+                                <TableHead>Website</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -543,6 +556,16 @@ export default function LeadsMapClient() {
                                     <TableCell>{prospectInfo.place.name}</TableCell>
                                     <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                     <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        {prospectInfo.place.website ? (
+                                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
+                                                <LinkIcon className="h-3 w-3" />
+                                                <span>Visit</span>
+                                            </a>
+                                        ) : (
+                                            'N/A'
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         {prospectInfo.existingLead ? (
                                             <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
