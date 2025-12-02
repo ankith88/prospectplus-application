@@ -403,8 +403,8 @@ export default function LeadsMapClient() {
                     position={clickedKmlFeature.latLng}
                     onCloseClick={() => setClickedKmlFeature(null)}
                 >
-                    <div className="p-2">
-                        <h4 className="font-bold text-base">{clickedKmlFeature.featureData.name}</h4>
+                    <div className="p-1">
+                        <h4 className="font-semibold text-base">{clickedKmlFeature.featureData.name}</h4>
                     </div>
                 </InfoWindow>
             )}
