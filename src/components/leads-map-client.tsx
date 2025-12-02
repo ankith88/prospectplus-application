@@ -10,9 +10,9 @@ import {
   InfoWindow,
   KmlLayer,
 } from '@react-google-maps/api'
-import { getLeadsFromFirebase } from '@/services/firebase'
-import { prospectWebsiteTool } from '@/services/firebase'
-import type { Lead, LeadStatus } from '@/lib/types'
+import { createNewLead, getLeadsFromFirebase } from '@/services/firebase'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import type { Lead, LeadStatus, Address } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
@@ -28,7 +28,7 @@ import { Label } from './ui/label'
 import { industryCategories } from '@/lib/constants'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -62,6 +62,7 @@ type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchi
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
     existingLead?: MapLead;
+    isAdding?: boolean;
 };
 
 type KmlFeatureData = {
@@ -73,7 +74,6 @@ type ClickedKmlFeature = {
   featureData: KmlFeatureData;
   latLng: google.maps.LatLng;
 }
-
 
 const getPinColor = (status: LeadStatus): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -127,27 +127,27 @@ export default function LeadsMapClient() {
     libraries: ['places']
   })
 
+  const fetchLeads = useCallback(async () => {
+    setLoadingLeads(true);
+    const allLeads = await getLeadsFromFirebase({ summary: true });
+
+    const leadsWithCoords = allLeads.filter(
+      (lead) => lead.latitude != null && lead.longitude != null && !isNaN(parseFloat(String(lead.latitude))) && !isNaN(parseFloat(String(lead.longitude)))
+    ).map(lead => ({
+        ...lead,
+        latitude: parseFloat(String(lead.latitude)),
+        longitude: parseFloat(String(lead.longitude)),
+    }));
+    
+    setLeads(leadsWithCoords as MapLead[]);
+    setLoadingLeads(false);
+  }, []);
+
   useEffect(() => {
-    const fetchLeads = async () => {
-      setLoadingLeads(true);
-      const allLeads = await getLeadsFromFirebase({ summary: true });
-
-      const leadsWithCoords = allLeads.filter(
-        (lead) => lead.latitude != null && lead.longitude != null && !isNaN(parseFloat(String(lead.latitude))) && !isNaN(parseFloat(String(lead.longitude)))
-      ).map(lead => ({
-          ...lead,
-          latitude: parseFloat(String(lead.latitude)),
-          longitude: parseFloat(String(lead.longitude)),
-      }));
-      
-      setLeads(leadsWithCoords as MapLead[]);
-      setLoadingLeads(false);
-    }
-
     if (isLoaded) {
       fetchLeads();
     }
-  }, [isLoaded]);
+  }, [isLoaded, fetchLeads]);
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -208,10 +208,14 @@ export default function LeadsMapClient() {
     } 
     else if (selectedLead.websiteUrl) {
         toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
-        const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
-        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
-            searchKeywords = prospectResult.searchKeywords;
-            toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
+        try {
+            const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
+            if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+                searchKeywords = prospectResult.searchKeywords;
+                toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
+            }
+        } catch (e) {
+            console.error('AI prospecting failed, falling back to industry.', e);
         }
     }
 
@@ -256,17 +260,101 @@ export default function LeadsMapClient() {
     });
   };
 
-  const handleCreateLeadFromProspect = (prospect: google.maps.places.PlaceResult) => {
-    const queryParams = new URLSearchParams();
-    if (prospect.name) queryParams.append('companyName', prospect.name);
-    if (prospect.vicinity) queryParams.append('address', prospect.vicinity);
-    if (prospect.geometry?.location) {
-        queryParams.append('lat', prospect.geometry.location.lat().toString());
-        queryParams.append('lng', prospect.geometry.location.lng().toString());
-    }
-    
-    router.push(`/leads/new?${queryParams.toString()}`);
-  };
+    const handleCreateLeadFromProspect = async (prospect: google.maps.places.PlaceResult) => {
+        if (!prospect.name || !prospect.vicinity || !prospect.geometry?.location) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
+            return;
+        }
+
+        const placeId = prospect.place_id;
+        if (!placeId) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
+            return;
+        }
+
+        setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
+
+        const getPlaceDetails = (service: google.maps.places.PlacesService, request: google.maps.places.PlaceDetailsRequest): Promise<google.maps.places.PlaceResult | null> => {
+            return new Promise((resolve) => {
+                service.getDetails(request, (place, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK) {
+                        resolve(place);
+                    } else {
+                        resolve(null);
+                    }
+                });
+            });
+        };
+
+        const placesService = new google.maps.places.PlacesService(map!);
+        const details = await getPlaceDetails(placesService, {
+            placeId,
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry']
+        });
+
+        if (!details) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch prospect details.' });
+            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+            return;
+        }
+
+        const addressComponents = details.address_components;
+        const getAddressComponent = (type: string) => addressComponents?.find(c => c.types.includes(type))?.long_name || '';
+
+        const newLeadData = {
+            companyName: details.name || prospect.name,
+            websiteUrl: details.website || '',
+            industryCategory: selectedLead?.industryCategory || '',
+            address: {
+                street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
+                city: getAddressComponent('locality'),
+                state: getAddressComponent('administrative_area_level_1'),
+                zip: getAddressComponent('postal_code'),
+                country: 'Australia',
+                lat: details.geometry?.location?.lat(),
+                lng: details.geometry?.location?.lng(),
+            },
+            contact: { // Default contact, can be updated later
+                firstName: 'Info',
+                lastName: details.name || prospect.name,
+                title: 'Primary Contact',
+                email: `info@${(details.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`,
+                phone: details.formatted_phone_number || '',
+            }
+        };
+
+        try {
+            const result = await createNewLead(newLeadData);
+            if (result.success && result.leadId) {
+                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been successfully created.` });
+                await fetchLeads(); // Refresh leads on the map
+                // Update the prospect in the dialog to show it's now an existing lead
+                setProspects(prev => prev.map(p => p.place.place_id === placeId
+                    ? {
+                        ...p,
+                        isAdding: false,
+                        existingLead: {
+                            id: result.leadId!,
+                            companyName: newLeadData.companyName,
+                            status: 'New' as LeadStatus,
+                            address: newLeadData.address as Address,
+                            industryCategory: newLeadData.industryCategory,
+                            latitude: newLeadData.address.lat,
+                            longitude: newLeadData.address.lng,
+                        }
+                    }
+                    : p
+                ));
+            } else {
+                toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
+                setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
+            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+        }
+    };
+
 
   if (!isLoaded || loadingLeads) {
     return (
@@ -293,9 +381,9 @@ export default function LeadsMapClient() {
       <style>
         .gm-ui-hover-effect { display: none !important; }
         .gm-style-iw-d { overflow: hidden !important; padding: 0 !important; }
-        .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; }
+        .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: none !important; background-color: transparent !important; }
         .gm-style-iw > button { display: none !important; }
-        .custom-iw-container { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; }
+        .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); }
         .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 8px;}
         .custom-iw-close { cursor: pointer; width: 16px; height: 16px; }
       </style>
@@ -387,18 +475,6 @@ export default function LeadsMapClient() {
                 />
             ))}
 
-            {prospects.map(p => p.place.geometry?.location && (
-                <MarkerF
-                    key={p.place.place_id}
-                    position={p.place.geometry.location}
-                    icon={{ url: 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png' }}
-                    onClick={() => {
-                        setIsProspectsDialogOpen(true);
-                    }}
-                />
-            ))}
-
-
             {selectedLead && (
                 <InfoWindow
                 position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
@@ -457,7 +533,7 @@ export default function LeadsMapClient() {
                             <TableRow>
                                 <TableHead>Company Name</TableHead>
                                 <TableHead>Address</TableHead>
-                                <TableHead>Source Industry</TableHead>
+                                <TableHead>Phone Number</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -466,7 +542,7 @@ export default function LeadsMapClient() {
                                 <TableRow key={prospectInfo.place.place_id}>
                                     <TableCell>{prospectInfo.place.name}</TableCell>
                                     <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                    <TableCell>{selectedLead?.industryCategory || 'N/A'}</TableCell>
+                                    <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         {prospectInfo.existingLead ? (
                                             <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
@@ -474,9 +550,9 @@ export default function LeadsMapClient() {
                                                 View Lead
                                             </Button>
                                         ) : (
-                                            <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)}>
-                                                <PlusCircle className="mr-2 h-4 w-4"/>
-                                                Add Lead
+                                            <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                                                {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                             </Button>
                                         )}
                                     </TableCell>
