@@ -203,7 +203,7 @@ export default function LeadsMapClient() {
     return new Promise((resolve) => {
         placesService.getDetails({
             placeId,
-            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id']
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status']
         }, (place, status) => {
             if (status === google.maps.places.PlacesServiceStatus.OK) {
                 resolve(place);
