@@ -291,17 +291,13 @@ export default function LeadsMapClient() {
     disableAutoPan: false,
     content: `
       <style>
-        .gm-ui-hover-effect {
-            display: none !important;
-        }
-        .gm-style-iw-d {
-            overflow: hidden !important;
-            padding: 0 !important;
-        }
-        .gm-style-iw-c {
-            padding: 0 !important;
-            border-radius: 8px !important;
-        }
+        .gm-ui-hover-effect { display: none !important; }
+        .gm-style-iw-d { overflow: hidden !important; padding: 0 !important; }
+        .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; }
+        .gm-style-iw > button { display: none !important; }
+        .custom-iw-container { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; }
+        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 8px;}
+        .custom-iw-close { cursor: pointer; width: 16px; height: 16px; }
       </style>
     `,
   };
@@ -391,6 +387,18 @@ export default function LeadsMapClient() {
                 />
             ))}
 
+            {prospects.map(p => p.place.geometry?.location && (
+                <MarkerF
+                    key={p.place.place_id}
+                    position={p.place.geometry.location}
+                    icon={{ url: 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png' }}
+                    onClick={() => {
+                        setIsProspectsDialogOpen(true);
+                    }}
+                />
+            ))}
+
+
             {selectedLead && (
                 <InfoWindow
                 position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
@@ -424,8 +432,11 @@ export default function LeadsMapClient() {
                     onCloseClick={() => setClickedKmlFeature(null)}
                     options={infoWindowOptions}
                 >
-                    <div className="p-2">
-                        <h4 className="font-semibold text-sm">{clickedKmlFeature.featureData.name}</h4>
+                    <div
+                        className="custom-iw-container"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <span className="custom-iw-content">{clickedKmlFeature.featureData.name}</span>
                     </div>
                 </InfoWindow>
             )}
