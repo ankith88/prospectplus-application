@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -7,7 +6,7 @@ import {
   GoogleMap,
   useJsApiLoader,
   MarkerF,
-  InfoWindow,
+  InfoWindowF,
   KmlLayer,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase } from '@/services/firebase'
@@ -105,6 +104,7 @@ export default function LeadsMapClient() {
   const [leads, setLeads] = useState<MapLead[]>([])
   const [loadingLeads, setLoadingLeads] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
+  const [hoveredLead, setHoveredLead] = useState<MapLead | null>(null);
   const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null);
   const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([]);
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
@@ -162,6 +162,7 @@ export default function LeadsMapClient() {
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead)
+    setHoveredLead(null)
   }, [])
 
   const onInfoWindowClose = useCallback(() => {
@@ -436,7 +437,6 @@ export default function LeadsMapClient() {
   
   const infoWindowOptions = {
     pixelOffset: new google.maps.Size(0, -30),
-    disableAutoPan: true,
   };
 
   return (
@@ -528,6 +528,8 @@ export default function LeadsMapClient() {
                 key={lead.id}
                 position={{ lat: lead.latitude!, lng: lead.longitude! }}
                 onClick={() => onMarkerClick(lead)}
+                onMouseOver={() => setHoveredLead(lead)}
+                onMouseOut={() => setHoveredLead(null)}
                 icon={{ url: getPinColor(lead.status) }}
                 />
             ))}
@@ -547,7 +549,7 @@ export default function LeadsMapClient() {
             )}
 
             {selectedLead && (
-                <InfoWindow
+                <InfoWindowF
                 position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
                 onCloseClick={onInfoWindowClose}
                 options={infoWindowOptions}
@@ -573,18 +575,33 @@ export default function LeadsMapClient() {
                         </Button>
                     </div>
                 </div>
-                </InfoWindow>
+                </InfoWindowF>
+            )}
+
+            {hoveredLead && !selectedLead && (
+                <InfoWindowF
+                    position={{ lat: hoveredLead.latitude!, lng: hoveredLead.longitude! }}
+                    onCloseClick={() => setHoveredLead(null)}
+                    options={{...infoWindowOptions, disableAutoPan: true }}
+                >
+                    <div className="p-1">
+                        <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{hoveredLead.companyName}</span>
+                            <LeadStatusBadge status={hoveredLead.status} />
+                        </div>
+                    </div>
+                </InfoWindowF>
             )}
 
             {clickedKmlFeature && (
-                <InfoWindow
+                <InfoWindowF
                     position={clickedKmlFeature.latLng}
                     onCloseClick={onInfoWindowClose}
                 >
                     <div className="p-2">
                         <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
                     </div>
-                </InfoWindow>
+                </InfoWindowF>
             )}
             </GoogleMap>
         </div>
