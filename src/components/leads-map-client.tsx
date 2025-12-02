@@ -258,11 +258,14 @@ export default function LeadsMapClient() {
     placesService.nearbySearch(request, async (results, status) => {
         setIsSearchingNearby(false);
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+
             const detailedProspects = await Promise.all(
-                results.map(async (place) => {
+                openProspects.map(async (place) => {
                     const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
                     let detailedPlace = place;
-                    if (place.place_id && (!place.website || !place.formatted_phone_number)) {
+                    // Fetch details only if needed, and place_id exists
+                    if (place.place_id && (!place.website || !place.formatted_phone_number || !place.business_status)) {
                         const details = await getPlaceDetails(place.place_id);
                         if (details) {
                             detailedPlace = { ...place, ...details };
@@ -393,11 +396,11 @@ export default function LeadsMapClient() {
     content: `
       <style>
         .gm-ui-hover-effect { display: none !important; }
-        .gm-style-iw-d { overflow: hidden !important; padding: 0 !important; }
+        .gm-style-iw-d { overflow: hidden !important; max-width: none !important; max-height: none !important; }
         .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: none !important; background-color: transparent !important; }
-        .gm-style-iw > button { display: none !important; }
+        .gm-style-iw-c button { display: none !important; }
         .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); font-family: sans-serif; }
-        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 8px; white-space: nowrap; }
+        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 0px; white-space: nowrap; }
       </style>
     `,
   };
