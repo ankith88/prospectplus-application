@@ -167,7 +167,7 @@ export default function LeadsMapClient() {
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null)
     setClickedKmlFeature(null)
-  }, [])
+  }, []);
 
   const onKmlLayerClick = useCallback((e: google.maps.KmlMouseEvent) => {
     if (e.featureData) {
@@ -436,80 +436,77 @@ export default function LeadsMapClient() {
   
   const infoWindowOptions = {
     pixelOffset: new google.maps.Size(0, -30),
-    disableAutoPan: false,
-    content: `
-      <style>
-        .gm-ui-hover-effect { display: none !important; }
-        .gm-style-iw-d { overflow: hidden !important; max-width: none !important; max-height: none !important; padding: 0 !important; }
-        .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: none !important; background-color: transparent !important; }
-        .gm-style-iw-c button { display: none !important; }
-        .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); font-family: sans-serif; }
-        .custom-iw-content { font-weight: 600; font-size: 14px; margin-right: 0px; white-space: nowrap; }
-      </style>
-    `,
+    disableAutoPan: true,
   };
 
   return (
     <div className="flex flex-col gap-4 flex-grow">
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <span>Filters & Actions</span>
-                    <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
-                 <div className="space-y-2">
-                    <Label htmlFor="franchisee">Franchisee</Label>
-                    <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
-                        <SelectTrigger id="franchisee">
-                            <SelectValue placeholder="Select Franchisee" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Franchisees</SelectItem>
-                            {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                 </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                        <SelectTrigger id="status">
-                            <SelectValue placeholder="Select Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                 </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
-                        <SelectTrigger id="state">
-                            <SelectValue placeholder="Select State" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All States</SelectItem>
-                            {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                 </div>
-                  <div className="space-y-2">
-                    <Label>Actions</Label>
-                    <div className="flex items-center gap-2">
-                      <Button onClick={handleShowMyLocation} variant="outline"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <span>Filters</span>
+                        <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="franchisee">Franchisee</Label>
+                        <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
+                            <SelectTrigger id="franchisee">
+                                <SelectValue placeholder="Select Franchisee" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Franchisees</SelectItem>
+                                {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
-                  </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                    <div className="flex items-center gap-2">
-                      <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                      <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Status</Label>
+                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                            <SelectTrigger id="status">
+                                <SelectValue placeholder="Select Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
-                 </div>
-            </CardContent>
-        </Card>
+                    <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
+                            <SelectTrigger id="state">
+                                <SelectValue placeholder="Select State" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All States</SelectItem>
+                                {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Field Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label>My Location</Label>
+                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                        <div className="flex items-center gap-2">
+                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
         <div className="flex-grow">
             <GoogleMap
             mapContainerStyle={containerStyle}
@@ -553,8 +550,9 @@ export default function LeadsMapClient() {
                 <InfoWindow
                 position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
                 onCloseClick={onInfoWindowClose}
+                options={infoWindowOptions}
                 >
-                <div className="space-y-2 p-2 max-w-xs">
+                <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
                     <div className="flex items-center gap-2">
                         <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
                         <LeadStatusBadge status={selectedLead.status} />
@@ -582,15 +580,9 @@ export default function LeadsMapClient() {
                 <InfoWindow
                     position={clickedKmlFeature.latLng}
                     onCloseClick={onInfoWindowClose}
-                    options={infoWindowOptions}
                 >
-                    <div
-                        className="custom-iw-container"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="custom-iw-content" style={{ display: 'flex', alignItems: 'center' }}>
-                          <span>{clickedKmlFeature.featureData.name}</span>
-                      </div>
+                    <div className="p-2">
+                        <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
                     </div>
                 </InfoWindow>
             )}
