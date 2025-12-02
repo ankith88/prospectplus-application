@@ -396,7 +396,7 @@ export default function LeadsMapClient() {
     content: `
       <style>
         .gm-ui-hover-effect { display: none !important; }
-        .gm-style-iw-d { overflow: hidden !important; max-width: none !important; max-height: none !important; }
+        .gm-style-iw-d { overflow: hidden !important; max-width: none !important; max-height: none !important; padding: 0 !important; }
         .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: none !important; background-color: transparent !important; }
         .gm-style-iw-c button { display: none !important; }
         .custom-iw-container { display: flex; align-items: center; padding: 4px 8px; background-color: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1); font-family: sans-serif; }

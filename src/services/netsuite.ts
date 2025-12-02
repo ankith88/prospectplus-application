@@ -1,6 +1,7 @@
 
 
 
+
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
@@ -638,8 +639,8 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         
         try {
             const jsonResponse = JSON.parse(responseBody);
-            if (jsonResponse.success === "true" && jsonResponse.leadID) {
-                 return { success: true, leadId: jsonResponse.leadID, message: 'Lead created in NetSuite.' };
+            if (jsonResponse.success && jsonResponse.leadID) {
+                 return { success: true, leadId: jsonResponse.leadID, message: jsonResponse.message || 'Lead created in NetSuite.' };
             } else {
                 return { success: false, message: jsonResponse.message || 'An unknown error occurred in NetSuite.' };
             }

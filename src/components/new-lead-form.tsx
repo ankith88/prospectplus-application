@@ -150,7 +150,7 @@ export function NewLeadForm() {
       if (result.success && result.leadId) {
         toast({
             title: 'Lead Created',
-            description: `${values.companyName} has been successfully sent to NetSuite.`,
+            description: `Lead for ${values.companyName} has been created successfully.`,
         });
         router.push(`/leads/${result.leadId}`);
       } else {
