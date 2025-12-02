@@ -7,6 +7,7 @@ import {
   useJsApiLoader,
   MarkerF,
   InfoWindow,
+  KmlLayer,
 } from '@react-google-maps/api'
 import { getLeadsFromFirebase } from '@/services/firebase'
 import { prospectWebsiteTool } from '@/services/firebase'
@@ -334,6 +335,10 @@ export default function LeadsMapClient() {
                 mapTypeControl: false,
             }}
             >
+            <KmlLayer
+                url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E"
+                options={{ preserveViewport: true, suppressInfoWindows: true }}
+            />
             {filteredLeads.map((lead) => (
                 <MarkerF
                 key={lead.id}
