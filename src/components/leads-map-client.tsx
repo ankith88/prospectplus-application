@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -357,7 +358,7 @@ export default function LeadsMapClient() {
             }}
             >
             <KmlLayer
-                url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E"
+                url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
                 options={{ preserveViewport: true, suppressInfoWindows: true }}
                 onClick={onKmlLayerClick}
             />
@@ -403,7 +404,7 @@ export default function LeadsMapClient() {
                     onCloseClick={() => setClickedKmlFeature(null)}
                 >
                     <div className="p-2">
-                        <h4 className="font-bold">{clickedKmlFeature.featureData.name}</h4>
+                        <h4 className="font-bold text-base">{clickedKmlFeature.featureData.name}</h4>
                     </div>
                 </InfoWindow>
             )}
