@@ -121,6 +121,41 @@ export function NewLeadForm() {
     },
   });
 
+  const handleAiProspect = useCallback(async (websiteUrl?: string) => {
+    const url = websiteUrl || form.getValues('websiteUrl');
+    if (!url) {
+      toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to prospect.' });
+      return;
+    }
+    setIsProspecting(true);
+    try {
+      const tempLeadId = 'new-lead-prospecting';
+      const result = await prospectWebsiteTool({ leadId: tempLeadId, websiteUrl: url });
+      
+      if (result.companyDescription) {
+        console.log('AI Company Description:', result.companyDescription);
+      }
+
+      if (result.contacts && result.contacts.length > 0) {
+        const primaryContact = result.contacts[0];
+        const nameParts = primaryContact.name?.split(' ') || [];
+        form.setValue('contact.firstName', nameParts[0] || '');
+        form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
+        form.setValue('contact.title', primaryContact.title || '');
+        form.setValue('contact.email', primaryContact.email || '');
+        form.setValue('contact.phone', primaryContact.phone || '');
+        toast({ title: 'Contact Found!', description: `Filled contact details for ${primaryContact.name}.` });
+      } else {
+        toast({ title: 'No Contacts Found', description: 'AI could not find specific contacts on the website.' });
+      }
+    } catch (error) {
+      console.error('AI Prospecting failed', error);
+      toast({ variant: 'destructive', title: 'AI Prospecting Failed', description: 'Could not retrieve information from the website.' });
+    } finally {
+      setIsProspecting(false);
+    }
+  }, [form, toast]);
+
   const setupAutocomplete = useCallback(() => {
     if (!window.google || !autocompleteInputRef.current) return;
 
@@ -166,7 +201,7 @@ export function NewLeadForm() {
             handleAiProspect(websiteUrl);
         }
     });
-  }, [form]);
+  }, [form, handleAiProspect]);
 
   useEffect(() => {
     setupAutocomplete();
@@ -192,42 +227,6 @@ export function NewLeadForm() {
 
   }, [searchParams, form]);
   
-  const handleAiProspect = async (websiteUrl?: string) => {
-    const url = websiteUrl || form.getValues('websiteUrl');
-    if (!url) {
-      toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to prospect.' });
-      return;
-    }
-    setIsProspecting(true);
-    try {
-      const tempLeadId = 'new-lead-prospecting';
-      const result = await aiProspectWebsiteTool({ leadId: tempLeadId, websiteUrl: url });
-      
-      if (result.companyDescription) {
-        console.log('AI Company Description:', result.companyDescription);
-      }
-
-      if (result.contacts && result.contacts.length > 0) {
-        const primaryContact = result.contacts[0];
-        const nameParts = primaryContact.name?.split(' ') || [];
-        form.setValue('contact.firstName', nameParts[0] || '');
-        form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
-        form.setValue('contact.title', primaryContact.title || '');
-        form.setValue('contact.email', primaryContact.email || '');
-        form.setValue('contact.phone', primaryContact.phone || '');
-        toast({ title: 'Contact Found!', description: `Filled contact details for ${primaryContact.name}.` });
-      } else {
-        toast({ title: 'No Contacts Found', description: 'AI could not find specific contacts on the website.' });
-      }
-    } catch (error) {
-      console.error('AI Prospecting failed', error);
-      toast({ variant: 'destructive', title: 'AI Prospecting Failed', description: 'Could not retrieve information from the website.' });
-    } finally {
-      setIsProspecting(false);
-    }
-  };
-
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
     try {
@@ -240,7 +239,7 @@ export function NewLeadForm() {
         });
 
         if (values.websiteUrl) {
-           aiProspectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
+           prospectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
             .then(() => console.log(`Background AI prospecting initiated for lead ${result.leadId}`))
             .catch(err => console.error(`Background AI prospecting failed for lead ${result.leadId}:`, err));
         }
