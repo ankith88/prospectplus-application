@@ -9,7 +9,7 @@ import {
   InfoWindowF,
   KmlLayer,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead } from '@/services/firebase'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -28,6 +28,16 @@ import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
 import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -119,6 +129,7 @@ export default function LeadsMapClient() {
   const [isQuickAddMode, setIsQuickAddMode] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
 
   const [filters, setFilters] = useState({
@@ -184,21 +195,30 @@ export default function LeadsMapClient() {
     }
   }, []);
   
-  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
+  const onMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
     if (!isQuickAddMode || !e.latLng) return;
 
     toast({ title: 'Finding address...', description: 'Geocoding the selected location.' });
 
     const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ location: e.latLng }, (results, status) => {
+    geocoder.geocode({ location: e.latLng }, async (results, status) => {
         if (status === 'OK' && results && results[0]) {
             const place = results[0];
+            const companyName = place.formatted_address.split(',')[0]
             const getAddressComponent = (type: string, useShortName = false) => {
                 const component = place.address_components?.find(c => c.types.includes(type));
                 return useShortName ? component?.short_name : component?.long_name || '';
             }
+            
+            const duplicateId = await checkForDuplicateLead(companyName, '');
+            if (duplicateId) {
+                setDuplicateLeadId(duplicateId);
+                setIsQuickAddMode(false); // Turn off mode after check
+                return;
+            }
 
             const addressParams = new URLSearchParams({
+                companyName: companyName,
                 street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
                 city: getAddressComponent('locality') || getAddressComponent('postal_town'),
                 state: getAddressComponent('administrative_area_level_1', true),
@@ -381,6 +401,13 @@ export default function LeadsMapClient() {
             return;
         }
 
+        const duplicateId = await checkForDuplicateLead(prospect.name, prospect.formatted_phone_number || '');
+        if (duplicateId) {
+            setDuplicateLeadId(duplicateId);
+            return;
+        }
+
+
         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
         
         const details = prospect; // We have already fetched details
@@ -475,6 +502,23 @@ export default function LeadsMapClient() {
   };
 
   return (
+    <>
+    <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
+                <AlertDialogDescription>
+                    A lead with this name or address already exists in the system.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
+                    View Existing Lead
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     <div className="flex flex-col gap-4 flex-grow">
       <TooltipProvider>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -564,7 +608,7 @@ export default function LeadsMapClient() {
             </Card>
         </div>
       </TooltipProvider>
-      <div className="flex-grow">
+      <div className="flex-grow min-h-[300px] h-[calc(100vh-28rem)]">
           <GoogleMap
           mapContainerStyle={containerStyle}
           center={center}
@@ -722,5 +766,6 @@ export default function LeadsMapClient() {
           </DialogContent>
       </Dialog>
     </div>
+    </>
   )
 }
