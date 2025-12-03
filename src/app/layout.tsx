@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   icons: {
     icon: 'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
   },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
