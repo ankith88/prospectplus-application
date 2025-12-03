@@ -169,9 +169,10 @@ export const prospectWebsiteTool = ai.defineTool(
 
         const hunterData = await response.json() as any;
 
-        const foundContacts = hunterData?.data?.emails?.map((emailInfo: any) => {
+        const foundContacts = hunterData?.data?.emails?.map((emailInfo: any, index: number) => {
             const fullName = `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim();
             return {
+                id: `temp-${Date.now()}-${index}`, // Add a temporary unique ID
                 name: fullName || extractNameFromEmail(emailInfo.value),
                 title: emailInfo.position || 'N/A',
                 email: emailInfo.value,
