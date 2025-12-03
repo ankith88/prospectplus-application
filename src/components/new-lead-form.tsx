@@ -27,7 +27,8 @@ import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createNewLead, prospectWebsiteTool } from '@/services/firebase';
+import { createNewLead } from '@/services/firebase';
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
@@ -133,7 +134,8 @@ export function NewLeadForm() {
         if (!place.address_components) return;
 
         form.setValue('companyName', place.name || '');
-        form.setValue('websiteUrl', place.website || '');
+        const websiteUrl = place.website || '';
+        form.setValue('websiteUrl', websiteUrl);
         if(place.formatted_phone_number) form.setValue('contact.phone', place.formatted_phone_number);
 
         const getAddressComponent = (type: string, useShortName = false) => {
@@ -158,6 +160,10 @@ export function NewLeadForm() {
         const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
         if (websiteDomain) {
             form.setValue('contact.email', `info@${websiteDomain}`);
+        }
+
+        if (websiteUrl) {
+            handleAiProspect(websiteUrl);
         }
     });
   }, [form]);
@@ -186,26 +192,26 @@ export function NewLeadForm() {
 
   }, [searchParams, form]);
   
-  const handleAiProspect = async () => {
-    const websiteUrl = form.getValues('websiteUrl');
-    if (!websiteUrl) {
+  const handleAiProspect = async (websiteUrl?: string) => {
+    const url = websiteUrl || form.getValues('websiteUrl');
+    if (!url) {
       toast({ variant: 'destructive', title: 'No Website URL', description: 'Please enter a website URL to prospect.' });
       return;
     }
     setIsProspecting(true);
     try {
-      // Use a temporary leadId for the tool, it's only used for association and not critical if lead doesn't exist yet
       const tempLeadId = 'new-lead-prospecting';
-      const result = await prospectWebsiteTool({ leadId: tempLeadId, websiteUrl });
+      const result = await aiProspectWebsiteTool({ leadId: tempLeadId, websiteUrl: url });
       
       if (result.companyDescription) {
-        // Maybe we can add a field for this later. For now, just log it.
         console.log('AI Company Description:', result.companyDescription);
       }
 
       if (result.contacts && result.contacts.length > 0) {
         const primaryContact = result.contacts[0];
-        form.setValue('contact.name', primaryContact.name || '');
+        const nameParts = primaryContact.name?.split(' ') || [];
+        form.setValue('contact.firstName', nameParts[0] || '');
+        form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
         form.setValue('contact.title', primaryContact.title || '');
         form.setValue('contact.email', primaryContact.email || '');
         form.setValue('contact.phone', primaryContact.phone || '');
@@ -233,9 +239,8 @@ export function NewLeadForm() {
             description: `${values.companyName} created. AI prospecting will run in the background.`,
         });
 
-        // Fire-and-forget the AI prospecting tool after successful creation
         if (values.websiteUrl) {
-           prospectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
+           aiProspectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
             .then(() => console.log(`Background AI prospecting initiated for lead ${result.leadId}`))
             .catch(err => console.error(`Background AI prospecting failed for lead ${result.leadId}:`, err));
         }
@@ -342,7 +347,7 @@ export function NewLeadForm() {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</span>
-              <Button type="button" variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting}>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleAiProspect()} disabled={isProspecting}>
                 {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</>}
               </Button>
             </CardTitle>

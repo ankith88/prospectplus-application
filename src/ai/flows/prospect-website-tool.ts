@@ -59,6 +59,7 @@ function extractDomain(url: string): string | null {
  */
 function extractNameFromEmail(email: string): string {
     try {
+        if (!email.includes('@')) return 'N/A';
         const namePart = email.split('@')[0];
         const names = namePart.replace(/[._-]/g, ' ').split(' ');
         const capitalizedNames = names.map(name => name.charAt(0).toUpperCase() + name.slice(1));
@@ -146,7 +147,7 @@ export const prospectWebsiteTool = ai.defineTool(
         }
         
         console.log(`Prospecting domain: ${domain} for lead ${leadId} using Hunter.io`);
-        const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}`;
+        const hunterUrl = `https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}&type=personal&department=operations,management,executive`;
 
         const controller = new AbortController();
         const timeout = setTimeout(() => {
