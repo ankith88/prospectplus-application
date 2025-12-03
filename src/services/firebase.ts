@@ -1313,6 +1313,28 @@ async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; 
     return { searchKeywords: [], contacts: [] };
 }
 
+async function checkForDuplicateLead(companyName: string, phoneNumber: string): Promise<string | null> {
+    const leadsRef = collection(firestore, 'leads');
+    
+    // Check for duplicate by company name (case-insensitive)
+    const nameQuery = query(leadsRef, where('companyName', '==', companyName), limit(1));
+    const nameSnapshot = await getDocs(nameQuery);
+    if (!nameSnapshot.empty) {
+        return nameSnapshot.docs[0].id;
+    }
+    
+    // Check for duplicate by phone number if provided
+    if (phoneNumber) {
+        const phoneQuery = query(leadsRef, where('customerPhone', '==', phoneNumber), limit(1));
+        const phoneSnapshot = await getDocs(phoneQuery);
+        if (!phoneSnapshot.empty) {
+            return phoneSnapshot.docs[0].id;
+        }
+    }
+    
+    return null;
+}
+
 export { 
     getLeadsFromFirebase,
     getArchivedLeads,
@@ -1363,6 +1385,7 @@ export {
     getLastActivity,
     createNewLead,
     prospectWebsiteTool,
+    checkForDuplicateLead,
 };
 
 
@@ -1380,3 +1403,4 @@ export {
 
 
     
+

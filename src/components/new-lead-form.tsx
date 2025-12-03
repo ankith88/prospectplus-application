@@ -20,6 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
@@ -27,7 +37,7 @@ import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createNewLead } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search } from 'lucide-react';
@@ -94,6 +104,7 @@ export function NewLeadForm() {
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
+  const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
@@ -168,10 +179,19 @@ export function NewLeadForm() {
         const place = autocomplete.getPlace();
         if (!place.address_components) return;
 
-        form.setValue('companyName', place.name || '');
+        const companyName = place.name || '';
+        const phoneNumber = place.formatted_phone_number || '';
+        
+        const duplicateId = await checkForDuplicateLead(companyName, phoneNumber);
+        if (duplicateId) {
+            setDuplicateLeadId(duplicateId);
+            return;
+        }
+
+        form.setValue('companyName', companyName);
         const websiteUrl = place.website || '';
         form.setValue('websiteUrl', websiteUrl);
-        if(place.formatted_phone_number) form.setValue('contact.phone', place.formatted_phone_number);
+        if(phoneNumber) form.setValue('contact.phone', phoneNumber);
 
         const getAddressComponent = (type: string, useShortName = false) => {
             const component = place.address_components?.find(c => c.types.includes(type));
@@ -265,6 +285,23 @@ export function NewLeadForm() {
   }
 
   return (
+    <>
+    <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
+                <AlertDialogDescription>
+                    A lead with this name or phone number already exists in the system.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
+                    View Existing Lead
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
          <Card>
@@ -377,5 +414,6 @@ export function NewLeadForm() {
         </div>
       </form>
     </Form>
+    </>
   );
 }
