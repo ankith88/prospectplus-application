@@ -165,13 +165,7 @@ export default function LeadsMapClient() {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries: ['places', 'drawing', 'geometry']
   })
-
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
-    }
-  }, [isLoaded]);
-
+  
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -219,6 +213,12 @@ export default function LeadsMapClient() {
       }
     );
   }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
+
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
   
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
@@ -630,6 +630,16 @@ export default function LeadsMapClient() {
 
   const handleCreateRouteFromProspects = () => {
     if (!window.google) return;
+    
+    if (!myLocation) {
+        toast({
+            variant: "destructive",
+            title: "Location Needed",
+            description: "Please set your location on the map first before creating a route.",
+        });
+        handleShowMyLocation();
+        return;
+    }
 
     const leadsForRouting = selectedProspects.map((p, index) => ({
       id: p.place_id || `prospect-${index}`,
@@ -649,7 +659,7 @@ export default function LeadsMapClient() {
     }
 
     setSelectedRouteLeads(leadsForRouting);
-    handleCreateRoute(); // This needs myLocation to be set
+    handleCreateRoute();
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -1039,7 +1049,7 @@ export default function LeadsMapClient() {
                   </Table>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0 || !myLocation}>
+                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
                     <Route className="mr-2 h-4 w-4" />
                     Create Route from Selected ({selectedProspects.length})
                 </Button>
