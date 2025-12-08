@@ -209,14 +209,6 @@ export default function LeadsMapClient() {
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead);
-    setSelectedRouteLeads(prev => {
-        const isSelected = prev.some(l => l.id === lead.id);
-        if (isSelected) {
-            return prev.filter(l => l.id !== lead.id);
-        } else {
-            return [...prev, lead];
-        }
-    });
   }, []);
 
   const onInfoWindowClose = useCallback(() => {
@@ -370,7 +362,7 @@ export default function LeadsMapClient() {
     else if (selectedLead.websiteUrl) {
         toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
         try {
-            const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
+            const prospectResult = await aiProspectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
             if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
                 searchKeywords = prospectResult.searchKeywords;
                 toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
