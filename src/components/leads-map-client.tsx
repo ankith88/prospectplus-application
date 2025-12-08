@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -165,6 +166,33 @@ export default function LeadsMapClient() {
     libraries: ['places', 'drawing', 'geometry']
   })
   
+  const handleShowMyLocation = useCallback(() => {
+    setLocationError(null);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const pos = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+                setMyLocation(pos);
+                map?.panTo(pos);
+                map?.setZoom(15);
+                toast({ title: "Location Found", description: "Your current location has been set." });
+            },
+            () => {
+                const errorMsg = 'Geolocation permission denied. Please enable it in your browser settings.';
+                setLocationError(errorMsg);
+                toast({ variant: 'destructive', title: 'Location Error', description: errorMsg });
+            }
+        );
+    } else {
+        const errorMsg = 'Geolocation is not supported by this browser.';
+        setLocationError(errorMsg);
+        toast({ variant: 'destructive', title: 'Location Error', description: errorMsg });
+    }
+  }, [map, toast]);
+
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -173,6 +201,7 @@ export default function LeadsMapClient() {
 
     if (!myLocation) {
         toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
+        handleShowMyLocation();
         return;
     }
 
@@ -211,7 +240,7 @@ export default function LeadsMapClient() {
         }
       }
     );
-  }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
+  }, [map, selectedRouteLeads, travelMode, toast, myLocation, handleShowMyLocation]);
   
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -452,30 +481,6 @@ export default function LeadsMapClient() {
         return;
     }
     findProspects(myLocation, prospectSearchQuery);
-  };
-
-  const handleShowMyLocation = () => {
-    setLocationError(null);
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const pos = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                };
-                setMyLocation(pos);
-                map?.panTo(pos);
-                map?.setZoom(15);
-            },
-            () => {
-                setLocationError('Geolocation permission denied. Please enable it in your browser settings.');
-                toast({ variant: 'destructive', title: 'Location Error', description: 'Could not get your location.' });
-            }
-        );
-    } else {
-        setLocationError('Geolocation is not supported by this browser.');
-        toast({ variant: 'destructive', title: 'Location Error', description: 'Geolocation is not supported by this browser.' });
-    }
   };
   
     const handleCreateLeadFromProspect = async (prospect: google.maps.places.PlaceResult) => {
@@ -1094,7 +1099,7 @@ export default function LeadsMapClient() {
               <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
               <Button variant={travelMode === google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
-            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !myLocation}>
+            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute}>
               {isCalculatingRoute ? <Loader /> : 'Create Route'}
             </Button>
             <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
