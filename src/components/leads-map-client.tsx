@@ -13,7 +13,7 @@ import {
   DrawingManagerF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
@@ -162,7 +162,7 @@ export default function LeadsMapClient() {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places', 'drawing']
+    libraries: ['places', 'drawing', 'geometry']
   })
 
   const fetchLeads = useCallback(async () => {
@@ -590,6 +590,7 @@ export default function LeadsMapClient() {
   };
 
   const onPolygonComplete = (polygon: google.maps.Polygon) => {
+    if (!window.google) return;
     const leadsInPolygon = filteredLeads.filter(lead => {
         if (lead.latitude && lead.longitude) {
             const leadLatLng = new google.maps.LatLng(lead.latitude, lead.longitude);
@@ -1053,3 +1054,5 @@ export default function LeadsMapClient() {
     </>
   )
 }
+
+    
