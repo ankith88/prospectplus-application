@@ -63,6 +63,7 @@ import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { Checkbox } from './ui/checkbox'
 import { AddressAutocomplete } from './address-autocomplete'
+import { Textarea } from './ui/textarea';
 
 
 const containerStyle = {
@@ -76,7 +77,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData'>;
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData'> & { isProspect?: boolean };
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -160,6 +161,11 @@ export default function LeadsMapClient() {
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [routeName, setRouteName] = useState('');
+  
+  // State for creating lead from prospect
+  const [prospectToCreate, setProspectToCreate] = useState<MapLead | null>(null);
+  const [isCreatingLead, setIsCreatingLead] = useState(false);
+  const [initialNotes, setInitialNotes] = useState('');
 
 
   const [filters, setFilters] = useState({
@@ -601,15 +607,61 @@ export default function LeadsMapClient() {
     setShowRouteStops(false);
   };
 
-  const handleCheckIn = async (leadId: string) => {
+  const handleCheckIn = async (lead: MapLead) => {
+    if (lead.isProspect) {
+      setProspectToCreate(lead);
+      return;
+    }
     try {
-        await logActivity(leadId, { type: 'Update', notes: 'Checked in via map route.' });
-        router.push(`/leads/${leadId}`);
+      await logActivity(lead.id, { type: 'Update', notes: 'Checked in via map route.' });
+      router.push(`/leads/${lead.id}`);
     } catch (error) {
-        console.error('Failed to log check-in', error);
-        toast({ variant: 'destructive', title: 'Check-in failed', description: 'Could not log activity.' });
+      console.error('Failed to log check-in', error);
+      toast({ variant: 'destructive', title: 'Check-in failed', description: 'Could not log activity.' });
     }
   };
+
+  const handleCreateLeadFromRoute = async () => {
+    if (!prospectToCreate) return;
+    
+    setIsCreatingLead(true);
+    
+    const newLeadData = {
+        companyName: prospectToCreate.companyName,
+        websiteUrl: prospectToCreate.websiteUrl || '',
+        industryCategory: prospectToCreate.industryCategory || '',
+        address: prospectToCreate.address as Address,
+        contact: {
+            firstName: 'Info',
+            lastName: prospectToCreate.companyName,
+            title: 'Primary Contact',
+            email: `info@${(prospectToCreate.websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`,
+            phone: '',
+        }
+    };
+
+    try {
+        const result = await createNewLead(newLeadData);
+        if (result.success && result.leadId) {
+            toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
+            if (initialNotes) {
+                await logActivity(result.leadId, { type: 'Update', notes: `Initial note from map: ${initialNotes}` });
+            }
+            await fetchLeads();
+            setProspectToCreate(null);
+            setInitialNotes('');
+            // Optional: update the route with the new lead ID
+            setSelectedRouteLeads(prev => prev.map(l => l.id === prospectToCreate.id ? { ...l, id: result.leadId!, isProspect: false } : l));
+        } else {
+            toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
+    } finally {
+        setIsCreatingLead(false);
+    }
+  };
+
 
   const onPolygonComplete = (polygon: google.maps.Polygon) => {
     if (!window.google) return;
@@ -644,8 +696,6 @@ export default function LeadsMapClient() {
   };
 
   const handleCreateRouteFromProspects = () => {
-    if (!window.google) return;
-    
     if (!myLocation) {
         toast({
             variant: "destructive",
@@ -656,7 +706,7 @@ export default function LeadsMapClient() {
         return;
     }
 
-    const leadsForRouting = selectedProspects.map((p, index) => ({
+    const leadsForRouting: MapLead[] = selectedProspects.map((p, index) => ({
       id: p.place_id || `prospect-${index}`,
       companyName: p.name || 'Unknown Prospect',
       status: 'New' as LeadStatus,
@@ -665,7 +715,9 @@ export default function LeadsMapClient() {
       address: {
         street: p.formatted_address || '',
         city: '', state: '', zip: '', country: ''
-      }
+      },
+      websiteUrl: p.website || '',
+      isProspect: true, // Mark this as a prospect
     }));
 
     if (leadsForRouting.length < 1) {
@@ -784,6 +836,31 @@ export default function LeadsMapClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Create New Lead</DialogTitle>
+                <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
+                <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
+                <Label htmlFor="initial-notes">Initial Notes</Label>
+                <Textarea 
+                    id="initial-notes"
+                    value={initialNotes}
+                    onChange={(e) => setInitialNotes(e.target.value)}
+                    placeholder="Add any initial notes or comments here..."
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
+                <Button onClick={handleCreateLeadFromRoute} disabled={isCreatingLead}>
+                    {isCreatingLead ? <Loader/> : "Create Lead"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <div className="flex flex-col gap-4 h-full">
         <div className="grid grid-cols-1 gap-4">
             <Card>
@@ -1087,7 +1164,7 @@ export default function LeadsMapClient() {
                         <p className="text-xs text-muted-foreground">
                           {leg.duration?.text} &bull; {leg.distance?.text}
                         </p>
-                        <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead.id)}>
+                        <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
                           <CheckSquare className="mr-2 h-4 w-4"/>
                           Check In
                         </Button>
