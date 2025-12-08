@@ -9,6 +9,7 @@ import {
   InfoWindowF,
   KmlLayer,
   DirectionsRenderer,
+  DrawingManagerF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -27,7 +28,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Walk, Bike, Route, X, History } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Walk, Bike, Route, X, History, PenSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   AlertDialog,
@@ -136,13 +137,14 @@ export default function LeadsMapClient() {
   const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
-  // Routing state
+  // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(google.maps.TravelMode.DRIVING);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [showRouteStops, setShowRouteStops] = useState(false);
-  const mapRef = useRef<google.maps.Map | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
 
   const [filters, setFilters] = useState({
     franchisee: 'all',
@@ -156,7 +158,7 @@ export default function LeadsMapClient() {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places']
+    libraries: ['places', 'drawing']
   })
 
   const fetchLeads = useCallback(async () => {
@@ -202,14 +204,8 @@ export default function LeadsMapClient() {
   }, [leads, filters]);
 
   const onMarkerClick = useCallback((lead: MapLead) => {
-    const isAlreadySelected = selectedRouteLeads.some(l => l.id === lead.id);
-    if (isAlreadySelected) {
-        setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
-    } else {
-        setSelectedRouteLeads(prev => [...prev, lead]);
-    }
     setSelectedLead(lead);
-  }, [selectedRouteLeads]);
+  }, []);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null);
@@ -589,6 +585,25 @@ export default function LeadsMapClient() {
     }
   };
 
+  const onPolygonComplete = (polygon: google.maps.Polygon) => {
+    const leadsInPolygon = filteredLeads.filter(lead => {
+        if (lead.latitude && lead.longitude) {
+            const leadLatLng = new google.maps.LatLng(lead.latitude, lead.longitude);
+            return google.maps.geometry.poly.containsLocation(leadLatLng, polygon);
+        }
+        return false;
+    });
+
+    setSelectedRouteLeads(leadsInPolygon);
+    toast({ title: `${leadsInPolygon.length} leads selected.`, description: "Click 'Create Route' to generate directions." });
+    
+    // Clean up drawing
+    polygon.setMap(null);
+    setIsDrawing(false);
+    if (drawingManagerRef.current) {
+        drawingManagerRef.current.setDrawingMode(null);
+    }
+  };
 
   if (loadError) {
     return <div>Error loading maps. Please check your API key and network connection.</div>
@@ -643,101 +658,106 @@ export default function LeadsMapClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
-    <div className="grid grid-cols-1 md:grid-cols-1 gap-4 h-full">
-      <div className="flex flex-col gap-4 flex-grow">
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <span><Map className="h-5 w-5" /> Filters</span>
-                    <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                <div className="space-y-2">
-                    <Label htmlFor="franchisee">Franchisee</Label>
-                    <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
-                        <SelectTrigger id="franchisee">
-                            <SelectValue placeholder="Select Franchisee" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Franchisees</SelectItem>
-                            {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                        <SelectTrigger id="status">
-                            <SelectValue placeholder="Select Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
-                        <SelectTrigger id="state">
-                            <SelectValue placeholder="Select State" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All States</SelectItem>
-                            {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader>
-                <CardTitle>Field Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+    <div className="flex flex-col gap-4 h-full">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <span><Map className="h-5 w-5" /> Filters</span>
+                        <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                     <div className="space-y-2">
-                    <Label htmlFor="geo-search">Go to Location</Label>
-                    <div className="flex items-center gap-2">
-                        <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                        <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                        <Label htmlFor="franchisee">Franchisee</Label>
+                        <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
+                            <SelectTrigger id="franchisee">
+                                <SelectValue placeholder="Select Franchisee" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Franchisees</SelectItem>
+                                {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
-                </div>
-                <div className="space-y-2">
-                    <Label>My Location</Label>
-                    <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                    <div className="flex items-center gap-2">
-                        <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                        <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Status</Label>
+                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                            <SelectTrigger id="status">
+                                <SelectValue placeholder="Select Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
-                </div>
-                <div className="space-y-2 flex flex-col justify-end">
-                    <Label>Quick Add</Label>
-                    <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="flex items-center space-x-2">
-                                <Switch
-                                    checked={isQuickAddMode}
-                                    onCheckedChange={setIsQuickAddMode}
-                                    aria-label="Toggle Quick Add Mode"
-                                />
-                                <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
-                                    Click map to add a lead
-                                </Label>
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>When enabled, click on the map to create a new lead at that location.</p>
-                        </TooltipContent>
-                    </Tooltip>
-                    </TooltipProvider>
-                </div>
-            </CardContent>
-        </Card>
+                    <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
+                            <SelectTrigger id="state">
+                                <SelectValue placeholder="Select State" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All States</SelectItem>
+                                {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Field Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div className="space-y-2">
+                        <Label htmlFor="geo-search">Go to Location</Label>
+                        <div className="flex items-center gap-2">
+                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>My Location</Label>
+                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                        <div className="flex items-center gap-2">
+                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                        </div>
+                    </div>
+                    <div className="space-y-2 flex flex-col justify-end">
+                        <Label>Quick Add</Label>
+                        <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="flex items-center space-x-2">
+                                    <Switch
+                                        checked={isQuickAddMode}
+                                        onCheckedChange={setIsQuickAddMode}
+                                        aria-label="Toggle Quick Add Mode"
+                                    />
+                                    <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
+                                        Click map to add a lead
+                                    </Label>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>When enabled, click on the map to create a new lead at that location.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                        </TooltipProvider>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Draw to Route</Label>
+                      <Button onClick={() => setIsDrawing(true)} variant="outline" className="w-full"><PenSquare className="mr-2 h-4 w-4" /> Select Area</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
         <div className="flex-grow min-h-[300px] h-[calc(100vh-32rem)] relative">
         <div className="h-full w-full absolute top-0 left-0">
             <GoogleMap
@@ -746,7 +766,6 @@ export default function LeadsMapClient() {
               zoom={4}
               onLoad={mapInstance => {
                   setMap(mapInstance);
-                  mapRef.current = mapInstance;
               }}
               onClick={onMapClick}
               options={{
@@ -756,6 +775,25 @@ export default function LeadsMapClient() {
                   cursor: isQuickAddMode ? 'crosshair' : 'default',
               }}
             >
+              {isDrawing && (
+                <DrawingManagerF
+                  onLoad={(dm) => (drawingManagerRef.current = dm)}
+                  onPolygonComplete={onPolygonComplete}
+                  drawingMode={google.maps.drawing.OverlayType.POLYGON}
+                  options={{
+                    drawingControl: false,
+                    polygonOptions: {
+                      fillColor: '#8884d8',
+                      fillOpacity: 0.2,
+                      strokeColor: '#8884d8',
+                      strokeWeight: 2,
+                      clickable: false,
+                      editable: false,
+                      zIndex: 1,
+                    },
+                  }}
+                />
+              )}
               <KmlLayer
                   url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
                   options={{ preserveViewport: true, suppressInfoWindows: true }}
@@ -893,7 +931,7 @@ export default function LeadsMapClient() {
         )}
       </aside>
         </div>
-      </div>
+    </div>
       
        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
           <DialogContent className="max-w-6xl">
@@ -950,7 +988,6 @@ export default function LeadsMapClient() {
               </div>
           </DialogContent>
       </Dialog>
-    </div>
 
      {selectedRouteLeads.length > 0 && (
         <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto shadow-2xl">
