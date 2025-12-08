@@ -127,6 +127,7 @@ export default function LeadsMapClient() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
   const [isQuickAddMode, setIsQuickAddMode] = useState(false)
+  const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const router = useRouter()
   const { toast } = useToast()
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
@@ -477,6 +478,18 @@ export default function LeadsMapClient() {
             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
         }
     };
+    
+    const handleGeoSearch = () => {
+        if (!geoSearchQuery || !map) return;
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: geoSearchQuery, componentRestrictions: { country: 'AU' } }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+                map.fitBounds(results[0].geometry.viewport);
+            } else {
+                toast({ variant: 'destructive', title: 'Location not found', description: `Could not find a location for "${geoSearchQuery}".` });
+            }
+        });
+    };
 
 
   if (!isLoaded || loadingLeads) {
@@ -573,6 +586,13 @@ export default function LeadsMapClient() {
                     <CardTitle>Field Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                     <div className="space-y-2">
+                        <Label htmlFor="geo-search">Go to Location</Label>
+                        <div className="flex items-center gap-2">
+                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                        </div>
+                    </div>
                     <div className="space-y-2">
                         <Label>My Location</Label>
                         <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
