@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -29,7 +28,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   AlertDialog,
@@ -95,6 +94,15 @@ type ClickedKmlFeature = {
   latLng: google.maps.LatLng;
 }
 
+type SavedRoute = {
+    name: string;
+    createdAt: string;
+    leads: MapLead[];
+    directions: google.maps.DirectionsResult;
+    travelMode: google.maps.TravelMode;
+};
+
+
 const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
@@ -150,6 +158,9 @@ export default function LeadsMapClient() {
   const [showRouteStops, setShowRouteStops] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [routeName, setRouteName] = useState('');
+
 
   const [filters, setFilters] = useState({
     franchisee: 'all',
@@ -194,9 +205,9 @@ export default function LeadsMapClient() {
   }, [map, toast]);
 
   const handleCreateRoute = useCallback(() => {
-    if (!map || selectedRouteLeads.length < 2 || !travelMode) {
-      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
-      return;
+    if (!map || selectedRouteLeads.length < 1) {
+        toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 lead to create a route." });
+        return;
     }
 
     if (!myLocation) {
@@ -205,43 +216,42 @@ export default function LeadsMapClient() {
         return;
     }
 
+    if (!travelMode) {
+        toast({ variant: 'destructive', title: 'Travel Mode', description: 'Please select a travel mode (Car, Walk, or Bike).' });
+        return;
+    }
+
     setIsCalculatingRoute(true);
     const directionsService = new google.maps.DirectionsService();
 
     const origin = myLocation;
-    const destination = myLocation; 
+    const destination = myLocation;
     const waypoints = selectedRouteLeads.map(lead => ({
-      location: { lat: lead.latitude!, lng: lead.longitude! },
-      stopover: true,
+        location: { lat: lead.latitude!, lng: lead.longitude! },
+        stopover: true,
     }));
 
     directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        optimizeWaypoints: true,
-        travelMode: travelMode,
-      },
-      (result, status) => {
-        setIsCalculatingRoute(false);
-        if (status === google.maps.DirectionsStatus.OK) {
-          setDirections(result);
-          setShowRouteStops(true);
-          const routeState = {
-            leads: selectedRouteLeads,
-            directions: result,
+        {
+            origin,
+            destination,
+            waypoints,
+            optimizeWaypoints: true,
             travelMode: travelMode,
-          };
-          localStorage.setItem('activeRoute', JSON.stringify(routeState));
-        } else {
-          console.error(`error fetching directions ${result}`);
-          toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
+        },
+        (result, status) => {
+            setIsCalculatingRoute(false);
+            if (status === google.maps.DirectionsStatus.OK) {
+                setDirections(result);
+                setShowRouteStops(true);
+            } else {
+                console.error(`error fetching directions ${result}`);
+                toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
+            }
         }
-      }
     );
-  }, [map, selectedRouteLeads, travelMode, toast, myLocation, handleShowMyLocation]);
-  
+}, [map, selectedRouteLeads, travelMode, toast, myLocation, handleShowMyLocation]);
+
   useEffect(() => {
     if (isLoaded && window.google) {
       setTravelMode(window.google.maps.TravelMode.DRIVING);
@@ -266,13 +276,9 @@ export default function LeadsMapClient() {
   }, []);
   
   useEffect(() => {
-    const savedRoute = localStorage.getItem('activeRoute');
-    if (savedRoute) {
-      const { leads: savedLeads, directions: savedDirections, travelMode: savedTravelMode } = JSON.parse(savedRoute);
-      setSelectedRouteLeads(savedLeads);
-      setDirections(savedDirections);
-      setTravelMode(savedTravelMode);
-      setShowRouteStops(true);
+    const storedRoutes = localStorage.getItem('savedMapRoutes');
+    if (storedRoutes) {
+      setSavedRoutes(JSON.parse(storedRoutes));
     }
   }, []);
 
@@ -588,7 +594,6 @@ export default function LeadsMapClient() {
     setDirections(null);
     setSelectedRouteLeads([]);
     setShowRouteStops(false);
-    localStorage.removeItem('activeRoute');
   };
 
   const handleCheckIn = async (leadId: string) => {
@@ -668,6 +673,47 @@ export default function LeadsMapClient() {
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
+  
+    const handleSaveRoute = () => {
+        if (!routeName) {
+            toast({ variant: 'destructive', title: 'Route Name Required', description: 'Please enter a name for your route.' });
+            return;
+        }
+        if (!directions || selectedRouteLeads.length === 0 || !travelMode) {
+            toast({ variant: 'destructive', title: 'Cannot Save', description: 'An active route is required to save.' });
+            return;
+        }
+
+        const newRoute: SavedRoute = {
+            name: routeName,
+            createdAt: new Date().toISOString(),
+            leads: selectedRouteLeads,
+            directions,
+            travelMode,
+        };
+
+        const updatedRoutes = [...savedRoutes, newRoute];
+        setSavedRoutes(updatedRoutes);
+        localStorage.setItem('savedMapRoutes', JSON.stringify(updatedRoutes));
+        setRouteName('');
+        toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved.` });
+    };
+
+    const handleLoadRoute = (route: SavedRoute) => {
+        setSelectedRouteLeads(route.leads);
+        setDirections(route.directions);
+        setTravelMode(route.travelMode);
+        setShowRouteStops(true);
+        toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
+    };
+
+    const handleDeleteRoute = (routeName: string) => {
+        const updatedRoutes = savedRoutes.filter(route => route.name !== routeName);
+        setSavedRoutes(updatedRoutes);
+        localStorage.setItem('savedMapRoutes', JSON.stringify(updatedRoutes));
+        toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
+    };
+
 
 
   if (loadError) {
@@ -781,57 +827,86 @@ export default function LeadsMapClient() {
                     </div>
                 </CardContent>
             </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Field Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                        <div className="space-y-2">
-                        <Label htmlFor="geo-search">Go to Location</Label>
-                        <div className="flex items-center gap-2">
-                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>My Location</Label>
-                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                        <div className="flex items-center gap-2">
-                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
-                        </div>
-                    </div>
-                    <div className="space-y-2 flex flex-col justify-end">
-                        <Label>Quick Add</Label>
-                        <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="flex items-center space-x-2">
-                                    <Switch
-                                        checked={isQuickAddMode}
-                                        onCheckedChange={setIsQuickAddMode}
-                                        aria-label="Toggle Quick Add Mode"
-                                    />
-                                    <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
-                                        Click map to add a lead
-                                    </Label>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>When enabled, click on the map to create a new lead at that location.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                        </TooltipProvider>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Draw to Route</Label>
-                      <Button onClick={() => setIsDrawing(true)} variant="outline" className="w-full"><PenSquare className="mr-2 h-4 w-4" /> Select Area</Button>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Field Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                          <div className="space-y-2">
+                          <Label htmlFor="geo-search">Go to Location</Label>
+                          <div className="flex items-center gap-2">
+                              <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                              <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                          </div>
+                      </div>
+                      <div className="space-y-2">
+                          <Label>My Location</Label>
+                          <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                          <div className="flex items-center gap-2">
+                              <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                              <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                          </div>
+                      </div>
+                      <div className="space-y-2 flex flex-col justify-end">
+                          <Label>Quick Add</Label>
+                          <TooltipProvider>
+                          <Tooltip>
+                              <TooltipTrigger asChild>
+                                  <span className="flex items-center space-x-2">
+                                      <Switch
+                                          checked={isQuickAddMode}
+                                          onCheckedChange={setIsQuickAddMode}
+                                          aria-label="Toggle Quick Add Mode"
+                                      />
+                                      <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
+                                          Click map to add a lead
+                                      </Label>
+                                  </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                  <p>When enabled, click on the map to create a new lead at that location.</p>
+                              </TooltipContent>
+                          </Tooltip>
+                          </TooltipProvider>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Draw to Route</Label>
+                        <Button onClick={() => setIsDrawing(true)} variant="outline" className="w-full"><PenSquare className="mr-2 h-4 w-4" /> Select Area</Button>
+                      </div>
+                  </CardContent>
+              </Card>
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Saved Routes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      {savedRoutes.length > 0 ? (
+                          <ScrollArea className="h-48">
+                              <div className="space-y-2">
+                                  {savedRoutes.map(route => (
+                                      <div key={route.name} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                          <div>
+                                              <p className="font-semibold">{route.name}</p>
+                                              <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                              <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
+                                              <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.name)}><Trash2 className="h-4 w-4" /></Button>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </ScrollArea>
+                      ) : (
+                          <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
+                      )}
+                  </CardContent>
+              </Card>
+            </div>
         </div>
         <div className="flex-grow min-h-[300px] h-[calc(100vh-32rem)] relative">
         <div className="h-full w-full absolute top-0 left-0">
@@ -1017,6 +1092,20 @@ export default function LeadsMapClient() {
                 })}
               </CardContent>
             </ScrollArea>
+             <CardFooter className="flex-col items-stretch gap-2">
+                <Label htmlFor="route-name">Route Name</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="route-name" 
+                    placeholder="e.g. Tuesday Afternoon Run" 
+                    value={routeName}
+                    onChange={(e) => setRouteName(e.target.value)}
+                  />
+                  <Button onClick={handleSaveRoute} disabled={!routeName}>
+                    <Save className="mr-2 h-4 w-4" /> Save
+                  </Button>
+                </div>
+            </CardFooter>
           </>
         )}
       </aside>
@@ -1079,7 +1168,7 @@ export default function LeadsMapClient() {
                   </Table>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateRouteFromProspects}>
+                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
                     <Route className="mr-2 h-4 w-4" />
                     Create Route from Selected ({selectedProspects.length})
                 </Button>
@@ -1099,7 +1188,7 @@ export default function LeadsMapClient() {
               <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
               <Button variant={travelMode === google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
-            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute}>
+            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length === 0}>
               {isCalculatingRoute ? <Loader /> : 'Create Route'}
             </Button>
             <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
