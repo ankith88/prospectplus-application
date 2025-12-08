@@ -646,101 +646,99 @@ export default function LeadsMapClient() {
     </AlertDialog>
     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 h-full">
       <div className="flex flex-col gap-4 flex-grow">
-        <TooltipProvider>
-             <div className="space-y-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <span><Map className="h-5 w-5" /> Filters</span>
-                            <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                        <div className="space-y-2">
-                            <Label htmlFor="franchisee">Franchisee</Label>
-                            <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
-                                <SelectTrigger id="franchisee">
-                                    <SelectValue placeholder="Select Franchisee" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Franchisees</SelectItem>
-                                    {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="status">Status</Label>
-                            <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                                <SelectTrigger id="status">
-                                    <SelectValue placeholder="Select Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="state">State</Label>
-                            <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
-                                <SelectTrigger id="state">
-                                    <SelectValue placeholder="Select State" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All States</SelectItem>
-                                    {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Field Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                         <div className="space-y-2">
-                            <Label htmlFor="geo-search">Go to Location</Label>
-                            <div className="flex items-center gap-2">
-                                <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                                <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>My Location</Label>
-                            <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                            <div className="flex items-center gap-2">
-                                <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                                <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
-                            </div>
-                        </div>
-                        <div className="space-y-2 flex flex-col justify-end">
-                          <Label>Quick Add</Label>
-                           <Tooltip>
-                                <TooltipTrigger asChild>
-                                   <span className="flex items-center space-x-2">
-                                        <Switch
-                                            checked={isQuickAddMode}
-                                            onCheckedChange={setIsQuickAddMode}
-                                            aria-label="Toggle Quick Add Mode"
-                                        />
-                                        <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
-                                            Click map to add a lead
-                                        </Label>
-                                   </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>When enabled, click on the map to create a new lead at that location.</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </TooltipProvider>
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <span><Map className="h-5 w-5" /> Filters</span>
+                    <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                <div className="space-y-2">
+                    <Label htmlFor="franchisee">Franchisee</Label>
+                    <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
+                        <SelectTrigger id="franchisee">
+                            <SelectValue placeholder="Select Franchisee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Franchisees</SelectItem>
+                            {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                        <SelectTrigger id="status">
+                            <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
+                        <SelectTrigger id="state">
+                            <SelectValue placeholder="Select State" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All States</SelectItem>
+                            {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </CardContent>
+        </Card>
+        <Card>
+            <CardHeader>
+                <CardTitle>Field Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    <div className="space-y-2">
+                    <Label htmlFor="geo-search">Go to Location</Label>
+                    <div className="flex items-center gap-2">
+                        <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                        <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label>My Location</Label>
+                    <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                    <div className="flex items-center gap-2">
+                        <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                        <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                    </div>
+                </div>
+                <div className="space-y-2 flex flex-col justify-end">
+                    <Label>Quick Add</Label>
+                    <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="flex items-center space-x-2">
+                                <Switch
+                                    checked={isQuickAddMode}
+                                    onCheckedChange={setIsQuickAddMode}
+                                    aria-label="Toggle Quick Add Mode"
+                                />
+                                <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
+                                    Click map to add a lead
+                                </Label>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>When enabled, click on the map to create a new lead at that location.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
+                </div>
+            </CardContent>
+        </Card>
         <div className="flex-grow min-h-[300px] h-[calc(100vh-32rem)] relative">
             <GoogleMap
               mapContainerStyle={containerStyle}
