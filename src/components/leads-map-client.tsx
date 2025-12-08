@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -29,7 +28,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Footprints, Bike, Route, X, History, PenSquare } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   AlertDialog,
@@ -166,12 +165,6 @@ export default function LeadsMapClient() {
     libraries: ['places', 'drawing', 'geometry']
   })
   
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
-    }
-  }, [isLoaded]);
-
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -219,6 +212,13 @@ export default function LeadsMapClient() {
       }
     );
   }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
+  
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
+
   
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
@@ -733,7 +733,7 @@ export default function LeadsMapClient() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <span><Map className="h-5 w-5" /> Filters</span>
+                        <span><MapIcon className="h-5 w-5" /> Filters</span>
                         <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
                     </CardTitle>
                 </CardHeader>
