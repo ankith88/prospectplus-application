@@ -210,6 +210,11 @@ export default function LeadsMapClient() {
         return;
     }
 
+    if (selectedRouteLeads.length > 25) {
+        toast({ variant: "destructive", title: "Too many stops", description: `The maximum number of stops for a route is 25. You have selected ${selectedRouteLeads.length}.` });
+        return;
+    }
+
     if (!myLocation) {
         toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
         handleShowMyLocation();
@@ -222,7 +227,7 @@ export default function LeadsMapClient() {
     }
 
     setIsCalculatingRoute(true);
-    const directionsService = new google.maps.DirectionsService();
+    const directionsService = new window.google.maps.DirectionsService();
 
     const origin = myLocation;
     const destination = myLocation;
@@ -241,7 +246,7 @@ export default function LeadsMapClient() {
         },
         (result, status) => {
             setIsCalculatingRoute(false);
-            if (status === google.maps.DirectionsStatus.OK) {
+            if (status === window.google.maps.DirectionsStatus.OK) {
                 setDirections(result);
                 setShowRouteStops(true);
             } else {
@@ -610,8 +615,8 @@ export default function LeadsMapClient() {
     if (!window.google) return;
     const leadsInPolygon = filteredLeads.filter(lead => {
         if (lead.latitude && lead.longitude) {
-            const leadLatLng = new google.maps.LatLng(lead.latitude, lead.longitude);
-            return google.maps.geometry.poly.containsLocation(leadLatLng, polygon);
+            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+            return window.google.maps.geometry.poly.containsLocation(leadLatLng, polygon);
         }
         return false;
     });
@@ -1184,9 +1189,9 @@ export default function LeadsMapClient() {
                 <p className="font-bold">{selectedRouteLeads.length} stop(s) selected</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant={travelMode === google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
-              <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
-              <Button variant={travelMode === google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
             <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length === 0}>
               {isCalculatingRoute ? <Loader /> : 'Create Route'}
