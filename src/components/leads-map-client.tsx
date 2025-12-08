@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -644,7 +643,7 @@ export default function LeadsMapClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-1 gap-4 h-full">
       <div className="flex flex-col gap-4 flex-grow">
         <Card>
             <CardHeader>
@@ -740,6 +739,7 @@ export default function LeadsMapClient() {
             </CardContent>
         </Card>
         <div className="flex-grow min-h-[300px] h-[calc(100vh-32rem)] relative">
+        <div className="h-full w-full absolute top-0 left-0">
             <GoogleMap
               mapContainerStyle={containerStyle}
               center={center}
@@ -843,10 +843,9 @@ export default function LeadsMapClient() {
               )}
             </GoogleMap>
         </div>
-      </div>
-      <aside className={cn(
-        "transition-all duration-300 ease-in-out bg-card border-l rounded-lg flex flex-col",
-        showRouteStops ? "w-full md:w-96" : "w-0 p-0 border-none"
+        <aside className={cn(
+        "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
+        showRouteStops ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
       )}>
         {showRouteStops && (
           <>
@@ -893,7 +892,9 @@ export default function LeadsMapClient() {
           </>
         )}
       </aside>
-
+        </div>
+      </div>
+      
        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
           <DialogContent className="max-w-6xl">
               <DialogHeader>
