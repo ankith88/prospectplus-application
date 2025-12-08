@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -687,7 +688,7 @@ export default function LeadsMapClient() {
   }
   
   const infoWindowOptions = {
-    pixelOffset: new google.maps.Size(0, -30),
+    pixelOffset: new window.google.maps.Size(0, -30),
   };
 
   const sortedRouteLegs = directions?.routes[0]?.legs
@@ -867,8 +868,22 @@ export default function LeadsMapClient() {
                       url: getPinColor(lead.status, selectedRouteLeads.some(l => l.id === lead.id)),
                       scaledSize: new window.google.maps.Size(32, 32)
                     }}
+                    visible={directions === null} // Hide original markers when route is active
                   />
               ))}
+
+              {directions && selectedRouteLeads.map(lead => (
+                 <MarkerF
+                    key={`route-${lead.id}`}
+                    position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                    onClick={() => onMarkerClick(lead)}
+                    icon={{ 
+                      url: getPinColor(lead.status, true),
+                      scaledSize: new window.google.maps.Size(32, 32)
+                    }}
+                  />
+              ))}
+
 
               {myLocation && (
                   <MarkerF
