@@ -166,6 +166,12 @@ export default function LeadsMapClient() {
     libraries: ['places', 'drawing', 'geometry']
   })
 
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
+
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -213,12 +219,6 @@ export default function LeadsMapClient() {
       }
     );
   }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
-
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
-    }
-  }, [isLoaded]);
   
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
@@ -629,6 +629,8 @@ export default function LeadsMapClient() {
   };
 
   const handleCreateRouteFromProspects = () => {
+    if (!window.google) return;
+
     const leadsForRouting = selectedProspects.map((p, index) => ({
       id: p.place_id || `prospect-${index}`,
       companyName: p.name || 'Unknown Prospect',
@@ -640,8 +642,14 @@ export default function LeadsMapClient() {
         city: '', state: '', zip: '', country: ''
       }
     }));
+
+    if (leadsForRouting.length < 2) {
+      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 prospects to create a route." });
+      return;
+    }
+
     setSelectedRouteLeads(leadsForRouting);
-    handleCreateRoute();
+    handleCreateRoute(); // This needs myLocation to be set
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -848,7 +856,7 @@ export default function LeadsMapClient() {
                     onClick={() => onMarkerClick(lead)}
                     icon={{ 
                       url: getPinColor(lead.status, selectedRouteLeads.some(l => l.id === lead.id)),
-                      scaledSize: new google.maps.Size(32, 32)
+                      scaledSize: new window.google.maps.Size(32, 32)
                     }}
                   />
               ))}
@@ -1031,7 +1039,7 @@ export default function LeadsMapClient() {
                   </Table>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
+                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0 || !myLocation}>
                     <Route className="mr-2 h-4 w-4" />
                     Create Route from Selected ({selectedProspects.length})
                 </Button>
