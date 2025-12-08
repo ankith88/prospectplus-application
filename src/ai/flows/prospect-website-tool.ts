@@ -220,7 +220,12 @@ export const prospectWebsiteTool = ai.defineTool(
         
         const getContactKey = (contact: {email?: string | null, phone?: string | null}) => (contact.email || '').toLowerCase();
         
-        const existingContacts = new Set((lead.contacts || []).map(getContactKey));
+        // This is a safety check. The `contacts` subcollection should exist, but let's be defensive.
+        const leadWithContacts = await getDoc(leadDocRef);
+        const existingLeadData = leadWithContacts.data() as Lead;
+        const existingContactsList = existingLeadData.contacts || [];
+
+        const existingContacts = new Set(existingContactsList.map(getContactKey));
         
         const uniqueNewContacts = foundContacts.filter((contact: any) => {
             if (!contact.email) return false;
