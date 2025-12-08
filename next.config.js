@@ -26,7 +26,9 @@ const nextConfig = {
       }
     ],
   },
-  serverComponentsExternalPackages: ['firebase-admin'],
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin'],
+  },
 };
 
 module.exports = withPWA({
