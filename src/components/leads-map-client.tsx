@@ -171,7 +171,7 @@ export default function LeadsMapClient() {
       setTravelMode(window.google.maps.TravelMode.DRIVING);
     }
   }, [isLoaded]);
-  
+
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -695,10 +695,20 @@ export default function LeadsMapClient() {
     .map((leg, index) => {
       const orderIndex = directions.routes[0].waypoint_order[index - 1] ?? -1;
       const lead = index === 0 ? null : selectedRouteLeads[orderIndex]; // leg 0 is from origin
-      return { leg, lead };
+      return { leg, lead, stopNumber: index };
     })
     .filter(item => item.leg && item.lead)
     ?? [];
+
+  const waypointOrderMap = new Map<string, number>();
+    if (directions) {
+        directions.routes[0].waypoint_order.forEach((originalIndex, optimizedIndex) => {
+            const lead = selectedRouteLeads[originalIndex];
+            if (lead) {
+                waypointOrderMap.set(lead.id, optimizedIndex + 1);
+            }
+        });
+    }
 
   return (
     <>
@@ -871,19 +881,20 @@ export default function LeadsMapClient() {
                     visible={directions === null} // Hide original markers when route is active
                   />
               ))}
-
+              
               {directions && selectedRouteLeads.map(lead => (
-                 <MarkerF
+                <MarkerF
                     key={`route-${lead.id}`}
                     position={{ lat: lead.latitude!, lng: lead.longitude! }}
                     onClick={() => onMarkerClick(lead)}
+                    label={(waypointOrderMap.get(lead.id) || 0).toString()}
                     icon={{ 
                       url: getPinColor(lead.status, true),
-                      scaledSize: new window.google.maps.Size(32, 32)
+                      scaledSize: new window.google.maps.Size(40, 40),
+                      labelOrigin: new window.google.maps.Point(20, 15),
                     }}
                   />
               ))}
-
 
               {myLocation && (
                   <MarkerF
