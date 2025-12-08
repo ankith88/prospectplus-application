@@ -63,6 +63,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { Checkbox } from './ui/checkbox'
+import { AddressAutocomplete } from './address-autocomplete'
 
 
 const containerStyle = {
@@ -165,12 +166,6 @@ export default function LeadsMapClient() {
     libraries: ['places', 'drawing', 'geometry']
   })
 
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
-    }
-  }, [isLoaded]);
-  
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -219,6 +214,12 @@ export default function LeadsMapClient() {
     );
   }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
 
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
+  
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
     const allLeads = await getLeadsFromFirebase({ summary: true });
