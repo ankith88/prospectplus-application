@@ -1,19 +1,20 @@
 
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   GoogleMap,
   useJsApiLoader,
   MarkerF,
   InfoWindowF,
   KmlLayer,
+  DirectionsRenderer,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address } from '@/lib/types'
 import { Loader } from './ui/loader'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
 import { LeadStatusBadge } from './lead-status-badge'
 import {
@@ -26,7 +27,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Walk, Bike, Route, X, History } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   AlertDialog,
@@ -56,6 +57,8 @@ import {
 import { Input } from './ui/input';
 import { Switch } from './ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { ScrollArea } from './ui/scroll-area'
+import { cn } from '@/lib/utils'
 
 
 const containerStyle = {
@@ -87,12 +90,16 @@ type ClickedKmlFeature = {
   latLng: google.maps.LatLng;
 }
 
-const getPinColor = (status: LeadStatus): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
     const blueStatuses: LeadStatus[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
+
+    if (isSelected) {
+      return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
+    }
 
     if (greenStatuses.includes(status)) {
         return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
@@ -128,10 +135,15 @@ export default function LeadsMapClient() {
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
   const [isQuickAddMode, setIsQuickAddMode] = useState(false)
   const [geoSearchQuery, setGeoSearchQuery] = useState('');
-  const router = useRouter()
-  const { toast } = useToast()
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
+  // Routing state
+  const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(google.maps.TravelMode.DRIVING);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [showRouteStops, setShowRouteStops] = useState(false);
+  const mapRef = useRef<google.maps.Map | null>(null);
 
   const [filters, setFilters] = useState({
     franchisee: 'all',
@@ -139,7 +151,10 @@ export default function LeadsMapClient() {
     state: 'all',
   });
 
-  const { isLoaded } = useJsApiLoader({
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries: ['places']
@@ -160,6 +175,17 @@ export default function LeadsMapClient() {
     setLeads(leadsWithCoords as MapLead[]);
     setLoadingLeads(false);
   }, []);
+  
+  useEffect(() => {
+    const savedRoute = localStorage.getItem('activeRoute');
+    if (savedRoute) {
+      const { leads: savedLeads, directions: savedDirections, travelMode: savedTravelMode } = JSON.parse(savedRoute);
+      setSelectedRouteLeads(savedLeads);
+      setDirections(savedDirections);
+      setTravelMode(savedTravelMode);
+      setShowRouteStops(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (isLoaded) {
@@ -177,9 +203,15 @@ export default function LeadsMapClient() {
   }, [leads, filters]);
 
   const onMarkerClick = useCallback((lead: MapLead) => {
-    setSelectedLead(lead)
-    setHoveredLead(null)
-  }, [])
+    const isAlreadySelected = selectedRouteLeads.some(l => l.id === lead.id);
+    if (isAlreadySelected) {
+        setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
+    } else {
+        setSelectedRouteLeads(prev => [...prev, lead]);
+    }
+    setSelectedLead(lead);
+    setHoveredLead(null);
+  }, [selectedRouteLeads]);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null);
@@ -197,7 +229,10 @@ export default function LeadsMapClient() {
   }, []);
   
   const onMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
-    if (!isQuickAddMode || !e.latLng) return;
+    if (!isQuickAddMode || !e.latLng) {
+      if (selectedLead) setSelectedLead(null); // Deselect lead on map click
+      return;
+    };
 
     toast({ title: 'Finding address...', description: 'Geocoding the selected location.' });
 
@@ -234,7 +269,7 @@ export default function LeadsMapClient() {
             toast({ variant: 'destructive', title: 'Geocoding Failed', description: `Could not find address for this location. Status: ${status}` });
         }
     });
-  }, [isQuickAddMode, router, toast]);
+  }, [isQuickAddMode, router, toast, selectedLead]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -491,6 +526,75 @@ export default function LeadsMapClient() {
         });
     };
 
+    const handleCreateRoute = useCallback(() => {
+    if (!map || selectedRouteLeads.length < 2) {
+      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
+      return;
+    }
+
+    if (!myLocation) {
+        toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
+        return;
+    }
+
+    setIsCalculatingRoute(true);
+    const directionsService = new google.maps.DirectionsService();
+
+    const origin = myLocation;
+    const destination = myLocation; 
+    const waypoints = selectedRouteLeads.map(lead => ({
+      location: { lat: lead.latitude!, lng: lead.longitude! },
+      stopover: true,
+    }));
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        optimizeWaypoints: true,
+        travelMode: travelMode,
+      },
+      (result, status) => {
+        setIsCalculatingRoute(false);
+        if (status === google.maps.DirectionsStatus.OK) {
+          setDirections(result);
+          setShowRouteStops(true);
+          const routeState = {
+            leads: selectedRouteLeads,
+            directions: result,
+            travelMode: travelMode,
+          };
+          localStorage.setItem('activeRoute', JSON.stringify(routeState));
+        } else {
+          console.error(`error fetching directions ${result}`);
+          toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
+        }
+      }
+    );
+  }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
+
+  const handleClearRoute = () => {
+    setDirections(null);
+    setSelectedRouteLeads([]);
+    setShowRouteStops(false);
+    localStorage.removeItem('activeRoute');
+  };
+
+  const handleCheckIn = async (leadId: string) => {
+    try {
+        await logActivity(leadId, { type: 'Update', notes: 'Checked in via map route.' });
+        router.push(`/leads/${leadId}`);
+    } catch (error) {
+        console.error('Failed to log check-in', error);
+        toast({ variant: 'destructive', title: 'Check-in failed', description: 'Could not log activity.' });
+    }
+  };
+
+
+  if (loadError) {
+    return <div>Error loading maps. Please check your API key and network connection.</div>
+  }
 
   if (!isLoaded || loadingLeads) {
     return (
@@ -514,6 +618,15 @@ export default function LeadsMapClient() {
     pixelOffset: new google.maps.Size(0, -30),
   };
 
+  const sortedRouteLegs = directions?.routes[0]?.legs
+    .map((leg, index) => {
+      const orderIndex = directions.routes[0].waypoint_order[index - 1] ?? -1;
+      const lead = index === 0 ? null : selectedRouteLeads[orderIndex]; // leg 0 is from origin
+      return { leg, lead };
+    })
+    .filter(item => item.leg && item.lead)
+    ?? [];
+
   return (
     <>
     <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
@@ -532,205 +645,276 @@ export default function LeadsMapClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
-    <div className="flex flex-col gap-4 flex-grow">
-      <TooltipProvider>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <span>Filters</span>
-                        <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                    <div className="space-y-2">
-                        <Label htmlFor="franchisee">Franchisee</Label>
-                        <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
-                            <SelectTrigger id="franchisee">
-                                <SelectValue placeholder="Select Franchisee" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Franchisees</SelectItem>
-                                {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="status">Status</Label>
-                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                            <SelectTrigger id="status">
-                                <SelectValue placeholder="Select Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
-                            <SelectTrigger id="state">
-                                <SelectValue placeholder="Select State" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All States</SelectItem>
-                                {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Field Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                     <div className="space-y-2">
-                        <Label htmlFor="geo-search">Go to Location</Label>
-                        <div className="flex items-center gap-2">
-                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>My Location</Label>
-                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                        <div className="flex items-center gap-2">
-                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
-                        </div>
-                    </div>
-                    <div className="space-y-2 flex flex-col pt-3">
-                      <Label>Quick Add</Label>
-                       <Tooltip>
-                            <TooltipTrigger asChild>
-                               <span className="flex items-center space-x-2">
-                                    <Switch
-                                        checked={isQuickAddMode}
-                                        onCheckedChange={setIsQuickAddMode}
-                                        aria-label="Toggle Quick Add Mode"
-                                    />
-                                    <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
-                                        Click map to add a lead
-                                    </Label>
-                               </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>When enabled, click on the map to create a new lead at that location.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-      </TooltipProvider>
-      <div className="flex-grow min-h-[300px] h-[calc(100vh-28rem)]">
-          <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={center}
-          zoom={4}
-          onLoad={setMap}
-          onClick={onMapClick}
-          options={{
-              streetViewControl: false,
-              mapTypeControl: false,
-              clickableIcons: isQuickAddMode, // Disable clicking on default POIs unless in quick add mode
-              cursor: isQuickAddMode ? 'crosshair' : 'default',
-          }}
-          >
-          <KmlLayer
-              url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
-              options={{ preserveViewport: true, suppressInfoWindows: true }}
-              onClick={onKmlLayerClick}
-          />
-          {filteredLeads.map((lead) => (
-              <MarkerF
-              key={lead.id}
-              position={{ lat: lead.latitude!, lng: lead.longitude! }}
-              onClick={() => onMarkerClick(lead)}
-              onMouseOver={() => setHoveredLead(lead)}
-              onMouseOut={() => setHoveredLead(null)}
-              icon={{ url: getPinColor(lead.status) }}
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 h-full">
+      <div className="flex flex-col gap-4 flex-grow">
+        <TooltipProvider>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                          <span><Map className="h-5 w-5" /> Filters</span>
+                          <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                      <div className="space-y-2">
+                          <Label htmlFor="franchisee">Franchisee</Label>
+                          <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
+                              <SelectTrigger id="franchisee">
+                                  <SelectValue placeholder="Select Franchisee" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="all">All Franchisees</SelectItem>
+                                  {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="status">Status</Label>
+                          <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
+                              <SelectTrigger id="status">
+                                  <SelectValue placeholder="Select Status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="all">All Statuses</SelectItem>
+                                  {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="state">State</Label>
+                          <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
+                              <SelectTrigger id="state">
+                                  <SelectValue placeholder="Select State" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="all">All States</SelectItem>
+                                  {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  </CardContent>
+              </Card>
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Field Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                       <div className="space-y-2">
+                          <Label htmlFor="geo-search">Go to Location</Label>
+                          <div className="flex items-center gap-2">
+                              <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                              <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                          </div>
+                      </div>
+                      <div className="space-y-2">
+                          <Label>My Location</Label>
+                          <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                          <div className="flex items-center gap-2">
+                              <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                              <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                          </div>
+                      </div>
+                      <div className="space-y-2 flex flex-col pt-3">
+                        <Label>Quick Add</Label>
+                         <Tooltip>
+                              <TooltipTrigger asChild>
+                                 <span className="flex items-center space-x-2">
+                                      <Switch
+                                          checked={isQuickAddMode}
+                                          onCheckedChange={setIsQuickAddMode}
+                                          aria-label="Toggle Quick Add Mode"
+                                      />
+                                      <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
+                                          Click map to add a lead
+                                      </Label>
+                                 </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                  <p>When enabled, click on the map to create a new lead at that location.</p>
+                              </TooltipContent>
+                          </Tooltip>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+        </TooltipProvider>
+        <div className="flex-grow min-h-[300px] h-[calc(100vh-28rem)] relative">
+            <GoogleMap
+              mapContainerStyle={containerStyle}
+              center={center}
+              zoom={4}
+              onLoad={mapInstance => {
+                  setMap(mapInstance);
+                  mapRef.current = mapInstance;
+              }}
+              onClick={onMapClick}
+              options={{
+                  streetViewControl: false,
+                  mapTypeControl: false,
+                  clickableIcons: isQuickAddMode, // Disable clicking on default POIs unless in quick add mode
+                  cursor: isQuickAddMode ? 'crosshair' : 'default',
+              }}
+            >
+              <KmlLayer
+                  url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
+                  options={{ preserveViewport: true, suppressInfoWindows: true }}
+                  onClick={onKmlLayerClick}
               />
-          ))}
+              {filteredLeads.map((lead) => (
+                  <MarkerF
+                    key={lead.id}
+                    position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                    onClick={() => onMarkerClick(lead)}
+                    onMouseOver={() => setHoveredLead(lead)}
+                    onMouseOut={() => setHoveredLead(null)}
+                    icon={{ 
+                      url: getPinColor(lead.status, selectedRouteLeads.some(l => l.id === lead.id)),
+                      scaledSize: new google.maps.Size(32, 32)
+                    }}
+                  />
+              ))}
 
-          {myLocation && (
-              <MarkerF
-                  position={myLocation}
-                  icon={{
-                      path: google.maps.SymbolPath.CIRCLE,
-                      scale: 8,
-                      fillColor: '#4285F4',
-                      fillOpacity: 1,
-                      strokeColor: 'white',
-                      strokeWeight: 2,
-                  }}
-              />
-          )}
+              {myLocation && (
+                  <MarkerF
+                      position={myLocation}
+                      icon={{
+                          path: google.maps.SymbolPath.CIRCLE,
+                          scale: 8,
+                          fillColor: '#4285F4',
+                          fillOpacity: 1,
+                          strokeColor: 'white',
+                          strokeWeight: 2,
+                      }}
+                  />
+              )}
 
-          {selectedLead && (
-              <InfoWindowF
-              position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
-              onCloseClick={onInfoWindowClose}
-              options={infoWindowOptions}
-              >
-              <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
-                  <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                      <LeadStatusBadge status={selectedLead.status} />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                      {selectedLead.industryCategory || 'N/A'}
-                  </p>
-                  <p className="text-sm">
-                      {formatAddress(selectedLead.address)}
-                  </p>
-                  <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
-                          <Briefcase className="mr-2 h-4 w-4" />
-                          View Profile
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                          {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
-                      </Button>
-                  </div>
-              </div>
-              </InfoWindowF>
-          )}
+              {directions && (
+                  <DirectionsRenderer
+                      directions={directions}
+                      options={{
+                          suppressMarkers: true, // We use our custom markers
+                          polylineOptions: {
+                              strokeColor: '#095c7b',
+                              strokeWeight: 6,
+                              strokeOpacity: 0.8,
+                          },
+                      }}
+                  />
+              )}
 
-          {hoveredLead && !selectedLead && (
-              <InfoWindowF
-                  position={{ lat: hoveredLead.latitude!, lng: hoveredLead.longitude! }}
-                  onCloseClick={() => setHoveredLead(null)}
-                  options={{...infoWindowOptions, disableAutoPan: true }}
-              >
-                  <div className="p-1">
+              {selectedLead && (
+                  <InfoWindowF
+                  position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+                  onCloseClick={onInfoWindowClose}
+                  options={infoWindowOptions}
+                  >
+                  <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
                       <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm">{hoveredLead.companyName}</span>
-                          <LeadStatusBadge status={hoveredLead.status} />
+                          <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                          <LeadStatusBadge status={selectedLead.status} />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                          {selectedLead.industryCategory || 'N/A'}
+                      </p>
+                      <p className="text-sm">
+                          {formatAddress(selectedLead.address)}
+                      </p>
+                      <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
+                              <Briefcase className="mr-2 h-4 w-4" />
+                              View Profile
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                              {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
+                          </Button>
                       </div>
                   </div>
-              </InfoWindowF>
-          )}
+                  </InfoWindowF>
+              )}
 
-          {clickedKmlFeature && (
-              <InfoWindowF
-                  position={clickedKmlFeature.latLng}
-                  onCloseClick={onInfoWindowClose}
-              >
-                  <div className="p-2">
-                      <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
-                  </div>
-              </InfoWindowF>
-          )}
-          </GoogleMap>
+              {hoveredLead && !selectedLead && (
+                  <InfoWindowF
+                      position={{ lat: hoveredLead.latitude!, lng: hoveredLead.longitude! }}
+                      onCloseClick={() => setHoveredLead(null)}
+                      options={{...infoWindowOptions, disableAutoPan: true }}
+                  >
+                      <div className="p-1">
+                          <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">{hoveredLead.companyName}</span>
+                              <LeadStatusBadge status={hoveredLead.status} />
+                          </div>
+                      </div>
+                  </InfoWindowF>
+              )}
+
+              {clickedKmlFeature && (
+                  <InfoWindowF
+                      position={clickedKmlFeature.latLng}
+                      onCloseClick={onInfoWindowClose}
+                  >
+                      <div className="p-2">
+                          <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
+                      </div>
+                  </InfoWindowF>
+              )}
+            </GoogleMap>
+        </div>
       </div>
+      <aside className={cn(
+        "transition-all duration-300 ease-in-out bg-card border-l rounded-lg flex flex-col",
+        showRouteStops ? "w-full md:w-96" : "w-0 p-0 border-none"
+      )}>
+        {showRouteStops && (
+          <>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Route Stops</span>
+                <Button variant="ghost" size="icon" onClick={handleClearRoute}><X className="h-4 w-4"/></Button>
+              </CardTitle>
+              {directions && (
+                <CardDescription>
+                  Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                  <br />
+                  Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                </CardDescription>
+              )}
+            </CardHeader>
+            <ScrollArea className="flex-grow">
+              <CardContent className="space-y-2">
+                {sortedRouteLegs.map(({ leg, lead }, index) => {
+                  if (!lead) return null;
+                  return (
+                    <Card key={lead.id} className="p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-bold">{index + 1}. {lead.companyName}</p>
+                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                        </div>
+                        <LeadStatusBadge status={lead.status} />
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          {leg.duration?.text} &bull; {leg.distance?.text}
+                        </p>
+                        <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead.id)}>
+                          <CheckSquare className="mr-2 h-4 w-4"/>
+                          Check In
+                        </Button>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </CardContent>
+            </ScrollArea>
+          </>
+        )}
+      </aside>
 
-      <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+       <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
           <DialogContent className="max-w-6xl">
               <DialogHeader>
                   <DialogTitle>Nearby Prospects</DialogTitle>
@@ -786,6 +970,26 @@ export default function LeadsMapClient() {
           </DialogContent>
       </Dialog>
     </div>
+
+     {selectedRouteLeads.length > 0 && (
+        <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto shadow-2xl">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                <Route className="h-5 w-5 text-primary" />
+                <p className="font-bold">{selectedRouteLeads.length} stop(s) selected</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant={travelMode === 'DRIVING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
+              <Button variant={travelMode === 'WALKING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Walk className="h-4 w-4" /></Button>
+              <Button variant={travelMode === 'BICYCLING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
+            </div>
+            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !myLocation}>
+              {isCalculatingRoute ? <Loader /> : 'Create Route'}
+            </Button>
+            <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 }
