@@ -57,7 +57,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from './ui/input';
 import { Switch } from './ui/switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
 
@@ -647,7 +647,7 @@ export default function LeadsMapClient() {
     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 h-full">
       <div className="flex flex-col gap-4 flex-grow">
         <TooltipProvider>
-            <div className="grid grid-cols-1 gap-4">
+             <div className="space-y-4">
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
