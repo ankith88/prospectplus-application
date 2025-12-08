@@ -810,7 +810,7 @@ export default function LeadsMapClient() {
                   cursor: isQuickAddMode ? 'crosshair' : 'default',
               }}
             >
-              {isDrawing && window.google && (
+              {isDrawing && (
                 <DrawingManagerF
                   onLoad={(dm) => (drawingManagerRef.current = dm)}
                   onPolygonComplete={onPolygonComplete}
