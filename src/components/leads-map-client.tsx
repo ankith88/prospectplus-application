@@ -144,7 +144,7 @@ export default function LeadsMapClient() {
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(google.maps.TravelMode.DRIVING);
+  const [travelMode, setTravelMode] = useState<google.maps.TravelMode | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [showRouteStops, setShowRouteStops] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -164,6 +164,60 @@ export default function LeadsMapClient() {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries: ['places', 'drawing', 'geometry']
   })
+
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
+  
+  const handleCreateRoute = useCallback(() => {
+    if (!map || selectedRouteLeads.length < 2 || !travelMode) {
+      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
+      return;
+    }
+
+    if (!myLocation) {
+        toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
+        return;
+    }
+
+    setIsCalculatingRoute(true);
+    const directionsService = new google.maps.DirectionsService();
+
+    const origin = myLocation;
+    const destination = myLocation; 
+    const waypoints = selectedRouteLeads.map(lead => ({
+      location: { lat: lead.latitude!, lng: lead.longitude! },
+      stopover: true,
+    }));
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        optimizeWaypoints: true,
+        travelMode: travelMode,
+      },
+      (result, status) => {
+        setIsCalculatingRoute(false);
+        if (status === google.maps.DirectionsStatus.OK) {
+          setDirections(result);
+          setShowRouteStops(true);
+          const routeState = {
+            leads: selectedRouteLeads,
+            directions: result,
+            travelMode: travelMode,
+          };
+          localStorage.setItem('activeRoute', JSON.stringify(routeState));
+        } else {
+          console.error(`error fetching directions ${result}`);
+          toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
+        }
+      }
+    );
+  }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
 
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
@@ -524,55 +578,7 @@ export default function LeadsMapClient() {
         });
     };
 
-    const handleCreateRoute = useCallback(() => {
-    if (!map || selectedRouteLeads.length < 2) {
-      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
-      return;
-    }
-
-    if (!myLocation) {
-        toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
-        return;
-    }
-
-    setIsCalculatingRoute(true);
-    const directionsService = new google.maps.DirectionsService();
-
-    const origin = myLocation;
-    const destination = myLocation; 
-    const waypoints = selectedRouteLeads.map(lead => ({
-      location: { lat: lead.latitude!, lng: lead.longitude! },
-      stopover: true,
-    }));
-
-    directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        optimizeWaypoints: true,
-        travelMode: travelMode,
-      },
-      (result, status) => {
-        setIsCalculatingRoute(false);
-        if (status === google.maps.DirectionsStatus.OK) {
-          setDirections(result);
-          setShowRouteStops(true);
-          const routeState = {
-            leads: selectedRouteLeads,
-            directions: result,
-            travelMode: travelMode,
-          };
-          localStorage.setItem('activeRoute', JSON.stringify(routeState));
-        } else {
-          console.error(`error fetching directions ${result}`);
-          toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
-        }
-      }
-    );
-  }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
-
-  const handleClearRoute = () => {
+    const handleClearRoute = () => {
     setDirections(null);
     setSelectedRouteLeads([]);
     setShowRouteStops(false);
@@ -810,7 +816,7 @@ export default function LeadsMapClient() {
                   cursor: isQuickAddMode ? 'crosshair' : 'default',
               }}
             >
-              {isDrawing && (
+              {isDrawing && window.google && (
                 <DrawingManagerF
                   onLoad={(dm) => (drawingManagerRef.current = dm)}
                   onPolygonComplete={onPolygonComplete}
@@ -850,7 +856,7 @@ export default function LeadsMapClient() {
                   <MarkerF
                       position={myLocation}
                       icon={{
-                          path: google.maps.SymbolPath.CIRCLE,
+                          path: window.google.maps.SymbolPath.CIRCLE,
                           scale: 8,
                           fillColor: '#4285F4',
                           fillOpacity: 1,
@@ -1032,7 +1038,7 @@ export default function LeadsMapClient() {
           </DialogContent>
       </Dialog>
 
-     {selectedRouteLeads.length > 0 && !showRouteStops &&(
+     {selectedRouteLeads.length > 0 && !showRouteStops && window.google && (
         <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto shadow-2xl">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -1040,9 +1046,9 @@ export default function LeadsMapClient() {
                 <p className="font-bold">{selectedRouteLeads.length} stop(s) selected</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant={travelMode === 'DRIVING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
-              <Button variant={travelMode === 'WALKING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Walk className="h-4 w-4" /></Button>
-              <Button variant={travelMode === 'BICYCLING' ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
+              <Button variant={travelMode === google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
+              <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Walk className="h-4 w-4" /></Button>
+              <Button variant={travelMode === google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
             <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !myLocation}>
               {isCalculatingRoute ? <Loader /> : 'Create Route'}
