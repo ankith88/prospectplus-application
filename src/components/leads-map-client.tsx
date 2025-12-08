@@ -810,11 +810,11 @@ export default function LeadsMapClient() {
                   cursor: isQuickAddMode ? 'crosshair' : 'default',
               }}
             >
-              {isDrawing && (
+              {isDrawing && window.google && (
                 <DrawingManagerF
                   onLoad={(dm) => (drawingManagerRef.current = dm)}
                   onPolygonComplete={onPolygonComplete}
-                  drawingMode={google.maps.drawing.OverlayType.POLYGON}
+                  drawingMode={window.google.maps.drawing?.OverlayType.POLYGON}
                   options={{
                     drawingControl: false,
                     polygonOptions: {
