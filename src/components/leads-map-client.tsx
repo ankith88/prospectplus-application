@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -29,7 +28,7 @@ import {
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Walk, Bike, Route, X, History, PenSquare } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map, Car, Footprints, Bike, Route, X, History, PenSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   AlertDialog,
@@ -166,6 +165,12 @@ export default function LeadsMapClient() {
     libraries: ['places', 'drawing', 'geometry']
   })
   
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setTravelMode(window.google.maps.TravelMode.DRIVING);
+    }
+  }, [isLoaded]);
+  
   const handleCreateRoute = useCallback(() => {
     if (!map || selectedRouteLeads.length < 2 || !travelMode) {
       toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 leads to create a route." });
@@ -213,12 +218,6 @@ export default function LeadsMapClient() {
       }
     );
   }, [map, selectedRouteLeads, travelMode, toast, myLocation]);
-
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
-    }
-  }, [isLoaded]);
   
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
@@ -653,8 +652,8 @@ export default function LeadsMapClient() {
       }
     }));
 
-    if (leadsForRouting.length < 2) {
-      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 2 prospects to create a route." });
+    if (leadsForRouting.length < 1) {
+      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 prospect to create a route." });
       return;
     }
 
@@ -1049,7 +1048,7 @@ export default function LeadsMapClient() {
                   </Table>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
+                <Button onClick={handleCreateRouteFromProspects}>
                     <Route className="mr-2 h-4 w-4" />
                     Create Route from Selected ({selectedProspects.length})
                 </Button>
@@ -1066,7 +1065,7 @@ export default function LeadsMapClient() {
             </div>
             <div className="flex items-center gap-2">
               <Button variant={travelMode === google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
-              <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Walk className="h-4 w-4" /></Button>
+              <Button variant={travelMode === google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
               <Button variant={travelMode === google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
             <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !myLocation}>
