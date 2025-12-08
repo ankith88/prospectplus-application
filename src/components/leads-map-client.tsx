@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -46,6 +47,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -60,6 +62,7 @@ import { Switch } from './ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { Checkbox } from './ui/checkbox'
 
 
 const containerStyle = {
@@ -128,6 +131,7 @@ export default function LeadsMapClient() {
   const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null)
   const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false)
+  const [selectedProspects, setSelectedProspects] = useState<google.maps.places.PlaceResult[]>([]);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false)
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null)
@@ -205,6 +209,14 @@ export default function LeadsMapClient() {
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead);
+    setSelectedRouteLeads(prev => {
+        const isSelected = prev.some(l => l.id === lead.id);
+        if (isSelected) {
+            return prev.filter(l => l.id !== lead.id);
+        } else {
+            return [...prev, lead];
+        }
+    });
   }, []);
 
   const onInfoWindowClose = useCallback(() => {
@@ -605,6 +617,36 @@ export default function LeadsMapClient() {
     }
   };
 
+  const handleProspectSelection = (prospect: google.maps.places.PlaceResult) => {
+    setSelectedProspects(prev => {
+      const isSelected = prev.some(p => p.place_id === prospect.place_id);
+      if (isSelected) {
+        return prev.filter(p => p.place_id !== prospect.place_id);
+      } else {
+        return [...prev, prospect];
+      }
+    });
+  };
+
+  const handleCreateRouteFromProspects = () => {
+    const leadsForRouting = selectedProspects.map((p, index) => ({
+      id: p.place_id || `prospect-${index}`,
+      companyName: p.name || 'Unknown Prospect',
+      status: 'New' as LeadStatus,
+      latitude: p.geometry?.location?.lat()!,
+      longitude: p.geometry?.location?.lng()!,
+      address: {
+        street: p.formatted_address || '',
+        city: '', state: '', zip: '', country: ''
+      }
+    }));
+    setSelectedRouteLeads(leadsForRouting);
+    handleCreateRoute();
+    setIsProspectsDialogOpen(false);
+    setSelectedProspects([]);
+  };
+
+
   if (loadError) {
     return <div>Error loading maps. Please check your API key and network connection.</div>
   }
@@ -945,6 +987,7 @@ export default function LeadsMapClient() {
                   <Table>
                       <TableHeader>
                           <TableRow>
+                              <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
                               <TableHead>Company Name</TableHead>
                               <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
@@ -955,6 +998,7 @@ export default function LeadsMapClient() {
                       <TableBody>
                           {prospects.map(prospectInfo => (
                               <TableRow key={prospectInfo.place.place_id}>
+                                  <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
                                   <TableCell>{prospectInfo.place.name}</TableCell>
                                   <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                   <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
@@ -986,10 +1030,16 @@ export default function LeadsMapClient() {
                       </TableBody>
                   </Table>
               </div>
+              <DialogFooter>
+                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
+                    <Route className="mr-2 h-4 w-4" />
+                    Create Route from Selected ({selectedProspects.length})
+                </Button>
+              </DialogFooter>
           </DialogContent>
       </Dialog>
 
-     {selectedRouteLeads.length > 0 && (
+     {selectedRouteLeads.length > 0 && !showRouteStops &&(
         <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto shadow-2xl">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="flex items-center gap-2">
