@@ -166,7 +166,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
-          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus || 'N/A')}.`,
           address: address,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -1403,4 +1403,3 @@ export {
 
 
     
-
