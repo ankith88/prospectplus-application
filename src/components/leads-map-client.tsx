@@ -212,11 +212,11 @@ export default function LeadsMapClient() {
   }, [map, toast]);
 
   const handleCreateRoute = useCallback(() => {
-    if (!map || selectedRouteLeads.length < 1) {
+    if (!map) return;
+    if (selectedRouteLeads.length < 1) {
         toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 lead to create a route." });
         return;
     }
-
     if (selectedRouteLeads.length > 25) {
         toast({ variant: "destructive", title: "Too many stops", description: `The maximum number of stops for a route is 25. You have selected ${selectedRouteLeads.length}.` });
         return;
@@ -608,22 +608,11 @@ export default function LeadsMapClient() {
     setShowRouteStops(false);
   };
 
-  const handleCheckIn = async (lead: MapLead) => {
+  const handleCheckIn = (lead: MapLead) => {
     if (lead.isProspect) {
       setProspectToCreate(lead);
-      return;
-    }
-    if (!lead.id) {
-        console.error("Check in failed: lead ID is missing.");
-        toast({ variant: "destructive", title: "Error", description: "Cannot check in, lead ID is missing." });
-        return;
-    }
-    try {
-      await logActivity(lead.id, { type: 'Update', notes: 'Checked in via map route.' });
-      router.push(`/leads/${lead.id}`);
-    } catch (error) {
-      console.error('Failed to log check-in', error);
-      toast({ variant: 'destructive', title: 'Check-in failed', description: 'Could not log activity.' });
+    } else if (lead.id) {
+      window.open(`/leads/${lead.id}`, '_blank');
     }
   };
 

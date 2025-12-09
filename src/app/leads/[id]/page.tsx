@@ -9,6 +9,12 @@ export default async function LeadProfilePage({
 }: {
   params: { id: string }
 }) {
+  // Add a guard to ensure the ID is valid before fetching
+  if (!id || typeof id !== 'string') {
+    notFound();
+    return;
+  }
+
   // Fetch the lead and all its sub-collections on the server.
   const lead: Lead | null = await getLeadFromFirebase(id, true);
 
