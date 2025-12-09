@@ -5,10 +5,12 @@ import { LeadProfile } from '@/components/lead-profile'
 import type { Lead } from '@/lib/types'
 
 export default async function LeadProfilePage({
-  params: { id },
+  params,
 }: {
   params: { id: string }
 }) {
+  const { id } = params;
+
   // Add a guard to ensure the ID is valid before fetching
   if (!id || typeof id !== 'string') {
     notFound();
