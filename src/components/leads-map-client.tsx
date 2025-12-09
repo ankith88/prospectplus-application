@@ -148,7 +148,6 @@ export default function LeadsMapClient() {
   const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
-  const [isQuickAddMode, setIsQuickAddMode] = useState(false)
   const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
@@ -329,47 +328,10 @@ export default function LeadsMapClient() {
   }, []);
   
   const onMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
-    if (!isQuickAddMode || !e.latLng) {
-      if (selectedLead) setSelectedLead(null); // Deselect lead on map click
-      return;
-    };
-
-    toast({ title: 'Finding address...', description: 'Geocoding the selected location.' });
-
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ location: e.latLng }, async (results, status) => {
-        if (status === 'OK' && results && results[0]) {
-            const place = results[0];
-            const companyName = place.formatted_address.split(',')[0]
-            const getAddressComponent = (type: string, useShortName = false) => {
-                const component = place.address_components?.find(c => c.types.includes(type));
-                return useShortName ? component?.short_name : component?.long_name || '';
-            }
-            
-            const duplicateId = await checkForDuplicateLead(companyName, '');
-            if (duplicateId) {
-                setDuplicateLeadId(duplicateId);
-                setIsQuickAddMode(false); // Turn off mode after check
-                return;
-            }
-
-            const addressParams = new URLSearchParams({
-                companyName: companyName,
-                street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
-                city: getAddressComponent('locality') || getAddressComponent('postal_town'),
-                state: getAddressComponent('administrative_area_level_1', true),
-                zip: getAddressComponent('postal_code'),
-                lat: e.latLng!.lat().toString(),
-                lng: e.latLng!.lng().toString(),
-            });
-
-            setIsQuickAddMode(false);
-            router.push(`/leads/new?${addressParams.toString()}`);
-        } else {
-            toast({ variant: 'destructive', title: 'Geocoding Failed', description: `Could not find address for this location. Status: ${status}` });
-        }
-    });
-  }, [isQuickAddMode, router, toast, selectedLead]);
+    if (selectedLead) {
+        setSelectedLead(null);
+    }
+  }, [selectedLead]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -932,28 +894,6 @@ export default function LeadsMapClient() {
                               <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
                           </div>
                       </div>
-                      <div className="space-y-2 flex flex-col justify-end">
-                          <Label>Quick Add</Label>
-                          <TooltipProvider>
-                          <Tooltip>
-                              <TooltipTrigger asChild>
-                                  <span className="flex items-center space-x-2">
-                                      <Switch
-                                          checked={isQuickAddMode}
-                                          onCheckedChange={setIsQuickAddMode}
-                                          aria-label="Toggle Quick Add Mode"
-                                      />
-                                      <Label htmlFor="quick-add-mode" className="text-sm font-normal text-muted-foreground">
-                                          Click map to add a lead
-                                      </Label>
-                                  </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                  <p>When enabled, click on the map to create a new lead at that location.</p>
-                              </TooltipContent>
-                          </Tooltip>
-                          </TooltipProvider>
-                      </div>
                       <div className="space-y-2">
                         <Label>Draw to Route</Label>
                         <Button onClick={() => setIsDrawing(true)} variant="outline" className="w-full"><PenSquare className="mr-2 h-4 w-4" /> Select Area</Button>
@@ -1002,8 +942,6 @@ export default function LeadsMapClient() {
               options={{
                   streetViewControl: false,
                   mapTypeControl: false,
-                  clickableIcons: isQuickAddMode, // Disable clicking on default POIs unless in quick add mode
-                  cursor: isQuickAddMode ? 'crosshair' : 'default',
               }}
             >
               {isDrawing && window.google && (
