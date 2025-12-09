@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -177,7 +178,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerSource || 'N/A',
+          campaign: data.customerSource,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
