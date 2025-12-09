@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -611,6 +612,11 @@ export default function LeadsMapClient() {
     if (lead.isProspect) {
       setProspectToCreate(lead);
       return;
+    }
+    if (!lead.id) {
+        console.error("Check in failed: lead ID is missing.");
+        toast({ variant: "destructive", title: "Error", description: "Cannot check in, lead ID is missing." });
+        return;
     }
     try {
       await logActivity(lead.id, { type: 'Update', notes: 'Checked in via map route.' });
