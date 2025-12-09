@@ -14,8 +14,8 @@ import {
   CircleF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
-import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import type { Lead, LeadStatus, Address, UserProfile } from '@/lib/types'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
@@ -459,7 +459,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     else if (selectedLead.websiteUrl) {
         toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
         try {
-            const prospectResult = await aiProspectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
+            const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
             if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
                 searchKeywords = prospectResult.searchKeywords;
                 toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
@@ -514,42 +514,57 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             return;
         }
 
-
         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
         
-        const details = prospect; // We have already fetched details
+        let primaryContact: Omit<Contact, 'id'> | null = null;
 
-        if (!details) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch prospect details.' });
-            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-            return;
+        // Prospect with Hunter.io if website exists
+        if (prospect.website) {
+            try {
+                const hunterResult = await prospectWebsiteTool({
+                    leadId: 'new-lead-prospecting', // Special ID to prevent saving
+                    websiteUrl: prospect.website,
+                });
+
+                if (hunterResult.contacts && hunterResult.contacts.length > 0) {
+                    const firstContact = hunterResult.contacts[0];
+                    const nameParts = firstContact.name?.split(' ') || [];
+                    primaryContact = {
+                        name: firstContact.name || 'Info',
+                        title: firstContact.title || 'Primary Contact',
+                        email: firstContact.email || '',
+                        phone: firstContact.phone || prospect.formatted_phone_number || '',
+                    };
+                    toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
+                }
+            } catch (error) {
+                console.warn('Hunter.io prospecting failed, using default contact info.', error);
+            }
         }
-
-        const addressComponents = details.address_components;
-        const getAddressComponent = (type: string, useShortName = false) => {
-            const component = addressComponents?.find(c => c.types.includes(type));
-            return useShortName ? component?.short_name : component?.long_name || '';
-        }
-
-        const newLeadData = {
-            companyName: details.name || prospect.name,
-            websiteUrl: details.website || '',
-            industryCategory: selectedLead?.industryCategory || '',
-            address: {
-                street: `${getAddressComponent('street_number')} ${getAddressComponent('route')}`.trim(),
-                city: getAddressComponent('locality') || getAddressComponent('postal_town'),
-                state: getAddressComponent('administrative_area_level_1', true),
-                zip: getAddressComponent('postal_code'),
-                country: 'Australia',
-                lat: details.geometry?.location?.lat(),
-                lng: details.geometry?.location?.lng(),
-            },
-            contact: { // Default contact, can be updated later
-                firstName: 'Info',
-                lastName: details.name || prospect.name,
+        
+        if (!primaryContact) {
+            // Fallback to default contact info
+            const websiteDomain = (prospect.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+            primaryContact = {
+                name: `Info ${prospect.name}`,
                 title: 'Primary Contact',
-                email: `info@${(details.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`,
-                phone: details.formatted_phone_number || '',
+                email: websiteDomain ? `info@${websiteDomain}` : '',
+                phone: prospect.formatted_phone_number || '',
+            };
+        }
+        const nameParts = primaryContact.name.split(' ');
+        
+        const newLeadData = {
+            companyName: prospect.name,
+            websiteUrl: prospect.website || '',
+            industryCategory: selectedLead?.industryCategory || '',
+            address: parseAddressComponents(prospect.address_components || []),
+            contact: {
+                firstName: nameParts[0] || 'Info',
+                lastName: nameParts.slice(1).join(' ') || prospect.name,
+                title: primaryContact.title,
+                email: primaryContact.email,
+                phone: primaryContact.phone,
             }
         };
 
@@ -558,7 +573,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
                 await fetchLeads(); // Refresh leads on the map
-                // Update the prospect in the dialog to show it's now an existing lead
                 setProspects(prev => prev.map(p => p.place.place_id === placeId
                     ? {
                         ...p,
@@ -608,54 +622,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
   const handleCheckIn = (lead: MapLead) => {
     if (lead.isProspect) {
-      setProspectToCreate(lead);
+      const url = new URL('/leads/new', window.location.origin);
+      url.searchParams.set('companyName', lead.companyName);
+      if (lead.address) {
+        url.searchParams.set('street', lead.address.street);
+        url.searchParams.set('city', lead.address.city);
+        url.searchParams.set('state', lead.address.state);
+        url.searchParams.set('zip', lead.address.zip);
+        if (lead.address.lat) url.searchParams.set('lat', lead.address.lat.toString());
+        if (lead.address.lng) url.searchParams.set('lng', lead.address.lng.toString());
+      }
+      window.open(url.toString(), '_blank');
     } else if (lead.id) {
         window.open(`/leads/${lead.id}`, '_blank');
         logActivity(lead.id, {
             type: 'Update',
             notes: 'Checked in at location via map.'
         });
-    }
-  };
-
-  const handleCreateLeadFromRoute = async () => {
-    if (!prospectToCreate || !prospectToCreate.address) return;
-    
-    setIsCreatingLead(true);
-    
-    const newLeadData = {
-        companyName: prospectToCreate.companyName,
-        websiteUrl: prospectToCreate.websiteUrl || '',
-        industryCategory: prospectToCreate.industryCategory || '',
-        address: prospectToCreate.address as Address,
-        contact: {
-            firstName: 'Info',
-            lastName: prospectToCreate.companyName,
-            title: 'Primary Contact',
-            email: `info@${(prospectToCreate.websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`,
-            phone: '',
-        }
-    };
-
-    try {
-        const result = await createNewLead(newLeadData);
-        if (result.success && result.leadId) {
-            toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-            if (initialNotes) {
-                await logActivity(result.leadId, { type: 'Update', notes: `Initial note from map: ${initialNotes}` });
-            }
-            await fetchLeads();
-            setProspectToCreate(null);
-            setInitialNotes('');
-            // Optional: update the route with the new lead ID
-            setSelectedRouteLeads(prev => prev.map(l => l.id === prospectToCreate.id ? { ...l, id: result.leadId!, isProspect: false } : l));
-        } else {
-            toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
-        }
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
-    } finally {
-        setIsCreatingLead(false);
     }
   };
 
@@ -690,27 +673,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
     };
-
-  const onPolygonComplete = (polygon: google.maps.Polygon) => {
-    if (!window.google) return;
-    const leadsInPolygon = filteredLeads.filter(lead => {
-        if (lead.latitude && lead.longitude) {
-            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-            return window.google.maps.geometry.poly.containsLocation(leadLatLng, polygon);
-        }
-        return false;
-    });
-
-    setSelectedRouteLeads(leadsInPolygon);
-    toast({ title: `${leadsInPolygon.length} leads selected.`, description: "Click 'Create Route' to generate directions." });
-    
-    // Clean up drawing
-    polygon.setMap(null);
-    setIsDrawing(false);
-    if (drawingManagerRef.current) {
-        drawingManagerRef.current.setDrawingMode(null);
-    }
-  };
 
   const handleProspectSelection = (prospect: google.maps.places.PlaceResult) => {
     setSelectedProspects(prev => {
@@ -886,9 +848,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                <Button onClick={handleCreateLeadFromRoute} disabled={isCreatingLead}>
-                    {isCreatingLead ? <Loader/> : "Create Lead"}
-                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -1135,6 +1094,38 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
               )}
             </GoogleMap>
         </div>
+        {!directions && selectedRouteLeads.length > 0 && (
+            <Card className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto">
+                <CardContent className="p-4 flex items-center gap-4">
+                    <p className="text-sm font-semibold">{selectedRouteLeads.length} stops selected.</p>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button disabled={isCalculatingRoute}>
+                                {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
+                                Create Route
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
+                                <Car className="mr-2 h-4 w-4" />
+                                Driving
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
+                                <Footprints className="mr-2 h-4 w-4" />
+                                Walking
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
+                                <Bike className="mr-2 h-4 w-4" />
+                                Bicycling
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                     <Button variant="secondary" onClick={() => setSelectedRouteLeads([])}>
+                        Clear Selection
+                    </Button>
+                </CardContent>
+            </Card>
+        )}
         <aside className={cn(
         "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
         showRouteStops ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
@@ -1188,17 +1179,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             {directions && leg ? `${leg.duration?.text} • ${leg.distance?.text}` : 'Calculating...'}
                         </p>
                         <div className='flex gap-2'>
-                        {lead.isProspect ? (
-                            <Button size="sm" variant="secondary" onClick={() => setProspectToCreate(lead)}>
-                                <PlusCircle className="mr-2 h-4 w-4"/>
-                                Add New Lead
-                            </Button>
-                        ) : (
-                            <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                                <CheckSquare className="mr-2 h-4 w-4"/>
-                                Check In
-                            </Button>
-                        )}
+                          <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                              {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
+                              {lead.isProspect ? 'Add New Lead' : 'Check In'}
+                          </Button>
                          <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
                             <Trash2 className="h-4 w-4" />
                         </Button>
