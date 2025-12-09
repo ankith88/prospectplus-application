@@ -609,7 +609,9 @@ export default function LeadsMapClient() {
   };
 
   const handleCheckIn = (lead: MapLead) => {
-    if (lead.id) {
+    if (lead.isProspect) {
+      setProspectToCreate(lead);
+    } else if (lead.id) {
         window.open(`/leads/${lead.id}`, '_blank');
         logActivity(lead.id, {
             type: 'Update',
@@ -1131,21 +1133,37 @@ export default function LeadsMapClient() {
       )}>
         {showRouteStops && (
           <>
-            <CardHeader>
+            <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Route Stops</span>
                 <Button variant="ghost" size="icon" onClick={handleClearRoute}><X className="h-4 w-4"/></Button>
               </CardTitle>
               {directions && (
-                <CardDescription>
-                  Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
-                  <br />
-                  Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
-                </CardDescription>
+                <div className="space-y-2 pt-2">
+                    <CardDescription>
+                      Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                      <br />
+                      Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                    </CardDescription>
+                    <div className="space-y-1">
+                        <Label htmlFor="route-name">Route Name</Label>
+                        <div className="flex gap-2">
+                        <Input 
+                            id="route-name" 
+                            placeholder="e.g. Tuesday Afternoon Run" 
+                            value={routeName}
+                            onChange={(e) => setRouteName(e.target.value)}
+                        />
+                        <Button onClick={handleSaveRoute} disabled={!routeName}>
+                            <Save className="mr-2 h-4 w-4" /> Save
+                        </Button>
+                        </div>
+                    </div>
+                </div>
               )}
             </CardHeader>
             <ScrollArea className="flex-grow">
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-2 pt-2">
                 {sortedRouteLegs.map(({ leg, lead }, index) => {
                   if (!lead) return null;
                   return (
@@ -1178,20 +1196,6 @@ export default function LeadsMapClient() {
                 })}
               </CardContent>
             </ScrollArea>
-             <CardFooter className="flex-col items-stretch gap-2">
-                <Label htmlFor="route-name">Route Name</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    id="route-name" 
-                    placeholder="e.g. Tuesday Afternoon Run" 
-                    value={routeName}
-                    onChange={(e) => setRouteName(e.target.value)}
-                  />
-                  <Button onClick={handleSaveRoute} disabled={!routeName}>
-                    <Save className="mr-2 h-4 w-4" /> Save
-                  </Button>
-                </div>
-            </CardFooter>
           </>
         )}
       </aside>
