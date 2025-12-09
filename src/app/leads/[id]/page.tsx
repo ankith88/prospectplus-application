@@ -1,16 +1,13 @@
 
 'use client';
-import { notFound } from 'next/navigation'
+import { notFound, useParams } from 'next/navigation'
 import { getLeadFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
 import type { Lead } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 
-export default function LeadProfilePage({
-  params,
-}: {
-  params: { id: string }
-}) {
+export default function LeadProfilePage() {
+  const params = useParams();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
