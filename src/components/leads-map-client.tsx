@@ -67,6 +67,12 @@ import { cn } from '@/lib/utils'
 import { Checkbox } from './ui/checkbox'
 import { AddressAutocomplete } from './address-autocomplete'
 import { Textarea } from './ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 
 const containerStyle = {
@@ -214,7 +220,7 @@ export default function LeadsMapClient() {
     }
   }, [map, toast]);
 
-  const handleCreateRoute = useCallback(() => {
+  const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMode) => {
     if (!map) return;
     if (selectedRouteLeads.length < 1) {
         toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 lead to create a route." });
@@ -231,11 +237,7 @@ export default function LeadsMapClient() {
         return;
     }
 
-    if (!travelMode) {
-        toast({ variant: 'destructive', title: 'Travel Mode', description: 'Please select a travel mode (Car, Walk, or Bike).' });
-        return;
-    }
-
+    setTravelMode(selectedTravelMode);
     setIsCalculatingRoute(true);
     setDirections(null);
     const directionsService = new window.google.maps.DirectionsService();
@@ -253,7 +255,7 @@ export default function LeadsMapClient() {
             destination,
             waypoints,
             optimizeWaypoints: true,
-            travelMode: travelMode,
+            travelMode: selectedTravelMode,
         },
         (result, status) => {
             setIsCalculatingRoute(false);
@@ -266,7 +268,7 @@ export default function LeadsMapClient() {
             }
         }
     );
-}, [map, selectedRouteLeads, travelMode, toast, myLocation, handleShowMyLocation]);
+}, [map, selectedRouteLeads, toast, myLocation, handleShowMyLocation]);
 
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -277,7 +279,11 @@ export default function LeadsMapClient() {
   
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
-    const allLeads = await getLeadsFromFirebase({ summary: true });
+    let allLeads = await getLeadsFromFirebase({ summary: true });
+
+    if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
+        allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
+    }
 
     const leadsWithCoords = allLeads.filter(
       (lead) => lead.latitude != null && lead.longitude != null && !isNaN(parseFloat(String(lead.latitude))) && !isNaN(parseFloat(String(lead.longitude)))
@@ -289,7 +295,7 @@ export default function LeadsMapClient() {
     
     setLeads(leadsWithCoords as MapLead[]);
     setLoadingLeads(false);
-  }, []);
+  }, [userProfile]);
   
   useEffect(() => {
     if (userProfile?.uid) {
@@ -301,10 +307,10 @@ export default function LeadsMapClient() {
   }, [userProfile]);
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && userProfile) {
       fetchLeads();
     }
-  }, [isLoaded, fetchLeads]);
+  }, [isLoaded, fetchLeads, userProfile]);
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -312,14 +318,9 @@ export default function LeadsMapClient() {
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
         const stateMatch = filters.state === 'all' || lead.address?.state === filters.state;
         
-        let userMatch = true;
-        if (userProfile && userProfile.role !== 'admin') {
-            userMatch = lead.dialerAssigned === userProfile.displayName;
-        }
-
-        return userMatch && franchiseeMatch && statusMatch && stateMatch;
+        return franchiseeMatch && statusMatch && stateMatch;
     });
-  }, [leads, filters, userProfile]);
+  }, [leads, filters]);
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead);
@@ -703,7 +704,7 @@ export default function LeadsMapClient() {
     });
   };
 
-  const handleCreateRouteFromProspects = () => {
+  const handleCreateRouteFromProspects = (selectedTravelMode: google.maps.TravelMode) => {
     if (!myLocation) {
         toast({
             variant: "destructive",
@@ -735,6 +736,7 @@ export default function LeadsMapClient() {
     }
 
     setSelectedRouteLeads(leadsForRouting);
+    handleCreateRoute(selectedTravelMode);
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -1191,7 +1193,7 @@ export default function LeadsMapClient() {
               </CardContent>
             </ScrollArea>
              <CardFooter>
-                 <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                 <Button onClick={() => travelMode && handleCreateRoute(travelMode)} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
                   {isCalculatingRoute ? <Loader /> : 'Re-calculate Route'}
                 </Button>
              </CardFooter>
@@ -1257,10 +1259,28 @@ export default function LeadsMapClient() {
                   </Table>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateRouteFromProspects} disabled={selectedProspects.length === 0}>
-                    <Route className="mr-2 h-4 w-4" />
-                    Create Route from Selected ({selectedProspects.length})
-                </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button disabled={selectedProspects.length === 0}>
+                            <Route className="mr-2 h-4 w-4" />
+                            Create Route from Selected ({selectedProspects.length})
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
+                            <Car className="mr-2 h-4 w-4" />
+                            Driving
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
+                            <Footprints className="mr-2 h-4 w-4" />
+                            Walking
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
+                             <Bike className="mr-2 h-4 w-4" />
+                            Bicycling
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
               </DialogFooter>
           </DialogContent>
       </Dialog>
@@ -1273,13 +1293,10 @@ export default function LeadsMapClient() {
                 <p className="font-bold">{selectedRouteLeads.length} stop(s) selected</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant={travelMode === window.google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
-              <Button variant={travelMode === window.google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
-              <Button variant={travelMode === window.google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
+              <Button variant={travelMode === window.google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
-            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !travelMode}>
-              {isCalculatingRoute ? <Loader /> : 'Create Route'}
-            </Button>
             <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
           </CardContent>
         </Card>
