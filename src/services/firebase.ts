@@ -133,8 +133,11 @@ async function getUserPhoneNumber(displayName: string): Promise<string | null> {
 
 
 async function getLeadFromFirebase(leadId: string, includeSubCollections = true): Promise<Lead | null> {
+    if (!leadId) {
+        console.error("getLeadFromFirebase called with an undefined or null leadId.");
+        return null;
+    }
     try {
-        console.log(`Fetching lead ${leadId} from Firebase...`);
         const leadRef = doc(firestore, 'leads', leadId);
         const docSnapshot = await getDoc(leadRef);
 
@@ -151,7 +154,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             address = data.address;
         } else if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
-            address1: data.address1,
+            address1: data.address1 || '',
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -162,10 +165,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customerEntityId'] || data['internalid'],
+          entityId: data['customerEntityId'] || data['internalid'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
-          status: safeGetStatus(data.customerStatus),
+          status: safeGetStatus(data.customerStatus || 'New'),
           statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus || 'N/A')}.`,
           address: address,
