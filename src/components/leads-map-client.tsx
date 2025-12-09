@@ -11,6 +11,7 @@ import {
   KmlLayer,
   DirectionsRenderer,
   DrawingManagerF,
+  CircleF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -236,6 +237,7 @@ export default function LeadsMapClient() {
     }
 
     setIsCalculatingRoute(true);
+    setDirections(null);
     const directionsService = new window.google.maps.DirectionsService();
 
     const origin = myLocation;
@@ -577,10 +579,11 @@ export default function LeadsMapClient() {
     };
 
     const handleClearRoute = () => {
-    setDirections(null);
-    setSelectedRouteLeads([]);
-    setShowRouteStops(false);
-  };
+        setDirections(null);
+        setSelectedRouteLeads([]);
+        setShowRouteStops(false);
+        setRouteName('');
+    };
 
   const handleCheckIn = (lead: MapLead) => {
     if (lead.isProspect) {
@@ -635,6 +638,38 @@ export default function LeadsMapClient() {
     }
   };
 
+
+    const onCircleComplete = useCallback((circle: google.maps.Circle) => {
+        if (!window.google || !map) return;
+        
+        const center = circle.getCenter();
+        const radius = circle.getRadius();
+        
+        if (!center || !radius) return;
+
+        const leadsInCircle = filteredLeads.filter(lead => {
+            if (lead.latitude && lead.longitude) {
+                const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(center, leadLatLng);
+                return distance <= radius;
+            }
+            return false;
+        });
+
+        setSelectedRouteLeads(leadsInCircle);
+        setShowRouteStops(true);
+        toast({ title: `${leadsInCircle.length} leads selected.`, description: "Review stops and create your route." });
+        
+        circle.setMap(null);
+        setIsDrawing(false);
+        if (drawingManagerRef.current) {
+            drawingManagerRef.current.setDrawingMode(null);
+        }
+    }, [map, filteredLeads, toast]);
+
+    const handleRemoveFromRoute = (leadId: string) => {
+        setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
+    };
 
   const onPolygonComplete = (polygon: google.maps.Polygon) => {
     if (!window.google) return;
@@ -700,7 +735,7 @@ export default function LeadsMapClient() {
     }
 
     setSelectedRouteLeads(leadsForRouting);
-    handleCreateRoute();
+    setShowRouteStops(true);
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -964,11 +999,11 @@ export default function LeadsMapClient() {
               {isDrawing && window.google && (
                 <DrawingManagerF
                   onLoad={(dm) => (drawingManagerRef.current = dm)}
-                  onPolygonComplete={onPolygonComplete}
-                  drawingMode={window.google.maps.drawing?.OverlayType.POLYGON}
+                  onCircleComplete={onCircleComplete}
+                  drawingMode={window.google.maps.drawing.OverlayType.CIRCLE}
                   options={{
                     drawingControl: false,
-                    polygonOptions: {
+                    circleOptions: {
                       fillColor: '#8884d8',
                       fillOpacity: 0.2,
                       strokeColor: '#8884d8',
@@ -1090,16 +1125,17 @@ export default function LeadsMapClient() {
           <>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Route Stops</span>
+                <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})</span>
                 <Button variant="ghost" size="icon" onClick={handleClearRoute}><X className="h-4 w-4"/></Button>
               </CardTitle>
-              {directions && (
                 <div className="space-y-2 pt-2">
-                    <CardDescription>
-                      Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
-                      <br />
-                      Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
-                    </CardDescription>
+                    {directions && (
+                        <CardDescription>
+                            Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                            <br />
+                            Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                        </CardDescription>
+                    )}
                     <div className="space-y-1">
                         <Label htmlFor="route-name">Route Name</Label>
                         <div className="flex gap-2">
@@ -1109,31 +1145,31 @@ export default function LeadsMapClient() {
                             value={routeName}
                             onChange={(e) => setRouteName(e.target.value)}
                         />
-                        <Button onClick={handleSaveRoute} disabled={!routeName}>
+                        <Button onClick={handleSaveRoute} disabled={!routeName || !directions}>
                             <Save className="mr-2 h-4 w-4" /> Save
                         </Button>
                         </div>
                     </div>
                 </div>
-              )}
             </CardHeader>
             <ScrollArea className="flex-grow">
               <CardContent className="space-y-2 pt-2">
-                {sortedRouteLegs.map(({ leg, lead }, index) => {
-                  if (!lead) return null;
+                {selectedRouteLeads.map((lead, index) => {
+                  const leg = directions?.routes[0].legs[index + 1];
                   return (
                     <Card key={lead.id} className="p-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-bold">{index + 1}. {lead.companyName}</p>
+                           <p className="font-bold">{waypointOrderMap.get(lead.id) || index + 1}. {lead.companyName}</p>
                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
                         </div>
                         <LeadStatusBadge status={lead.status} />
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-muted-foreground">
-                          {leg.duration?.text} &bull; {leg.distance?.text}
+                            {directions && leg ? `${leg.duration?.text} • ${leg.distance?.text}` : 'Calculating...'}
                         </p>
+                        <div className='flex gap-2'>
                         {lead.isProspect ? (
                             <Button size="sm" variant="secondary" onClick={() => setProspectToCreate(lead)}>
                                 <PlusCircle className="mr-2 h-4 w-4"/>
@@ -1145,12 +1181,21 @@ export default function LeadsMapClient() {
                                 Check In
                             </Button>
                         )}
+                         <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                        </div>
                       </div>
                     </Card>
                   )
                 })}
               </CardContent>
             </ScrollArea>
+             <CardFooter>
+                 <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                  {isCalculatingRoute ? <Loader /> : 'Re-calculate Route'}
+                </Button>
+             </CardFooter>
           </>
         )}
       </aside>
