@@ -701,8 +701,8 @@ export default function LeadsMapClient() {
         return;
     }
 
-    const leadsForRouting: MapLead[] = selectedProspects.map((p, index) => ({
-      id: p.place_id || `prospect-${index}`,
+    const leadsForRouting: MapLead[] = selectedProspects.map((p) => ({
+      id: p.place_id || `prospect-${p.name}`, // Use stable place_id
       companyName: p.name || 'Unknown Prospect',
       status: 'New' as LeadStatus,
       latitude: p.geometry?.location?.lat()!,
