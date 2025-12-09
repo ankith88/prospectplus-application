@@ -609,10 +609,12 @@ export default function LeadsMapClient() {
   };
 
   const handleCheckIn = (lead: MapLead) => {
-    if (lead.isProspect) {
-      setProspectToCreate(lead);
-    } else if (lead.id) {
-      window.open(`/leads/${lead.id}`, '_blank');
+    if (lead.id) {
+        window.open(`/leads/${lead.id}`, '_blank');
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: 'Checked in at location via map.'
+        });
     }
   };
 
@@ -1159,10 +1161,17 @@ export default function LeadsMapClient() {
                         <p className="text-xs text-muted-foreground">
                           {leg.duration?.text} &bull; {leg.distance?.text}
                         </p>
-                        <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                          <CheckSquare className="mr-2 h-4 w-4"/>
-                          Check In
-                        </Button>
+                        {lead.isProspect ? (
+                            <Button size="sm" variant="secondary" onClick={() => setProspectToCreate(lead)}>
+                                <PlusCircle className="mr-2 h-4 w-4"/>
+                                Add New Lead
+                            </Button>
+                        ) : (
+                            <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                                <CheckSquare className="mr-2 h-4 w-4"/>
+                                Check In
+                            </Button>
+                        )}
                       </div>
                     </Card>
                   )
