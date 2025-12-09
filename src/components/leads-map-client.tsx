@@ -15,7 +15,7 @@ import {
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import type { Lead, LeadStatus, Address } from '@/lib/types'
+import type { Lead, LeadStatus, Address, UserProfile } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
@@ -220,14 +220,14 @@ export default function LeadsMapClient() {
     }
   }, [map, toast]);
 
-  const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMode) => {
+const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMode, leadsForRoute: MapLead[]) => {
     if (!map) return;
-    if (selectedRouteLeads.length < 1) {
+    if (leadsForRoute.length < 1) {
         toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 lead to create a route." });
         return;
     }
-    if (selectedRouteLeads.length > 25) {
-        toast({ variant: "destructive", title: "Too many stops", description: `The maximum number of stops for a route is 25. You have selected ${selectedRouteLeads.length}.` });
+    if (leadsForRoute.length > 25) {
+        toast({ variant: "destructive", title: "Too many stops", description: `The maximum number of stops for a route is 25. You have selected ${leadsForRoute.length}.` });
         return;
     }
 
@@ -244,7 +244,7 @@ export default function LeadsMapClient() {
 
     const origin = myLocation;
     const destination = myLocation;
-    const waypoints = selectedRouteLeads.map(lead => ({
+    const waypoints = leadsForRoute.map(lead => ({
         location: { lat: lead.latitude!, lng: lead.longitude! },
         stopover: true,
     }));
@@ -268,7 +268,7 @@ export default function LeadsMapClient() {
             }
         }
     );
-}, [map, selectedRouteLeads, toast, myLocation, handleShowMyLocation]);
+}, [map, toast, myLocation, handleShowMyLocation]);
 
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -729,14 +729,9 @@ export default function LeadsMapClient() {
       isProspect: true, // Mark this as a prospect
       dialerAssigned: undefined,
     }));
-
-    if (leadsForRouting.length < 1) {
-      toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 prospect to create a route." });
-      return;
-    }
-
+    
     setSelectedRouteLeads(leadsForRouting);
-    handleCreateRoute(selectedTravelMode);
+    handleCreateRoute(selectedTravelMode, leadsForRouting);
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -1193,7 +1188,7 @@ export default function LeadsMapClient() {
               </CardContent>
             </ScrollArea>
              <CardFooter>
-                 <Button onClick={() => travelMode && handleCreateRoute(travelMode)} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                 <Button onClick={() => travelMode && handleCreateRoute(travelMode, selectedRouteLeads)} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
                   {isCalculatingRoute ? <Loader /> : 'Re-calculate Route'}
                 </Button>
              </CardFooter>
@@ -1284,23 +1279,6 @@ export default function LeadsMapClient() {
               </DialogFooter>
           </DialogContent>
       </Dialog>
-
-     {selectedRouteLeads.length > 0 && !showRouteStops && window.google && (
-        <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto shadow-2xl">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="flex items-center gap-2">
-                <Route className="h-5 w-5 text-primary" />
-                <p className="font-bold">{selectedRouteLeads.length} stop(s) selected</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant={travelMode === window.google.maps.TravelMode.DRIVING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.DRIVING)}><Car className="h-4 w-4" /></Button>
-              <Button variant={travelMode === window.google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
-              <Button variant={travelMode === window.google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => handleCreateRoute(window.google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
-            </div>
-            <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
-          </CardContent>
-        </Card>
-      )}
     </>
   )
 }
