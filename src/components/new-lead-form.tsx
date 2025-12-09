@@ -236,6 +236,8 @@ export function NewLeadForm() {
     const zip = searchParams.get('zip');
     const lat = searchParams.get('lat');
     const lng = searchParams.get('lng');
+    const websiteUrl = searchParams.get('websiteUrl');
+    const industryCategory = searchParams.get('industryCategory');
 
     if (companyName) form.setValue('companyName', companyName);
     if (street) form.setValue('address.street', street);
@@ -244,8 +246,13 @@ export function NewLeadForm() {
     if (zip) form.setValue('address.zip', zip);
     if (lat) form.setValue('address.lat', parseFloat(lat));
     if (lng) form.setValue('address.lng', parseFloat(lng));
+    if (websiteUrl) form.setValue('websiteUrl', websiteUrl);
+    if (industryCategory) form.setValue('industryCategory', industryCategory);
 
-  }, [searchParams, form]);
+    if(websiteUrl) {
+        handleAiProspect(websiteUrl);
+    }
+  }, [searchParams, form, handleAiProspect]);
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
@@ -349,7 +356,7 @@ export function NewLeadForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select an industry" />

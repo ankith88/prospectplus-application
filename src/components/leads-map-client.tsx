@@ -127,6 +127,12 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     address.city = get('locality') || get('postal_town');
     address.state = get('administrative_area_level_1', true);
     address.zip = get('postal_code');
+    const location = components.find(c => c.types.includes('location'))
+    if(location){
+        address.lat = (location as any).geometry.location.lat();
+        address.lng = (location as any).geometry.location.lng();
+    }
+
 
     return address as Address;
 };
@@ -624,6 +630,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     if (lead.isProspect) {
       const url = new URL('/leads/new', window.location.origin);
       url.searchParams.set('companyName', lead.companyName);
+      if (lead.websiteUrl) {
+          url.searchParams.set('websiteUrl', lead.websiteUrl);
+      }
+      if (prospectSearchQuery) {
+          url.searchParams.set('industryCategory', prospectSearchQuery);
+      }
       if (lead.address) {
         url.searchParams.set('street', lead.address.street);
         url.searchParams.set('city', lead.address.city);
@@ -686,6 +698,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   };
 
   const handleCreateRouteFromProspects = (selectedTravelMode: google.maps.TravelMode) => {
+    if (selectedProspects.length === 0) {
+        toast({ variant: 'destructive', title: 'No Prospects Selected', description: 'Please select one or more prospects to create a route.' });
+        return;
+    }
     if (!myLocation) {
         toast({
             variant: "destructive",
