@@ -270,7 +270,7 @@ export default function LeadsMapClient() {
 
   useEffect(() => {
     if (isLoaded && window.google) {
-      setTravelMode(window.google.maps.TravelMode.DRIVING);
+      setTravelMode(null);
     }
   }, [isLoaded]);
 
@@ -367,7 +367,7 @@ export default function LeadsMapClient() {
   
   const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult | null> => {
     if (!map) return Promise.resolve(null);
-    const placesService = new google.maps.places.PlacesService(map);
+    const placesService = new window.google.maps.places.PlacesService(map);
     return new Promise((resolve) => {
         placesService.getDetails({
             placeId,
@@ -387,7 +387,7 @@ export default function LeadsMapClient() {
     setIsSearchingNearby(true);
     setProspects([]);
     
-    const placesService = new google.maps.places.PlacesService(map);
+    const placesService = new window.google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
         location,
         radius: 2000, 
@@ -583,6 +583,7 @@ export default function LeadsMapClient() {
         setSelectedRouteLeads([]);
         setShowRouteStops(false);
         setRouteName('');
+        setTravelMode(null);
     };
 
   const handleCheckIn = (lead: MapLead) => {
@@ -657,8 +658,7 @@ export default function LeadsMapClient() {
         });
 
         setSelectedRouteLeads(leadsInCircle);
-        setShowRouteStops(true);
-        toast({ title: `${leadsInCircle.length} leads selected.`, description: "Review stops and create your route." });
+        toast({ title: `${leadsInCircle.length} leads selected.`, description: "Choose a travel mode and create your route." });
         
         circle.setMap(null);
         setIsDrawing(false);
@@ -735,7 +735,6 @@ export default function LeadsMapClient() {
     }
 
     setSelectedRouteLeads(leadsForRouting);
-    setShowRouteStops(true);
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
@@ -1278,7 +1277,7 @@ export default function LeadsMapClient() {
               <Button variant={travelMode === window.google.maps.TravelMode.WALKING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.WALKING)}><Footprints className="h-4 w-4" /></Button>
               <Button variant={travelMode === window.google.maps.TravelMode.BICYCLING ? 'default' : 'outline'} size="icon" onClick={() => setTravelMode(window.google.maps.TravelMode.BICYCLING)}><Bike className="h-4 w-4" /></Button>
             </div>
-            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length === 0}>
+            <Button onClick={handleCreateRoute} disabled={isCalculatingRoute || !travelMode}>
               {isCalculatingRoute ? <Loader /> : 'Create Route'}
             </Button>
             <Button variant="destructive" onClick={handleClearRoute}>Clear</Button>
