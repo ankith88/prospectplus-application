@@ -1,43 +1,55 @@
 
+'use client';
 import { notFound } from 'next/navigation'
 import { getLeadFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
 import type { Lead } from '@/lib/types'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
-export default async function LeadProfilePage({
+export default function LeadProfilePage({
   params,
 }: {
   params: { id: string }
 }) {
-  // const resolvedParams = React.use(params);
-  const { id } = params;
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  // params.then((resolvedData) => {
-  //   // Access the elements within 'resolvedData' here
-  //   console.log("Resolved data:", resolvedData);
-  //   // Example: If resolvedData is an object with a 'name' property
-  //   // console.log(resolvedData.name);
-  // }).catch((error) => {
-  //   // Handle any errors that occurred during Promise resolution
-  //   console.error("Error resolving Promise:", error);
-  // });
-  console.log('params: ' + params);
-  console.log('typeof params: ' + typeof params);
-  
+  useEffect(() => {
+    const { id } = params;
+    if (!id || typeof id !== 'string') {
+      setError(true);
+      setLoading(false);
+      return;
+    }
 
-  // Add a guard to ensure the ID is valid before fetching
-  if (!id || typeof id !== 'string') {
+    const fetchLead = async () => {
+      try {
+        const leadData = await getLeadFromFirebase(id, true);
+        if (!leadData) {
+          setError(true);
+        } else {
+          setLead(leadData);
+        }
+      } catch (e) {
+        console.error(e);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLead();
+  }, [params]);
+
+  if (error) {
     notFound();
-    return;
+    return null;
   }
 
-  // Fetch the lead and all its sub-collections on the server.
-  const lead: Lead | null = await getLeadFromFirebase(id, true);
-
-  if (!lead) {
-    notFound();
-    return;
+  if (loading || !lead) {
+    // You can return a loading spinner here if you have one
+    return <div>Loading...</div>;
   }
   
   return <LeadProfile 
