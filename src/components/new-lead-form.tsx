@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -154,7 +155,10 @@ export function NewLeadForm() {
         form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
         form.setValue('contact.title', primaryContact.title || '');
         form.setValue('contact.email', primaryContact.email || '');
-        form.setValue('contact.phone', primaryContact.phone || '');
+        // Only set phone if it's found, otherwise keep the Google one if it exists
+        if (primaryContact.phone && primaryContact.phone !== 'N/A') {
+          form.setValue('contact.phone', primaryContact.phone);
+        }
         toast({ title: 'Contact Found!', description: `Filled contact details for ${primaryContact.name}.` });
       } else {
         toast({ title: 'No Contacts Found', description: 'AI could not find specific contacts on the website.' });
@@ -238,6 +242,7 @@ export function NewLeadForm() {
     const lng = searchParams.get('lng');
     const websiteUrl = searchParams.get('websiteUrl');
     const industryCategory = searchParams.get('industryCategory');
+    const phone = searchParams.get('phone');
 
     if (companyName) form.setValue('companyName', companyName);
     if (street) form.setValue('address.street', street);
@@ -248,6 +253,7 @@ export function NewLeadForm() {
     if (lng) form.setValue('address.lng', parseFloat(lng));
     if (websiteUrl) form.setValue('websiteUrl', websiteUrl);
     if (industryCategory) form.setValue('industryCategory', industryCategory);
+    if (phone) form.setValue('contact.phone', phone);
 
     if(websiteUrl) {
         handleAiProspect(websiteUrl);

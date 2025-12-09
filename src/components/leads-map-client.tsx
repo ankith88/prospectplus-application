@@ -86,7 +86,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned'> & { isProspect?: boolean };
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean };
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -534,7 +534,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
                     const firstContact = hunterResult.contacts[0];
-                    const nameParts = firstContact.name?.split(' ') || [];
                     primaryContact = {
                         name: firstContact.name || 'Info',
                         title: firstContact.title || 'Primary Contact',
@@ -592,6 +591,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             latitude: newLeadData.address.lat,
                             longitude: newLeadData.address.lng,
                             dialerAssigned: undefined,
+                            customerPhone: newLeadData.contact.phone,
                         }
                     }
                     : p
@@ -632,6 +632,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       url.searchParams.set('companyName', lead.companyName);
       if (lead.websiteUrl) {
           url.searchParams.set('websiteUrl', lead.websiteUrl);
+      }
+      if (lead.customerPhone) {
+        url.searchParams.set('phone', lead.customerPhone);
       }
       if (prospectSearchQuery) {
           url.searchParams.set('industryCategory', prospectSearchQuery);
@@ -727,10 +730,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             websiteUrl: p.website || '',
             isProspect: true,
             dialerAssigned: undefined,
+            customerPhone: p.formatted_phone_number,
         };
     });
     
-    setSelectedRouteLeads(leadsForRouting);
     handleCreateRoute(selectedTravelMode, leadsForRouting);
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
