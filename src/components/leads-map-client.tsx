@@ -112,6 +112,25 @@ type SavedRoute = {
     travelMode: google.maps.TravelMode;
 };
 
+const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
+    const address: Partial<Address> = { country: 'Australia' };
+    const get = (type: string, useShortName = false) => {
+        const comp = components.find(c => c.types.includes(type));
+        return useShortName ? comp?.short_name : comp?.long_name;
+    };
+
+    const streetNumber = get('street_number');
+    const route = get('route');
+    
+    address.street = `${streetNumber || ''} ${route || ''}`.trim();
+    address.address1 = get('subpremise'); // For level, suite, etc.
+    address.city = get('locality') || get('postal_town');
+    address.state = get('administrative_area_level_1', true);
+    address.zip = get('postal_code');
+
+    return address as Address;
+};
+
 
 const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
@@ -600,7 +619,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   };
 
   const handleCreateLeadFromRoute = async () => {
-    if (!prospectToCreate) return;
+    if (!prospectToCreate || !prospectToCreate.address) return;
     
     setIsCreatingLead(true);
     
@@ -715,20 +734,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         return;
     }
 
-    const leadsForRouting: MapLead[] = selectedProspects.map((p) => ({
-      id: p.place_id || `prospect-${p.name}`, // Use stable place_id
-      companyName: p.name || 'Unknown Prospect',
-      status: 'New' as LeadStatus,
-      latitude: p.geometry?.location?.lat()!,
-      longitude: p.geometry?.location?.lng()!,
-      address: {
-        street: p.formatted_address || '',
-        city: '', state: '', zip: '', country: ''
-      },
-      websiteUrl: p.website || '',
-      isProspect: true, // Mark this as a prospect
-      dialerAssigned: undefined,
-    }));
+    const leadsForRouting: MapLead[] = selectedProspects.map((p) => {
+        const address = p.address_components ? parseAddressComponents(p.address_components) : { street: p.formatted_address || '', city: '', state: '', zip: '', country: 'Australia' };
+        address.lat = p.geometry?.location?.lat();
+        address.lng = p.geometry?.location?.lng();
+
+        return {
+            id: p.place_id || `prospect-${p.name}`,
+            companyName: p.name || 'Unknown Prospect',
+            status: 'New' as LeadStatus,
+            latitude: p.geometry?.location?.lat()!,
+            longitude: p.geometry?.location?.lng()!,
+            address: address,
+            websiteUrl: p.website || '',
+            isProspect: true,
+            dialerAssigned: undefined,
+        };
+    });
     
     setSelectedRouteLeads(leadsForRouting);
     handleCreateRoute(selectedTravelMode, leadsForRouting);
