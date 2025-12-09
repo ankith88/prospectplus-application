@@ -31,6 +31,7 @@ import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
 import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,7 +79,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData'> & { isProspect?: boolean };
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned'> & { isProspect?: boolean };
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -176,6 +177,8 @@ export default function LeadsMapClient() {
 
   const router = useRouter()
   const { toast } = useToast()
+  const { userProfile, loading: authLoading } = useAuth();
+
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -287,11 +290,13 @@ export default function LeadsMapClient() {
   }, []);
   
   useEffect(() => {
-    const storedRoutes = localStorage.getItem('savedMapRoutes');
-    if (storedRoutes) {
-      setSavedRoutes(JSON.parse(storedRoutes));
+    if (userProfile?.uid) {
+        const storedRoutes = localStorage.getItem(`savedMapRoutes_${userProfile.uid}`);
+        if (storedRoutes) {
+            setSavedRoutes(JSON.parse(storedRoutes));
+        }
     }
-  }, []);
+  }, [userProfile]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -304,9 +309,15 @@ export default function LeadsMapClient() {
         const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
         const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
         const stateMatch = filters.state === 'all' || lead.address?.state === filters.state;
-        return franchiseeMatch && statusMatch && stateMatch;
+        
+        let userMatch = true;
+        if (userProfile && userProfile.role !== 'admin') {
+            userMatch = lead.dialerAssigned === userProfile.displayName;
+        }
+
+        return userMatch && franchiseeMatch && statusMatch && stateMatch;
     });
-  }, [leads, filters]);
+  }, [leads, filters, userProfile]);
 
   const onMarkerClick = useCallback((lead: MapLead) => {
     setSelectedLead(lead);
@@ -538,6 +549,7 @@ export default function LeadsMapClient() {
                             industryCategory: newLeadData.industryCategory,
                             latitude: newLeadData.address.lat,
                             longitude: newLeadData.address.lng,
+                            dialerAssigned: undefined,
                         }
                     }
                     : p
@@ -679,6 +691,7 @@ export default function LeadsMapClient() {
       },
       websiteUrl: p.website || '',
       isProspect: true, // Mark this as a prospect
+      dialerAssigned: undefined,
     }));
 
     if (leadsForRouting.length < 1) {
@@ -712,7 +725,9 @@ export default function LeadsMapClient() {
 
         const updatedRoutes = [...savedRoutes, newRoute];
         setSavedRoutes(updatedRoutes);
-        localStorage.setItem('savedMapRoutes', JSON.stringify(updatedRoutes));
+        if (userProfile?.uid) {
+            localStorage.setItem(`savedMapRoutes_${userProfile.uid}`, JSON.stringify(updatedRoutes));
+        }
         setRouteName('');
         toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved.` });
     };
@@ -728,7 +743,9 @@ export default function LeadsMapClient() {
     const handleDeleteRoute = (routeName: string) => {
         const updatedRoutes = savedRoutes.filter(route => route.name !== routeName);
         setSavedRoutes(updatedRoutes);
-        localStorage.setItem('savedMapRoutes', JSON.stringify(updatedRoutes));
+        if (userProfile?.uid) {
+            localStorage.setItem(`savedMapRoutes_${userProfile.uid}`, JSON.stringify(updatedRoutes));
+        }
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
     };
 
@@ -738,7 +755,7 @@ export default function LeadsMapClient() {
     return <div>Error loading maps. Please check your API key and network connection.</div>
   }
 
-  if (!isLoaded || loadingLeads) {
+  if (!isLoaded || loadingLeads || authLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
