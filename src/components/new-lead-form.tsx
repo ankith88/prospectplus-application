@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
 import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -41,7 +41,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
 
 const phoneRegex = new RegExp(
@@ -317,106 +317,106 @@ export function NewLeadForm() {
     </AlertDialog>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="w-5 h-5" />
-              Find a Business
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-             <FormField
-              control={form.control}
-              name="companyName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Company Name*</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      ref={autocompleteInputRef}
-                      placeholder="Start typing a company name or address..."
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-         </Card>
-      
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" /> Company Details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField control={form.control} name="companyName" render={({ field }) => (
-                <FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={form.control} name="websiteUrl" render={({ field }) => (
-                <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField
-              control={form.control}
-              name="industryCategory"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+          <CardContent className="p-6 space-y-8">
+            {/* Section 1: Business Search */}
+            <div className="space-y-4">
+               <h3 className="text-lg font-medium flex items-center gap-2"><Search className="w-5 h-5" />Find a Business</h3>
+               <FormField
+                control={form.control}
+                name="companyName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Search by Company Name or Address*</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an industry" />
-                      </SelectTrigger>
+                      <Input
+                        {...field}
+                        ref={autocompleteInputRef}
+                        placeholder="Start typing to search Google Maps..."
+                      />
                     </FormControl>
-                    <SelectContent>
-                      {industryCategories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> Address*</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AddressAutocomplete />
-          </CardContent>
-        </Card>
+            <hr/>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2"><User className="w-5 h-5" /> Primary Contact*</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => handleAiProspect()} disabled={isProspecting}>
-                {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</>}
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <FormField control={form.control} name="contact.firstName" render={({ field }) => (
-                <FormItem><FormLabel>First Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-             <FormField control={form.control} name="contact.lastName" render={({ field }) => (
-                <FormItem><FormLabel>Last Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-             <FormField control={form.control} name="contact.title" render={({ field }) => (
-                <FormItem><FormLabel>Title*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-             <FormField control={form.control} name="contact.email" render={({ field }) => (
-                <FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-             <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
+            {/* Section 2: Company Details */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="companyName" render={({ field }) => (
+                    <FormItem><FormLabel>Company Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={form.control} name="websiteUrl" render={({ field }) => (
+                    <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField
+                  control={form.control}
+                  name="industryCategory"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Industry</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an industry" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {industryCategories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <hr/>
+
+             {/* Section 3: Address */}
+             <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
+                <AddressAutocomplete />
+             </div>
+
+            <hr/>
+            
+            {/* Section 4: Primary Contact */}
+            <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <h3 className="text-lg font-medium flex items-center gap-2"><User className="w-5 h-5" />Primary Contact*</h3>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleAiProspect()} disabled={isProspecting}>
+                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect Website</>}
+                    </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField control={form.control} name="contact.firstName" render={({ field }) => (
+                        <FormItem><FormLabel>First Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                    <FormField control={form.control} name="contact.lastName" render={({ field }) => (
+                        <FormItem><FormLabel>Last Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                    <FormField control={form.control} name="contact.title" render={({ field }) => (
+                        <FormItem><FormLabel>Title*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                    <FormField control={form.control} name="contact.email" render={({ field }) => (
+                        <FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                    <FormField control={form.control} name="contact.phone" render={({ field }) => (
+                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                </div>
+            </div>
+
           </CardContent>
         </Card>
 
@@ -430,3 +430,4 @@ export function NewLeadForm() {
     </>
   );
 }
+
