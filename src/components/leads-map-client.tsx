@@ -830,15 +830,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     pixelOffset: new window.google.maps.Size(0, -30),
   };
 
-  const sortedRouteLegs = directions?.routes[0]?.legs
-    .map((leg, index) => {
-      const orderIndex = directions.routes[0].waypoint_order[index - 1] ?? -1;
-      const lead = index === 0 ? null : selectedRouteLeads[orderIndex]; // leg 0 is from origin
-      return { leg, lead, stopNumber: index };
-    })
-    .filter(item => item.leg && item.lead)
-    ?? [];
-
   const waypointOrderMap = new Map<string, number>();
     if (directions) {
         directions.routes[0].waypoint_order.forEach((originalIndex, optimizedIndex) => {
@@ -848,6 +839,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             }
         });
     }
+
+  const sortedRouteLegs = directions?.routes[0]?.legs
+    .map((leg, index) => {
+        if (index === 0) return { leg, lead: null, stopNumber: 0 }; // Origin
+        const orderIndex = directions.routes[0].waypoint_order[index - 1];
+        const lead = selectedRouteLeads[orderIndex];
+        return { leg, lead, stopNumber: index };
+    })
+    .filter(item => item.leg && item.lead) ?? [];
+
 
   return (
     <>
