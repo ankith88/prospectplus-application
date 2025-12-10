@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getArchivedLeads } from '@/services/firebase'
+import { getArchivedLeads, getLastNote } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns'
@@ -37,6 +36,7 @@ import type { DateRange } from 'react-day-picker'
 import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { useToast } from '@/hooks/use-toast'
+import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -66,11 +66,21 @@ export default function ArchivedLeadsClientPage() {
 
   const [filters, setFilters] = useState({
     companyName: '',
-    status: 'all',
-    franchisee: '',
-    industryCategory: '',
+    status: [] as string[],
+    franchisee: [] as string[],
     date: undefined as DateRange | undefined,
   });
+
+  const uniqueFranchisees: Option[] = useMemo(() => {
+    if (loading) return [];
+    const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads, loading]);
+
+  const statusOptions: Option[] = useMemo(() => {
+    return archivedStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, []);
+
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -102,7 +112,7 @@ export default function ArchivedLeadsClientPage() {
   };
 
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[] | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
     setCurrentPage(1); 
   };
@@ -110,9 +120,8 @@ export default function ArchivedLeadsClientPage() {
   const clearFilters = () => {
     setFilters({
       companyName: '',
-      status: 'all',
-      franchisee: '',
-      industryCategory: '',
+      status: [],
+      franchisee: [],
       date: undefined,
     });
     setCurrentPage(1);
@@ -121,10 +130,9 @@ export default function ArchivedLeadsClientPage() {
   const archivedLeads = useMemo(() => {
      return allLeads.filter(lead => {
         const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
-        const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
-        const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
-        const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
-
+        const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
+        const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
+        
         let dateMatch = true;
         if (filters.date?.from && lead.activity?.[0]) {
             const lastActivityDate = new Date(lead.activity[0].date);
@@ -133,7 +141,7 @@ export default function ArchivedLeadsClientPage() {
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && industryMatch && dateMatch;
+        return companyMatch && statusMatch && franchiseeMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -323,7 +331,7 @@ export default function ArchivedLeadsClientPage() {
     )
   }
   
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
 
   return (
     <>
@@ -353,32 +361,28 @@ export default function ArchivedLeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
-                            <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                                <SelectTrigger id="status">
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Archived</SelectItem>
-                                    {archivedStatuses.sort().map(status => (
-                                        <SelectItem key={status} value={status}>{status === 'Won' ? 'Signed' : status}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                             <MultiSelectCombobox
+                                options={statusOptions}
+                                selected={filters.status}
+                                onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                                placeholder="Select statuses..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="franchisee">Franchisee</Label>
-                            <Input id="franchisee" value={filters.franchisee} onChange={(e) => handleFilterChange('franchisee', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="industry">Industry</Label>
-                            <Input id="industry" value={filters.industryCategory} onChange={(e) => handleFilterChange('industryCategory', e.target.value)} />
+                             <MultiSelectCombobox
+                                options={uniqueFranchisees}
+                                selected={filters.franchisee}
+                                onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                placeholder="Select franchisees..."
+                            />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="date">Date Archived</Label>
@@ -603,5 +607,4 @@ export default function ArchivedLeadsClientPage() {
     </>
   )
 }
-
     
