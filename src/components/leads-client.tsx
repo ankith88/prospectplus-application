@@ -40,6 +40,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format } from 'date-fns'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'industryCategory';
@@ -75,7 +76,7 @@ export default function LeadsClientPage() {
   const { toast } = useToast();
   const [filters, setFilters] = useState({
     companyName: '',
-    status: 'all',
+    status: [] as string[],
     franchisee: '',
     industryCategory: '',
   });
@@ -137,14 +138,14 @@ export default function LeadsClientPage() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
   const clearFilters = () => {
     setFilters({
       companyName: '',
-      status: 'all',
+      status: [],
       franchisee: '',
       industryCategory: '',
     });
@@ -153,7 +154,7 @@ export default function LeadsClientPage() {
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
       const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
-      const statusMatch = filters.status !== 'all' ? lead.status === filters.status : true;
+      const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status);
@@ -591,7 +592,9 @@ export default function LeadsClientPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
+  
+  const leadStatusOptions: Option[] = (['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
 
   return (
     <>
@@ -628,15 +631,12 @@ export default function LeadsClientPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
-                            <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                                <SelectTrigger id="status">
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    {(['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectCombobox
+                                options={leadStatusOptions}
+                                selected={filters.status}
+                                onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                                placeholder="Select statuses..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="franchisee">Franchisee</Label>
@@ -1176,5 +1176,3 @@ export default function LeadsClientPage() {
     </>
   )
 }
-
-    

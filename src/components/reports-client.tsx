@@ -24,6 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getAllCallActivities, getAllLeadsForReport, getAllAppointments, getAllUsers } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
+import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
+
 
 const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'New': '#A0A0A0', // Neutral Gray
@@ -77,23 +79,23 @@ export default function ReportsClientPage() {
 
 
   const [filters, setFilters] = useState({
-    status: 'all' as LeadStatus | 'all',
+    status: [] as string[],
     callDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
-    dialerAssigned: 'all',
-    salesRepAssigned: 'all',
-    appointmentAssignedTo: 'all',
+    dialerAssigned: [] as string[],
+    salesRepAssigned: [] as string[],
+    appointmentAssignedTo: [] as string[],
   });
   
-  const allSalesReps = useMemo(() => {
+  const allSalesRepsOptions: Option[] = useMemo(() => {
     const reps = new Set(allLeads.map(l => l.salesRepAssigned).filter(Boolean));
-    return Array.from(reps as string[]);
+    return Array.from(reps as string[]).map(r => ({ value: r, label: r }));
   }, [allLeads]);
 
-  const allAppointmentAssignees = useMemo(() => {
+  const allAppointmentAssigneesOptions: Option[] = useMemo(() => {
     const assignees = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(assignees as string[]);
+    return Array.from(assignees as string[]).map(a => ({ value: a, label: a }));
   }, [allAppointments]);
 
   useEffect(() => {
@@ -109,7 +111,7 @@ export default function ReportsClientPage() {
 
   useEffect(() => {
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
-      handleFilterChange('dialerAssigned', userProfile.displayName);
+      handleFilterChange('dialerAssigned', [userProfile.displayName]);
     }
   }, [userProfile]);
   
@@ -155,13 +157,13 @@ export default function ReportsClientPage() {
 
   const clearFilters = () => {
     setFilters({
-      status: 'all',
+      status: [],
       callDate: undefined,
       appointmentDate: undefined,
       duration: 'all',
-      dialerAssigned: userProfile?.role === 'admin' ? 'all' : userProfile?.displayName || 'all',
-      salesRepAssigned: 'all',
-      appointmentAssignedTo: 'all',
+      dialerAssigned: userProfile?.role === 'admin' ? [] : (userProfile?.displayName ? [userProfile.displayName] : []),
+      salesRepAssigned: [],
+      appointmentAssignedTo: [],
     });
   };
 
@@ -195,9 +197,9 @@ export default function ReportsClientPage() {
 
   const filteredLeads = useMemo(() => {
      return (allLeads || []).filter(lead => {
-        const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
-        const salesRepMatch = filters.salesRepAssigned === 'all' || lead.salesRepAssigned === filters.salesRepAssigned;
-        const statusMatch = filters.status === 'all' || lead.status === filters.status;
+        const dialerMatch = filters.dialerAssigned.length === 0 || (lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned));
+        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(lead.status);
         
         let callDateMatch = true;
         if (filters.callDate?.from) {
@@ -214,8 +216,7 @@ export default function ReportsClientPage() {
             callDateMatch = hasMatchingActivity || hasMatchingAppointment;
         }
         
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || (allAppointments || []).some(a => a.leadId === lead.id && a.assignedTo === filters.appointmentAssignedTo);
-
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === lead.id && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
         return dialerMatch && salesRepMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
     });
@@ -224,9 +225,9 @@ export default function ReportsClientPage() {
   const filteredCalls = useMemo(() => {
     return (allCalls || []).filter(call => {
         const lead = (allLeads || []).find(l => l.id === call.leadId);
-        const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
-        const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
-        const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
+        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
+        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead?.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
 
         let callDateMatch = true;
         if (filters.callDate?.from) {
@@ -247,8 +248,7 @@ export default function ReportsClientPage() {
             }
         };
 
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo === filters.appointmentAssignedTo);
-
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
         return dialerMatch && salesRepMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
@@ -260,10 +260,10 @@ export default function ReportsClientPage() {
           return false;
         }
         const lead = (allLeads || []).find(l => l.id === appointment.leadId);
-        const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
-        const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
-        const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || appointment.assignedTo === filters.appointmentAssignedTo;
+        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
+        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead?.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
 
         let creationDateMatch = true;
         if (filters.callDate?.from) {
@@ -585,14 +585,13 @@ export default function ReportsClientPage() {
   }, [filteredCalls, filteredLeads, filteredAppointments, allLeads]);
   
 
-  const hasActiveFilters = 
-    (filters.dialerAssigned !== 'all' && userProfile?.role === 'admin') || 
-    (filters.salesRepAssigned !== 'all') ||
-    filters.status !== 'all' || 
-    !!filters.callDate || 
-    !!filters.appointmentDate ||
-    filters.duration !== 'all' ||
-    filters.appointmentAssignedTo !== 'all';
+  const hasActiveFilters = filters.dialerAssigned.length > 0 ||
+                           filters.salesRepAssigned.length > 0 ||
+                           filters.status.length > 0 ||
+                           !!filters.callDate ||
+                           !!filters.appointmentDate ||
+                           filters.duration !== 'all' ||
+                           filters.appointmentAssignedTo.length > 0;
 
   if (authLoading || !userProfile || loading) {
     return (
@@ -616,6 +615,9 @@ export default function ReportsClientPage() {
   );
 
   const chartConfig = {};
+  
+  const leadStatusOptions: Option[] = (['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
+  const dialerOptions: Option[] = allDialers.map(d => ({ value: d, label: d }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -648,61 +650,40 @@ export default function ReportsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="user">Assigned To (Dialer)</Label>
-                            <Select 
-                                value={filters.dialerAssigned} 
-                                onValueChange={(value) => handleFilterChange('dialerAssigned', value)}
-                                disabled={userProfile?.role !== 'admin'}
-                            >
-                            <SelectTrigger id="user">
-                                <SelectValue placeholder="Select user" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {userProfile?.role === 'admin' && <SelectItem value="all">All Users</SelectItem>}
-                                {allDialers.filter(d => d).map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={dialerOptions}
+                            selected={filters.dialerAssigned}
+                            onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)}
+                            placeholder="Select users..."
+                            className={userProfile?.role !== 'admin' ? 'cursor-not-allowed' : ''}
+                        />
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="salesRep">Sales Rep Assigned</Label>
-                        <Select 
-                            value={filters.salesRepAssigned} 
-                            onValueChange={(value) => handleFilterChange('salesRepAssigned', value)}
-                        >
-                        <SelectTrigger id="salesRep">
-                            <SelectValue placeholder="Select sales rep" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Sales Reps</SelectItem>
-                            {allSalesReps.map(rep => <SelectItem key={rep} value={rep}>{rep}</SelectItem>)}
-                        </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={allSalesRepsOptions}
+                            selected={filters.salesRepAssigned}
+                            onSelectedChange={(selected) => handleFilterChange('salesRepAssigned', selected)}
+                            placeholder="Select sales reps..."
+                        />
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="appointmentAssignedTo">Assigned To (Appointment)</Label>
-                        <Select 
-                            value={filters.appointmentAssignedTo} 
-                            onValueChange={(value) => handleFilterChange('appointmentAssignedTo', value)}
-                        >
-                        <SelectTrigger id="appointmentAssignedTo">
-                            <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Users</SelectItem>
-                            {allAppointmentAssignees.map(assignee => <SelectItem key={assignee} value={assignee}>{assignee}</SelectItem>)}
-                        </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={allAppointmentAssigneesOptions}
+                            selected={filters.appointmentAssignedTo}
+                            onSelectedChange={(selected) => handleFilterChange('appointmentAssignedTo', selected)}
+                            placeholder="Select users..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
-                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                            <SelectTrigger id="status">
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={leadStatusOptions}
+                            selected={filters.status}
+                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            placeholder="Select statuses..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="callDate">Call/Creation Date</Label>

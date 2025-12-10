@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from './ui/scroll-area'
 import { Checkbox } from './ui/checkbox'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
@@ -76,14 +77,14 @@ export default function CallsClientPage() {
 
 
   const [filters, setFilters] = useState({
-    user: 'all',
+    user: [] as string[],
     date: undefined as DateRange | undefined,
     duration: 'all',
     leadName: '',
-    status: 'all' as LeadStatus | 'all',
+    status: [] as string[],
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
-    reviewedBy: 'all',
-    reviewCategory: 'all',
+    reviewedBy: [] as string[],
+    reviewCategory: [] as string[],
   });
 
   const router = useRouter();
@@ -123,13 +124,13 @@ export default function CallsClientPage() {
     }
   }, [user, authLoading, router]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
     setCurrentPage(1);
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', date: undefined, duration: 'all', leadName: '', status: 'all', reviewed: 'all', reviewedBy: 'all', reviewCategory: 'all' });
+    setFilters({ user: [], date: undefined, duration: 'all', leadName: '', status: [], reviewed: 'all', reviewedBy: [], reviewCategory: [] });
      setCurrentPage(1);
   };
   
@@ -162,7 +163,7 @@ export default function CallsClientPage() {
     }
 
     return callsToFilter.filter(call => {
-        const userMatch = filters.user === 'all' || call.dialerAssigned === filters.user;
+        const userMatch = filters.user.length === 0 || (call.dialerAssigned && filters.user.includes(call.dialerAssigned));
         
         let dateMatch = true;
         if (filters.date?.from) {
@@ -184,14 +185,14 @@ export default function CallsClientPage() {
         };
 
         const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
-        const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
+        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
         
         const reviewedMatch = filters.reviewed === 'all' || 
                               (filters.reviewed === 'reviewed' && !!call.review) ||
                               (filters.reviewed === 'not_reviewed' && !call.review);
                               
-        const reviewedByMatch = filters.reviewedBy === 'all' || call.review?.reviewer === filters.reviewedBy;
-        const reviewCategoryMatch = filters.reviewCategory === 'all' || call.review?.category === filters.reviewCategory;
+        const reviewedByMatch = filters.reviewedBy.length === 0 || (call.review?.reviewer && filters.reviewedBy.includes(call.review.reviewer));
+        const reviewCategoryMatch = filters.reviewCategory.length === 0 || (call.review?.category && filters.reviewCategory.includes(call.review.category));
 
         const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
 
@@ -250,15 +251,18 @@ export default function CallsClientPage() {
 
   const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
   
-  const allUsers = useMemo(() => {
+  const allUsersOptions: Option[] = useMemo(() => {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
-      return Array.from(users as string[]);
+      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
   }, [allCalls]);
 
-  const allReviewers = useMemo(() => {
+  const allReviewersOptions: Option[] = useMemo(() => {
       const reviewers = new Set(allCalls.map(c => c.review?.reviewer).filter(Boolean));
-      return Array.from(reviewers as string[]);
+      return Array.from(reviewers as string[]).map(r => ({ value: r, label: r }));
   }, [allCalls]);
+  
+  const leadStatusOptions: Option[] = (['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
+  const reviewCategoryOptions: Option[] = reviewCategories.map(c => ({ value: c, label: c }));
 
   const transcriptsByCallId = useMemo(() => {
     return allTranscripts.reduce((acc, transcript) => {
@@ -367,7 +371,7 @@ export default function CallsClientPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all');
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
 
   const ReviewCategoryBadge = ({ category }: { category?: ReviewCategory }) => {
     if (!category) return <span className="text-muted-foreground">N/A</span>;
@@ -515,41 +519,32 @@ export default function CallsClientPage() {
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
-                             <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
-                                <SelectTrigger id="user">
-                                    <SelectValue placeholder="Select user" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Users</SelectItem>
-                                    {allUsers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                             <MultiSelectCombobox
+                                options={allUsersOptions}
+                                selected={filters.user}
+                                onSelectedChange={(selected) => handleFilterChange('user', selected)}
+                                placeholder="Select users..."
+                            />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="reviewedBy">Reviewed By</Label>
-                             <Select value={filters.reviewedBy} onValueChange={(value) => handleFilterChange('reviewedBy', value)}>
-                                <SelectTrigger id="reviewedBy">
-                                    <SelectValue placeholder="Select reviewer" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Reviewers</SelectItem>
-                                    {allReviewers.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                             <MultiSelectCombobox
+                                options={allReviewersOptions}
+                                selected={filters.reviewedBy}
+                                onSelectedChange={(selected) => handleFilterChange('reviewedBy', selected)}
+                                placeholder="Select reviewers..."
+                            />
                         </div>
                        </>
                     )}
                      <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
-                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                            <SelectTrigger id="status">
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={leadStatusOptions}
+                            selected={filters.status}
+                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            placeholder="Select statuses..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="reviewed">Review Status</Label>
@@ -566,15 +561,12 @@ export default function CallsClientPage() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="reviewCategory">Review Category</Label>
-                        <Select value={filters.reviewCategory} onValueChange={(value) => handleFilterChange('reviewCategory', value)}>
-                            <SelectTrigger id="reviewCategory">
-                                <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Categories</SelectItem>
-                                {reviewCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={reviewCategoryOptions}
+                            selected={filters.reviewCategory}
+                            onSelectedChange={(selected) => handleFilterChange('reviewCategory', selected)}
+                            placeholder="Select categories..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="date">Date</Label>
