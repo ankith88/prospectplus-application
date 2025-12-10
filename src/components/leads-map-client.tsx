@@ -291,6 +291,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             if (status === window.google.maps.DirectionsStatus.OK) {
                 setDirections(result);
                 setShowRouteStops(true);
+                // Also set the selected leads for the route stops UI
+                setSelectedRouteLeads(leadsForRoute);
             } else {
                 console.error(`error fetching directions ${result}`);
                 toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
