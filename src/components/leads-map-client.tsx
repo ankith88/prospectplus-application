@@ -127,10 +127,13 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     address.city = get('locality') || get('postal_town');
     address.state = get('administrative_area_level_1', true);
     address.zip = get('postal_code');
-    const location = components.find(c => c.types.includes('location'))
-    if(location){
-        address.lat = (location as any).geometry.location.lat();
-        address.lng = (location as any).geometry.location.lng();
+    
+    // This is a bit of a hack to get lat/lng, as it's not directly in address_components
+    // The correct way is to use place.geometry.location if available.
+    // This is a fallback.
+    if ((components as any).geometry?.location) {
+        address.lat = (components as any).geometry.location.lat();
+        address.lng = (components as any).geometry.location.lng();
     }
 
 
@@ -640,10 +643,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
           url.searchParams.set('industryCategory', prospectSearchQuery);
       }
       if (lead.address) {
-        url.searchParams.set('street', lead.address.street);
-        url.searchParams.set('city', lead.address.city);
-        url.searchParams.set('state', lead.address.state);
-        url.searchParams.set('zip', lead.address.zip);
+        if(lead.address.street) url.searchParams.set('street', lead.address.street);
+        if(lead.address.city) url.searchParams.set('city', lead.address.city);
+        if(lead.address.state) url.searchParams.set('state', lead.address.state);
+        if(lead.address.zip) url.searchParams.set('zip', lead.address.zip);
         if (lead.address.lat) url.searchParams.set('lat', lead.address.lat.toString());
         if (lead.address.lng) url.searchParams.set('lng', lead.address.lng.toString());
       }
@@ -676,7 +679,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         });
 
         setSelectedRouteLeads(leadsInCircle);
-        toast({ title: `${leadsInCircle.length} leads selected.`, description: "Choose a travel mode and create your route." });
         
         circle.setMap(null);
         setIsDrawing(false);
@@ -707,7 +709,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
     
     const leadsForRouting: MapLead[] = selectedProspects.map((p) => {
-        const address = p.address_components ? parseAddressComponents(p.address_components) : { street: p.formatted_address || '', city: '', state: '', zip: '', country: 'Australia' };
+        const addressComponents = p.address_components || [];
+        let address: Address;
+
+        if (addressComponents.length > 0) {
+          address = parseAddressComponents(addressComponents);
+        } else {
+          address = { street: p.formatted_address || '', city: '', state: '', zip: '', country: 'Australia' };
+        }
+        
         address.lat = p.geometry?.location?.lat();
         address.lng = p.geometry?.location?.lng();
 
@@ -725,12 +735,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         };
     });
     
-    // Set the selected leads for routing display
-    setSelectedRouteLeads(leadsForRouting);
-    // Directly call the route creation logic
     handleCreateRoute(selectedTravelMode, leadsForRouting);
-    
-    // Close dialog and clear selections
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
