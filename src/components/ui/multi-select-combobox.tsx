@@ -66,9 +66,19 @@ export function MultiSelectCombobox({
                   <Badge
                     key={value}
                     variant="secondary"
-                    className="mr-1"
+                    className="mr-1 flex items-center gap-1"
                   >
                     {option?.label || value}
+                    <button
+                      className="appearance-none rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelect(value);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                      <span className="sr-only">Remove {option?.label}</span>
+                    </button>
                   </Badge>
                 );
               })
@@ -89,6 +99,7 @@ export function MultiSelectCombobox({
                 <CommandItem
                   key={option.value}
                   onSelect={() => handleSelect(option.value)}
+                  className="cursor-pointer"
                 >
                   <Check
                     className={cn(
