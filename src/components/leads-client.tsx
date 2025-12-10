@@ -79,7 +79,7 @@ export default function LeadsClientPage() {
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
-    franchisee: '',
+    franchisee: [] as string[],
     industryCategory: '',
   });
   
@@ -148,7 +148,7 @@ export default function LeadsClientPage() {
     setFilters({
       companyName: '',
       status: [],
-      franchisee: '',
+      franchisee: [],
       industryCategory: '',
     });
   };
@@ -157,7 +157,7 @@ export default function LeadsClientPage() {
     let leads = allLeads.filter(lead => {
       const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
-      const franchiseeMatch = filters.franchisee ? (lead.franchisee || '').toLowerCase().includes(filters.franchisee.toLowerCase()) : true;
+      const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status);
 
@@ -597,6 +597,12 @@ export default function LeadsClientPage() {
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
+  
+  const uniqueFranchisees: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+
 
   return (
     <>
@@ -642,11 +648,12 @@ export default function LeadsClientPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="franchisee">Franchisee</Label>
-                            <Input id="franchisee" value={filters.franchisee} onChange={(e) => handleFilterChange('franchisee', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="industry">Industry</Label>
-                            <Input id="industry" value={filters.industryCategory} onChange={(e) => handleFilterChange('industryCategory', e.target.value)} />
+                             <MultiSelectCombobox
+                                options={uniqueFranchisees}
+                                selected={filters.franchisee}
+                                onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                placeholder="Select franchisees..."
+                            />
                         </div>
                     </CardContent>
                     {hasActiveFilters && (
