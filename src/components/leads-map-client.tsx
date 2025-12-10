@@ -686,7 +686,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
-    }, [map, filteredLeads, toast]);
+    }, [map, filteredLeads]);
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
