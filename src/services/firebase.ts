@@ -378,6 +378,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 leadType: data.leadType,
                 discoveryData: data.discoveryData,
                 demoCompleted: data.demoCompleted,
+                franchisee: data.franchisee, // Add this line
                 activity: [] // Activity will be populated by other functions if needed
             } as Lead;
         });
