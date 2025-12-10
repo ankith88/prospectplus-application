@@ -194,7 +194,7 @@ export default function ReportsClientPage() {
   };
 
   const filteredLeads = useMemo(() => {
-     return allLeads.filter(lead => {
+     return (allLeads || []).filter(lead => {
         const dialerMatch = filters.dialerAssigned === 'all' || lead.dialerAssigned === filters.dialerAssigned;
         const salesRepMatch = filters.salesRepAssigned === 'all' || lead.salesRepAssigned === filters.salesRepAssigned;
         const statusMatch = filters.status === 'all' || lead.status === filters.status;
@@ -204,8 +204,8 @@ export default function ReportsClientPage() {
             const fromDate = startOfDay(filters.callDate.from);
             const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
             
-            const hasMatchingActivity = allCalls.some(c => c.leadId === lead.id && new Date(c.date) >= fromDate && new Date(c.date) <= toDate);
-            const hasMatchingAppointment = allAppointments.some(a => {
+            const hasMatchingActivity = (allCalls || []).some(c => c.leadId === lead.id && new Date(c.date) >= fromDate && new Date(c.date) <= toDate);
+            const hasMatchingAppointment = (allAppointments || []).some(a => {
                 if (a.leadId !== lead.id) return false;
                 const createdDate = parseDateString(a.appointmentDate);
                 if (!createdDate) return false;
@@ -214,7 +214,7 @@ export default function ReportsClientPage() {
             callDateMatch = hasMatchingActivity || hasMatchingAppointment;
         }
         
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || allAppointments.some(a => a.leadId === lead.id && a.assignedTo === filters.appointmentAssignedTo);
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || (allAppointments || []).some(a => a.leadId === lead.id && a.assignedTo === filters.appointmentAssignedTo);
 
 
         return dialerMatch && salesRepMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
@@ -222,8 +222,8 @@ export default function ReportsClientPage() {
   }, [allLeads, filters, allCalls, allAppointments]);
 
   const filteredCalls = useMemo(() => {
-    return allCalls.filter(call => {
-        const lead = allLeads.find(l => l.id === call.leadId);
+    return (allCalls || []).filter(call => {
+        const lead = (allLeads || []).find(l => l.id === call.leadId);
         const dialerMatch = filters.dialerAssigned === 'all' || call.dialerAssigned === filters.dialerAssigned;
         const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
         const statusMatch = filters.status === 'all' || call.leadStatus === filters.status;
@@ -247,7 +247,7 @@ export default function ReportsClientPage() {
             }
         };
 
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo === filters.appointmentAssignedTo);
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo === 'all' || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo === filters.appointmentAssignedTo);
 
 
         return dialerMatch && salesRepMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
@@ -255,11 +255,11 @@ export default function ReportsClientPage() {
   }, [allCalls, allLeads, filters, allAppointments]);
   
   const filteredAppointments = useMemo(() => {
-    return allAppointments.filter(appointment => {
+    return (allAppointments || []).filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') {
           return false;
         }
-        const lead = allLeads.find(l => l.id === appointment.leadId);
+        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
         const dialerMatch = filters.dialerAssigned === 'all' || appointment.dialerAssigned === filters.dialerAssigned;
         const salesRepMatch = filters.salesRepAssigned === 'all' || lead?.salesRepAssigned === filters.salesRepAssigned;
         const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
@@ -288,7 +288,7 @@ export default function ReportsClientPage() {
 
 
   const stats = useMemo(() => {
-    const leadsMap = new Map(allLeads.map(l => [l.id, l]));
+    const leadsMap = new Map((allLeads || []).map(l => [l.id, l]));
     const validCalls = filteredCalls.filter(c => c.callId);
     const uniqueCallIds = new Set(validCalls.map(c => c.callId));
     const totalCalls = uniqueCallIds.size;
