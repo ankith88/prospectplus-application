@@ -84,18 +84,18 @@ export default function ReportsClientPage() {
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
-    salesRepAssigned: [] as string[],
+    franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
   });
-  
-  const allSalesRepsOptions: Option[] = useMemo(() => {
-    const reps = new Set(allLeads.map(l => l.salesRepAssigned).filter(Boolean));
-    return Array.from(reps as string[]).map(r => ({ value: r, label: r }));
-  }, [allLeads]);
 
+  const allFranchiseesOptions: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  
   const allAppointmentAssigneesOptions: Option[] = useMemo(() => {
     const assignees = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(assignees as string[]).map(a => ({ value: a, label: a }));
+    return Array.from(assignees as string[]).map(a => ({ value: a, label: a })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allAppointments]);
 
   useEffect(() => {
@@ -162,7 +162,7 @@ export default function ReportsClientPage() {
       appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: userProfile?.role === 'admin' ? [] : (userProfile?.displayName ? [userProfile.displayName] : []),
-      salesRepAssigned: [],
+      franchisee: [],
       appointmentAssignedTo: [],
     });
   };
@@ -198,7 +198,7 @@ export default function ReportsClientPage() {
   const filteredLeads = useMemo(() => {
      return (allLeads || []).filter(lead => {
         const dialerMatch = filters.dialerAssigned.length === 0 || (lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned));
-        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(lead.status);
         
         let callDateMatch = true;
@@ -218,7 +218,7 @@ export default function ReportsClientPage() {
         
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === lead.id && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
-        return dialerMatch && salesRepMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
     });
   }, [allLeads, filters, allCalls, allAppointments]);
 
@@ -226,7 +226,7 @@ export default function ReportsClientPage() {
     return (allCalls || []).filter(call => {
         const lead = (allLeads || []).find(l => l.id === call.leadId);
         const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
-        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead?.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
 
         let callDateMatch = true;
@@ -250,7 +250,7 @@ export default function ReportsClientPage() {
 
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
-        return dialerMatch && salesRepMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
   }, [allCalls, allLeads, filters, allAppointments]);
   
@@ -261,7 +261,7 @@ export default function ReportsClientPage() {
         }
         const lead = (allLeads || []).find(l => l.id === appointment.leadId);
         const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
-        const salesRepMatch = filters.salesRepAssigned.length === 0 || (lead?.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
 
@@ -282,7 +282,7 @@ export default function ReportsClientPage() {
             appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
-        return dialerMatch && salesRepMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
   }, [allAppointments, allLeads, filters]);
 
@@ -586,7 +586,7 @@ export default function ReportsClientPage() {
   
 
   const hasActiveFilters = filters.dialerAssigned.length > 0 ||
-                           filters.salesRepAssigned.length > 0 ||
+                           filters.franchisee.length > 0 ||
                            filters.status.length > 0 ||
                            !!filters.callDate ||
                            !!filters.appointmentDate ||
@@ -616,8 +616,8 @@ export default function ReportsClientPage() {
 
   const chartConfig = {};
   
-  const leadStatusOptions: Option[] = (['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
-  const dialerOptions: Option[] = allDialers.map(d => ({ value: d, label: d }));
+  const leadStatusOptions: Option[] = (['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+  const dialerOptions: Option[] = allDialers.map(d => ({ value: d, label: d })).sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <div className="flex flex-col gap-6">
@@ -659,12 +659,12 @@ export default function ReportsClientPage() {
                         />
                     </div>
                      <div className="space-y-2">
-                        <Label htmlFor="salesRep">Sales Rep Assigned</Label>
+                        <Label htmlFor="franchisee">Franchisee</Label>
                         <MultiSelectCombobox
-                            options={allSalesRepsOptions}
-                            selected={filters.salesRepAssigned}
-                            onSelectedChange={(selected) => handleFilterChange('salesRepAssigned', selected)}
-                            placeholder="Select sales reps..."
+                            options={allFranchiseesOptions}
+                            selected={filters.franchisee}
+                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                            placeholder="Select franchisees..."
                         />
                     </div>
                      <div className="space-y-2">
