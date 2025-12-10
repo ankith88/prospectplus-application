@@ -1138,43 +1138,11 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 )}
             </GoogleMap>
         </div>
-        {!directions && selectedRouteLeads.length > 0 && (
-            <Card className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-auto">
-                <CardContent className="p-4 flex items-center gap-4">
-                    <p className="text-sm font-semibold">{selectedRouteLeads.length} stops selected.</p>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button disabled={isCalculatingRoute}>
-                                {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
-                                Create Route
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
-                                <Car className="mr-2 h-4 w-4" />
-                                Driving
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
-                                <Footprints className="mr-2 h-4 w-4" />
-                                Walking
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
-                                <Bike className="mr-2 h-4 w-4" />
-                                Bicycling
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                     <Button variant="secondary" onClick={() => setSelectedRouteLeads([])}>
-                        Clear Selection
-                    </Button>
-                </CardContent>
-            </Card>
-        )}
         <aside className={cn(
         "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
-        showRouteStops ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
+        (selectedRouteLeads.length > 0) ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
       )}>
-        {showRouteStops && (
+        {(selectedRouteLeads.length > 0) && (
           <>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between">
@@ -1182,12 +1150,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 <Button variant="ghost" size="icon" onClick={handleClearRoute}><X className="h-4 w-4"/></Button>
               </CardTitle>
                 <div className="space-y-2 pt-2">
-                    {directions && (
+                    {directions ? (
                         <CardDescription>
                             Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
                             <br />
                             Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
                         </CardDescription>
+                    ) : (
+                        <CardDescription>Select a travel mode to generate a route.</CardDescription>
                     )}
                     <div className="space-y-1">
                         <Label htmlFor="route-name">Route Name</Label>
@@ -1207,23 +1177,25 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </CardHeader>
             <ScrollArea className="flex-grow">
               <CardContent className="space-y-2 pt-2">
-                {sortedRouteLegs.map((item, index) => {
+                {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
                   if (!item.lead) return null;
                   const lead = item.lead;
-                  const leg = item.leg;
+                  const leg = (item as any).leg;
                   return (
                     <Card key={lead.id} className="p-3">
                       <div className="flex justify-between items-start">
                         <div>
-                           <p className="font-bold">{item.stopNumber}. {lead.companyName}</p>
+                           <p className="font-bold">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</p>
                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
                         </div>
                         <LeadStatusBadge status={lead.status} />
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-muted-foreground">
-                            {leg?.duration?.text} • {leg?.distance?.text}
-                        </p>
+                        {leg && (
+                            <p className="text-xs text-muted-foreground">
+                                {leg?.duration?.text} • {leg?.distance?.text}
+                            </p>
+                        )}
                         <div className='flex gap-2'>
                           <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
                               {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
@@ -1239,9 +1211,31 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 })}
               </CardContent>
             </ScrollArea>
-             <CardFooter>
-                 <Button onClick={() => travelMode && handleCreateRoute(travelMode, selectedRouteLeads)} disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
-                  {isCalculatingRoute ? <Loader /> : 'Re-calculate Route'}
+             <CardFooter className="flex flex-col gap-2">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                         <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                            {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
+                            {directions ? 'Re-calculate Route' : 'Create Route'}
+                        </Button>
+                    </DropdownMenuTrigger>
+                     <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
+                            <Car className="mr-2 h-4 w-4" />
+                            Driving
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
+                            <Footprints className="mr-2 h-4 w-4" />
+                            Walking
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
+                            <Bike className="mr-2 h-4 w-4" />
+                            Bicycling
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                 <Button variant="secondary" onClick={() => setSelectedRouteLeads([])} className="w-full">
+                    Clear Selection
                 </Button>
              </CardFooter>
           </>
@@ -1334,3 +1328,4 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
+
