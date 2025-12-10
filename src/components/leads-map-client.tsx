@@ -377,17 +377,17 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
   const uniqueFranchisees = useMemo(() => {
     const franchisees = new Set(leads.map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [leads]);
 
   const uniqueStatuses = useMemo(() => {
     const statuses = new Set(leads.map(lead => lead.status));
-    return Array.from(statuses).map(s => ({ value: s, label: s }));
+    return Array.from(statuses).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   }, [leads]);
 
   const uniqueStates = useMemo(() => {
     const states = new Set(leads.map(lead => lead.address?.state).filter(Boolean));
-    return Array.from(states as string[]).map(s => ({ value: s, label: s }));
+    return Array.from(states as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   }, [leads]);
   
   const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult | null> => {
@@ -1319,3 +1319,4 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
+
