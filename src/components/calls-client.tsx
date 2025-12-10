@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -58,6 +59,7 @@ const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunit
 type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
 
 const CALLS_PER_PAGE = 50;
+const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'];
 
 export default function CallsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
@@ -253,16 +255,16 @@ export default function CallsClientPage() {
   
   const allUsersOptions: Option[] = useMemo(() => {
       const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
-      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
+      return Array.from(users as string[]).map(u => ({ value: u, label: u })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
 
   const allReviewersOptions: Option[] = useMemo(() => {
       const reviewers = new Set(allCalls.map(c => c.review?.reviewer).filter(Boolean));
-      return Array.from(reviewers as string[]).map(r => ({ value: r, label: r }));
+      return Array.from(reviewers as string[]).map(r => ({ value: r, label: r })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
   
-  const leadStatusOptions: Option[] = (['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
-  const reviewCategoryOptions: Option[] = reviewCategories.map(c => ({ value: c, label: c }));
+  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
+  const reviewCategoryOptions: Option[] = reviewCategories.map(c => ({ value: c, label: c })).sort((a,b) => a.label.localeCompare(b.label));
 
   const transcriptsByCallId = useMemo(() => {
     return allTranscripts.reduce((acc, transcript) => {

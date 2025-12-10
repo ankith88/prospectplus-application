@@ -50,6 +50,8 @@ type ExpandedLeadDetails = {
     loading: boolean;
 };
 
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
+
 export default function LeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
@@ -594,7 +596,7 @@ export default function LeadsClientPage() {
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
-  const leadStatusOptions: Option[] = (['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'] as LeadStatus[]).map(s => ({ value: s, label: s }));
+  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
 
   return (
     <>

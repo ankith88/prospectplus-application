@@ -50,6 +50,7 @@ type ExpandedLeadDetails = {
 };
 
 const LEADS_PER_PAGE = 100;
+const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate'];
 
 export default function ArchivedLeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -365,13 +366,9 @@ export default function ArchivedLeadsClientPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Archived</SelectItem>
-                                    <SelectItem value="Qualified">Qualified</SelectItem>
-                                    <SelectItem value="Pre Qualified">Pre Qualified</SelectItem>
-                                    <SelectItem value="Won">Signed</SelectItem>
-                                    <SelectItem value="Lost">Lost</SelectItem>
-                                    <SelectItem value="LPO Review">LPO Review</SelectItem>
-                                    <SelectItem value="Unqualified">Unqualified</SelectItem>
-                                    <SelectItem value="Trialing ShipMate">Trialing ShipMate</SelectItem>
+                                    {archivedStatuses.sort().map(status => (
+                                        <SelectItem key={status} value={status}>{status === 'Won' ? 'Signed' : status}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
