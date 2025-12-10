@@ -785,6 +785,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
     };
 
+    const startDrawing = () => {
+        setIsDrawing(true);
+        toast({
+            title: "Drawing Mode Activated",
+            description: "Draw a circle on the map to select leads. Press Esc or click Cancel to exit.",
+        });
+    };
+
+    const cancelDrawing = () => {
+        setIsDrawing(false);
+        if (drawingManagerRef.current) {
+            drawingManagerRef.current.setDrawingMode(null);
+        }
+        toast({
+            title: "Drawing Mode Canceled",
+        });
+    };
 
 
   if (loadError) {
@@ -946,7 +963,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                       </div>
                       <div className="space-y-2">
                         <Label>Draw to Route</Label>
-                        <Button onClick={() => setIsDrawing(true)} variant="outline" className="w-full"><PenSquare className="mr-2 h-4 w-4" /> Select Area</Button>
+                         <div className="flex gap-2">
+                            <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
+                                <PenSquare className="mr-2 h-4 w-4" /> Select Area
+                            </Button>
+                            {isDrawing && (
+                                <Button onClick={cancelDrawing} variant="destructive">
+                                    <X className="mr-2 h-4 w-4" /> Cancel
+                                </Button>
+                            )}
+                        </div>
                       </div>
                   </CardContent>
               </Card>
