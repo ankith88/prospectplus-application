@@ -43,7 +43,7 @@ import { format } from 'date-fns'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
-type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'industryCategory';
+type SortableLeadKeys = 'companyName' | 'status' | 'franchisee';
 type ExpandedLeadDetails = {
     note: Note | null;
     activity: Activity | null;
@@ -80,7 +80,6 @@ export default function LeadsClientPage() {
     companyName: '',
     status: [] as string[],
     franchisee: [] as string[],
-    industryCategory: '',
   });
   
   useEffect(() => {
@@ -149,7 +148,6 @@ export default function LeadsClientPage() {
       companyName: '',
       status: [],
       franchisee: [],
-      industryCategory: '',
     });
   };
 
@@ -158,10 +156,9 @@ export default function LeadsClientPage() {
       const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
-      const industryMatch = filters.industryCategory ? (lead.industryCategory || '').toLowerCase().includes(filters.industryCategory.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status);
 
-      return !isArchived && companyMatch && statusMatch && franchiseeMatch && industryMatch;
+      return !isArchived && companyMatch && statusMatch && franchiseeMatch;
     });
 
     if (sortConfig !== null) {
@@ -584,16 +581,7 @@ export default function LeadsClientPage() {
             }));
         }
     };
-
-
-  if (loading || authLoading) {
-    return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <Loader />
-      </div>
-    )
-  }
-
+    
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
@@ -603,6 +591,14 @@ export default function LeadsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
 
+
+  if (loading || authLoading) {
+    return (
+      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+        <Loader />
+      </div>
+    )
+  }
 
   return (
     <>
