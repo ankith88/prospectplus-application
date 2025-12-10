@@ -32,11 +32,12 @@ import { Calendar as CalendarPicker } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+
 
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData; };
 type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime' | 'discoveryScore';
@@ -47,13 +48,13 @@ export default function AllAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState<{ key: SortableAppointmentKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [filters, setFilters] = useState({
-    user: 'all',
-    leadAssignedTo: 'all',
+    user: [] as string[],
+    leadAssignedTo: [] as string[],
     date: undefined as DateRange | undefined,
     createdDate: undefined as DateRange | undefined,
     leadName: '',
-    status: 'all' as LeadStatus | 'all',
-    appointmentStatus: 'all' as AppointmentStatus | 'Pending' | 'all',
+    status: [] as string[],
+    appointmentStatus: [] as string[],
   });
 
   const router = useRouter();
@@ -84,12 +85,12 @@ export default function AllAppointmentsPage() {
 
   }, [user, authLoading, router]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | DateRange | undefined) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
   
   const clearFilters = () => {
-    setFilters({ user: 'all', leadAssignedTo: 'all', date: undefined, createdDate: undefined, leadName: '', status: 'all', appointmentStatus: 'all' });
+    setFilters({ user: [], leadAssignedTo: [], date: undefined, createdDate: undefined, leadName: '', status: [], appointmentStatus: [] });
   };
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
@@ -133,8 +134,8 @@ export default function AllAppointmentsPage() {
 
 
     return uniqueAppointments.filter(appointment => {
-        const appointmentUserMatch = filters.user === 'all' || appointment.assignedTo === filters.user;
-        const leadUserMatch = filters.leadAssignedTo === 'all' || appointment.dialerAssigned === filters.leadAssignedTo;
+        const appointmentUserMatch = filters.user.length === 0 || filters.user.includes(appointment.assignedTo);
+        const leadUserMatch = filters.leadAssignedTo.length === 0 || (appointment.dialerAssigned && filters.leadAssignedTo.includes(appointment.dialerAssigned));
         
         let dateMatch = true;
         if (filters.date?.from) {
@@ -161,9 +162,9 @@ export default function AllAppointmentsPage() {
         const finalAppointmentUserMatch = userProfile?.role === 'admin' ? appointmentUserMatch : true;
         const finalLeadUserMatch = userProfile?.role === 'admin' ? leadUserMatch : true;
 
-        const statusMatch = filters.status === 'all' || appointment.leadStatus === filters.status;
+        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         
-        const appointmentStatusMatch = filters.appointmentStatus === 'all' || (appointment.appointmentStatus || 'Pending') === filters.appointmentStatus;
+        const appointmentStatusMatch = filters.appointmentStatus.length === 0 || filters.appointmentStatus.includes(appointment.appointmentStatus || 'Pending');
 
         return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch && appointmentStatusMatch;
     });
@@ -221,12 +222,12 @@ export default function AllAppointmentsPage() {
   
   const allUsers = useMemo(() => {
       const users = new Set(allAppointments.map(c => c.assignedTo).filter(Boolean));
-      return Array.from(users as string[]);
+      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
   }, [allAppointments]);
   
   const allLeadUsers = useMemo(() => {
       const users = new Set(allAppointments.map(c => c.dialerAssigned).filter(Boolean));
-      return Array.from(users as string[]);
+      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
   }, [allAppointments]);
 
   const escapeCsvCell = (cellData: any) => {
@@ -276,7 +277,11 @@ export default function AllAppointmentsPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => val && val !== 'all' && val !== '');
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== '') || (typeof val === 'object' && val !== undefined));
+  
+  const leadStatusOptions: Option[] = (['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo'] as LeadStatus[]).map(s => ({ value: s, label: s }));
+  const appointmentStatusOptions: Option[] = (['Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'] as (AppointmentStatus | 'Pending')[]).map(s => ({ value: s, label: s }));
+
 
   return (
     <>
@@ -309,53 +314,41 @@ export default function AllAppointmentsPage() {
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>
-                             <Select value={filters.leadAssignedTo} onValueChange={(value) => handleFilterChange('leadAssignedTo', value)}>
-                                <SelectTrigger id="leadAssignedTo">
-                                    <SelectValue placeholder="Select user" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Users</SelectItem>
-                                    {allLeadUsers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectCombobox
+                                options={allLeadUsers}
+                                selected={filters.leadAssignedTo}
+                                onSelectedChange={(selected) => handleFilterChange('leadAssignedTo', selected)}
+                                placeholder="Select users..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="user">Assigned To (Appointment)</Label>
-                             <Select value={filters.user} onValueChange={(value) => handleFilterChange('user', value)}>
-                                <SelectTrigger id="user">
-                                    <SelectValue placeholder="Select user" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Users</SelectItem>
-                                    {allUsers.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectCombobox
+                                options={allUsers}
+                                selected={filters.user}
+                                onSelectedChange={(selected) => handleFilterChange('user', selected)}
+                                placeholder="Select users..."
+                            />
                         </div>
                        </>
                     )}
                     <div className="space-y-2">
                         <Label htmlFor="status">Lead Status</Label>
-                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                            <SelectTrigger id="status">
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {(['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo'] as LeadStatus[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={leadStatusOptions}
+                            selected={filters.status}
+                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            placeholder="Select statuses..."
+                        />
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="appointmentStatus">Appointment Status</Label>
-                        <Select value={filters.appointmentStatus} onValueChange={(value) => handleFilterChange('appointmentStatus', value)}>
-                            <SelectTrigger id="appointmentStatus">
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {(['Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'] as (AppointmentStatus | 'Pending')[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={appointmentStatusOptions}
+                            selected={filters.appointmentStatus}
+                            onSelectedChange={(selected) => handleFilterChange('appointmentStatus', selected)}
+                            placeholder="Select statuses..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="date">Appointment Date</Label>

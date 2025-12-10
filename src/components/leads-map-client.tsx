@@ -20,13 +20,6 @@ import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
 import { LeadStatusBadge } from './lead-status-badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
@@ -65,7 +58,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { Checkbox } from './ui/checkbox'
-import { AddressAutocomplete } from './address-autocomplete'
 import { Textarea } from './ui/textarea';
 import {
   DropdownMenu,
@@ -73,6 +65,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 
 const containerStyle = {
@@ -205,9 +198,9 @@ export default function LeadsMapClient() {
 
 
   const [filters, setFilters] = useState({
-    franchisee: 'all',
-    status: 'all',
-    state: 'all',
+    franchisee: [] as string[],
+    status: [] as string[],
+    state: [] as string[],
   });
 
   const router = useRouter()
@@ -345,9 +338,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-        const franchiseeMatch = filters.franchisee === 'all' || lead.franchisee === filters.franchisee;
-        const statusMatch = filters.status === 'all' ? true : lead.status === filters.status;
-        const stateMatch = filters.state === 'all' || lead.address?.state === filters.state;
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(lead.status);
+        const stateMatch = filters.state.length === 0 || (lead.address?.state && filters.state.includes(lead.address.state));
         
         return franchiseeMatch && statusMatch && stateMatch;
     });
@@ -378,23 +371,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
   }, [selectedLead]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
   const uniqueFranchisees = useMemo(() => {
     const franchisees = new Set(leads.map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]);
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
   }, [leads]);
 
   const uniqueStatuses = useMemo(() => {
     const statuses = new Set(leads.map(lead => lead.status));
-    return Array.from(statuses);
+    return Array.from(statuses).map(s => ({ value: s, label: s }));
   }, [leads]);
 
   const uniqueStates = useMemo(() => {
     const states = new Set(leads.map(lead => lead.address?.state).filter(Boolean));
-    return Array.from(states as string[]);
+    return Array.from(states as string[]).map(s => ({ value: s, label: s }));
   }, [leads]);
   
   const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult | null> => {
@@ -904,39 +897,30 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="franchisee">Franchisee</Label>
-                        <Select value={filters.franchisee} onValueChange={(value) => handleFilterChange('franchisee', value)}>
-                            <SelectTrigger id="franchisee">
-                                <SelectValue placeholder="Select Franchisee" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Franchisees</SelectItem>
-                                {uniqueFranchisees.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={uniqueFranchisees}
+                            selected={filters.franchisee}
+                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                            placeholder="Select Franchisees..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="status">Status</Label>
-                        <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
-                            <SelectTrigger id="status">
-                                <SelectValue placeholder="Select Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {uniqueStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                         <MultiSelectCombobox
+                            options={uniqueStatuses}
+                            selected={filters.status}
+                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            placeholder="Select Statuses..."
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="state">State</Label>
-                        <Select value={filters.state} onValueChange={(value) => handleFilterChange('state', value)}>
-                            <SelectTrigger id="state">
-                                <SelectValue placeholder="Select State" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All States</SelectItem>
-                                {uniqueStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectCombobox
+                            options={uniqueStates}
+                            selected={filters.state}
+                            onSelectedChange={(selected) => handleFilterChange('state', selected)}
+                            placeholder="Select States..."
+                        />
                     </div>
                 </CardContent>
             </Card>
