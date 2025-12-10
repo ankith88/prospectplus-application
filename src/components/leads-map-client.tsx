@@ -705,16 +705,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ variant: 'destructive', title: 'No Prospects Selected', description: 'Please select one or more prospects to create a route.' });
         return;
     }
-    if (!myLocation) {
-        toast({
-            variant: "destructive",
-            title: "Location Needed",
-            description: "Please set your location on the map first before creating a route.",
-        });
-        handleShowMyLocation();
-        return;
-    }
-
+    
     const leadsForRouting: MapLead[] = selectedProspects.map((p) => {
         const address = p.address_components ? parseAddressComponents(p.address_components) : { street: p.formatted_address || '', city: '', state: '', zip: '', country: 'Australia' };
         address.lat = p.geometry?.location?.lat();
@@ -734,7 +725,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         };
     });
     
+    // Set the selected leads for routing display
+    setSelectedRouteLeads(leadsForRouting);
+    // Directly call the route creation logic
     handleCreateRoute(selectedTravelMode, leadsForRouting);
+    
+    // Close dialog and clear selections
     setIsProspectsDialogOpen(false);
     setSelectedProspects([]);
   };
