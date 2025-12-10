@@ -661,9 +661,9 @@ export default function LeadsClientPage() {
         </Collapsible>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle>My Assigned Leads</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 {isSessionActive && (
                   <Button onClick={handleEndSession} variant="destructive" size="sm">
                     <XCircle className="mr-2 h-4 w-4" />
@@ -693,11 +693,11 @@ export default function LeadsClientPage() {
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
-              {Object.entries(groupedMyLeads).map(([status, leads]) => {
+              {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
                 const currentPage = myLeadsPagination[status] || 1;
                 const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                 const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                const isAllInGroupSelected = paginatedLeads.every(l => selectedMyLeads.includes(l.id));
+                const isAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedMyLeads.includes(l.id));
 
                 return (
                   <AccordionItem value={status} key={status}>
@@ -723,89 +723,106 @@ export default function LeadsClientPage() {
                         </Button>
                       </div>
                     <AccordionContent className="pt-2">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-8">
-                                        <Checkbox
-                                            checked={paginatedLeads.length > 0 && isAllInGroupSelected}
-                                            onCheckedChange={(checked) => handleSelectAllMyLeadsInGroup(paginatedLeads, checked)}
-                                            aria-label={`Select all leads in ${status}`}
-                                        />
-                                    </TableHead>
-                                    <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
-                                    <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                                    <TableHead><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
-                                    <TableHead className="w-[120px] text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {paginatedLeads.map((lead) => (
-                                    <Fragment key={lead.id}>
-                                    <TableRow data-state={selectedMyLeads.includes(lead.id) && "selected"}>
-                                        <TableCell>
-                                           <Checkbox 
-                                                checked={selectedMyLeads.includes(lead.id)} 
-                                                onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} 
-                                                aria-label={`Select lead ${lead.companyName}`} 
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-8 px-2 md:px-4">
+                                            <Checkbox
+                                                checked={isAllInGroupSelected}
+                                                onCheckedChange={(checked) => handleSelectAllMyLeadsInGroup(paginatedLeads, checked)}
+                                                aria-label={`Select all leads in ${status}`}
                                             />
-                                        </TableCell>
-                                        <TableCell>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="link" className="p-0 h-auto">{lead.companyName}</Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                        <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                                        <TableCell>{lead.industryCategory}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
-                                                <History className="mr-2 h-4 w-4"/>
-                                                {expandedDetails[lead.id] ? 'Hide' : 'History'}
-                                            </Button>
-                                        </TableCell>
+                                        </TableHead>
+                                        <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                                        <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
+                                        <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
-                                     {expandedDetails[lead.id] && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="p-0">
-                                                <div className="p-4 bg-secondary/50">
-                                                    {expandedDetails[lead.id].loading ? (
-                                                        <Loader />
-                                                    ) : (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                            <div>
-                                                                <h4 className="font-semibold mb-2">Last Activity</h4>
-                                                                {expandedDetails[lead.id].activity ? (
-                                                                    <div>
-                                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
-                                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
-                                                                    </div>
-                                                                ) : <p className="text-muted-foreground">No activities found.</p>}
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="font-semibold mb-2">Last Note</h4>
-                                                                {expandedDetails[lead.id].note ? (
-                                                                    <div>
-                                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
-                                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
-                                                                    </div>
-                                                                ) : <p className="text-muted-foreground">No notes found.</p>}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                </TableHeader>
+                                <TableBody>
+                                    {paginatedLeads.map((lead) => (
+                                        <Fragment key={lead.id}>
+                                        <TableRow data-state={selectedMyLeads.includes(lead.id) && "selected"}>
+                                            <TableCell className="px-2 md:px-4">
+                                            <Checkbox 
+                                                    checked={selectedMyLeads.includes(lead.id)} 
+                                                    onCheckedChange={(checked) => handleSelectMyLead(lead.id, checked)} 
+                                                    aria-label={`Select lead ${lead.companyName}`} 
+                                                />
+                                            </TableCell>
+                                            <TableCell className="px-2 md:px-4">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="link" className="p-0 h-auto text-left">{lead.companyName}</Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent>
+                                                        <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                            <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
+                                            <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
+                                            <TableCell className="text-right px-2 md:px-4">
+                                                <div className="hidden md:inline-flex">
+                                                    <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                                                        <History className="mr-2 h-4 w-4"/>
+                                                        {expandedDetails[lead.id] ? 'Hide' : 'History'}
+                                                    </Button>
+                                                </div>
+                                                <div className="inline-flex md:hidden">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                            <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}>
+                                                                <History className="mr-2 h-4 w-4"/>
+                                                                View History
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    )}
-                                    </Fragment>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                        {expandedDetails[lead.id] && (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="p-0 md:p-0">
+                                                    <div className="p-4 bg-secondary/50">
+                                                        {expandedDetails[lead.id].loading ? (
+                                                            <Loader />
+                                                        ) : (
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                                <div>
+                                                                    <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                                    {expandedDetails[lead.id].activity ? (
+                                                                        <div>
+                                                                            <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                                            <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                                        </div>
+                                                                    ) : <p className="text-muted-foreground">No activities found.</p>}
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-semibold mb-2">Last Note</h4>
+                                                                    {expandedDetails[lead.id].note ? (
+                                                                        <div>
+                                                                            <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                                            <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                                        </div>
+                                                                    ) : <p className="text-muted-foreground">No notes found.</p>}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        </Fragment>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                          {totalPages > 1 && (
                             <div className="flex items-center justify-end gap-2 pt-4 text-sm">
                                 <Button variant="outline" size="sm" onClick={() => handleMyLeadsPageChange(status, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
@@ -841,12 +858,12 @@ export default function LeadsClientPage() {
       
       {userProfile?.role === 'admin' && (
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
                 <span>All Assigned Leads</span>
                 <Badge variant="secondary">{Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().length} lead(s)</Badge>
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 {selectedForReassignment.length > 0 && (
                     <>
                         <Button variant="outline" size="sm" onClick={handleBulkUnassign}>
@@ -870,12 +887,12 @@ export default function LeadsClientPage() {
              <div className="text-center"><Loader /></div>
            ) : Object.keys(groupedAssignedLeads).length > 0 ? (
               <Accordion type="multiple" className="w-full space-y-2">
-                {Object.entries(groupedAssignedLeads).map(([dialer, statusGroups]) => (
+                {Object.entries(groupedAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
                   <AccordionItem value={dialer} key={dialer}>
                     <div className="bg-muted px-4 rounded-md flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Checkbox
-                              checked={Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
+                              checked={Object.values(statusGroups).flat().length > 0 && Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
                               onCheckedChange={(checked) => handleSelectAllInAssignedGroup(Object.values(statusGroups).flat(), checked)}
                               onClick={(e) => e.stopPropagation()}
                               id={`select-all-${dialer}`}
@@ -891,18 +908,18 @@ export default function LeadsClientPage() {
                     </div>
                     <AccordionContent className="pt-2">
                        <Accordion type="multiple" className="w-full space-y-1">
-                          {Object.entries(statusGroups).map(([status, leads]) => {
+                          {Object.entries(statusGroups).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
                               const groupKey = `${dialer}-${status}`;
                               const currentPage = paginationState[groupKey] || 1;
                               const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                               const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                              const areAllInGroupSelected = paginatedLeads.every(l => selectedForReassignment.includes(l.id));
+                              const areAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedForReassignment.includes(l.id));
 
                               return (
                                 <AccordionItem value={status} key={status}>
                                   <div className="bg-secondary/50 px-4 rounded-md flex items-center">
                                     <Checkbox
-                                        checked={paginatedLeads.length > 0 && areAllInGroupSelected}
+                                        checked={areAllInGroupSelected}
                                         onCheckedChange={(checked) => handleSelectAllInAssignedGroup(paginatedLeads, checked)}
                                         onClick={(e) => e.stopPropagation()}
                                         id={`select-all-${dialer}-${status}`}
@@ -917,84 +934,96 @@ export default function LeadsClientPage() {
                                     </AccordionTrigger>
                                   </div>
                                   <AccordionContent className="p-2">
-                                     <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-8">
-                                                </TableHead>
-                                                <TableHead>Company</TableHead>
-                                                <TableHead>Franchisee</TableHead>
-                                                <TableHead>Industry</TableHead>
-                                                <TableHead className="w-[120px] text-right">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                          {paginatedLeads.map((lead) => (
-                                            <Fragment key={lead.id}>
-                                              <TableRow data-state={selectedForReassignment.includes(lead.id) && "selected"}>
-                                                  <TableCell>
-                                                      <Checkbox
-                                                          checked={selectedForReassignment.includes(lead.id)}
-                                                          onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
-                                                          aria-label={`Select lead ${lead.companyName}`}
-                                                      />
-                                                  </TableCell>
-                                                  <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
-                                                  <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                                                  <TableCell>{lead.industryCategory}</TableCell>
-                                                  <TableCell className="text-right">
-                                                      <div className="flex items-center justify-end">
-                                                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
-                                                              <History className="mr-2 h-4 w-4"/>
-                                                              {expandedDetails[lead.id] ? 'Hide' : 'History'}
-                                                          </Button>
-                                                          <DropdownMenu>
-                                                              <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                                              </DropdownMenuTrigger>
-                                                              <DropdownMenuContent>
-                                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
-                                                              </DropdownMenuContent>
-                                                          </DropdownMenu>
-                                                      </div>
-                                                  </TableCell>
-                                              </TableRow>
-                                              {expandedDetails[lead.id] && (
+                                     <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="p-0">
-                                                        <div className="p-4 bg-secondary/50">
-                                                            {expandedDetails[lead.id].loading ? (
-                                                                <Loader />
-                                                            ) : (
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                                    <div>
-                                                                        <h4 className="font-semibold mb-2">Last Activity</h4>
-                                                                        {expandedDetails[lead.id].activity ? (
-                                                                            <div>
-                                                                                <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
-                                                                                <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
-                                                                            </div>
-                                                                        ) : <p className="text-muted-foreground">No activities found.</p>}
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className="font-semibold mb-2">Last Note</h4>
-                                                                        {expandedDetails[lead.id].note ? (
-                                                                            <div>
-                                                                                <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
-                                                                                <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
-                                                                            </div>
-                                                                        ) : <p className="text-muted-foreground">No notes found.</p>}
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                    <TableHead className="w-8 px-2 md:px-4"></TableHead>
+                                                    <TableHead className="px-2 md:px-4">Company</TableHead>
+                                                    <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
+                                                    <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                                                    <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                            {paginatedLeads.map((lead) => (
+                                                <Fragment key={lead.id}>
+                                                <TableRow data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                                    <TableCell className="px-2 md:px-4">
+                                                        <Checkbox
+                                                            checked={selectedForReassignment.includes(lead.id)}
+                                                            onCheckedChange={(checked) => handleSelectForReassignment(lead.id, checked)}
+                                                            aria-label={`Select lead ${lead.companyName}`}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="px-2 md:px-4"><Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                                    <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
+                                                    <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
+                                                    <TableCell className="text-right px-2 md:px-4">
+                                                        <div className="hidden md:inline-flex">
+                                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
+                                                                <History className="mr-2 h-4 w-4"/>
+                                                                {expandedDetails[lead.id] ? 'Hide' : 'History'}
+                                                            </Button>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent>
+                                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </div>
+                                                         <div className="inline-flex md:hidden">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent>
+                                                                    <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
-                                              )}
-                                            </Fragment>
-                                          ))}
-                                        </TableBody>
-                                    </Table>
+                                                {expandedDetails[lead.id] && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={5} className="p-0">
+                                                            <div className="p-4 bg-secondary/50">
+                                                                {expandedDetails[lead.id].loading ? (
+                                                                    <Loader />
+                                                                ) : (
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                                        <div>
+                                                                            <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                                            {expandedDetails[lead.id].activity ? (
+                                                                                <div>
+                                                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                                                </div>
+                                                                            ) : <p className="text-muted-foreground">No activities found.</p>}
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="font-semibold mb-2">Last Note</h4>
+                                                                            {expandedDetails[lead.id].note ? (
+                                                                                <div>
+                                                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                                                </div>
+                                                                            ) : <p className="text-muted-foreground">No notes found.</p>}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                                </Fragment>
+                                            ))}
+                                            </TableBody>
+                                        </Table>
+                                     </div>
                                     {totalPages > 1 && (
                                         <div className="flex items-center justify-end gap-2 pt-4 text-sm">
                                             <Button variant="outline" size="sm" onClick={() => handlePageChange(groupKey, currentPage - 1)} disabled={currentPage === 1}>Previous</Button>
@@ -1035,7 +1064,7 @@ export default function LeadsClientPage() {
 
       {userProfile?.role === 'admin' && (
        <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
                 <span>All Unassigned Leads</span>
                 <Badge variant="secondary">{unassignedLeads.length} lead(s)</Badge>
@@ -1054,18 +1083,18 @@ export default function LeadsClientPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                   <TableHead className="w-8">
+                   <TableHead className="w-8 px-2 md:px-4">
                     <Checkbox
                         checked={unassignedLeads.length > 0 && selectedAllLeads.length === unassignedLeads.length}
                         onCheckedChange={handleSelectAllUnassignedLeads}
                         aria-label="Select all unassigned leads"
                     />
                   </TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead className="w-[50px] text-right">Actions</TableHead>
+                  <TableHead className="px-2 md:px-4">Company</TableHead>
+                  <TableHead className="px-2 md:px-4">Status</TableHead>
+                  <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
+                  <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                  <TableHead className="w-[50px] text-right px-2 md:px-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1077,26 +1106,26 @@ export default function LeadsClientPage() {
                   unassignedLeads.map((lead) => {
                     return (
                     <TableRow key={lead.id} data-state={selectedAllLeads.includes(lead.id) && "selected"}>
-                      <TableCell>
+                      <TableCell className="px-2 md:px-4">
                         <Checkbox
                             checked={selectedAllLeads.includes(lead.id)}
                             onCheckedChange={(checked) => handleSelectAllLead(lead.id, checked)}
                             aria-label={`Select lead ${lead.companyName}`}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                      <TableCell className="px-2 md:px-4">
+                        <Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                           {lead.companyName}
                         </Button>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-2 md:px-4">
                         <LeadStatusBadge status={lead.status} />
                       </TableCell>
-                      <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
+                      <TableCell className="hidden md:table-cell px-2 md:px-4">
                         {lead.industryCategory}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right px-2 md:px-4">
                          <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
