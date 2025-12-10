@@ -277,6 +277,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         stopover: true,
     }));
 
+    // Waypoint optimization reorders the waypoints to create the most efficient route.
     directionsService.route(
         {
             origin,
@@ -1036,11 +1037,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     position={{ lat: lead.latitude!, lng: lead.longitude! }}
                     onClick={() => onMarkerClick(lead)}
                     label={(waypointOrderMap.get(lead.id) || 0).toString()}
-                    icon={{ 
-                      url: getPinColor(lead.status, true),
-                      scaledSize: new window.google.maps.Size(40, 40),
-                      labelOrigin: new window.google.maps.Point(20, 15),
-                    }}
                   />
               ))}
 
@@ -1183,20 +1179,22 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </CardHeader>
             <ScrollArea className="flex-grow">
               <CardContent className="space-y-2 pt-2">
-                {selectedRouteLeads.map((lead, index) => {
-                  const leg = directions?.routes[0].legs[index + 1];
+                {sortedRouteLegs.map((item, index) => {
+                  if (!item.lead) return null;
+                  const lead = item.lead;
+                  const leg = item.leg;
                   return (
                     <Card key={lead.id} className="p-3">
                       <div className="flex justify-between items-start">
                         <div>
-                           <p className="font-bold">{waypointOrderMap.get(lead.id) || index + 1}. {lead.companyName}</p>
+                           <p className="font-bold">{item.stopNumber}. {lead.companyName}</p>
                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
                         </div>
                         <LeadStatusBadge status={lead.status} />
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-muted-foreground">
-                            {directions && leg ? `${leg.duration?.text} • ${leg.distance?.text}` : 'Calculating...'}
+                            {leg?.duration?.text} • {leg?.distance?.text}
                         </p>
                         <div className='flex gap-2'>
                           <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
