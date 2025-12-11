@@ -23,7 +23,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -87,6 +87,7 @@ type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
     existingLead?: MapLead;
     isAdding?: boolean;
+    classification?: 'B2B' | 'B2C' | 'Unknown';
 };
 
 type KmlFeatureData = {
@@ -198,6 +199,9 @@ export default function LeadsMapClient() {
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [initialNotes, setInitialNotes] = useState('');
 
+  // State for AI territory analysis
+  const [analyzingTerritory, setAnalyzingTerritory] = useState(false);
+  const [drawnTerritory, setDrawnTerritory] = useState<{ center: google.maps.LatLng | null; radius: number } | null>(null);
 
   const [filters, setFilters] = useState({
     franchisee: [] as string[],
@@ -398,7 +402,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return new Promise((resolve) => {
         placesService.getDetails({
             placeId,
-            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status']
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types']
         }, (place, status) => {
             if (status === google.maps.places.PlacesServiceStatus.OK) {
                 resolve(place);
@@ -409,7 +413,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     });
   }, [map]);
 
-  const findProspects = useCallback((location: google.maps.LatLngLiteral, keyword: string) => {
+  const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
     if (!map) return;
     setIsSearchingNearby(true);
     setProspects([]);
@@ -426,19 +430,22 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
             const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-            const detailedProspects = await Promise.all(
-                openProspects.map(async (place) => {
-                    const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
-                    let detailedPlace = place;
-                    if (place.place_id && (!place.website || !place.formatted_phone_number || !place.business_status)) {
-                        const details = await getPlaceDetails(place.place_id);
-                        if (details) {
-                            detailedPlace = { ...place, ...details };
-                        }
+            const detailedProspectsPromises = openProspects.map(async (place) => {
+                const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+                let detailedPlace = place;
+                if (place.place_id) {
+                    const details = await getPlaceDetails(place.place_id);
+                    if (details) {
+                        detailedPlace = { ...place, ...details };
                     }
-                    return { place: detailedPlace, existingLead };
-                })
-            );
+                }
+                const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+                const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+                
+                return { place: detailedPlace, existingLead, classification };
+            });
+
+            const detailedProspects = await Promise.all(detailedProspectsPromises);
 
             setProspects(detailedProspects);
             
@@ -460,21 +467,17 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     setIsSearchingNearby(true);
     let searchKeywords: string[] = [];
     
-    if (selectedLead.discoveryData?.searchKeywords && selectedLead.discoveryData.searchKeywords.length > 0) {
-        searchKeywords = selectedLead.discoveryData.searchKeywords;
-    } 
-    else if (selectedLead.websiteUrl) {
-        toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
-        try {
-            const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
-            if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
-                searchKeywords = prospectResult.searchKeywords;
-                toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
-            }
-        } catch (e) {
-            console.error('AI prospecting failed, falling back to industry.', e);
+    toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
+    try {
+        const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl || '' });
+        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+            searchKeywords = prospectResult.searchKeywords;
+            toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
         }
+    } catch (e) {
+        console.error('AI prospecting failed, falling back to industry.', e);
     }
+    
 
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
         searchKeywords = [selectedLead.industryCategory];
@@ -663,6 +666,56 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
   };
 
+  const handleAnalyzeTerritory = useCallback(async () => {
+    if (!drawnTerritory?.center || selectedRouteLeads.length === 0) {
+      toast({ variant: 'destructive', title: 'No Area or Leads', description: 'Please select an area with leads to analyze.' });
+      return;
+    }
+
+    setAnalyzingTerritory(true);
+    let searchKeywords: string[] = [];
+
+    const successfulLeads = selectedRouteLeads.filter(l => l.status === 'Won' || l.status === 'Qualified');
+    
+    if (successfulLeads.length > 0) {
+      // Primary Strategy: Analyze successful leads
+      const industries = successfulLeads.map(l => l.industryCategory).filter(Boolean);
+      if (industries.length > 0) {
+        const industryCounts = industries.reduce((acc, industry) => {
+          acc[industry!] = (acc[industry!] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        const mostCommonIndustry = Object.keys(industryCounts).reduce((a, b) => industryCounts[a] > industryCounts[b] ? a : b);
+        searchKeywords = [mostCommonIndustry];
+        toast({ title: 'AI Analysis', description: `Searching for prospects similar to your successful leads in the "${mostCommonIndustry}" industry.` });
+      }
+    } else {
+      // Fallback Strategy: Use most common industry from all selected leads
+      const allIndustries = selectedRouteLeads.map(l => l.industryCategory).filter(Boolean);
+      if (allIndustries.length > 0) {
+        const industryCounts = allIndustries.reduce((acc, industry) => {
+          acc[industry!] = (acc[industry!] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        const mostCommonIndustry = Object.keys(industryCounts).reduce((a, b) => industryCounts[a] > industryCounts[b] ? a : b);
+        searchKeywords = [mostCommonIndustry];
+        toast({ title: 'AI Analysis', description: `No successful leads found. Searching for prospects in the most common industry: "${mostCommonIndustry}".` });
+      }
+    }
+
+    if (searchKeywords.length === 0) {
+      toast({ variant: 'destructive', title: 'Analysis Failed', description: 'Could not determine a common profile to search for.' });
+      setAnalyzingTerritory(false);
+      return;
+    }
+
+    findProspects({ lat: drawnTerritory.center.lat(), lng: drawnTerritory.center.lng() }, searchKeywords.join(' '));
+    setAnalyzingTerritory(false);
+    setDrawnTerritory(null);
+  }, [drawnTerritory, selectedRouteLeads, findProspects, toast]);
+
 
     const onCircleComplete = useCallback((circle: google.maps.Circle) => {
         if (!window.google || !map) return;
@@ -682,13 +735,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         });
 
         setSelectedRouteLeads(leadsInCircle);
+        setDrawnTerritory({ center, radius });
+
+        toast({
+          title: `${leadsInCircle.length} Leads Selected`,
+          description: "You can now create a route or analyze the territory.",
+        });
         
         circle.setMap(null);
         setIsDrawing(false);
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
-    }, [map, filteredLeads]);
+    }, [map, filteredLeads, toast]);
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
@@ -1124,7 +1183,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 View Profile
                             </Button>
                             <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                {isSearchingNearby ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Find Nearby</>}
+                                {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Find Nearby</>}
                             </Button>
                         </div>
                     </div>
@@ -1152,7 +1211,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})</span>
-                <Button variant="ghost" size="icon" onClick={handleClearRoute}><X className="h-4 w-4"/></Button>
+                <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
               </CardTitle>
                 <div className="space-y-2 pt-2">
                     {directions ? (
@@ -1162,7 +1221,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
                         </CardDescription>
                     ) : (
-                        <CardDescription>Select a travel mode to generate a route.</CardDescription>
+                        <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
                     )}
                     <div className="space-y-1">
                         <Label htmlFor="route-name">Route Name</Label>
@@ -1217,6 +1276,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
               </CardContent>
             </ScrollArea>
              <CardFooter className="flex flex-col gap-2">
+                {drawnTerritory && (
+                    <Button onClick={handleAnalyzeTerritory} disabled={analyzingTerritory} className="w-full">
+                        {analyzingTerritory ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                        Analyze Territory for Opportunities
+                    </Button>
+                )}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                          <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
@@ -1239,7 +1304,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
-                 <Button variant="secondary" onClick={() => setSelectedRouteLeads([])} className="w-full">
+                 <Button variant="secondary" onClick={() => { setSelectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
                     Clear Selection
                 </Button>
              </CardFooter>
@@ -1266,6 +1331,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                               <TableHead>Address</TableHead>
                               <TableHead>Phone</TableHead>
                               <TableHead>Website</TableHead>
+                              <TableHead>Type</TableHead>
                               <TableHead className="text-right">Action</TableHead>
                           </TableRow>
                       </TableHeader>
@@ -1286,6 +1352,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                           'N/A'
                                       )}
                                   </TableCell>
+                                  <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                   <TableCell className="text-right">
                                       {prospectInfo.existingLead ? (
                                           <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
@@ -1333,8 +1400,3 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
-
-
-
-
-    
