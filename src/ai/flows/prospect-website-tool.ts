@@ -39,7 +39,7 @@ const ProspectWebsiteOutputSchema = z.object({
 
 const ProspectWebsiteInputSchema = z.object({
   leadId: z.string().describe('The ID of the lead to associate the contacts with.'),
-  website: z.string().describe('The URL of the website to prospect.'),
+  websiteUrl: z.string().describe('The URL of the website to prospect.'),
 });
 
 function extractDomain(url: string): string | null {
@@ -95,7 +95,7 @@ export const prospectWebsiteTool = ai.defineTool(
     inputSchema: ProspectWebsiteInputSchema,
     outputSchema: ProspectWebsiteOutputSchema,
   },
-  async ({ leadId, website: websiteUrl }) => {
+  async ({ leadId, websiteUrl }) => {
     let companyDescription = '';
     let searchKeywords: string[] = [];
     
@@ -268,3 +268,5 @@ export const prospectWebsiteTool = ai.defineTool(
     }
   }
 );
+
+    
