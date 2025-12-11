@@ -14,7 +14,7 @@ import {
   CircleF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
@@ -441,11 +441,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
         const detailedProspectsPromises = openProspects.map(async (place) => {
-          const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+          if (!place.place_id) return null;
           
-          const detailedPlace = place.place_id ? await getPlaceDetails(place.place_id) : place;
-
+          const detailedPlace = await getPlaceDetails(place.place_id);
           if (!detailedPlace) return null;
+          
+          const existingLead = leads.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
 
           let description = 'No website to analyze.';
           if (detailedPlace.website) {
@@ -454,7 +455,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 leadId: 'new-lead-prospecting',
                 websiteUrl: detailedPlace.website,
               });
-              description = prospectResult.companyDescription || 'Could not summarize website.';
+              description = prospectResult.companyDescription || 'AI analysis of website failed.';
             } catch (e) {
               console.error('Error prospecting website for description', e);
               description = 'AI analysis of website failed.';
@@ -467,17 +468,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
           return { place: detailedPlace, existingLead, classification, description };
         });
 
-        const resolvedProspects = await Promise.all(detailedProspectsPromises);
-        const validProspects = resolvedProspects.filter((p): p is ProspectWithLeadInfo => p !== null);
+        const resolvedProspects = (await Promise.all(detailedProspectsPromises))
+            .filter((p): p is ProspectWithLeadInfo => p !== null);
 
-        setProspects(validProspects);
+        setProspects(resolvedProspects);
         setIsSearchingNearby(false);
 
-        if (validProspects.length > 0) {
-          setIsProspectsDialogOpen(true);
-          toast({ title: `Found ${validProspects.length} prospects nearby.` });
+        if (resolvedProspects.length > 0) {
+            setIsProspectsDialogOpen(true);
         } else {
-          toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
+            toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
         }
       } else {
         toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
@@ -984,9 +984,11 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             <DialogHeader>
                 <DialogTitle>AI Prospect Description</DialogTitle>
             </DialogHeader>
-            <div className="py-4 text-sm text-muted-foreground max-h-[60vh] overflow-y-auto">
-                {viewingDescription}
-            </div>
+            <ScrollArea className="max-h-[60vh]">
+                <div className="py-4 text-sm text-muted-foreground pr-6">
+                    {viewingDescription}
+                </div>
+            </ScrollArea>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
             </DialogFooter>
@@ -1381,8 +1383,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                   {prospectInfo.place.vicinity}
                               </div>
                               {prospectInfo.description && (
-                                <div className="text-sm my-2">
-                                  <p className="text-muted-foreground line-clamp-2">
+                                <div>
+                                  <p className="text-sm my-2 text-muted-foreground line-clamp-2">
                                     {prospectInfo.description}
                                   </p>
                                   <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
