@@ -14,7 +14,7 @@ import {
   CircleF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
@@ -441,7 +441,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         detailedPlace = { ...place, ...details };
                         if(details.website) {
                             try {
-                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: details.website});
+                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', website: details.website});
                                 if (prospectResult.companyDescription) {
                                     description = prospectResult.companyDescription;
                                 }
@@ -475,37 +475,42 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
   const handleFindNearby = async () => {
     if (!selectedLead || !map) return;
-
+  
     setIsSearchingNearby(true);
     let searchKeywords: string[] = [];
-    
+  
+    // 1. Primary Method: AI Website Analysis for keywords
     if (selectedLead.websiteUrl) {
-      toast({ title: "Analyzing Website", description: "AI is analyzing the website to find similar prospects..." });
+      toast({ title: "Analyzing Website", description: "AI is finding similar prospects..." });
       try {
-          const prospectResult = await aiProspectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
-          if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
-              searchKeywords = prospectResult.searchKeywords;
-              toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
-          }
+        const prospectResult = await aiProspectWebsiteTool({ 
+          leadId: selectedLead.id, 
+          website: selectedLead.websiteUrl 
+        });
+        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+          searchKeywords = prospectResult.searchKeywords;
+        }
       } catch (e) {
-          console.error('AI prospecting failed, falling back to industry.', e);
+        console.error('AI prospecting for keywords failed, falling back.', e);
       }
     }
-    
+  
+    // 2. Fallback Method: Use Existing AI-Generated Keywords
     if (searchKeywords.length === 0 && selectedLead.discoveryData?.searchKeywords?.length) {
-        searchKeywords = selectedLead.discoveryData.searchKeywords;
-        toast({ title: "Using Stored Keywords", description: "Using previously saved keywords for search." });
+      searchKeywords = selectedLead.discoveryData.searchKeywords;
+      toast({ title: "Using Stored Keywords", description: "Using previously saved keywords for search." });
     }
-
+  
+    // 3. Final Fallback: Industry Category
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
-        searchKeywords = [selectedLead.industryCategory];
-        toast({ title: "Using Industry Category", description: "No specific keywords found, searching by industry." });
+      searchKeywords = [selectedLead.industryCategory];
+      toast({ title: "Using Industry Category", description: "No specific keywords found, searching by industry." });
     }
-
+  
     if (searchKeywords.length === 0) {
-        toast({ variant: "destructive", title: "Cannot Search", description: "No industry or keywords available for this lead." });
-        setIsSearchingNearby(false);
-        return;
+      toast({ variant: "destructive", title: "Cannot Search", description: "No industry or keywords available for this lead." });
+      setIsSearchingNearby(false);
+      return;
     }
     
     findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
@@ -551,7 +556,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             try {
                 const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting', // Special ID to prevent saving
-                    websiteUrl: prospect.website,
+                    website: prospect.website,
                 });
 
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
