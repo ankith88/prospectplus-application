@@ -88,6 +88,7 @@ type ProspectWithLeadInfo = {
     existingLead?: MapLead;
     isAdding?: boolean;
     classification?: 'B2B' | 'B2C' | 'Unknown';
+    description?: string;
 };
 
 type KmlFeatureData = {
@@ -433,16 +434,27 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             const detailedProspectsPromises = openProspects.map(async (place) => {
                 const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
                 let detailedPlace = place;
+                let description = 'No website to analyze.';
                 if (place.place_id) {
                     const details = await getPlaceDetails(place.place_id);
                     if (details) {
                         detailedPlace = { ...place, ...details };
+                        if(details.website) {
+                            try {
+                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: details.website});
+                                if (prospectResult.companyDescription) {
+                                    description = prospectResult.companyDescription;
+                                }
+                            } catch (e) {
+                                console.error('Error prospecting website for description', e);
+                            }
+                        }
                     }
                 }
                 const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
                 const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
                 
-                return { place: detailedPlace, existingLead, classification };
+                return { place: detailedPlace, existingLead, classification, description };
             });
 
             const detailedProspects = await Promise.all(detailedProspectsPromises);
@@ -467,17 +479,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     setIsSearchingNearby(true);
     let searchKeywords: string[] = [];
     
-    toast({ title: "Analyzing Website", description: "AI is analyzing the website to find better prospects..." });
-    try {
-        const prospectResult = await prospectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl || '' });
-        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
-            searchKeywords = prospectResult.searchKeywords;
-            toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
-        }
-    } catch (e) {
-        console.error('AI prospecting failed, falling back to industry.', e);
+    if (selectedLead.websiteUrl) {
+      toast({ title: "Analyzing Website", description: "AI is analyzing the website to find similar prospects..." });
+      try {
+          const prospectResult = await aiProspectWebsiteTool({ leadId: selectedLead.id, websiteUrl: selectedLead.websiteUrl });
+          if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+              searchKeywords = prospectResult.searchKeywords;
+              toast({ title: "Analysis Complete", description: "Using AI-generated keywords for search." });
+          }
+      } catch (e) {
+          console.error('AI prospecting failed, falling back to industry.', e);
+      }
     }
     
+    if (searchKeywords.length === 0 && selectedLead.discoveryData?.searchKeywords?.length) {
+        searchKeywords = selectedLead.discoveryData.searchKeywords;
+        toast({ title: "Using Stored Keywords", description: "Using previously saved keywords for search." });
+    }
 
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
         searchKeywords = [selectedLead.industryCategory];
@@ -531,7 +549,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         // Prospect with Hunter.io if website exists
         if (prospect.website) {
             try {
-                const hunterResult = await prospectWebsiteTool({
+                const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting', // Special ID to prevent saving
                     websiteUrl: prospect.website,
                 });
@@ -1328,9 +1346,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                           <TableRow>
                               <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
                               <TableHead>Company Name</TableHead>
+                              <TableHead>Description</TableHead>
                               <TableHead>Address</TableHead>
-                              <TableHead>Phone</TableHead>
-                              <TableHead>Website</TableHead>
                               <TableHead>Type</TableHead>
                               <TableHead className="text-right">Action</TableHead>
                           </TableRow>
@@ -1339,19 +1356,25 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                           {prospects.map(prospectInfo => (
                               <TableRow key={prospectInfo.place.place_id}>
                                   <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
-                                  <TableCell>{prospectInfo.place.name}</TableCell>
-                                  <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                  <TableCell>{prospectInfo.place.formatted_phone_number || 'N/A'}</TableCell>
                                   <TableCell>
-                                      {prospectInfo.place.website ? (
-                                          <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
-                                              <LinkIcon className="h-3 w-3" />
-                                              <span>Visit</span>
-                                          </a>
-                                      ) : (
-                                          'N/A'
-                                      )}
+                                      <div className="font-medium">{prospectInfo.place.name}</div>
+                                      <div className="flex gap-2 items-center">
+                                        {prospectInfo.place.website && (
+                                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                                <Globe className="h-3 w-3" />
+                                                <span>Website</span>
+                                            </a>
+                                        )}
+                                        {prospectInfo.place.formatted_phone_number && (
+                                             <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <Phone className="h-3 w-3" />
+                                                <span>{prospectInfo.place.formatted_phone_number}</span>
+                                            </div>
+                                        )}
+                                      </div>
                                   </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{prospectInfo.description}</TableCell>
+                                  <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                   <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                   <TableCell className="text-right">
                                       {prospectInfo.existingLead ? (
