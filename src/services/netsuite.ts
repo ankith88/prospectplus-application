@@ -660,3 +660,5 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
 export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
     return await aiProspectWebsiteTool(input);
 }
+
+    

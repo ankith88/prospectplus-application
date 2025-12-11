@@ -560,11 +560,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         }
         const nameParts = primaryContact.name.split(' ');
         
+        const addressData = parseAddressComponents(prospect.address_components || []);
+        addressData.lat = prospect.geometry.location.lat();
+        addressData.lng = prospect.geometry.location.lng();
+
+
         const newLeadData = {
             companyName: prospect.name,
             websiteUrl: prospect.website || '',
             industryCategory: selectedLead?.industryCategory || '',
-            address: parseAddressComponents(prospect.address_components || []),
+            address: addressData,
             contact: {
                 firstName: nameParts[0] || 'Info',
                 lastName: nameParts.slice(1).join(' ') || prospect.name,
@@ -1330,3 +1335,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 }
 
 
+
+
+    
