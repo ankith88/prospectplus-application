@@ -248,6 +248,13 @@ export default function LeadsMapClient() {
     }
   }, [map, toast]);
 
+  // Automatically show location for Lead Gen users
+  useEffect(() => {
+    if (isLoaded && map && userProfile?.role === 'lead gen') {
+      handleShowMyLocation();
+    }
+  }, [isLoaded, map, userProfile, handleShowMyLocation]);
+
 const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMode, leadsForRoute: MapLead[]) => {
     if (!map) return;
     if (leadsForRoute.length < 1) {
@@ -803,8 +810,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
           address = { street: p.formatted_address || '', city: '', state: '', zip: '', country: 'Australia' };
         }
         
-        address.lat = p.geometry?.location?.lat();
-        address.lng = p.geometry?.location?.lng();
+        address.lat = p.geometry?.location?.lat()!;
+        address.lng = p.geometry?.location?.lng()!;
 
         return {
             id: p.place_id || `prospect-${p.name}`,
