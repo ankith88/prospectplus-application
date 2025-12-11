@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -145,19 +146,7 @@ export default function CallsClientPage() {
   };
   
   const filteredCalls = useMemo(() => {
-    // Group calls by callId to ensure uniqueness
-    const uniqueCallsMap = new Map<string, CallActivity>();
-    (allCalls || []).forEach(call => {
-        if (call.callId) {
-            // Keep the most recent record for a given callId if duplicates exist
-            const existing = uniqueCallsMap.get(call.callId);
-            if (!existing || new Date(call.date) > new Date(existing.date)) {
-                uniqueCallsMap.set(call.callId, call);
-            }
-        }
-    });
-
-    let callsToFilter = Array.from(uniqueCallsMap.values());
+    let callsToFilter = allCalls || [];
     
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
