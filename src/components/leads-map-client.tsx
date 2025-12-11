@@ -441,7 +441,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         detailedPlace = { ...place, ...details };
                         if(details.website) {
                             try {
-                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', website: details.website});
+                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: details.website});
                                 if (prospectResult.companyDescription) {
                                     description = prospectResult.companyDescription;
                                 }
@@ -485,7 +485,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       try {
         const prospectResult = await aiProspectWebsiteTool({ 
           leadId: selectedLead.id, 
-          website: selectedLead.websiteUrl 
+          websiteUrl: selectedLead.websiteUrl 
         });
         if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
           searchKeywords = prospectResult.searchKeywords;
@@ -556,7 +556,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             try {
                 const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting', // Special ID to prevent saving
-                    website: prospect.website,
+                    websiteUrl: prospect.website,
                 });
 
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
@@ -1378,7 +1378,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                         )}
                                       </div>
                                   </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{prospectInfo.description}</TableCell>
+                                  <TableCell className="text-sm text-muted-foreground max-w-xs whitespace-pre-wrap">{prospectInfo.description}</TableCell>
                                   <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                   <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                   <TableCell className="text-right">
