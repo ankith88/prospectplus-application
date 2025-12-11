@@ -425,6 +425,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
     if (!map) return;
     setIsSearchingNearby(true);
+    toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
     setProspects([]);
     
     const placesService = new window.google.maps.places.PlacesService(map);
@@ -443,22 +444,26 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
                 let detailedPlace = place;
                 let description = 'No website to analyze.';
+                
+                // Get full place details first
                 if (place.place_id) {
                     const details = await getPlaceDetails(place.place_id);
                     if (details) {
                         detailedPlace = { ...place, ...details };
-                        if(details.website) {
-                            try {
-                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', website: details.website});
-                                if (prospectResult.companyDescription) {
-                                    description = prospectResult.companyDescription;
-                                }
-                            } catch (e) {
-                                console.error('Error prospecting website for description', e);
-                            }
-                        }
                     }
                 }
+                
+                // Now, with full details, analyze the website if it exists
+                if(detailedPlace.website) {
+                    try {
+                        const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: detailedPlace.website});
+                        description = prospectResult.companyDescription || 'Could not summarize website.';
+                    } catch (e) {
+                        console.error('Error prospecting website for description', e);
+                        description = 'AI analysis of website failed.';
+                    }
+                }
+
                 const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
                 const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
                 
@@ -493,7 +498,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       try {
         const prospectResult = await aiProspectWebsiteTool({ 
           leadId: selectedLead.id, 
-          website: selectedLead.websiteUrl 
+          websiteUrl: selectedLead.websiteUrl 
         });
         if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
           searchKeywords = prospectResult.searchKeywords;
@@ -562,7 +567,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             try {
                 const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting', // Special ID to prevent saving
-                    website: prospect.website,
+                    websiteUrl: prospect.website,
                 });
 
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
@@ -1369,7 +1374,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                       <TableHeader>
                           <TableRow>
                               <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
-                              <TableHead>Company Name</TableHead>
+                              <TableHead>Company</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Address</TableHead>
                               <TableHead>Type</TableHead>
@@ -1397,12 +1402,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                         )}
                                       </div>
                                   </TableCell>
-                                   <TableCell className="max-w-xs">
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-sm text-muted-foreground truncate">
+                                   <TableCell>
+                                        <div className="flex flex-col items-start">
+                                            <p className="text-sm text-muted-foreground truncate w-60">
                                                 {prospectInfo.description}
                                             </p>
-                                            <Button variant="ghost" size="sm" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
                                         </div>
                                    </TableCell>
                                   <TableCell>{prospectInfo.place.vicinity}</TableCell>
@@ -1454,7 +1459,3 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
-
-    
-
-    
