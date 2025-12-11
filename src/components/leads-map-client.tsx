@@ -183,6 +183,7 @@ export default function LeadsMapClient() {
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
   const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
+  const [viewingDescription, setViewingDescription] = useState<string | null>(null);
 
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -981,6 +982,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </DialogFooter>
         </DialogContent>
     </Dialog>
+     <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>AI Prospect Description</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 text-sm text-muted-foreground max-h-[60vh] overflow-y-auto">
+                {viewingDescription}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <div className="flex flex-col gap-4 h-full">
          <Collapsible>
             <Card>
@@ -1385,7 +1399,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                         )}
                                       </div>
                                   </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground max-w-xs whitespace-pre-wrap">{prospectInfo.description}</TableCell>
+                                   <TableCell className="max-w-xs">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm text-muted-foreground truncate">
+                                            {prospectInfo.description}
+                                        </p>
+                                        <Button variant="ghost" size="sm" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                    </div>
+                                   </TableCell>
                                   <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                   <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                   <TableCell className="text-right">
@@ -1435,5 +1456,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
+
+    
 
     
