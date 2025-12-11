@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -254,12 +253,12 @@ export default function CallsClientPage() {
   const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
   
   const allUsersOptions: Option[] = useMemo(() => {
-      const users = new Set(allCalls.map(c => c.dialerAssigned).filter(Boolean));
+      const users = new Set((allCalls || []).map(c => c.dialerAssigned).filter(Boolean));
       return Array.from(users as string[]).map(u => ({ value: u, label: u })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
 
   const allReviewersOptions: Option[] = useMemo(() => {
-      const reviewers = new Set(allCalls.map(c => c.review?.reviewer).filter(Boolean));
+      const reviewers = new Set((allCalls || []).map(c => c.review?.reviewer).filter(Boolean));
       return Array.from(reviewers as string[]).map(r => ({ value: r, label: r })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
   
@@ -788,3 +787,5 @@ export default function CallsClientPage() {
     </>
   )
 }
+
+    
