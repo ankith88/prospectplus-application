@@ -14,7 +14,7 @@ import {
   CircleF,
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
-import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
@@ -405,7 +405,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return Array.from(states as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   }, [leads]);
   
-  const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult | null> => {
+  const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
     if (!map) return Promise.resolve(null);
     const placesService = new window.google.maps.places.PlacesService(map);
     return new Promise((resolve) => {
@@ -413,7 +413,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             placeId,
             fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types']
         }, (place, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK) {
+            if (status === google.maps.places.PlacesServiceStatus.OK && place) {
                 resolve(place);
             } else {
                 resolve(null);
@@ -440,21 +440,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
             const detailedProspectsPromises = openProspects.map(async (place) => {
                 const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
-                let detailedPlace = place;
-                let description = 'No website to analyze.';
                 
                 // Get full place details first
-                if (place.place_id) {
-                    const details = await getPlaceDetails(place.place_id);
-                    if (details) {
-                        detailedPlace = { ...place, ...details };
-                    }
-                }
-                
-                // Now, with full details, analyze the website if it exists
-                if(detailedPlace.website) {
+                const detailedPlace = place.place_id ? await getPlaceDetails(place.place_id) : place;
+
+                if (!detailedPlace) return null;
+
+                let description = 'No website to analyze.';
+                if (detailedPlace.website) {
                     try {
-                        const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: detailedPlace.website});
+                        const prospectResult = await prospectWebsiteTool({
+                            leadId: 'new-lead-prospecting', 
+                            websiteUrl: detailedPlace.website
+                        });
                         description = prospectResult.companyDescription || 'Could not summarize website.';
                     } catch (e) {
                         console.error('Error prospecting website for description', e);
@@ -467,11 +465,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 
                 return { place: detailedPlace, existingLead, classification, description };
             });
+            
+            const resolvedProspects = await Promise.all(detailedProspectsPromises);
+            const validProspects = resolvedProspects.filter((p): p is ProspectWithLeadInfo => p !== null);
 
-            const detailedProspects = await Promise.all(detailedProspectsPromises);
-            setProspects(detailedProspects);
-            setIsProspectsDialogOpen(true);
-            toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
+            setProspects(validProspects);
+            if (validProspects.length > 0) {
+              setIsProspectsDialogOpen(true);
+            }
+            toast({ title: `Found ${validProspects.length} prospects nearby.` });
 
         } else {
              toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
@@ -484,13 +486,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     if (!selectedLead || !map) return;
   
     setIsSearchingNearby(true);
-    toast({ title: "Analyzing Website", description: "AI is finding similar prospects..." });
+    toast({ title: "Analyzing Lead...", description: "AI is identifying key attributes to find similar prospects." });
+    
     let searchKeywords: string[] = [];
   
-    // 1. Primary Method: AI Website Analysis for keywords
     if (selectedLead.websiteUrl) {
       try {
-        const prospectResult = await aiProspectWebsiteTool({ 
+        const prospectResult = await prospectWebsiteTool({ 
           leadId: selectedLead.id, 
           websiteUrl: selectedLead.websiteUrl 
         });
@@ -502,12 +504,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       }
     }
   
-    // 2. Fallback Method: Use Existing AI-Generated Keywords
     if (searchKeywords.length === 0 && selectedLead.discoveryData?.searchKeywords?.length) {
       searchKeywords = selectedLead.discoveryData.searchKeywords;
     }
   
-    // 3. Final Fallback: Industry Category
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
       searchKeywords = [selectedLead.industryCategory];
     }
@@ -556,11 +556,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         
         let primaryContact: Omit<Contact, 'id'> | null = null;
 
-        // Prospect with Hunter.io if website exists
         if (prospect.website) {
             try {
-                const hunterResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting', // Special ID to prevent saving
+                const hunterResult = await prospectWebsiteTool({
+                    leadId: 'new-lead-prospecting',
                     websiteUrl: prospect.website,
                 });
 
@@ -580,7 +579,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         }
         
         if (!primaryContact) {
-            // Fallback to default contact info
             const websiteDomain = (prospect.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
             primaryContact = {
                 name: `Info ${prospect.name}`,
@@ -706,7 +704,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     const successfulLeads = selectedRouteLeads.filter(l => l.status === 'Won' || l.status === 'Qualified');
     
     if (successfulLeads.length > 0) {
-      // Primary Strategy: Analyze successful leads
       const industries = successfulLeads.map(l => l.industryCategory).filter(Boolean);
       if (industries.length > 0) {
         const industryCounts = industries.reduce((acc, industry) => {
@@ -719,7 +716,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ title: 'AI Analysis', description: `Searching for prospects similar to your successful leads in the "${mostCommonIndustry}" industry.` });
       }
     } else {
-      // Fallback Strategy: Use most common industry from all selected leads
       const allIndustries = selectedRouteLeads.map(l => l.industryCategory).filter(Boolean);
       if (allIndustries.length > 0) {
         const industryCounts = allIndustries.reduce((acc, industry) => {
@@ -1356,7 +1352,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </div>
       
        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-          <DialogContent className="max-w-6xl">
+          <DialogContent className="max-w-4xl w-[95vw] md:w-full">
               <DialogHeader>
                   <DialogTitle>Nearby Prospects</DialogTitle>
                   <DialogDescription>
@@ -1364,65 +1360,109 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                   </DialogDescription>
               </DialogHeader>
               <div className="max-h-[60vh] overflow-y-auto">
-                  <Table>
-                      <TableHeader>
-                          <TableRow>
-                              <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
-                              <TableHead>Company</TableHead>
-                              <TableHead>Description</TableHead>
-                              <TableHead>Address</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead className="text-right">Action</TableHead>
-                          </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {prospects.map(prospectInfo => (
-                              <TableRow key={prospectInfo.place.place_id}>
-                                  <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
-                                  <TableCell>
-                                      <div className="font-medium">{prospectInfo.place.name}</div>
-                                      <div className="flex gap-2 items-center">
-                                        {prospectInfo.place.website && (
-                                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                                                <Globe className="h-3 w-3" />
-                                                <span>Website</span>
-                                            </a>
-                                        )}
-                                        {prospectInfo.place.formatted_phone_number && (
-                                             <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                <Phone className="h-3 w-3" />
-                                                <span>{prospectInfo.place.formatted_phone_number}</span>
-                                            </div>
-                                        )}
-                                      </div>
-                                  </TableCell>
-                                   <TableCell>
-                                        <div className="flex flex-col items-start">
-                                            <p className="text-sm text-muted-foreground truncate w-60">
-                                                {prospectInfo.description}
-                                            </p>
-                                            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                        </div>
-                                   </TableCell>
-                                  <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                  <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
-                                  <TableCell className="text-right">
-                                      {prospectInfo.existingLead ? (
-                                          <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                              <Eye className="mr-2 h-4 w-4" />
-                                              View Lead
-                                          </Button>
-                                      ) : (
-                                          <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                              {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
-                                              {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
-                                          </Button>
-                                      )}
-                                  </TableCell>
+                   {/* Mobile View: List of Cards */}
+                  <div className="md:hidden space-y-4">
+                      {prospects.map(prospectInfo => (
+                          <Card key={prospectInfo.place.place_id} className="p-4">
+                              <div className="flex items-start justify-between">
+                                  <div className="font-medium pr-2">{prospectInfo.place.name}</div>
+                                  <Checkbox 
+                                      checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
+                                      onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
+                                  />
+                              </div>
+                              <div className="text-sm text-muted-foreground mt-1 mb-2">
+                                  {prospectInfo.place.vicinity}
+                              </div>
+                              {prospectInfo.description && (
+                                  <div className="text-sm my-2">
+                                      <p className="text-muted-foreground line-clamp-2">
+                                          {prospectInfo.description}
+                                      </p>
+                                       <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                  </div>
+                              )}
+                              <div className="flex justify-between items-center mt-2">
+                                  <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
+                                      {prospectInfo.classification}
+                                  </Badge>
+                                  {prospectInfo.existingLead ? (
+                                      <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                          <Eye className="mr-2 h-4 w-4" /> View
+                                      </Button>
+                                  ) : (
+                                      <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                          {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                                          Add
+                                      </Button>
+                                  )}
+                              </div>
+                          </Card>
+                      ))}
+                  </div>
+
+                  {/* Desktop View: Table */}
+                  <div className="hidden md:block">
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
+                                  <TableHead>Company</TableHead>
+                                  <TableHead>Description</TableHead>
+                                  <TableHead>Address</TableHead>
+                                  <TableHead>Type</TableHead>
+                                  <TableHead className="text-right">Action</TableHead>
                               </TableRow>
-                          ))}
-                      </TableBody>
-                  </Table>
+                          </TableHeader>
+                          <TableBody>
+                              {prospects.map(prospectInfo => (
+                                  <TableRow key={prospectInfo.place.place_id}>
+                                      <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
+                                      <TableCell>
+                                          <div className="font-medium">{prospectInfo.place.name}</div>
+                                          <div className="flex gap-2 items-center">
+                                            {prospectInfo.place.website && (
+                                                <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                                    <Globe className="h-3 w-3" />
+                                                    <span>Website</span>
+                                                </a>
+                                            )}
+                                            {prospectInfo.place.formatted_phone_number && (
+                                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <Phone className="h-3 w-3" />
+                                                    <span>{prospectInfo.place.formatted_phone_number}</span>
+                                                </div>
+                                            )}
+                                          </div>
+                                      </TableCell>
+                                       <TableCell>
+                                            <div className="flex flex-col items-start max-w-xs">
+                                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                                    {prospectInfo.description}
+                                                </p>
+                                                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                            </div>
+                                       </TableCell>
+                                      <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                                      <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
+                                      <TableCell className="text-right">
+                                          {prospectInfo.existingLead ? (
+                                              <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                                  <Eye className="mr-2 h-4 w-4" />
+                                                  View Lead
+                                              </Button>
+                                          ) : (
+                                              <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                  {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                                                  {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
+                                              </Button>
+                                          )}
+                                      </TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  </div>
               </div>
               <DialogFooter>
                   <DropdownMenu>
