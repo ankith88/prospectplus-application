@@ -1304,10 +1304,7 @@ interface NewLeadData {
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
-  // const { contact, ...companyData } = data;
-  
   const nsResult = await sendNewLeadToNetSuite(data);
-  
   return nsResult;
 }
 
