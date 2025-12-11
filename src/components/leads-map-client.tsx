@@ -449,7 +449,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         detailedPlace = { ...place, ...details };
                         if(details.website) {
                             try {
-                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', websiteUrl: details.website});
+                                const prospectResult = await aiProspectWebsiteTool({leadId: 'new-lead-prospecting', website: details.website});
                                 if (prospectResult.companyDescription) {
                                     description = prospectResult.companyDescription;
                                 }
@@ -485,15 +485,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     if (!selectedLead || !map) return;
   
     setIsSearchingNearby(true);
+    toast({ title: "Analyzing Website", description: "AI is finding similar prospects..." });
     let searchKeywords: string[] = [];
   
     // 1. Primary Method: AI Website Analysis for keywords
     if (selectedLead.websiteUrl) {
-      toast({ title: "Analyzing Website", description: "AI is finding similar prospects..." });
       try {
         const prospectResult = await aiProspectWebsiteTool({ 
           leadId: selectedLead.id, 
-          websiteUrl: selectedLead.websiteUrl 
+          website: selectedLead.websiteUrl 
         });
         if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
           searchKeywords = prospectResult.searchKeywords;
@@ -506,13 +506,11 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     // 2. Fallback Method: Use Existing AI-Generated Keywords
     if (searchKeywords.length === 0 && selectedLead.discoveryData?.searchKeywords?.length) {
       searchKeywords = selectedLead.discoveryData.searchKeywords;
-      toast({ title: "Using Stored Keywords", description: "Using previously saved keywords for search." });
     }
   
     // 3. Final Fallback: Industry Category
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
       searchKeywords = [selectedLead.industryCategory];
-      toast({ title: "Using Industry Category", description: "No specific keywords found, searching by industry." });
     }
   
     if (searchKeywords.length === 0) {
@@ -564,7 +562,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             try {
                 const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting', // Special ID to prevent saving
-                    websiteUrl: prospect.website,
+                    website: prospect.website,
                 });
 
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
@@ -1227,7 +1225,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 View Profile
                             </Button>
                             <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Find Nearby</>}
+                                {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
                             </Button>
                         </div>
                     </div>
@@ -1400,12 +1398,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                       </div>
                                   </TableCell>
                                    <TableCell className="max-w-xs">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm text-muted-foreground truncate">
-                                            {prospectInfo.description}
-                                        </p>
-                                        <Button variant="ghost" size="sm" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                    </div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm text-muted-foreground truncate">
+                                                {prospectInfo.description}
+                                            </p>
+                                            <Button variant="ghost" size="sm" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                        </div>
                                    </TableCell>
                                   <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                   <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
