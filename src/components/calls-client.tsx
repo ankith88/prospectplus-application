@@ -148,7 +148,7 @@ export default function CallsClientPage() {
   const filteredCalls = useMemo(() => {
     // Group calls by callId to ensure uniqueness
     const uniqueCallsMap = new Map<string, CallActivity>();
-    allCalls.forEach(call => {
+    (allCalls || []).forEach(call => {
         if (call.callId) {
             // Keep the most recent record for a given callId if duplicates exist
             const existing = uniqueCallsMap.get(call.callId);
