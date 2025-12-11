@@ -98,43 +98,9 @@ export const prospectWebsiteTool = ai.defineTool(
   async ({ leadId, websiteUrl }) => {
     let companyDescription = '';
     let searchKeywords: string[] = [];
+    let hunterData: any = {};
     
-    // Step 1: Fetch and analyze website content for a description and keywords. This is non-critical.
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => {
-            controller.abort();
-        }, 10000); // 10-second timeout
-
-        const websiteResponse = await fetch(websiteUrl, { signal: controller.signal as any });
-        
-        clearTimeout(timeout);
-
-        if (websiteResponse.ok) {
-            const html = await websiteResponse.text();
-            const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
-                                    .replace(/<script[^>]*>.*<\/script>/gs, '')
-                                    .replace(/<[^>]+>/g, ' ')
-                                    .replace(/\s+/g, ' ')
-                                    .trim();
-            
-            if (textContent) {
-                const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
-                if (output) {
-                    if (output.summary) companyDescription = output.summary;
-                    if (output.keywords) searchKeywords = output.keywords;
-                }
-            }
-        }
-    } catch (error: any) {
-         if (error.name === 'AbortError') {
-            console.error('Non-critical error: Website content fetch timed out.');
-        } else {
-            console.error('Non-critical error fetching or summarizing website content:', error);
-        }
-    }
-
-    // Step 2: Prospect for contacts using Hunter.io. This is the primary function.
+    // Step 1: Prospect for contacts and initial info using Hunter.io. This is the primary function.
     try {
         const apiKey = process.env.HUNTER_API_KEY;
         if (!apiKey) {
@@ -164,11 +130,62 @@ export const prospectWebsiteTool = ai.defineTool(
         if (!response.ok) {
             const errorBody = await response.text();
             console.error(`Hunter.io API request failed with status: ${response.status}`, errorBody);
-            throw new Error(`Hunter.io API request failed: ${response.statusText}`);
+            // Don't throw, as we can still try AI summary.
+        } else {
+            hunterData = await response.json() as any;
+            if (hunterData?.data?.description) {
+              companyDescription = hunterData.data.description;
+            }
         }
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.error('Non-critical error: Hunter.io API call timed out.');
+        } else {
+            console.error('Non-critical error during Hunter.io prospecting:', error);
+        }
+    }
 
-        const hunterData = await response.json() as any;
 
+    // Step 2: Fetch and analyze website content if Hunter didn't provide a description.
+    if (!companyDescription) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => {
+                controller.abort();
+            }, 10000); // 10-second timeout
+
+            const websiteResponse = await fetch(websiteUrl, { signal: controller.signal as any });
+            
+            clearTimeout(timeout);
+
+            if (websiteResponse.ok) {
+                const html = await websiteResponse.text();
+                const textContent = html.replace(/<style[^>]*>.*<\/style>/gs, '')
+                                        .replace(/<script[^>]*>.*<\/script>/gs, '')
+                                        .replace(/<[^>]+>/g, ' ')
+                                        .replace(/\s+/g, ' ')
+                                        .trim();
+                
+                if (textContent) {
+                    const { output } = await summarizeWebsitePrompt({ siteContent: textContent.substring(0, 8000) });
+                    if (output) {
+                        if (output.summary) companyDescription = output.summary;
+                        if (output.keywords) searchKeywords = output.keywords;
+                    }
+                }
+            }
+        } catch (error: any) {
+             if (error.name === 'AbortError') {
+                console.error('Non-critical error: Website content fetch timed out.');
+            } else {
+                console.error('Non-critical error fetching or summarizing website content:', error);
+            }
+        }
+    }
+
+
+    // Step 3: Process contacts and save to Firebase.
+    try {
         const foundContacts = hunterData?.data?.emails?.map((emailInfo: any, index: number) => {
             const fullName = `${emailInfo.first_name || ''} ${emailInfo.last_name || ''}`.trim();
             return {
@@ -269,3 +286,4 @@ export const prospectWebsiteTool = ai.defineTool(
   }
 );
     
+
