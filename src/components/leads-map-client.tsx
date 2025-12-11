@@ -426,7 +426,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     if (!map) return;
     setIsSearchingNearby(true);
     toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
-    setProspects([]);
     
     const placesService = new window.google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
@@ -436,7 +435,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     placesService.nearbySearch(request, async (results, status) => {
-        setIsSearchingNearby(false);
         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
             const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
@@ -471,18 +469,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             });
 
             const detailedProspects = await Promise.all(detailedProspectsPromises);
-
             setProspects(detailedProspects);
-            
-            if (detailedProspects.length > 0) {
-                setIsProspectsDialogOpen(true);
-                toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
-            } else {
-                toast({ title: "No new prospects found nearby." });
-            }
+            setIsProspectsDialogOpen(true);
+            toast({ title: `Found ${detailedProspects.length} prospects nearby.` });
+
         } else {
              toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
         }
+        setIsSearchingNearby(false);
     });
   }, [map, leads, getPlaceDetails, toast]);
   
