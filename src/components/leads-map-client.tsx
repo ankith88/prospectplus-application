@@ -251,10 +251,10 @@ export default function LeadsMapClient() {
 
   // Automatically show location for Lead Gen users
   useEffect(() => {
-    if (isLoaded && map && userProfile?.role === 'lead gen') {
+    if (isLoaded && map && userProfile?.role === 'lead gen' && !myLocation) {
       handleShowMyLocation();
     }
-  }, [isLoaded, map, userProfile, handleShowMyLocation]);
+  }, [isLoaded, map, userProfile, myLocation, handleShowMyLocation]);
 
 const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMode, leadsForRoute: MapLead[]) => {
     if (!map) return;
@@ -411,7 +411,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return new Promise((resolve) => {
         placesService.getDetails({
             placeId,
-            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types']
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types', 'vicinity']
         }, (place, status) => {
             if (status === google.maps.places.PlacesServiceStatus.OK && place) {
                 resolve(place);
@@ -422,67 +422,71 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     });
   }, [map]);
 
-  const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
+ const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
     if (!map) return;
+    setProspects([]); 
+
     setIsSearchingNearby(true);
     toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
-    
+
     const placesService = new window.google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
-        location,
-        radius: 2000, 
-        keyword,
+      location,
+      radius: 2000,
+      keyword,
     };
 
     placesService.nearbySearch(request, async (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-            const detailedProspectsPromises = openProspects.map(async (place) => {
-                const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
-                
-                // Get full place details first
-                const detailedPlace = place.place_id ? await getPlaceDetails(place.place_id) : place;
+        const detailedProspectsPromises = openProspects.map(async (place) => {
+          const existingLead = leads.find(l => l.companyName.toLowerCase() === place.name?.toLowerCase());
+          
+          const detailedPlace = place.place_id ? await getPlaceDetails(place.place_id) : place;
 
-                if (!detailedPlace) return null;
+          if (!detailedPlace) return null;
 
-                let description = 'No website to analyze.';
-                if (detailedPlace.website) {
-                    try {
-                        const prospectResult = await prospectWebsiteTool({
-                            leadId: 'new-lead-prospecting', 
-                            websiteUrl: detailedPlace.website
-                        });
-                        description = prospectResult.companyDescription || 'Could not summarize website.';
-                    } catch (e) {
-                        console.error('Error prospecting website for description', e);
-                        description = 'AI analysis of website failed.';
-                    }
-                }
-
-                const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-                const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-                
-                return { place: detailedPlace, existingLead, classification, description };
-            });
-            
-            const resolvedProspects = await Promise.all(detailedProspectsPromises);
-            const validProspects = resolvedProspects.filter((p): p is ProspectWithLeadInfo => p !== null);
-
-            setProspects(validProspects);
-            if (validProspects.length > 0) {
-              setIsProspectsDialogOpen(true);
+          let description = 'No website to analyze.';
+          if (detailedPlace.website) {
+            try {
+              const prospectResult = await aiProspectWebsiteTool({
+                leadId: 'new-lead-prospecting',
+                websiteUrl: detailedPlace.website,
+              });
+              description = prospectResult.companyDescription || 'Could not summarize website.';
+            } catch (e) {
+              console.error('Error prospecting website for description', e);
+              description = 'AI analysis of website failed.';
             }
-            toast({ title: `Found ${validProspects.length} prospects nearby.` });
+          }
 
-        } else {
-             toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
-        }
+          const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+          const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+          
+          return { place: detailedPlace, existingLead, classification, description };
+        });
+
+        const resolvedProspects = await Promise.all(detailedProspectsPromises);
+        const validProspects = resolvedProspects.filter((p): p is ProspectWithLeadInfo => p !== null);
+
+        setProspects(validProspects);
         setIsSearchingNearby(false);
+
+        if (validProspects.length > 0) {
+          setIsProspectsDialogOpen(true);
+          toast({ title: `Found ${validProspects.length} prospects nearby.` });
+        } else {
+          toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
+        }
+      } else {
+        toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
+        setIsSearchingNearby(false);
+      }
     });
   }, [map, leads, getPlaceDetails, toast]);
   
-  const handleFindNearby = async () => {
+  const handleFindNearby = useCallback(async () => {
     if (!selectedLead || !map) return;
   
     setIsSearchingNearby(true);
@@ -492,7 +496,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
     if (selectedLead.websiteUrl) {
       try {
-        const prospectResult = await prospectWebsiteTool({ 
+        const prospectResult = await aiProspectWebsiteTool({ 
           leadId: selectedLead.id, 
           websiteUrl: selectedLead.websiteUrl 
         });
@@ -519,7 +523,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
     
     findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
-  };
+  }, [selectedLead, map, toast, findProspects]);
 
 
   const handleFindProspectsNearMe = () => {
@@ -558,7 +562,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
         if (prospect.website) {
             try {
-                const hunterResult = await prospectWebsiteTool({
+                const hunterResult = await aiProspectWebsiteTool({
                     leadId: 'new-lead-prospecting',
                     websiteUrl: prospect.website,
                 });
@@ -1061,7 +1065,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
                                     <div className="flex items-center gap-2">
                                         <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                                        <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}><Search className="h-4 w-4"/></Button>
+                                        <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
+                                            {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4"/>}
+                                        </Button>
                                     </div>
                                 </div>
                                 <div className="space-y-2">
@@ -1371,16 +1377,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                       onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
                                   />
                               </div>
-                              <div className="text-sm text-muted-foreground mt-1 mb-2">
+                               <div className="text-sm text-muted-foreground mt-1">
                                   {prospectInfo.place.vicinity}
                               </div>
                               {prospectInfo.description && (
-                                  <div className="text-sm my-2">
-                                      <p className="text-muted-foreground line-clamp-2">
-                                          {prospectInfo.description}
-                                      </p>
-                                       <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                  </div>
+                                <div className="text-sm my-2">
+                                  <p className="text-muted-foreground line-clamp-2">
+                                    {prospectInfo.description}
+                                  </p>
+                                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                </div>
                               )}
                               <div className="flex justify-between items-center mt-2">
                                   <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
