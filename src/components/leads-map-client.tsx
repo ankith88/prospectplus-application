@@ -340,12 +340,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }));
 
     const companiesWithCoords = allCompanies.filter(
-      (company) => company.latitude != null && company.longitude != null && !isNaN(parseFloat(String(company.latitude))) && !isNaN(parseFloat(String(company.longitude)))
+      (company) => company.latitude != null && company.longitude != null && typeof company.latitude === 'number' && typeof company.longitude === 'number'
     ).map(company => ({
       ...company,
-      status: 'Won' as LeadStatus, // Treat companies as 'Won' for display purposes
-      latitude: parseFloat(String(company.latitude)),
-      longitude: parseFloat(String(company.longitude)),
+      status: 'Won' as LeadStatus,
+      latitude: company.latitude,
+      longitude: company.longitude,
       isCompany: true,
     }));
     
