@@ -1337,6 +1337,33 @@ async function checkForDuplicateLead(companyName: string, phoneNumber: string): 
     return null;
 }
 
+async function deleteLead(leadId: string): Promise<void> {
+    const leadRef = doc(firestore, 'leads', leadId);
+    const subcollections = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments', 'scorecards'];
+
+    try {
+        // Delete all documents in all subcollections
+        for (const subcollection of subcollections) {
+            const subcollectionRef = collection(leadRef, subcollection);
+            const snapshot = await getDocs(subcollectionRef);
+            const batch = writeBatch(firestore);
+            snapshot.docs.forEach(subDoc => {
+                batch.delete(subDoc.ref);
+            });
+            await batch.commit();
+            console.log(`Deleted all documents in subcollection '${subcollection}' for lead ${leadId}.`);
+        }
+
+        // Delete the main lead document
+        await deleteDoc(leadRef);
+        console.log(`Successfully deleted lead document ${leadId}.`);
+
+    } catch (error) {
+        console.error(`Failed to delete lead ${leadId} and its subcollections:`, error);
+        throw new Error('Failed to delete lead from Firebase');
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     getArchivedLeads,
@@ -1388,6 +1415,7 @@ export {
     createNewLead,
     prospectWebsiteTool,
     checkForDuplicateLead,
+    deleteLead,
 };
 
 

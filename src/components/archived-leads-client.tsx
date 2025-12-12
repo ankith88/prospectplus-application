@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getArchivedLeads, getLastNote } from '@/services/firebase'
+import { getArchivedLeads, getLastNote, deleteLead } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
-import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History, RefreshCw, Route } from 'lucide-react'
+import { MapPin, ArrowUpDown, SlidersHorizontal, X, Filter, Calendar as CalendarIcon, User, Star, Download, History, RefreshCw, Route, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -37,6 +37,19 @@ import { Badge } from '@/components/ui/badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { useToast } from '@/hooks/use-toast'
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { MoreHorizontal } from 'lucide-react'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -323,6 +336,17 @@ export default function ArchivedLeadsClientPage() {
         }
     };
 
+    const handleDeleteLead = async (leadId: string, leadName: string) => {
+        try {
+            await deleteLead(leadId);
+            setAllLeads(prev => prev.filter(l => l.id !== leadId));
+            toast({ title: 'Success', description: `Lead "${leadName}" has been permanently deleted.` });
+        } catch (error) {
+            console.error("Failed to delete lead:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the lead.' });
+        }
+    };
+
   if (loading || authLoading) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -541,10 +565,43 @@ export default function ArchivedLeadsClientPage() {
                         {lead.industryCategory}
                       </TableCell>
                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id, lead.activity?.[0] || null)}>
-                              <History className="mr-2 h-4 w-4"/>
-                              {expandedDetails[lead.id] ? 'Hide' : 'History'}
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id, lead.activity?.[0] || null)}>
+                                <History className="mr-2 h-4 w-4" />
+                                {expandedDetails[lead.id] ? 'Hide History' : 'View History'}
+                              </DropdownMenuItem>
+                              {userProfile?.role === 'admin' && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete Lead
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will permanently delete the lead "{lead.companyName}" and all of its associated data (contacts, notes, etc.). This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDeleteLead(lead.id, lead.companyName)} className="bg-destructive hover:bg-destructive/90">
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                       </TableCell>
                     </TableRow>
                      {expandedDetails[lead.id] && (
