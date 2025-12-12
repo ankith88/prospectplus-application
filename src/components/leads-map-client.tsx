@@ -13,7 +13,7 @@ import {
   DrawingManagerF,
   CircleF,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -81,7 +81,7 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean };
+type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean, isCompany?: boolean };
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -148,6 +148,10 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     if (isSelected) {
       return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
+    
+    if (status === 'Won') {
+      return 'http://maps.google.com/mapfiles/ms/icons/green-pushpin.png';
+    }
 
     if (greenStatuses.includes(status)) {
         return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
@@ -169,8 +173,8 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
 
 
 export default function LeadsMapClient() {
-  const [leads, setLeads] = useState<MapLead[]>([])
-  const [loadingLeads, setLoadingLeads] = useState(true)
+  const [mapData, setMapData] = useState<MapLead[]>([])
+  const [loadingData, setLoadingData] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
   const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null)
   const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
@@ -316,9 +320,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [isLoaded]);
 
   
-  const fetchLeads = useCallback(async () => {
-    setLoadingLeads(true);
-    let allLeads = await getLeadsFromFirebase({ summary: true });
+  const fetchMapData = useCallback(async () => {
+    setLoadingData(true);
+    let [allLeads, allCompanies] = await Promise.all([
+        getLeadsFromFirebase({ summary: true }),
+        getCompaniesFromFirebase()
+    ]);
 
     if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
         allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
@@ -330,10 +337,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         ...lead,
         latitude: parseFloat(String(lead.latitude)),
         longitude: parseFloat(String(lead.longitude)),
+        isCompany: false,
+    }));
+
+    const companiesWithCoords = allCompanies.filter(
+      (company) => company.latitude != null && company.longitude != null && !isNaN(parseFloat(String(company.latitude))) && !isNaN(parseFloat(String(company.longitude)))
+    ).map(company => ({
+      ...company,
+      status: 'Won' as LeadStatus, // Treat companies as 'Won' for display purposes
+      latitude: parseFloat(String(company.latitude)),
+      longitude: parseFloat(String(company.longitude)),
+      isCompany: true,
     }));
     
-    setLeads(leadsWithCoords as MapLead[]);
-    setLoadingLeads(false);
+    setMapData([...leadsWithCoords, ...companiesWithCoords] as MapLead[]);
+    setLoadingData(false);
   }, [userProfile]);
   
   useEffect(() => {
@@ -347,22 +365,22 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
   useEffect(() => {
     if (isLoaded && userProfile) {
-      fetchLeads();
+      fetchMapData();
     }
-  }, [isLoaded, fetchLeads, userProfile]);
+  }, [isLoaded, fetchMapData, userProfile]);
   
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(lead.status);
-        const stateMatch = filters.state.length === 0 || (lead.address?.state && filters.state.includes(lead.address.state));
+  const filteredData = useMemo(() => {
+    return mapData.filter(item => {
+        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
         
         return franchiseeMatch && statusMatch && stateMatch;
     });
-  }, [leads, filters]);
+  }, [mapData, filters]);
 
-  const onMarkerClick = useCallback((lead: MapLead) => {
-    setSelectedLead(lead);
+  const onMarkerClick = useCallback((item: MapLead) => {
+    setSelectedLead(item);
   }, []);
 
   const onInfoWindowClose = useCallback(() => {
@@ -391,19 +409,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   };
 
   const uniqueFranchisees: Option[] = useMemo(() => {
-    const franchisees = new Set(leads.map(lead => lead.franchisee).filter(Boolean));
+    const franchisees = new Set(mapData.map(item => item.franchisee).filter(Boolean));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [leads]);
+  }, [mapData]);
 
   const uniqueStatuses: Option[] = useMemo(() => {
-    const statuses = new Set(leads.map(lead => lead.status));
-    return Array.from(statuses).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [leads]);
+    const statuses = new Set(mapData.map(item => item.status));
+    return Array.from(statuses).map(s => ({ value: s, label: s === 'Won' ? 'Signed Customer' : s})).sort((a, b) => a.label.localeCompare(b.label));
+  }, [mapData]);
 
   const uniqueStates: Option[] = useMemo(() => {
-    const states = new Set(leads.map(lead => lead.address?.state).filter(Boolean));
+    const states = new Set(mapData.map(item => item.address?.state).filter(Boolean));
     return Array.from(states as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [leads]);
+  }, [mapData]);
   
   const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
     if (!map) return Promise.resolve(null);
@@ -446,7 +464,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
           const detailedPlace = await getPlaceDetails(place.place_id);
           if (!detailedPlace) return null;
           
-          const existingLead = leads.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
+          const existingLead = mapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
 
           let description = 'No website to analyze.';
           if (detailedPlace.website) {
@@ -484,7 +502,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setIsSearchingNearby(false);
       }
     });
-  }, [map, leads, getPlaceDetails, toast]);
+  }, [map, mapData, getPlaceDetails, toast]);
   
   const handleFindNearby = useCallback(async () => {
     if (!selectedLead || !map) return;
@@ -616,7 +634,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                await fetchLeads(); // Refresh leads on the map
+                await fetchMapData(); // Refresh leads on the map
                 setProspects(prev => prev.map(p => p.place.place_id === placeId
                     ? {
                         ...p,
@@ -688,7 +706,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       }
       window.open(url.toString(), '_blank');
     } else if (lead.id) {
-        window.open(`/leads/${lead.id}`, '_blank');
+        const path = lead.isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`;
+        window.open(path, '_blank');
         logActivity(lead.id, {
             type: 'Update',
             notes: 'Checked in at location via map.'
@@ -753,7 +772,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         
         if (!center || !radius) return;
 
-        const leadsInCircle = filteredLeads.filter(lead => {
+        const leadsInCircle = filteredData.filter(lead => {
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
                 const distance = window.google.maps.geometry.spherical.computeDistanceBetween(center, leadLatLng);
@@ -775,7 +794,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
-    }, [map, filteredLeads, toast]);
+    }, [map, filteredData, toast]);
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
@@ -897,7 +916,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return <div>Error loading maps. Please check your API key and network connection.</div>
   }
 
-  if (!isLoaded || loadingLeads || authLoading) {
+  if (!isLoaded || loadingData || authLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
@@ -1001,7 +1020,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     <div className="flex items-center gap-2">
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
-                        <Badge variant="secondary">{filteredLeads.length} lead(s)</Badge>
+                        <Badge variant="secondary">{filteredData.length} item(s)</Badge>
                     </div>
                      <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm">
@@ -1155,13 +1174,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     options={{ preserveViewport: true, suppressInfoWindows: true }}
                     onClick={onKmlLayerClick}
                 />
-                {filteredLeads.map((lead) => (
+                {filteredData.map((item) => (
                     <MarkerF
-                        key={lead.id}
-                        position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                        onClick={() => onMarkerClick(lead)}
+                        key={item.id}
+                        position={{ lat: item.latitude!, lng: item.longitude! }}
+                        onClick={() => onMarkerClick(item)}
                         icon={{ 
-                        url: getPinColor(lead.status, selectedRouteLeads.some(l => l.id === lead.id)),
+                        url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
                         scaledSize: new window.google.maps.Size(32, 32)
                         }}
                         visible={directions === null} // Hide original markers when route is active
@@ -1223,13 +1242,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             {formatAddress(selectedLead.address)}
                         </p>
                         <div className="flex items-center gap-2">
-                            <Button size="sm" onClick={() => window.open(`/leads/${selectedLead.id}`, '_blank')}>
+                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
-                            <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
-                            </Button>
+                            {!selectedLead.isCompany && (
+                              <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                  {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
+                              </Button>
+                            )}
                         </div>
                     </div>
                     </InfoWindowF>
@@ -1455,9 +1476,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                       <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                       <TableCell className="text-right">
                                           {prospectInfo.existingLead ? (
-                                              <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                              <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
                                                   <Eye className="mr-2 h-4 w-4" />
-                                                  View Lead
+                                                  View
                                               </Button>
                                           ) : (
                                               <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
