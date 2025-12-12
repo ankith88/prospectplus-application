@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -134,7 +135,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
                                     <TableRow key={invoice.id}>
                                         <TableCell className="font-medium">{invoice.documentId}</TableCell>
                                         <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
-                                        <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -151,7 +152,8 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
 }
 
 
-export function CompanyProfile({ initialCompany: company }: CompanyProfileProps) {
+export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
+  const company = initialCompany;
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
@@ -518,3 +520,5 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
     </>
   )
 }
+
+    
