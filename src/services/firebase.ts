@@ -190,6 +190,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          invoices: [],
         };
 
         if (includeSubCollections) {
@@ -566,7 +567,14 @@ async function getSubCollection<T>(parentCollection: string, docId: string, subC
         const ref = collection(firestore, parentCollection, docId, subCollectionName);
         const q = query(ref, orderBy(orderByField, orderDirection));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            // Special handling for invoiceType
+            if (subCollectionName === 'invoices' && !data.invoiceType) {
+                data.invoiceType = 'Service';
+            }
+            return { id: doc.id, ...data } as T;
+        });
     } catch (error) {
         console.error(`Failed to fetch sub-collection ${subCollectionName} for doc ${docId} in ${parentCollection}:`, error);
         return [];
@@ -1615,5 +1623,6 @@ export {
 
 
     
+
 
 

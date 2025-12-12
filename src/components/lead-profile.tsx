@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -169,8 +169,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [loadingBack, setLoadingBack] = useState(false);
 
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  const isCompanyProfile = pathname.startsWith('/companies/');
 
   useEffect(() => {
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
@@ -1078,15 +1081,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <FileDigit className="w-5 h-5 text-muted-foreground" />
-                    Invoices
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                {invoices.length > 0 ? (
+          {isCompanyProfile && invoices.length > 0 && (
+              <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileDigit className="w-5 h-5 text-muted-foreground" />
+                        Invoices
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -1099,18 +1102,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {invoices.map((invoice) => (
                                 <TableRow key={invoice.id}>
                                     <TableCell className="font-medium">{invoice.documentId}</TableCell>
-                                    <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
+                                    <TableCell>{invoice.invoiceType}</TableCell>
                                     <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
-                ) : (
-                    !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No invoices for this customer yet.</p>
-                )}
-                {loadingSubcollections && <div className="flex justify-center p-4"><Loader /></div>}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+          )}
           
           <Card>
             <CardHeader>
@@ -1392,7 +1392,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             ))}
                             </>
                         ) : (
-                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead.</p>
+                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead yet.</p>
                         )}
                             {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </div>
