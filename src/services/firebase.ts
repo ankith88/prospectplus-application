@@ -268,7 +268,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
-          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          profile: `A company profile for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
           latitude: data.latitude,
           longitude: data.longitude,
