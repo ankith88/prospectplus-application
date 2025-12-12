@@ -31,13 +31,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import {
   Table,
   TableBody,
   TableCell,
@@ -51,8 +44,6 @@ import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { ScrollArea } from './ui/scroll-area'
-import { collection, getDocs } from 'firebase/firestore'
-import { firestore } from '@/lib/firebase'
 import { LogNoteDialog } from './log-note-dialog'
 
 
@@ -61,92 +52,15 @@ interface CompanyProfileProps {
   onNoteLogged: (newNote: Note) => void;
 }
 
-function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, open: boolean, onOpenChange: (open: boolean) => void }) {
-    const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (open && companyId) {
-            const fetchInvoices = async () => {
-                setLoading(true);
-                try {
-                    const invoicesRef = collection(firestore, 'companies', companyId, 'invoices');
-                    const snapshot = await getDocs(invoicesRef);
-                    const invoiceData = snapshot.docs.map(doc => ({ 
-                        id: doc.id,
-                        documentId: doc.id,
-                        invoiceDocumentID: doc.data().invoiceDocumentID,
-                        invoiceDate: doc.data().invoiceDate,
-                        invoiceTotal: doc.data().invoiceTotal, 
-                        invoiceType: doc.data().invoiceType || 'Service' 
-                    } as Invoice));
-                    setInvoices(invoiceData);
-                } catch (error) {
-                    console.error("Failed to fetch invoices:", error);
-                } finally {
-                    setLoading(false);
-                }
-            };
-            fetchInvoices();
-        }
-    }, [open, companyId]);
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle>Invoices</DialogTitle>
-                    <DialogDescription>
-                        Showing all invoices for this company.
-                    </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh]">
-                    {loading ? (
-                        <div className="flex justify-center items-center h-40">
-                            <Loader />
-                        </div>
-                    ) : invoices.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Invoice Date</TableHead>
-                                    <TableHead>Invoice ID</TableHead>
-                                    <TableHead>Service Type</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {invoices.map((invoice) => (
-                                    <TableRow key={invoice.id}>
-                                        <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
-                                        <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
-                                        <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
-                                        <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    ) : (
-                        <div className="text-center py-10 text-muted-foreground">
-                            No invoices found for this company.
-                        </div>
-                    )}
-                </ScrollArea>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
-  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [] } = initialCompany;
+  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = initialCompany;
   const company = initialCompany;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
@@ -177,11 +91,6 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   return (
     <>
-    <InvoicesDialog 
-        companyId={company.id} 
-        open={isInvoiceDialogOpen} 
-        onOpenChange={setIsInvoiceDialogOpen} 
-    />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -441,11 +350,35 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         Financial records for this company.
                     </CardDescription>
                 </CardHeader>
-                 <CardContent>
-                    <Button variant="outline" size="sm" onClick={() => setIsInvoiceDialogOpen(true)}>
-                        <FileDigit className="mr-2 h-4 w-4" />
-                        View All Invoices
-                    </Button>
+                <CardContent>
+                    <ScrollArea className="max-h-[60vh]">
+                        {invoices.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Invoice Date</TableHead>
+                                        <TableHead>Invoice ID</TableHead>
+                                        <TableHead>Service Type</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {invoices.map((invoice) => (
+                                        <TableRow key={invoice.id}>
+                                            <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
+                                            <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
+                                            <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="text-center py-10 text-muted-foreground">
+                                No invoices found for this company.
+                            </div>
+                        )}
+                    </ScrollArea>
                 </CardContent>
             </Card>
 

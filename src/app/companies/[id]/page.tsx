@@ -42,7 +42,11 @@ export default function CompanyProfilePage() {
   }, [params]);
   
   const handleNoteLogged = (newNote: Note) => {
-    setCompany(prev => prev ? ({...prev, notes: [newNote, ...(prev.notes || [])]}) : null);
+    setCompany(prev => {
+        if (!prev) return null;
+        const updatedNotes = [newNote, ...(prev.notes || [])];
+        return { ...prev, notes: updatedNotes };
+    });
   };
 
   if (loading) {
