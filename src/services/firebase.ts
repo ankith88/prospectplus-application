@@ -200,14 +200,16 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 notes,
                 transcripts,
                 tasks,
-                appointments
+                appointments,
+                invoices
             ] = await Promise.all([
                 getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
                 getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
                 getSubCollection<Note>('leads', leadId, 'notes', 'date'),
                 getSubCollection<Transcript>('leads', leadId, 'transcripts', 'date'),
                 getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
-                getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate')
+                getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate'),
+                getSubCollection<Invoice>('leads', leadId, 'invoices', documentId())
             ]);
 
             transformedLead.contacts = contacts;
@@ -216,6 +218,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             transformedLead.transcripts = transcripts;
             transformedLead.tasks = tasks;
             transformedLead.appointments = appointments;
+            transformedLead.invoices = invoices;
             transformedLead.contactCount = contacts.length;
         }
 
@@ -1623,6 +1626,3 @@ export {
 
 
     
-
-
-
