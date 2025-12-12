@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -1067,7 +1066,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
           </div>
 
-          {invoices.length > 0 && (
+          {pathname.startsWith('/companies/') && invoices && invoices.length > 0 && (
               <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">

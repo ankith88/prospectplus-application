@@ -1,5 +1,4 @@
 
-
 'use client';
 import { notFound, useParams } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
@@ -41,17 +40,17 @@ export default function CompanyProfilePage() {
     fetchCompany();
   }, [params]);
 
-  if (error) {
-    notFound();
-    return null;
-  }
-
   if (loading || !company) {
     return (
         <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
             <Loader />
         </div>
     );
+  }
+  
+  if (error) {
+    notFound();
+    return null;
   }
   
   return <LeadProfile initialLead={company} />;
