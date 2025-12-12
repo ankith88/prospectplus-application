@@ -23,10 +23,11 @@ export default function CompanyProfilePage() {
 
     const fetchCompany = async () => {
       try {
-        const companyData = await getCompanyFromFirebase(id, true); // Ensure subcollections are fetched
+        const companyData = await getCompanyFromFirebase(id, true); // This fetches all subcollections, including invoices.
         if (!companyData) {
           setError(true);
         } else {
+          // Set the complete company data, including the fetched invoices, into state.
           setCompany(companyData);
         }
       } catch (e) {
@@ -53,5 +54,6 @@ export default function CompanyProfilePage() {
     );
   }
   
+  // Pass the complete company object, which now correctly includes the invoices array, to the LeadProfile.
   return <LeadProfile initialLead={company} />;
 }
