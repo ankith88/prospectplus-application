@@ -75,7 +75,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { format } from 'date-fns'
 import { getSubCollection } from '@/services/firebase';
 import { ScrollArea } from './ui/scroll-area'
-import { documentId } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore'
+import { firestore } from '@/lib/firebase'
 
 
 interface CompanyProfileProps {
@@ -91,7 +92,9 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
             const fetchInvoices = async () => {
                 setLoading(true);
                 try {
-                    const invoiceData = await getSubCollection<Invoice>('companies', companyId, 'invoices', documentId());
+                    const invoicesRef = collection(firestore, 'companies', companyId, 'invoices');
+                    const snapshot = await getDocs(invoicesRef);
+                    const invoiceData = snapshot.docs.map(doc => ({ id: doc.id, documentId: doc.data().documentId, invoiceTotal: doc.data().invoiceTotal, invoiceType: doc.data().invoiceType || 'Service' } as Invoice));
                     setInvoices(invoiceData);
                 } catch (error) {
                     console.error("Failed to fetch invoices:", error);
@@ -515,5 +518,3 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
     </>
   )
 }
-
-    
