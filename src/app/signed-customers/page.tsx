@@ -181,7 +181,7 @@ export default function SignedCustomersPage() {
                   filteredSignedLeads.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell>
-                         <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                         <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                             <Building className="h-4 w-4" />
                             {lead.companyName}
                         </Button>

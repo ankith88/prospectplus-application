@@ -226,6 +226,105 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
     }
 }
 
+async function getCompanyFromFirebase(companyId: string, includeSubCollections = true): Promise<Lead | null> {
+    if (!companyId) {
+        console.error("getCompanyFromFirebase called with an undefined or null companyId.");
+        return null;
+    }
+    try {
+        const companyRef = doc(firestore, 'companies', companyId);
+        const docSnapshot = await getDoc(companyRef);
+
+        if (!docSnapshot.exists()) {
+            console.log(`No company found with ID: ${companyId}`);
+            return null;
+        }
+
+        const data = docSnapshot.data() || {};
+        const companyName = data.companyName || 'Unknown Company';
+        
+        let address: Address | undefined;
+        if (data.address && typeof data.address === 'object') {
+            address = data.address;
+        } else if (data.street || data.city || data.state || data.zip || data.country) {
+          address = {
+            address1: data.address1 || '',
+            street: data.street || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            country: data.country || ''
+          };
+        }
+
+        const transformedCompany: Lead = {
+          id: docSnapshot.id,
+          entityId: data['customerEntityId'] || data['internalid'] || '',
+          salesRecordInternalId: data.salesRecordInternalId,
+          companyName: companyName,
+          status: safeGetStatus(data.customerStatus),
+          statusReason: data.statusReason,
+          profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          address: address,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          franchisee: data.franchisee,
+          websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
+          industryCategory: data.industryCategory,
+          industrySubCategory: data.industrySubCategory,
+          salesRepAssigned: data.salesRepAssigned,
+          salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
+          dialerAssigned: data.dialerAssigned,
+          campaign: data.customerSource,
+          customerServiceEmail: data.customerServiceEmail,
+          customerPhone: data.customerPhone,
+          aiScore: data.aiScore,
+          aiReason: data.aiReason,
+          discoveryData: data.discoveryData,
+          companyDescription: data.companyDescription,
+          leadType: data.leadType,
+          demoCompleted: data.demoCompleted,
+        };
+        
+        // Note: Subcollections are assumed to be in the 'leads' collection structure. 
+        // If companies have a different subcollection structure, this part will need adjustment.
+        if (includeSubCollections) {
+            const leadIdForSubcollections = docSnapshot.id;
+            const [
+                contacts,
+                activities,
+                notes,
+                transcripts,
+                tasks,
+                appointments
+            ] = await Promise.all([
+                getLeadSubCollection<Contact>(leadIdForSubcollections, 'contacts', documentId()),
+                getLeadSubCollection<Activity>(leadIdForSubcollections, 'activity', 'date'),
+                getLeadSubCollection<Note>(leadIdForSubcollections, 'notes', 'date'),
+                getLeadSubCollection<Transcript>(leadIdForSubcollections, 'transcripts', 'date'),
+                getLeadSubCollection<Task>(leadIdForSubcollections, 'tasks', 'dueDate', 'asc'),
+                getLeadSubCollection<Appointment>(leadIdForSubcollections, 'appointments', 'duedate')
+            ]);
+
+            transformedCompany.contacts = contacts;
+            transformedCompany.activity = activities;
+            transformedCompany.notes = notes;
+            transformedCompany.transcripts = transcripts;
+            transformedCompany.tasks = tasks;
+            transformedCompany.appointments = appointments;
+            transformedCompany.contactCount = contacts.length;
+        }
+
+
+        return transformedCompany;
+
+    } catch (error) {
+        console.error(`Firebase fetch failed for company ${companyId}:`, error);
+        return null;
+    }
+}
+
+
 async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean, dialerAssigned?: string }): Promise<Lead[]> {
   const { leadId, summary = false, dialerAssigned } = options || {};
   
@@ -1447,6 +1546,7 @@ async function deleteLead(leadIds: string | string[]): Promise<void> {
 export { 
     getLeadsFromFirebase,
     getCompaniesFromFirebase,
+    getCompanyFromFirebase,
     getArchivedLeads,
     addContactToLead,
     updateLeadSalesRep,
@@ -1514,3 +1614,4 @@ export {
 
 
     
+
