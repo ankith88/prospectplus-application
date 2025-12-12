@@ -23,6 +23,7 @@ export default function CompanyProfilePage() {
 
     const fetchCompany = async () => {
       try {
+        setLoading(true); // Set loading to true at the start of fetch
         const companyData = await getCompanyFromFirebase(id, true); // Fetch all subcollections
         if (!companyData) {
           setError(true);

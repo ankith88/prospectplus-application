@@ -48,33 +48,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice } from '@/lib/types'
-import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
-import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getCompanyFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import { ScoreIndicator } from '@/components/score-indicator'
-import { Badge } from '@/components/ui/badge'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -92,94 +68,25 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AddContactForm } from '@/components/add-contact-form'
-import { EditContactForm } from '@/components/edit-contact-form'
-import { LogNoteDialog } from '@/components/log-note-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
-import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'
-import { firestore } from '@/lib/firebase'
-import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
-import { TranscriptViewer } from './transcript-viewer'
-import { Input } from './ui/input'
-import { Checkbox } from './ui/checkbox'
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { Calendar as CalendarIcon } from 'lucide-react'
-import { format, startOfDay, endOfDay } from 'date-fns'
-import type { DateRange } from 'react-day-picker'
-import { Calendar as CalendarPicker } from './ui/calendar'
-import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { AddressAutocomplete } from './address-autocomplete'
-import { cn } from '@/lib/utils'
-import { DiscoveryRadarChart } from './discovery-radar-chart'
-import { ColdCallScorecardDialog } from './cold-call-scorecard';
+import { format } from 'date-fns'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
 }
 
-const salesReps = [
-    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
-    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
-    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
-];
-
-export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
-  const company = initialCompany; // Use the prop directly
-  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
-  const [isImprovingScript, setIsImprovingScript] = useState(false);
-  const [isProspecting, setIsProspecting] = useState(false);
-  const [scoringLoading, setScoringLoading] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
-  const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
-  const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
-  const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
-  const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
+export function CompanyProfile({ initialCompany: company }: CompanyProfileProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
-  const [showPostCallDialog, setShowPostCallDialog] = useState(false);
-  const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
-  const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
-  const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
-
   const [loadingBack, setLoadingBack] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [], invoices = [] } = company;
-
-  useEffect(() => {
-    if (company.aiScore) {
-      setScoringResult({
-        leadId: company.id,
-        score: company.aiScore,
-        reason: company.aiReason || '',
-        prospectedContacts: [],
-      });
-    }
-  }, [company]);
-
-
-  const handleCallLogged = (newStatus?: LeadStatus) => {
-    // A full re-fetch might be the simplest to ensure data consistency.
-    // For now, this is a placeholder. The parent page would need to handle the update.
-    if (newStatus) {
-       // Parent page would refetch
-    }
-};
+  const { contacts = [], activity: activities = [], notes = [], appointments = [], invoices = [] } = company;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -207,8 +114,6 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
     ? [company.address.address1, company.address.street, company.address.city, company.address.state, company.address.zip, company.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = contacts && contacts.length > 0 ? contacts[0] : null;
-
   return (
     <>
     <div className="flex flex-col gap-6">
@@ -225,9 +130,7 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
             <h1 className="text-3xl font-bold">{company.companyName}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={company.status} />
-                <>
-                  <p className="text-muted-foreground">&bull; {contacts?.length || 0} {contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
-                </>
+              <p className="text-muted-foreground">&bull; {contacts?.length || 0} {contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
             </div>
           </div>
         </div>
@@ -333,11 +236,9 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                       <div className="flex items-center gap-1">
                         <span className="font-medium break-all">{company.customerPhone ?? 'N/A'}</span>
                         {company.customerPhone && (
-                            <>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(company.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
                             </Button>
-                            </>
                         )}
                       </div>
                     </div>
