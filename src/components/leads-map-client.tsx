@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -371,11 +370,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
   const filteredData = useMemo(() => {
     return mapData.filter(item => {
-        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
-        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+      const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+      
+      const selectedStatuses = filters.status.includes('Won')
+        ? [...filters.status.filter(s => s !== 'Won'), 'Won']
+        : filters.status;
         
-        return franchiseeMatch && statusMatch && stateMatch;
+      const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+      const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+      
+      return franchiseeMatch && statusMatch && stateMatch;
     });
   }, [mapData, filters]);
 
