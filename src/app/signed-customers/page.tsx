@@ -23,7 +23,7 @@ import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Building, Mail, MapPin, Phone, Star } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getLeadsFromFirebase } from '@/services/firebase'
+import { getCompaniesFromFirebase } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 
 export default function SignedCustomersPage() {
@@ -36,9 +36,8 @@ export default function SignedCustomersPage() {
   const fetchSignedLeads = async () => {
     try {
       setLoading(true);
-      const allLeads = await getLeadsFromFirebase({ summary: true });
-      const wonLeads = allLeads.filter(lead => lead.status === 'Won');
-      setSignedLeads(wonLeads);
+      const companies = await getCompaniesFromFirebase();
+      setSignedLeads(companies);
     } catch (error) {
       console.error("Failed to fetch signed customers:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch signed customers.' });
