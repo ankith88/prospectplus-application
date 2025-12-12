@@ -45,14 +45,18 @@ import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { ScrollArea } from './ui/scroll-area'
 import { LogNoteDialog } from './log-note-dialog'
+import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { firestore } from '@/lib/firebase'
 
 
 interface CompanyProfileProps {
   initialCompany: Lead;
-  onNoteLogged: (newNote: Note) => void;
 }
 
-export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
+export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
+  const [company, setCompany] = useState<Lead>(initialCompany);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
 
@@ -60,8 +64,37 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = initialCompany;
-  const company = initialCompany;
+  useEffect(() => {
+    setCompany(initialCompany);
+  }, [initialCompany]);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!company.id) return;
+      setLoadingInvoices(true);
+      try {
+        const invoicesRef = collection(firestore, 'companies', company.id, 'invoices');
+        const invoicesSnapshot = await getDocs(invoicesRef);
+        const invoicesData = invoicesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Invoice));
+        setInvoices(invoicesData);
+      } catch (error) {
+        console.error("Failed to fetch invoices:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Could not load invoices for this company.",
+        });
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    
+    fetchInvoices();
+  }, [company.id, toast]);
+
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -75,6 +108,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const handleBackToLeads = () => {
     setLoadingBack(true);
     router.push('/signed-customers');
+  };
+  
+  const handleNoteLogged = (newNote: Note) => {
+    setCompany(prev => ({ ...prev, notes: [newNote, ...(prev.notes || [])] }));
   };
 
   if (!user) {
@@ -105,12 +142,12 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <h1 className="text-3xl font-bold">{company.companyName}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={company.status} />
-              <p className="text-muted-foreground">&bull; {contacts?.length || 0} {contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
+              <p className="text-muted-foreground">&bull; {company.contacts?.length || 0} {company.contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
             </div>
           </div>
         </div>
          <div className="flex flex-wrap items-center gap-2">
-            <LogNoteDialog lead={company} onNoteLogged={onNoteLogged}>
+            <LogNoteDialog lead={company} onNoteLogged={handleNoteLogged}>
               <Button variant="outline">
                 <ClipboardEdit className="mr-2 h-4 w-4" />
                 Log a Note
@@ -264,9 +301,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                    {contacts.length > 0 ? (
+                    {company.contacts && company.contacts.length > 0 ? (
                     <div className="space-y-4">
-                    {contacts.map((contact, index) => (
+                    {company.contacts.map((contact, index) => (
                         <Card key={contact.id || index} className="p-4">
                             <CardHeader className="flex-row items-start justify-between pb-2 p-0">
                                 <div>
@@ -352,7 +389,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="max-h-[60vh]">
-                        {invoices.length > 0 ? (
+                        {loadingInvoices ? (
+                            <div className="flex justify-center py-10"><Loader /></div>
+                        ) : invoices.length > 0 ? (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -396,9 +435,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             <TabsTrigger value="activity">Activity History</TabsTrigger>
                         </TabsList>
                         <TabsContent value="notes">
-                            {notes.length > 0 ? (
+                            {company.notes && company.notes.length > 0 ? (
                                 <div className="space-y-4 mt-4">
-                                {notes.map(note => (
+                                {company.notes.map(note => (
                                 <div key={note.id} className="text-sm border-l-2 pl-4">
                                     <p className="whitespace-pre-wrap">{note.content}</p>
                                     <p className="text-xs text-muted-foreground mt-2">
@@ -412,9 +451,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             )}
                         </TabsContent>
                         <TabsContent value="activity">
-                            {activities.length > 0 ? (
+                            {company.activity && company.activity.length > 0 ? (
                                 <ul className="space-y-4 mt-4">
-                                {activities.map((item, index) => (
+                                {company.activity.map((item, index) => (
                                     <li key={item.id} className="flex gap-4 group">
                                     <div className="flex flex-col items-center">
                                         <div className="bg-secondary rounded-full p-2">
@@ -423,7 +462,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                         {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
                                         {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                                         </div>
-                                        {activities && index < activities.length - 1 && (
+                                        {company.activity && index < company.activity.length - 1 && (
                                             <div className="w-px h-full bg-border"></div>
                                         )}
                                     </div>
@@ -447,7 +486,6 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 </CardContent>
           </Card>
         </div>
-
         <div className="lg:col-span-1 flex flex-col gap-6">
         </div>
       </main>
