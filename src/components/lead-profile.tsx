@@ -139,7 +139,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialLead.transcripts || []);
   const [tasks, setTasks] = useState<Task[]>(initialLead.tasks || []);
   const [appointments, setAppointments] = useState<Appointment[]>(initialLead.appointments || []);
-  const [invoices, setInvoices] = useState<Invoice[]>(initialLead.invoices || []);
 
   const [loadingSubcollections, setLoadingSubcollections] = useState(false);
   
@@ -174,6 +173,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const { user, userProfile } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
+  const invoices = initialLead.invoices || [];
 
   useEffect(() => {
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
@@ -205,8 +205,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   useEffect(() => {
     if (!initialLead) return;
 
-    // The data is now pre-fetched on the server, so we just set it to state.
-    // Real-time updates can be re-introduced with targeted listeners if needed.
     setLead(initialLead);
     setContacts(initialLead.contacts || []);
     setActivities(initialLead.activity || []);
@@ -214,7 +212,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setTranscripts(initialLead.transcripts || []);
     setTasks(initialLead.tasks || []);
     setAppointments(initialLead.appointments || []);
-    setInvoices(initialLead.invoices || []);
 
   }, [initialLead]);
 
@@ -527,7 +524,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleBackToLeads = () => {
     setLoadingBack(true);
-    router.push('/leads');
+    const destination = isCompanyProfile ? '/signed-customers' : '/leads';
+    router.push(destination);
   };
 
   const getCalendlyLink = (url: string) => {
@@ -627,7 +625,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
           {loadingBack ? <Loader /> : <ArrowLeft className="mr-2 h-4 w-4" />}
-          Back to All Leads
+          Back to {isCompanyProfile ? 'Signed Customers' : 'All Leads'}
         </Button>
         {isSessionActive && (
           <div className="flex items-center gap-2">
@@ -1088,7 +1086,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
           </div>
 
-          {isCompanyProfile && invoices && invoices.length > 0 && (
+          {isCompanyProfile && invoices.length > 0 && (
               <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">

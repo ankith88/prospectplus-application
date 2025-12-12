@@ -23,7 +23,7 @@ export default function CompanyProfilePage() {
 
     const fetchCompany = async () => {
       try {
-        const companyData = await getCompanyFromFirebase(id, true);
+        const companyData = await getCompanyFromFirebase(id, true); // Ensure subcollections are fetched
         if (!companyData) {
           setError(true);
         } else {
@@ -53,6 +53,7 @@ export default function CompanyProfilePage() {
     );
   }
   
+  // Pass the entire company object, including invoices, to the LeadProfile component.
   return <LeadProfile 
             initialLead={company} 
         />;
