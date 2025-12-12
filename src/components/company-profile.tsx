@@ -75,6 +75,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { format } from 'date-fns'
 import { getSubCollection } from '@/services/firebase';
 import { ScrollArea } from './ui/scroll-area'
+import { documentId } from 'firebase/firestore'
 
 
 interface CompanyProfileProps {
@@ -514,3 +515,5 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
     </>
   )
 }
+
+    
