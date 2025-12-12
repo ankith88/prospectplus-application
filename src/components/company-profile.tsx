@@ -73,20 +73,90 @@ import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { format } from 'date-fns'
+import { getSubCollection } from '@/services/firebase';
+import { ScrollArea } from './ui/scroll-area'
+
 
 interface CompanyProfileProps {
   initialCompany: Lead;
 }
 
+function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, open: boolean, onOpenChange: (open: boolean) => void }) {
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (open && companyId) {
+            const fetchInvoices = async () => {
+                setLoading(true);
+                try {
+                    const invoiceData = await getSubCollection<Invoice>('companies', companyId, 'invoices', documentId());
+                    setInvoices(invoiceData);
+                } catch (error) {
+                    console.error("Failed to fetch invoices:", error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchInvoices();
+        }
+    }, [open, companyId]);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Invoices</DialogTitle>
+                    <DialogDescription>
+                        Showing all invoices for this company.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh]">
+                    {loading ? (
+                        <div className="flex justify-center items-center h-40">
+                            <Loader />
+                        </div>
+                    ) : invoices.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Invoice ID</TableHead>
+                                    <TableHead>Service Type</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {invoices.map((invoice) => (
+                                    <TableRow key={invoice.id}>
+                                        <TableCell className="font-medium">{invoice.documentId}</TableCell>
+                                        <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
+                                        <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <div className="text-center py-10 text-muted-foreground">
+                            No invoices found for this company.
+                        </div>
+                    )}
+                </ScrollArea>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 export function CompanyProfile({ initialCompany: company }: CompanyProfileProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [], appointments = [], invoices = [] } = company;
+  const { contacts = [], activity: activities = [], notes = [] } = company;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -116,6 +186,11 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
 
   return (
     <>
+    <InvoicesDialog 
+        companyId={company.id} 
+        open={isInvoiceDialogOpen} 
+        onOpenChange={setIsInvoiceDialogOpen} 
+    />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -144,6 +219,10 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
                  <Building className="w-5 h-5 text-muted-foreground" />
                  Company Details
                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setIsInvoiceDialogOpen(true)}>
+                    <FileDigit className="mr-2 h-4 w-4" />
+                    View Invoices
+                </Button>
              </CardHeader>
              <CardContent className="space-y-4">
                 {company.companyDescription && (
@@ -356,37 +435,6 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
                 </CardContent>
             </Card>
           </div>
-            
-          {invoices && invoices.length > 0 && (
-              <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <FileDigit className="w-5 h-5 text-muted-foreground" />
-                        Invoices
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Invoice ID</TableHead>
-                                <TableHead>Service Type</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {invoices.map((invoice) => (
-                                <TableRow key={invoice.id}>
-                                    <TableCell className="font-medium">{invoice.documentId}</TableCell>
-                                    <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
-                                    <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-              </Card>
-          )}
 
           <Card>
             <CardHeader>
@@ -455,41 +503,6 @@ export function CompanyProfile({ initialCompany: company }: CompanyProfileProps)
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6">
-          <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-muted-foreground" />
-                        Appointments
-                    </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    {appointments.length > 0 ? (
-                        <>
-                        {appointments.map(appointment => (
-                            <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                            <div className="flex items-center gap-4">
-                                <div className="text-center">
-                                    <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
-                                    <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium">
-                                        Appointment with {appointment.assignedTo}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                    </p>
-                                </div>
-                            </div>
-                            </div>
-                        ))}
-                        </>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this company yet.</p>
-                    )}
-                </CardContent>
-          </Card>
         </div>
       </main>
     </div>
