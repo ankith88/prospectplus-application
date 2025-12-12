@@ -25,7 +25,7 @@ import {
   ClipboardEdit,
   Tag,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Lead, Contact, Activity, Note, Address, Invoice } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -65,7 +65,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(false);
 
-    useState(() => {
+    useEffect(() => {
         if (open && companyId) {
             const fetchInvoices = async () => {
                 setLoading(true);
@@ -89,7 +89,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
             };
             fetchInvoices();
         }
-    });
+    }, [open, companyId]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,7 +146,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = initialCompany;
+  const { contacts = [], activity: activities = [], notes = [] } = initialCompany;
   const company = initialCompany;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
