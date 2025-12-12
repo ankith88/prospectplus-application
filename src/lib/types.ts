@@ -125,6 +125,8 @@ export interface DiscoveryData {
 export interface Invoice {
     id: string;
     documentId: string;
+    invoiceDocumentID?: string;
+    invoiceDate?: string;
     invoiceTotal: number;
     invoiceType: string;
 }

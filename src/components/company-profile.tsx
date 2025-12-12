@@ -1,64 +1,40 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   ArrowLeft,
   Building,
   Building2,
   Calendar,
-  CheckCircle,
   Clipboard,
-  Edit,
   Globe,
   Hash,
   Key,
-  Lightbulb,
   Link as LinkIcon,
   MessageSquare,
   Mail,
-  MoreVertical,
-  Phone,
-  PlusCircle,
-  Sparkles,
-  Tag,
-  Trash2,
-  User,
-  Users,
-  ClipboardEdit,
   Briefcase,
   MapPin,
-  Info,
   Search,
-  BookText,
-  FileText,
-  PhoneCall,
-  Download,
-  Voicemail,
-  ListTodo,
-  FileQuestion,
-  Route,
-  Clock,
-  SkipForward,
-  ChevronDown,
   History,
-  XCircle,
+  Phone,
+  User,
+  Users,
   FileDigit,
+  ClipboardEdit,
 } from 'lucide-react'
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice } from '@/lib/types'
+import { useState } from 'react'
+import type { Lead, Contact, Activity, Note, Address, Invoice } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -73,11 +49,10 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { format } from 'date-fns'
-import { getSubCollection } from '@/services/firebase';
 import { ScrollArea } from './ui/scroll-area'
 import { collection, getDocs } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
+import { LogNoteDialog } from './log-note-dialog'
 
 
 interface CompanyProfileProps {
@@ -88,14 +63,21 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
+    useState(() => {
         if (open && companyId) {
             const fetchInvoices = async () => {
                 setLoading(true);
                 try {
                     const invoicesRef = collection(firestore, 'companies', companyId, 'invoices');
                     const snapshot = await getDocs(invoicesRef);
-                    const invoiceData = snapshot.docs.map(doc => ({ id: doc.id, documentId: doc.data().documentId, invoiceTotal: doc.data().invoiceTotal, invoiceType: doc.data().invoiceType || 'Service' } as Invoice));
+                    const invoiceData = snapshot.docs.map(doc => ({ 
+                        id: doc.id,
+                        documentId: doc.id,
+                        invoiceDocumentID: doc.data().invoiceDocumentID,
+                        invoiceDate: doc.data().invoiceDate,
+                        invoiceTotal: doc.data().invoiceTotal, 
+                        invoiceType: doc.data().invoiceType || 'Service' 
+                    } as Invoice));
                     setInvoices(invoiceData);
                 } catch (error) {
                     console.error("Failed to fetch invoices:", error);
@@ -105,7 +87,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
             };
             fetchInvoices();
         }
-    }, [open, companyId]);
+    });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -125,6 +107,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>Invoice Date</TableHead>
                                     <TableHead>Invoice ID</TableHead>
                                     <TableHead>Service Type</TableHead>
                                     <TableHead className="text-right">Total</TableHead>
@@ -133,7 +116,8 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
                             <TableBody>
                                 {invoices.map((invoice) => (
                                     <TableRow key={invoice.id}>
-                                        <TableCell className="font-medium">{invoice.documentId}</TableCell>
+                                        <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
+                                        <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
                                         <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
                                         <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
                                     </TableRow>
@@ -151,9 +135,8 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
     );
 }
 
-
 export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
-  const company = initialCompany;
+  const [company, setCompany] = useState<Lead>(initialCompany);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
@@ -162,7 +145,7 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [] } = company;
+  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = company;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -177,8 +160,12 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
     setLoadingBack(true);
     router.push('/signed-customers');
   };
+  
+  const handleNoteLogged = (newNote: Note) => {
+    setCompany(prev => ({...prev, notes: [newNote, ...(prev.notes || [])]}));
+  };
 
-  if (!company || !user) {
+  if (!user) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -215,6 +202,14 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
             </div>
           </div>
         </div>
+         <div className="flex flex-wrap items-center gap-2">
+            <LogNoteDialog lead={company} onNoteLogged={handleNoteLogged}>
+              <Button variant="outline">
+                <ClipboardEdit className="mr-2 h-4 w-4" />
+                Log a Note
+              </Button>
+            </LogNoteDialog>
+        </div>
       </header>
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -225,10 +220,6 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                  <Building className="w-5 h-5 text-muted-foreground" />
                  Company Details
                </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => setIsInvoiceDialogOpen(true)}>
-                    <FileDigit className="mr-2 h-4 w-4" />
-                    View Invoices
-                </Button>
              </CardHeader>
              <CardContent className="space-y-4">
                 {company.companyDescription && (
@@ -357,154 +348,172 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
              </CardContent>
            </Card>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="w-5 h-5 text-muted-foreground" />
-                        Contacts
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                {contacts.length > 0 ? (
-                  <div className="space-y-4">
-                  {contacts.map((contact, index) => (
-                      <Card key={contact.id || index} className="p-4">
-                          <CardHeader className="flex-row items-start justify-between pb-2 p-0">
-                              <div>
-                                  <p className="font-semibold">{contact.name}</p>
-                                  <p className="text-sm text-muted-foreground">{contact.title}</p>
-                              </div>
-                          </CardHeader>
-                          <CardContent className="space-y-3 text-sm p-0 pt-2">
-                              <div className="flex items-center gap-3">
-                                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                                      {contact.email}
-                                  </a>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                  <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                                  <div className="flex items-center gap-1">
-                                      <span className="break-all">{contact.phone}</span>
-                                  </div>
-                              </div>
-                          </CardContent>
-                      </Card>
-                  ))}
-                  </div>
-                ) : (
-                  <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
-                )}
-                </CardContent>
-             </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
-                        Address
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex items-start gap-3">
-                            <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                            <div className="flex-1">
-                                <p className="text-muted-foreground break-words">{fullAddress}</p>
-                                <div className="flex items-center gap-1 mt-1">
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
-                                        <Search className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
-                                        <Clipboard className="w-3 h-3" />
-                                    </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="w-5 h-5 text-muted-foreground" />
+                            Contacts
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                    {contacts.length > 0 ? (
+                    <div className="space-y-4">
+                    {contacts.map((contact, index) => (
+                        <Card key={contact.id || index} className="p-4">
+                            <CardHeader className="flex-row items-start justify-between pb-2 p-0">
+                                <div>
+                                    <p className="font-semibold">{contact.name}</p>
+                                    <p className="text-sm text-muted-foreground">{contact.title}</p>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm p-0 pt-2">
+                                <div className="flex items-center gap-3">
+                                    <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                    <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                                        {contact.email}
+                                    </a>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                                    <div className="flex items-center gap-1">
+                                        <span className="break-all">{contact.phone}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                    </div>
+                    ) : (
+                    <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
+                    )}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-muted-foreground" />
+                            Address
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1">
+                                    <p className="text-muted-foreground break-words">{fullAddress}</p>
+                                    <div className="flex items-center gap-1 mt-1">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
+                                            <Search className="w-3 h-3" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
+                                            <Clipboard className="w-3 h-3" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
+                            {fullAddress !== 'No address available' && (
+                                <div className="h-48 w-full rounded-md overflow-hidden border">
+                                    <iframe
+                                        width="100%"
+                                        height="100%"
+                                        frameBorder="0"
+                                        style={{ border: 0 }}
+                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                                            fullAddress
+                                        )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                                        allowFullScreen
+                                        aria-hidden="false"
+                                        tabIndex={0}
+                                    ></iframe>
+                                </div>
+                            )}
                         </div>
-                        {fullAddress !== 'No address available' && (
-                            <div className="h-48 w-full rounded-md overflow-hidden border">
-                                <iframe
-                                    width="100%"
-                                    height="100%"
-                                    frameBorder="0"
-                                    style={{ border: 0 }}
-                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                        fullAddress
-                                    )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                                    allowFullScreen
-                                    aria-hidden="false"
-                                    tabIndex={0}
-                                ></iframe>
-                            </div>
-                        )}
-                    </div>
+                    </CardContent>
+                </Card>
+            </div>
+            
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileDigit className="w-5 h-5 text-muted-foreground" />
+                        Invoices
+                    </CardTitle>
+                     <CardDescription>
+                        Financial records for this company.
+                    </CardDescription>
+                </CardHeader>
+                 <CardContent>
+                    <Button variant="outline" size="sm" onClick={() => setIsInvoiceDialogOpen(true)}>
+                        <FileDigit className="mr-2 h-4 w-4" />
+                        View All Invoices
+                    </Button>
                 </CardContent>
             </Card>
-          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="w-5 h-5 text-muted-foreground" />
-                History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <Tabs defaultValue="notes">
-                    <TabsList>
-                        <TabsTrigger value="notes">Notes</TabsTrigger>
-                        <TabsTrigger value="activity">Activity History</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="notes">
-                        {notes.length > 0 ? (
-                            <div className="space-y-4 mt-4">
-                            {notes.map(note => (
-                            <div key={note.id} className="text-sm border-l-2 pl-4">
-                                <p className="whitespace-pre-wrap">{note.content}</p>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(note.date).toLocaleString()} by {note.author}
-                                </p>
-                            </div>
-                            ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-muted-foreground text-center py-4">No notes for this company yet.</p>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="activity">
-                         {activities.length > 0 ? (
-                            <ul className="space-y-4 mt-4">
-                            {activities.map((item, index) => (
-                                <li key={item.id} className="flex gap-4 group">
-                                <div className="flex flex-col items-center">
-                                    <div className="bg-secondary rounded-full p-2">
-                                    {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                                    </div>
-                                    {activities && index < activities.length - 1 && (
-                                        <div className="w-px h-full bg-border"></div>
-                                    )}
+            <Card>
+                <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <History className="w-5 h-5 text-muted-foreground" />
+                    History
+                </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="notes">
+                        <TabsList>
+                            <TabsTrigger value="notes">Notes</TabsTrigger>
+                            <TabsTrigger value="activity">Activity History</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="notes">
+                            {notes.length > 0 ? (
+                                <div className="space-y-4 mt-4">
+                                {notes.map(note => (
+                                <div key={note.id} className="text-sm border-l-2 pl-4">
+                                    <p className="whitespace-pre-wrap">{note.content}</p>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                    {new Date(note.date).toLocaleString()} by {note.author}
+                                    </p>
                                 </div>
-                                <div className="flex-1 pb-4 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                    <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                                    <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                                    </div>
-                                    <div className="text-sm text-muted-foreground break-words">
-                                    {item.notes}
-                                    </div>
+                                ))}
                                 </div>
-                                </li>
-                            ))}
-                            </ul>
-                        ) : (
-                            <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">No notes for this company yet.</p>
+                            )}
+                        </TabsContent>
+                        <TabsContent value="activity">
+                            {activities.length > 0 ? (
+                                <ul className="space-y-4 mt-4">
+                                {activities.map((item, index) => (
+                                    <li key={item.id} className="flex gap-4 group">
+                                    <div className="flex flex-col items-center">
+                                        <div className="bg-secondary rounded-full p-2">
+                                        {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
+                                        {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
+                                        {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                                        {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
+                                        </div>
+                                        {activities && index < activities.length - 1 && (
+                                            <div className="w-px h-full bg-border"></div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 pb-4 min-w-0">
+                                        <div className="flex items-start justify-between gap-2">
+                                        <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
+                                        <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground break-words">
+                                        {item.notes}
+                                        </div>
+                                    </div>
+                                    </li>
+                                ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                            )}
+                        </TabsContent>
+                    </Tabs>
+                </CardContent>
           </Card>
         </div>
 
@@ -520,5 +529,3 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
     </>
   )
 }
-
-    
