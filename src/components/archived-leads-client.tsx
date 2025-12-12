@@ -16,9 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getArchivedLeads, getLastNote, deleteLead } from '@/services/firebase'
+import { getArchivedLeads, getLastNote, deleteLead, getAllUsers } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity, Contact } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, Contact, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal } from 'lucide-react'
+import { Checkbox } from './ui/checkbox'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -67,6 +68,7 @@ const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lo
 
 export default function ArchivedLeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
@@ -76,11 +78,14 @@ export default function ArchivedLeadsClientPage() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+
 
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
     franchisee: [] as string[],
+    dialerAssigned: [] as string[],
     date: undefined as DateRange | undefined,
   });
 
@@ -89,6 +94,14 @@ export default function ArchivedLeadsClientPage() {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads, loading]);
+
+  const dialerOptions: Option[] = useMemo(() => {
+    const dialers = allDialers.map(d => ({ value: d.displayName!, label: d.displayName! }));
+    return [
+        { value: 'unassigned', label: 'Unassigned' },
+        ...dialers.sort((a,b) => a.label.localeCompare(b.label))
+    ];
+  }, [allDialers]);
 
   const statusOptions: Option[] = useMemo(() => {
     return archivedStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
@@ -110,8 +123,16 @@ export default function ArchivedLeadsClientPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-        const archivedLeads = await getArchivedLeads();
+        const [archivedLeads, users] = await Promise.all([
+          getArchivedLeads(),
+          getAllUsers()
+        ]);
         setAllLeads(archivedLeads);
+        const dialers = users
+            .filter(u => u.firstName && u.lastName)
+            .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
+        setAllDialers(dialers);
+
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch archived leads.' });
     } finally {
@@ -135,6 +156,7 @@ export default function ArchivedLeadsClientPage() {
       companyName: '',
       status: [],
       franchisee: [],
+      dialerAssigned: [],
       date: undefined,
     });
     setCurrentPage(1);
@@ -146,6 +168,15 @@ export default function ArchivedLeadsClientPage() {
         const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
         const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
         
+        let dialerMatch = true;
+        if (filters.dialerAssigned.length > 0) {
+            if (filters.dialerAssigned.includes('unassigned')) {
+                dialerMatch = !lead.dialerAssigned || filters.dialerAssigned.includes(lead.dialerAssigned);
+            } else {
+                dialerMatch = lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned);
+            }
+        }
+        
         let dateMatch = true;
         if (filters.date?.from && lead.activity?.[0]) {
             const lastActivityDate = new Date(lead.activity[0].date);
@@ -154,7 +185,7 @@ export default function ArchivedLeadsClientPage() {
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && dateMatch;
+        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -336,16 +367,35 @@ export default function ArchivedLeadsClientPage() {
         }
     };
 
-    const handleDeleteLead = async (leadId: string, leadName: string) => {
+    const handleDeleteLeads = async (leadIds: string[]) => {
+        if (leadIds.length === 0) return;
         try {
-            await deleteLead(leadId);
-            setAllLeads(prev => prev.filter(l => l.id !== leadId));
-            toast({ title: 'Success', description: `Lead "${leadName}" has been permanently deleted.` });
+            await deleteLead(leadIds);
+            setAllLeads(prev => prev.filter(l => !leadIds.includes(l.id)));
+            setSelectedLeads(prev => prev.filter(id => !leadIds.includes(id)));
+            toast({ title: 'Success', description: `${leadIds.length} lead(s) have been permanently deleted.` });
         } catch (error) {
-            console.error("Failed to delete lead:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the lead.' });
+            console.error("Failed to delete leads:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the selected leads.' });
         }
     };
+    
+    const handleSelectLead = (leadId: string) => {
+        setSelectedLeads(prev => 
+            prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]
+        );
+    };
+
+    const handleSelectAllOnPage = (isChecked: boolean | 'indeterminate') => {
+        if (isChecked) {
+            setSelectedLeads(prev => [...new Set([...prev, ...paginatedLeads.map(l => l.id)])]);
+        } else {
+            const paginatedIds = new Set(paginatedLeads.map(l => l.id));
+            setSelectedLeads(prev => prev.filter(id => !paginatedIds.has(id)));
+        }
+    };
+    
+    const isAllOnPageSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
 
   if (loading || authLoading) {
     return (
@@ -385,10 +435,19 @@ export default function ArchivedLeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="dialerAssigned">Dialer Assigned</Label>
+                            <MultiSelectCombobox
+                                options={dialerOptions}
+                                selected={filters.dialerAssigned}
+                                onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)}
+                                placeholder="Select dialers..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
@@ -468,18 +527,50 @@ export default function ArchivedLeadsClientPage() {
             <span>Processed Leads</span>
             <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
           </CardTitle>
-           {userProfile?.role === 'admin' && (
-              <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
-                Export All
-              </Button>
-            )}
+           <div className="flex items-center gap-2">
+                {userProfile?.role === 'admin' && selectedLeads.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete ({selectedLeads.length})
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will permanently delete {selectedLeads.length} lead(s) and all associated data. This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteLeads(selectedLeads)} className="bg-destructive hover:bg-destructive/90">
+                                    Delete
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+                {userProfile?.role === 'admin' && (
+                    <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export All
+                    </Button>
+                )}
+           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                   <TableHead className="w-[50px]">
+                      <Checkbox 
+                        checked={isAllOnPageSelected}
+                        onCheckedChange={handleSelectAllOnPage}
+                      />
+                  </TableHead>
                   <TableHead className="w-[200px]">
                     <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
                       Company
@@ -529,12 +620,18 @@ export default function ArchivedLeadsClientPage() {
               <TableBody>
                 {loading || isRefreshing ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedLeads.length > 0 ? (
                   paginatedLeads.map((lead) => (
                     <Fragment key={lead.id}>
-                    <TableRow>
+                    <TableRow data-state={selectedLeads.includes(lead.id) && "selected"}>
+                      <TableCell>
+                        <Checkbox 
+                            checked={selectedLeads.includes(lead.id)}
+                            onCheckedChange={() => handleSelectLead(lead.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                             {lead.companyName}
@@ -593,7 +690,7 @@ export default function ArchivedLeadsClientPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteLead(lead.id, lead.companyName)} className="bg-destructive hover:bg-destructive/90">
+                                      <AlertDialogAction onClick={() => handleDeleteLeads([lead.id])} className="bg-destructive hover:bg-destructive/90">
                                         Delete
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
@@ -606,7 +703,7 @@ export default function ArchivedLeadsClientPage() {
                     </TableRow>
                      {expandedDetails[lead.id] && (
                         <TableRow>
-                            <TableCell colSpan={9} className="p-0">
+                            <TableCell colSpan={10} className="p-0">
                                 <div className="p-4 bg-secondary/50">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                         <div>
@@ -638,7 +735,7 @@ export default function ArchivedLeadsClientPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                           No archived leads found.
                       </TableCell>
                   </TableRow>
@@ -665,3 +762,4 @@ export default function ArchivedLeadsClientPage() {
   )
 }
     
+
