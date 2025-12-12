@@ -1081,7 +1081,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
           </div>
 
-          {isCompanyProfile && invoices.length > 0 && (
+          {isCompanyProfile && invoices && invoices.length > 0 && (
               <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
