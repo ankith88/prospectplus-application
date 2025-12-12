@@ -28,8 +28,8 @@ export default function LeadsMapPage() {
   return (
     <div className="flex flex-col gap-6 h-full">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Leads Map</h1>
-        <p className="text-muted-foreground">Visualize your leads on the map.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Territory Map</h1>
+        <p className="text-muted-foreground">Visualize your leads and signed customers on the map.</p>
       </header>
       <LeadsMapClient />
     </div>
