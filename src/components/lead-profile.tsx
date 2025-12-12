@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -120,6 +119,7 @@ import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
+import { ColdCallScorecardDialog } from './cold-call-scorecard';
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -171,7 +171,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
 
@@ -689,6 +689,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               <BookText className="mr-2 h-4 w-4" />
               View Script
             </Button>
+            {userProfile?.role === 'admin' && (
+              <ColdCallScorecardDialog 
+                lead={lead} 
+                dialerName={lead.dialerAssigned || userProfile.displayName || ''} 
+                onScorecardSubmit={() => {
+                  // This could refetch scorecards if they were displayed directly on the profile
+                }}
+              />
+            )}
         </div>
       </header>
 
@@ -1071,8 +1080,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <DialogTitle>Edit Address</DialogTitle>
                                 </DialogHeader>
                                 <AddressAutocomplete
-                                    defaultValue={lead.address}
-                                    onAddressSelect={handleAddressSave}
                                 />
                             </DialogContent>
                         </Dialog>

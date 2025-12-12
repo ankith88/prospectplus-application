@@ -5,6 +5,7 @@ import { getCompanyFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
 import type { Lead } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
+import { Loader } from '@/components/ui/loader';
 
 export default function CompanyProfilePage() {
   const params = useParams();
@@ -45,8 +46,11 @@ export default function CompanyProfilePage() {
   }
 
   if (loading || !company) {
-    // You can return a loading spinner here if you have one
-    return <div>Loading...</div>;
+    return (
+        <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+            <Loader />
+        </div>
+    );
   }
   
   return <LeadProfile 
