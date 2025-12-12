@@ -438,7 +438,6 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                 };
             }
             
-            // Safely parse lat/lng
             const latitude = data.latitude ? parseFloat(String(data.latitude)) : undefined;
             const longitude = data.longitude ? parseFloat(String(data.longitude)) : undefined;
 
