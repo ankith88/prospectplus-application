@@ -3,7 +3,7 @@
 import { notFound, useParams } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
 import { CompanyProfile } from '@/components/company-profile'
-import type { Lead } from '@/lib/types'
+import type { Lead, Note } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 import { Loader } from '@/components/ui/loader';
 
@@ -40,6 +40,10 @@ export default function CompanyProfilePage() {
 
     fetchCompany();
   }, [params]);
+  
+  const handleNoteLogged = (newNote: Note) => {
+    setCompany(prev => prev ? ({...prev, notes: [newNote, ...(prev.notes || [])]}) : null);
+  };
 
   if (loading) {
     return (
@@ -54,5 +58,5 @@ export default function CompanyProfilePage() {
     return null;
   }
   
-  return <CompanyProfile initialCompany={company} />;
+  return <CompanyProfile initialCompany={company} onNoteLogged={handleNoteLogged} />;
 }

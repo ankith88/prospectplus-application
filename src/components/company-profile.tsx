@@ -23,6 +23,7 @@ import {
   Users,
   FileDigit,
   ClipboardEdit,
+  Tag,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { Lead, Contact, Activity, Note, Address, Invoice } from '@/lib/types'
@@ -57,6 +58,7 @@ import { LogNoteDialog } from './log-note-dialog'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
+  onNoteLogged: (newNote: Note) => void;
 }
 
 function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, open: boolean, onOpenChange: (open: boolean) => void }) {
@@ -135,8 +137,7 @@ function InvoicesDialog({ companyId, open, onOpenChange }: { companyId: string, 
     );
 }
 
-export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
-  const [company, setCompany] = useState<Lead>(initialCompany);
+export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
@@ -145,7 +146,8 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = company;
+  const { contacts = [], activity: activities = [], notes = [], invoices = [] } = initialCompany;
+  const company = initialCompany;
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
@@ -159,10 +161,6 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
   const handleBackToLeads = () => {
     setLoadingBack(true);
     router.push('/signed-customers');
-  };
-  
-  const handleNoteLogged = (newNote: Note) => {
-    setCompany(prev => ({...prev, notes: [newNote, ...(prev.notes || [])]}));
   };
 
   if (!user) {
@@ -203,7 +201,7 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
           </div>
         </div>
          <div className="flex flex-wrap items-center gap-2">
-            <LogNoteDialog lead={company} onNoteLogged={handleNoteLogged}>
+            <LogNoteDialog lead={company} onNoteLogged={onNoteLogged}>
               <Button variant="outline">
                 <ClipboardEdit className="mr-2 h-4 w-4" />
                 Log a Note
