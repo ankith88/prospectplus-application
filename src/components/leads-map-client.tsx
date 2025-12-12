@@ -322,37 +322,41 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
   const fetchMapData = useCallback(async () => {
     setLoadingData(true);
-    let [allLeads, allCompanies] = await Promise.all([
-        getLeadsFromFirebase({ summary: true }),
-        getCompaniesFromFirebase()
-    ]);
+    try {
+        let allLeads = await getLeadsFromFirebase({ summary: true });
+        let allCompanies = await getCompaniesFromFirebase();
 
-    if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
-        allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
+        if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
+            allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
+        }
+
+        const leadsWithCoords = allLeads
+            .filter(lead => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude)))
+            .map(lead => ({
+                ...lead,
+                latitude: Number(lead.latitude),
+                longitude: Number(lead.longitude),
+                isCompany: false,
+            }));
+
+        const companiesWithCoords = allCompanies
+            .filter(company => company.latitude != null && company.longitude != null && typeof company.latitude === 'number' && typeof company.longitude === 'number')
+            .map(company => ({
+                ...company,
+                status: 'Won' as LeadStatus,
+                latitude: company.latitude,
+                longitude: company.longitude,
+                isCompany: true,
+            }));
+        
+        setMapData([...leadsWithCoords, ...companiesWithCoords] as MapLead[]);
+    } catch (error) {
+        console.error("Failed to fetch map data:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data.' });
+    } finally {
+        setLoadingData(false);
     }
-
-    const leadsWithCoords = allLeads.filter(
-      (lead) => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))
-    ).map(lead => ({
-        ...lead,
-        latitude: Number(lead.latitude),
-        longitude: Number(lead.longitude),
-        isCompany: false,
-    }));
-
-    const companiesWithCoords = allCompanies.filter(
-      (company) => company.latitude != null && company.longitude != null && typeof company.latitude === 'number' && typeof company.longitude === 'number'
-    ).map(company => ({
-      ...company,
-      status: 'Won' as LeadStatus,
-      latitude: company.latitude,
-      longitude: company.longitude,
-      isCompany: true,
-    }));
-    
-    setMapData([...leadsWithCoords, ...companiesWithCoords] as MapLead[]);
-    setLoadingData(false);
-  }, [userProfile]);
+  }, [userProfile, toast]);
   
   useEffect(() => {
     if (userProfile?.uid) {
@@ -1529,3 +1533,5 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
+
+    

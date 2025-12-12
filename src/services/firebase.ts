@@ -448,8 +448,8 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
           statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Sub-industry: ${data.industrySubCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
           address: address,
-          latitude: data.latitude,
-          longitude: data.longitude,
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
           franchisee: data.franchisee,
           websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
           industryCategory: data.industryCategory,
@@ -1629,3 +1629,6 @@ export {
 
     
 
+
+
+    
