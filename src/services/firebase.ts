@@ -1337,32 +1337,42 @@ async function checkForDuplicateLead(companyName: string, phoneNumber: string): 
     return null;
 }
 
-async function deleteLead(leadId: string): Promise<void> {
-    const leadRef = doc(firestore, 'leads', leadId);
-    const subcollections = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments', 'scorecards'];
+async function deleteLead(leadIds: string | string[]): Promise<void> {
+    const idsToDelete = Array.isArray(leadIds) ? leadIds : [leadIds];
+    if (idsToDelete.length === 0) {
+        return;
+    }
 
     try {
-        // Delete all documents in all subcollections
-        for (const subcollection of subcollections) {
-            const subcollectionRef = collection(leadRef, subcollection);
-            const snapshot = await getDocs(subcollectionRef);
-            const batch = writeBatch(firestore);
-            snapshot.docs.forEach(subDoc => {
-                batch.delete(subDoc.ref);
-            });
-            await batch.commit();
-            console.log(`Deleted all documents in subcollection '${subcollection}' for lead ${leadId}.`);
+        const batch = writeBatch(firestore);
+        const subcollections = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments', 'scorecards'];
+
+        for (const leadId of idsToDelete) {
+            const leadRef = doc(firestore, 'leads', leadId);
+
+            // Fetch and delete subcollections in parallel for a single lead
+            await Promise.all(subcollections.map(async (subcollection) => {
+                const subcollectionRef = collection(leadRef, subcollection);
+                const snapshot = await getDocs(subcollectionRef);
+                snapshot.docs.forEach(subDoc => {
+                    batch.delete(subDoc.ref);
+                });
+            }));
+            
+            // Queue the main lead document for deletion
+            batch.delete(leadRef);
         }
 
-        // Delete the main lead document
-        await deleteDoc(leadRef);
-        console.log(`Successfully deleted lead document ${leadId}.`);
+        // Commit all deletions in a single batch
+        await batch.commit();
+        console.log(`Successfully deleted ${idsToDelete.length} lead(s) and their subcollections.`);
 
     } catch (error) {
-        console.error(`Failed to delete lead ${leadId} and its subcollections:`, error);
-        throw new Error('Failed to delete lead from Firebase');
+        console.error(`Failed to delete leads:`, error);
+        throw new Error('Failed to delete lead(s) from Firebase');
     }
 }
+
 
 export { 
     getLeadsFromFirebase,

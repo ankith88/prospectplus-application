@@ -23,10 +23,10 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2 } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -41,6 +41,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format } from 'date-fns'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type SortableLeadKeys = 'companyName' | 'status' | 'franchisee';
@@ -68,6 +80,9 @@ export default function LeadsClientPage() {
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
   const [isStartingDialing, setIsStartingDialing] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
+  const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+
 
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
@@ -582,6 +597,32 @@ export default function LeadsClientPage() {
         }
     };
     
+    const confirmDelete = (ids: string[]) => {
+        if (ids.length > 0) {
+            setLeadsToDelete(ids);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (leadsToDelete.length === 0) return;
+
+        setIsDeleting(true);
+        try {
+            await deleteLead(leadsToDelete);
+            toast({ title: 'Success', description: `${leadsToDelete.length} lead(s) have been permanently deleted.` });
+            setAllLeads(prev => prev.filter(l => !leadsToDelete.includes(l.id)));
+            setSelectedMyLeads(prev => prev.filter(id => !leadsToDelete.includes(id)));
+            setSelectedAllLeads(prev => prev.filter(id => !leadsToDelete.includes(id)));
+            setSelectedForReassignment(prev => prev.filter(id => !leadsToDelete.includes(id)));
+        } catch (error) {
+            console.error("Failed to delete leads:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the selected leads.' });
+        } finally {
+            setIsDeleting(false);
+            setLeadsToDelete([]);
+        }
+    };
+
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
@@ -672,6 +713,12 @@ export default function LeadsClientPage() {
                     <XCircle className="mr-2 h-4 w-4" />
                     End Session
                   </Button>
+                )}
+                {userProfile?.role === 'admin' && selectedMyLeads.length > 0 && (
+                    <Button onClick={() => confirmDelete(selectedMyLeads)} variant="destructive" size="sm">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete ({selectedMyLeads.length})
+                    </Button>
                 )}
                 {selectedMyLeads.length > 0 && (
                 <Button onClick={handleBulkUnassign} variant="outline" size="sm">
@@ -869,7 +916,11 @@ export default function LeadsClientPage() {
             <div className="flex flex-wrap items-center gap-2">
                 {selectedForReassignment.length > 0 && (
                     <>
-                        <Button variant="outline" size="sm" onClick={handleBulkUnassign}>
+                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedForReassignment)}>
+                           <Trash2 className="mr-2 h-4 w-4" />
+                           Delete ({selectedForReassignment.length})
+                        </Button>
+                        <Button onClick={handleBulkUnassign} variant="outline" size="sm">
                             <UserX className="mr-2 h-4 w-4" />
                             Unassign ({selectedForReassignment.length})
                         </Button>
@@ -964,27 +1015,22 @@ export default function LeadsClientPage() {
                                                     <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
                                                         <div className="hidden md:inline-flex">
-                                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
-                                                                <History className="mr-2 h-4 w-4"/>
-                                                                {expandedDetails[lead.id] ? 'Hide' : 'History'}
-                                                            </Button>
+                                                            <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>{expandedDetails[lead.id] ? 'Hide' : 'History'}</Button>
                                                             <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                                 <DropdownMenuContent>
-                                                                <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </div>
                                                          <div className="inline-flex md:hidden">
                                                             <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button>
-                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
                                                                 <DropdownMenuContent>
                                                                     <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
                                                                     <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
+                                                                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </div>
@@ -1073,6 +1119,12 @@ export default function LeadsClientPage() {
                 <Badge variant="secondary">{unassignedLeads.length} lead(s)</Badge>
             </CardTitle>
             <div className="flex items-center gap-4">
+                 {selectedAllLeads.length > 0 && (
+                    <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedAllLeads)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete ({selectedAllLeads.length})
+                    </Button>
+                 )}
                 {selectedAllLeads.length > 0 && (
                     <Button onClick={handleBulkAssign} variant="outline">
                     <UserPlus className="mr-2 h-4 w-4" />
@@ -1139,6 +1191,10 @@ export default function LeadsClientPage() {
                               <DropdownMenuItem onClick={() => handleAssign(lead.id)}>
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Assign to Me
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => confirmDelete([lead.id])}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1207,6 +1263,22 @@ export default function LeadsClientPage() {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+    <AlertDialog open={leadsToDelete.length > 0} onOpenChange={(open) => !open && setLeadsToDelete([])}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete {leadsToDelete.length} lead(s) and all associated data (contacts, notes, etc.). This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                    {isDeleting ? <Loader /> : 'Delete'}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   )
 }
