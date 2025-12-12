@@ -165,13 +165,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   
   const lead = initialLead;
   const isCompanyProfile = pathname.startsWith('/companies/');
-  const contacts = lead.contacts || [];
-  const activities = lead.activity || [];
-  const notes = lead.notes || [];
-  const transcripts = lead.transcripts || [];
-  const tasks = lead.tasks || [];
-  const appointments = lead.appointments || [];
-  const invoices = lead.invoices || [];
+  const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [], invoices = [] } = lead;
+
 
   useEffect(() => {
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
@@ -1072,7 +1067,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
           </div>
 
-          {invoices.length > 0 && (
+          {pathname.startsWith('/companies/') && invoices.length > 0 && (
               <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">

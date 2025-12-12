@@ -1,4 +1,5 @@
 
+
 'use client';
 import { notFound, useParams } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
