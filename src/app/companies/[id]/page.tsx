@@ -2,7 +2,7 @@
 'use client';
 import { notFound, useParams } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
-import { LeadProfile } from '@/components/lead-profile'
+import { CompanyProfile } from '@/components/company-profile'
 import type { Lead } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 import { Loader } from '@/components/ui/loader';
@@ -23,7 +23,7 @@ export default function CompanyProfilePage() {
 
     const fetchCompany = async () => {
       try {
-        const companyData = await getCompanyFromFirebase(id, true);
+        const companyData = await getCompanyFromFirebase(id, true); // Fetch all subcollections
         if (!companyData) {
           setError(true);
         } else {
@@ -40,7 +40,7 @@ export default function CompanyProfilePage() {
     fetchCompany();
   }, [params]);
 
-  if (loading || !company) {
+  if (loading) {
     return (
         <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
             <Loader />
@@ -48,10 +48,10 @@ export default function CompanyProfilePage() {
     );
   }
   
-  if (error) {
+  if (error || !company) {
     notFound();
     return null;
   }
   
-  return <LeadProfile initialLead={company} />;
+  return <CompanyProfile initialCompany={company} />;
 }

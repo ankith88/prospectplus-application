@@ -1065,37 +1065,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
           </div>
-
-          {pathname.startsWith('/companies/') && invoices && invoices.length > 0 && (
-              <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <FileDigit className="w-5 h-5 text-muted-foreground" />
-                        Invoices
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Invoice ID</TableHead>
-                                <TableHead>Service Type</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {invoices.map((invoice) => (
-                                <TableRow key={invoice.id}>
-                                    <TableCell className="font-medium">{invoice.documentId}</TableCell>
-                                    <TableCell>{invoice.invoiceType}</TableCell>
-                                    <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-              </Card>
-          )}
           
           <Card>
             <CardHeader>
