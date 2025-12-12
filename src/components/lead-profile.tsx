@@ -132,15 +132,7 @@ const salesReps = [
 ];
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
-  const [lead, setLead] = useState<Lead | null>(initialLead);
-  const [contacts, setContacts] = useState<Contact[]>(initialLead.contacts || []);
-  const [activities, setActivities] = useState<Activity[]>(initialLead.activity || []);
-  const [notes, setNotes] = useState<Note[]>(initialLead.notes || []);
-  const [transcripts, setTranscripts] = useState<Transcript[]>(initialLead.transcripts || []);
-  const [tasks, setTasks] = useState<Task[]>(initialLead.tasks || []);
-  const [appointments, setAppointments] = useState<Appointment[]>(initialLead.appointments || []);
-
-  const [loadingSubcollections, setLoadingSubcollections] = useState(false);
+  const [lead, setLead] = useState<Lead>(initialLead);
   
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
@@ -173,14 +165,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const { user, userProfile } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
-  const invoices = initialLead.invoices || [];
+  const contacts = lead.contacts || [];
+  const activities = lead.activity || [];
+  const notes = lead.notes || [];
+  const transcripts = lead.transcripts || [];
+  const tasks = lead.tasks || [];
+  const appointments = lead.appointments || [];
+  const invoices = lead.invoices || [];
 
   useEffect(() => {
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
     if (sessionLeadIds) {
       const leads = JSON.parse(sessionLeadIds);
       setSessionLeads(leads);
-      // Only set session as active if the current lead is in the session
       if (initialLead && leads.includes(initialLead.id)) {
         setIsSessionActive(true);
       } else {
@@ -203,22 +200,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [initialLead]);
 
   useEffect(() => {
-    if (!initialLead) return;
-
     setLead(initialLead);
-    setContacts(initialLead.contacts || []);
-    setActivities(initialLead.activity || []);
-    setNotes(initialLead.notes || []);
-    setTranscripts(initialLead.transcripts || []);
-    setTasks(initialLead.tasks || []);
-    setAppointments(initialLead.appointments || []);
-
   }, [initialLead]);
 
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) {
-        setLead(prev => prev ? { ...prev, status: newStatus } : null);
+        setLead(prev => ({ ...prev, status: newStatus }));
     }
     
     if (isSessionActive) {
@@ -246,7 +234,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (scoring.scoredLeads.length > 0) {
             const result = scoring.scoredLeads[0];
             setScoringResult(result);
-            setLead(prev => prev ? { ...prev, aiScore: result.score, aiReason: result.reason } : null);
+            setLead(prev => ({ ...prev, aiScore: result.score, aiReason: result.reason }));
         }
     } catch (error) {
         console.error("Failed to calculate score:", error);
@@ -270,17 +258,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         
         if (result.logoUrl) {
           await updateLeadAvatar(lead.id, result.logoUrl);
-          setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
+          setLead(prev => ({ ...prev, avatarUrl: result.logoUrl! }));
           toast({ title: "Logo Found!", description: "Company logo has been updated." });
         }
         
         if (result.companyDescription) {
-            setLead(prev => prev ? { ...prev, companyDescription: result.companyDescription! } : null);
+            setLead(prev => ({ ...prev, companyDescription: result.companyDescription! }));
             toast({ title: "Description Generated", description: "Company description has been updated." });
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            setContacts(prev => [...prev, ...result.contacts!]);
+            setLead(prev => ({...prev, contacts: [...(prev.contacts || []), ...result.contacts!]}));
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -297,12 +285,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const addActivity = async (newActivity: Omit<Activity, 'id' | 'date'>) => {
     if (lead) {
         const newActivityId = await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
-        setActivities(prev => [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...prev] as Activity[]);
+        setLead(prev => ({...prev, activity: [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...(prev.activity || [])] as Activity[] }));
     }
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    setNotes(prev => [newNote, ...prev]);
+    setLead(prev => ({...prev, notes: [newNote, ...(prev.notes || [])]}));
   };
   
   const handleContactAdded = (newContactData: any) => {
@@ -313,7 +301,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         email: newContactData.email,
         phone: newContactData.phone,
     };
-    setContacts(prev => [newContact, ...prev]);
+    setLead(prev => ({...prev, contacts: [newContact, ...(prev.contacts || [])]}));
   };
 
   const handleContactUpdated = (updatedContact: Contact) => {
@@ -322,13 +310,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         notes: `Contact ${updatedContact.name} updated.`,
         author: user?.displayName,
      });
-     setContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
+     setLead(prev => ({...prev, contacts: (prev.contacts || []).map(c => c.id === updatedContact.id ? updatedContact : c)}));
   };
 
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
-    if (lead) {
-      setLead({ ...lead, ...updatedLeadData });
-    }
+    setLead(prev => ({ ...prev, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
   }
 
@@ -336,7 +322,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setContacts(prev => prev.filter(c => c.id !== contact.id));
+      setLead(prev => ({...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id)}));
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -395,7 +381,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           content: '{"utterances":[]}', // Placeholder
           author: lead.dialerAssigned
         };
-        setTranscripts(prev => [newTranscript, ...prev]);
+        setLead(prev => ({...prev, transcripts: [newTranscript, ...(prev.transcripts || [])]}));
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -419,7 +405,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
-        setTasks(prev => [newTask, ...prev].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
+        setLead(prev => ({...prev, tasks: [newTask, ...(prev.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -433,7 +419,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
-          setTasks(prev => prev.map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t));
+          setLead(prev => ({...prev, tasks: (prev.tasks || []).map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t)}));
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -445,7 +431,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
-          setTasks(prev => prev.filter(t => t.id !== taskId));
+          setLead(prev => ({...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId)}));
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -457,7 +443,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await updateLeadDiscoveryData(lead.id, discoveryData);
-      setLead(prev => prev ? { ...prev, discoveryData: discoveryData } : null);
+      setLead(prev => ({ ...prev, discoveryData: discoveryData }));
       toast({ title: 'Success', description: 'Discovery questions saved.' });
       setIsDiscoveryQuestionsOpen(false);
     } catch (error: any) {
@@ -474,7 +460,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await updateLeadDetails(lead.id, lead, { address: newAddress });
-      setLead(prev => prev ? { ...prev, address: newAddress } : null);
+      setLead(prev => ({ ...prev, address: newAddress }));
       toast({ title: "Success", description: "Address updated successfully." });
     } catch (error) {
       console.error("Failed to update address:", error);
@@ -488,19 +474,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || !isSessionActive || sessionLeads.length === 0) {
       return { nextLeadId: null, hasNextLead: false };
     }
-    // If the current lead is no longer in the session list, the next lead is the first one.
     if (!sessionLeads.includes(lead.id)) {
       return { nextLeadId: sessionLeads[0], hasNextLead: true };
     }
 
     const currentIndex = sessionLeads.indexOf(lead.id);
-
-    // If there are more leads after the current one
     if (currentIndex < sessionLeads.length - 1) {
       return { nextLeadId: sessionLeads[currentIndex + 1], hasNextLead: true };
     }
     
-    // It's the last lead in the session.
     return { nextLeadId: null, hasNextLead: false };
 }, [lead, sessionLeads, isSessionActive]);
 
@@ -551,18 +533,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     
     window.open(finalUrl, '_blank');
     
-    // Optimistically update the UI
-    setLead(prev => prev ? { ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl } : null);
+    setLead(prev => ({ ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
     toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
 
-    // Update Firebase in the background (fire and forget)
     updateLeadSalesRep(lead.id, repName, repUrl)
         .then(() => {
             console.log(`Lead ${lead.id} successfully assigned to ${repName} in the background.`);
         })
         .catch(error => {
             console.error("Failed to assign sales rep in the background:", error);
-            // Optionally, show a non-blocking error toast
             toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
         });
   };
@@ -1144,9 +1123,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             ))}
                             </div>
                         ) : (
-                            !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
+                            <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
                         )}
-                        {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </TabsContent>
                     <TabsContent value="calls">
                          {callHistory.length > 0 ? (
@@ -1234,9 +1212,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             ))}
                             </ul>
                         ) : (
-                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
+                            <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
                         )}
-                        {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                     </TabsContent>
                 </Tabs>
             </CardContent>
@@ -1253,7 +1230,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                           setTranscripts(prev => prev.map(t => t.id === selectedTranscript.id ? {...t, analysis} : t));
+                          setLead(prev => ({...prev, transcripts: (prev.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)}));
                         }}
                       />
                   )}
@@ -1294,9 +1271,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         ))}
                         </>
                     ) : (
-                        !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
+                        <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
                     )}
-                    {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
                 </CardContent>
           </Card>
           
@@ -1339,71 +1315,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-           {/* <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <ListTodo className="w-5 h-5 text-muted-foreground" />
-                        Tasks & Reminders
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleAddTask} className="flex flex-col sm:flex-row gap-2 mb-4">
-                        <Input 
-                            placeholder="Add a new task..." 
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                        />
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant={"outline"}
-                                    className="min-w-[150px] justify-start text-left font-normal"
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {newTaskDueDate ? format(newTaskDueDate, "PPP") : <span>Set date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <CalendarPicker
-                                    mode="single"
-                                    selected={newTaskDueDate}
-                                    onSelect={setNewTaskDueDate}
-                                    initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <Button type="submit">Add Task</Button>
-                    </form>
-                    <div className="space-y-2">
-                        {tasks.length > 0 ? (
-                            <>
-                            {tasks.map(task => (
-                                <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
-                                    <Checkbox
-                                        id={`task-${task.id}`}
-                                        checked={task.isCompleted}
-                                        onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
-                                    />
-                                    <label htmlFor={`task-${task.id}`} className="flex-1 text-sm font-medium data-[completed=true]:line-through data-[completed=true]:text-muted-foreground" data-completed={task.isCompleted}>
-                                        {task.title}
-                                        <p className="text-xs text-muted-foreground">
-                                            Due: {format(new Date(task.dueDate), "PP")}
-                                        </p>
-                                    </label>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))}
-                            </>
-                        ) : (
-                            !loadingSubcollections && <p className="text-sm text-center text-muted-foreground py-4">No tasks for this lead yet.</p>
-                        )}
-                            {loadingSubcollections && <div className="flex justify-center p-4"><Loader/></div>}
-                    </div>
-                </CardContent>
-           </Card> */}
-          
         </div>
       </main>
     </div>

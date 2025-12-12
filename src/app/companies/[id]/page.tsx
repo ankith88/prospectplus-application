@@ -53,8 +53,5 @@ export default function CompanyProfilePage() {
     );
   }
   
-  // Pass the entire company object, including invoices, to the LeadProfile component.
-  return <LeadProfile 
-            initialLead={company} 
-        />;
+  return <LeadProfile initialLead={company} />;
 }
