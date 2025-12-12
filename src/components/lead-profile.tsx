@@ -45,9 +45,10 @@ import {
   ChevronDown,
   History,
   XCircle,
+  FileDigit,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -83,6 +84,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddContactForm } from '@/components/add-contact-form'
 import { EditContactForm } from '@/components/edit-contact-form'
@@ -130,6 +139,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [transcripts, setTranscripts] = useState<Transcript[]>(initialLead.transcripts || []);
   const [tasks, setTasks] = useState<Task[]>(initialLead.tasks || []);
   const [appointments, setAppointments] = useState<Appointment[]>(initialLead.appointments || []);
+  const [invoices, setInvoices] = useState<Invoice[]>(initialLead.invoices || []);
 
   const [loadingSubcollections, setLoadingSubcollections] = useState(false);
   
@@ -201,6 +211,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setTranscripts(initialLead.transcripts || []);
     setTasks(initialLead.tasks || []);
     setAppointments(initialLead.appointments || []);
+    setInvoices(initialLead.invoices || []);
 
   }, [initialLead]);
 
@@ -1066,6 +1077,40 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <FileDigit className="w-5 h-5 text-muted-foreground" />
+                    Invoices
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                {invoices.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Invoice ID</TableHead>
+                                <TableHead>Service Type</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {invoices.map((invoice) => (
+                                <TableRow key={invoice.id}>
+                                    <TableCell className="font-medium">{invoice.documentId}</TableCell>
+                                    <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
+                                    <TableCell className="text-right">${invoice.invoiceTotal.toFixed(2)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    !loadingSubcollections && <p className="text-sm text-muted-foreground text-center py-4">No invoices for this customer yet.</p>
+                )}
+                {loadingSubcollections && <div className="flex justify-center p-4"><Loader /></div>}
+            </CardContent>
+          </Card>
           
           <Card>
             <CardHeader>

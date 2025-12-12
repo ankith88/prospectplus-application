@@ -123,6 +123,13 @@ export interface DiscoveryData {
     scoringReason?: string;
 }
 
+export interface Invoice {
+    id: string;
+    documentId: string;
+    invoiceTotal: number;
+    invoiceType: string;
+}
+
 export interface Lead {
   id: string
   entityId: string
@@ -134,6 +141,10 @@ export interface Lead {
   activity?: Activity[]
   notes?: Note[]
   contacts?: Contact[]
+  transcripts?: Transcript[]
+  tasks?: Task[]
+  appointments?: Appointment[]
+  invoices?: Invoice[]
   contactCount?: number
   address?: Address
   latitude?: number;

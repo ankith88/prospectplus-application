@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from './netsuite';
 
@@ -201,12 +201,12 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 tasks,
                 appointments
             ] = await Promise.all([
-                getLeadSubCollection<Contact>(leadId, 'contacts', documentId()),
-                getLeadSubCollection<Activity>(leadId, 'activity', 'date'),
-                getLeadSubCollection<Note>(leadId, 'notes', 'date'),
-                getLeadSubCollection<Transcript>(leadId, 'transcripts', 'date'),
-                getLeadSubCollection<Task>(leadId, 'tasks', 'dueDate', 'asc'),
-                getLeadSubCollection<Appointment>(leadId, 'appointments', 'duedate')
+                getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
+                getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
+                getSubCollection<Note>('leads', leadId, 'notes', 'date'),
+                getSubCollection<Transcript>('leads', leadId, 'transcripts', 'date'),
+                getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
+                getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate')
             ]);
 
             transformedLead.contacts = contacts;
@@ -286,24 +286,23 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           demoCompleted: data.demoCompleted,
         };
         
-        // Note: Subcollections are assumed to be in the 'leads' collection structure. 
-        // If companies have a different subcollection structure, this part will need adjustment.
         if (includeSubCollections) {
-            const leadIdForSubcollections = docSnapshot.id;
             const [
                 contacts,
                 activities,
                 notes,
                 transcripts,
                 tasks,
-                appointments
+                appointments,
+                invoices
             ] = await Promise.all([
-                getLeadSubCollection<Contact>(leadIdForSubcollections, 'contacts', documentId()),
-                getLeadSubCollection<Activity>(leadIdForSubcollections, 'activity', 'date'),
-                getLeadSubCollection<Note>(leadIdForSubcollections, 'notes', 'date'),
-                getLeadSubCollection<Transcript>(leadIdForSubcollections, 'transcripts', 'date'),
-                getLeadSubCollection<Task>(leadIdForSubcollections, 'tasks', 'dueDate', 'asc'),
-                getLeadSubCollection<Appointment>(leadIdForSubcollections, 'appointments', 'duedate')
+                getSubCollection<Contact>('companies', companyId, 'contacts', documentId()),
+                getSubCollection<Activity>('companies', companyId, 'activity', 'date'),
+                getSubCollection<Note>('companies', companyId, 'notes', 'date'),
+                getSubCollection<Transcript>('companies', companyId, 'transcripts', 'date'),
+                getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
+                getSubCollection<Appointment>('companies', companyId, 'appointments', 'duedate'),
+                getSubCollection<Invoice>('companies', companyId, 'invoices', documentId())
             ]);
 
             transformedCompany.contacts = contacts;
@@ -312,6 +311,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             transformedCompany.transcripts = transcripts;
             transformedCompany.tasks = tasks;
             transformedCompany.appointments = appointments;
+            transformedCompany.invoices = invoices;
             transformedCompany.contactCount = contacts.length;
         }
 
@@ -561,14 +561,14 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
     }
 }
 
-async function getLeadSubCollection<T>(leadId: string, collectionName: string, orderByField: string, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
+async function getSubCollection<T>(parentCollection: string, docId: string, subCollectionName: string, orderByField: string, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
     try {
-        const ref = collection(firestore, 'leads', leadId, collectionName);
+        const ref = collection(firestore, parentCollection, docId, subCollectionName);
         const q = query(ref, orderBy(orderByField, orderDirection));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
     } catch (error) {
-        console.error(`Failed to fetch sub-collection ${collectionName} for lead ${leadId}:`, error);
+        console.error(`Failed to fetch sub-collection ${subCollectionName} for doc ${docId} in ${parentCollection}:`, error);
         return [];
     }
 }
@@ -1597,6 +1597,7 @@ export {
     prospectWebsiteTool,
     checkForDuplicateLead,
     deleteLead,
+    getSubCollection
 };
 
 
@@ -1614,4 +1615,5 @@ export {
 
 
     
+
 
