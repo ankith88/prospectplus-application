@@ -306,7 +306,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
                 getSubCollection<Transcript>('companies', companyId, 'transcripts', 'date'),
                 getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('companies', companyId, 'appointments', 'duedate'),
-                getSubCollection<Invoice>('companies', companyId, 'invoices', 'invoiceDate')
+                getSubCollection<Invoice>('companies', companyId, 'invoices', documentId())
             ]);
 
             transformedCompany.contacts = contacts;
@@ -1628,3 +1628,4 @@ export {
     
 
     
+
