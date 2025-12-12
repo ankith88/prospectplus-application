@@ -21,14 +21,22 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 export default function SignedCustomersPage() {
   const [signedLeads, setSignedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    companyName: '',
+    franchisee: [] as string[],
+  });
   const router = useRouter();
   const { user, authLoading } = useAuth();
   const { toast } = useToast();
@@ -56,6 +64,28 @@ export default function SignedCustomersPage() {
     fetchSignedLeads();
 
   }, [user, authLoading, router, toast]);
+  
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+  
+  const clearFilters = () => {
+    setFilters({ companyName: '', franchisee: [] });
+  };
+  
+  const uniqueFranchisees: Option[] = useMemo(() => {
+    const franchisees = new Set(signedLeads.map(lead => lead.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [signedLeads]);
+
+  const filteredSignedLeads = useMemo(() => {
+    return signedLeads.filter(lead => {
+        const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
+        return companyMatch && franchiseeMatch;
+    });
+  }, [signedLeads, filters]);
+
 
   const formatAddress = (address?: Address) => {
     if (!address) return 'N/A';
@@ -69,6 +99,8 @@ export default function SignedCustomersPage() {
       </div>
     )
   }
+  
+  const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,6 +108,47 @@ export default function SignedCustomersPage() {
         <h1 className="text-3xl font-bold tracking-tight">Signed Customers</h1>
         <p className="text-muted-foreground">A list of all your won accounts.</p>
       </header>
+
+       <Collapsible>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                <span>Filters</span>
+              </CardTitle>
+               <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span className="ml-2">Toggle Filters</span>
+                  </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="companyName">Company Name</Label>
+                        <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="franchisee">Franchisee</Label>
+                         <MultiSelectCombobox
+                            options={uniqueFranchisees}
+                            selected={filters.franchisee}
+                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                            placeholder="Select franchisees..."
+                        />
+                    </div>
+                     {hasActiveFilters && (
+                        <div className="space-y-2 col-start-1">
+                            <Button variant="ghost" onClick={clearFilters}>
+                                <X className="mr-2 h-4 w-4" /> Clear Filters
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </CollapsibleContent>
+          </Card>
+      </Collapsible>
       
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -84,7 +157,7 @@ export default function SignedCustomersPage() {
                   <Star className="h-5 w-5" />
                   <span>All Signed Customers</span>
                 </CardTitle>
-                <Badge variant="secondary">{signedLeads.length} customer(s)</Badge>
+                <Badge variant="secondary">{filteredSignedLeads.length} customer(s)</Badge>
             </div>
         </CardHeader>
         <CardContent>
@@ -104,8 +177,8 @@ export default function SignedCustomersPage() {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : signedLeads.length > 0 ? (
-                  signedLeads.map((lead) => (
+                ) : filteredSignedLeads.length > 0 ? (
+                  filteredSignedLeads.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
