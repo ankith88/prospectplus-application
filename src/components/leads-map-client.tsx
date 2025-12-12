@@ -331,11 +331,11 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
 
     const leadsWithCoords = allLeads.filter(
-      (lead) => lead.latitude != null && lead.longitude != null && !isNaN(parseFloat(String(lead.latitude))) && !isNaN(parseFloat(String(lead.longitude)))
+      (lead) => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))
     ).map(lead => ({
         ...lead,
-        latitude: parseFloat(String(lead.latitude)),
-        longitude: parseFloat(String(lead.longitude)),
+        latitude: Number(lead.latitude),
+        longitude: Number(lead.longitude),
         isCompany: false,
     }));
 
@@ -372,16 +372,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return mapData.filter(item => {
       const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
       
-      const selectedStatuses = filters.status.includes('Won')
-        ? [...filters.status.filter(s => s !== 'Won'), 'Won']
-        : filters.status;
-        
+      const selectedStatuses = filters.status;
       const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+      
       const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
       
       return franchiseeMatch && statusMatch && stateMatch;
     });
   }, [mapData, filters]);
+
 
   const onMarkerClick = useCallback((item: MapLead) => {
     setSelectedLead(item);
