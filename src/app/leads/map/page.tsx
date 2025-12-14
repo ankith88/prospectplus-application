@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
 
-export default function LeadsMapPage() {
+export default function TerritoryMapPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 

@@ -438,8 +438,11 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                 };
             }
             
-            const latitude = (typeof data.latitude === 'string' && data.latitude.trim() !== '') ? parseFloat(data.latitude) : undefined;
-            const longitude = (typeof data.longitude === 'string' && data.longitude.trim() !== '') ? parseFloat(data.longitude) : undefined;
+            const latString = data.latitude;
+            const lngString = data.longitude;
+
+            const latitude = (typeof latString === 'string' && latString.trim() !== '') ? parseFloat(latString) : undefined;
+            const longitude = (typeof lngString === 'string' && lngString.trim() !== '') ? parseFloat(lngString) : undefined;
 
             const transformedCompany: Lead = {
                 id: doc.id,
@@ -1633,3 +1636,4 @@ export {
 
 
     
+

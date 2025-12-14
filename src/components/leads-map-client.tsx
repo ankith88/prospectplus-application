@@ -68,6 +68,7 @@ import {
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 
 
 const containerStyle = {
@@ -213,6 +214,7 @@ export default function LeadsMapClient() {
     franchisee: [] as string[],
     status: [] as string[],
     state: [] as string[],
+    type: 'all' as 'all' | 'leads' | 'companies'
   });
 
   const router = useRouter()
@@ -385,7 +387,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       
       const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
       
-      return franchiseeMatch && statusMatch && stateMatch;
+      const typeMatch = filters.type === 'all' || (filters.type === 'leads' && !item.isCompany) || (filters.type === 'companies' && item.isCompany);
+
+      return franchiseeMatch && statusMatch && stateMatch && typeMatch;
     });
   }, [mapData, filters]);
 
@@ -1054,7 +1058,20 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </TabsList>
                         </CardContent>
                         <TabsContent value="filters">
-                             <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                <div className="space-y-2">
+                                  <Label htmlFor="type">Show</Label>
+                                  <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">All Locations</SelectItem>
+                                      <SelectItem value="leads">Leads Only</SelectItem>
+                                      <SelectItem value="companies">Signed Customers Only</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="franchisee">Franchisee</Label>
                                     <MultiSelectCombobox
