@@ -252,7 +252,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             address = data.address;
         } else if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
-            address1: data.address1 || '',
+            address1: data.address1,
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',
@@ -438,8 +438,8 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                 };
             }
             
-            const latitude = data.latitude ? parseFloat(String(data.latitude)) : undefined;
-            const longitude = data.longitude ? parseFloat(String(data.longitude)) : undefined;
+            const latitude = (typeof data.latitude === 'string' && data.latitude.trim() !== '') ? parseFloat(data.latitude) : undefined;
+            const longitude = (typeof data.longitude === 'string' && data.longitude.trim() !== '') ? parseFloat(data.longitude) : undefined;
 
             const transformedCompany: Lead = {
                 id: doc.id,
