@@ -441,6 +441,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
             const latString = data.latitude;
             const lngString = data.longitude;
 
+            // Safely parse latitude and longitude
             const latitude = (typeof latString === 'string' && latString.trim() !== '') ? parseFloat(latString) : undefined;
             const longitude = (typeof lngString === 'string' && lngString.trim() !== '') ? parseFloat(lngString) : undefined;
 
@@ -1636,4 +1637,5 @@ export {
 
 
     
+
 

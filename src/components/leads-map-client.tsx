@@ -342,12 +342,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             }));
 
         const companiesWithCoords = allCompanies
-            .filter(company => company.latitude != null && company.longitude != null && typeof company.latitude === 'number' && typeof company.longitude === 'number')
+            .filter(company => company.latitude != null && company.longitude != null)
             .map(company => ({
                 ...company,
                 status: 'Won' as LeadStatus,
-                latitude: company.latitude,
-                longitude: company.longitude,
+                latitude: company.latitude!,
+                longitude: company.longitude!,
                 isCompany: true,
             }));
         
@@ -951,31 +951,31 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }, [directions, selectedRouteLeads]);
 
 
-  if (loadError) {
-    return <div>Error loading maps. Please check your API key and network connection.</div>
-  }
-
-  if (!isLoaded || loadingData || authLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader />
-      </div>
-    )
-  }
+    if (loadError) {
+        return <div>Error loading maps. Please check your API key and network connection.</div>
+    }
+    
+    if (!isLoaded || loadingData || authLoading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+            <Loader />
+            </div>
+        )
+    }
   
-  const formatAddress = (address?: { street?: string; city?: string; state?: string } | string) => {
-    if (!address) return 'Address not available';
-    if (typeof address === 'string') return address;
-    return [
-        address.street,
-        address.city,
-        address.state,
-    ].filter(Boolean).join(', ');
-  }
+    const formatAddress = (address?: { street?: string; city?: string; state?: string } | string) => {
+        if (!address) return 'Address not available';
+        if (typeof address === 'string') return address;
+        return [
+            address.street,
+            address.city,
+            address.state,
+        ].filter(Boolean).join(', ');
+    }
   
-  const infoWindowOptions = {
-    pixelOffset: new window.google.maps.Size(0, -30),
-  };
+    const infoWindowOptions = {
+        pixelOffset: new window.google.maps.Size(0, -30),
+    };
 
   return (
     <>
