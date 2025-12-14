@@ -922,6 +922,30 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         });
     };
 
+    const { waypointOrderMap, sortedRouteLegs } = useMemo(() => {
+        const waypointOrderMap = new Map<string, number>();
+        if (directions) {
+        directions.routes[0].waypoint_order.forEach((originalIndex, optimizedIndex) => {
+            const lead = selectedRouteLeads[originalIndex];
+            if (lead) {
+            waypointOrderMap.set(lead.id, optimizedIndex + 1);
+            }
+        });
+        }
+
+        const sortedRouteLegs =
+        directions?.routes[0]?.legs
+            .map((leg, index) => {
+            if (index === 0) return { leg, lead: null, stopNumber: 0 }; // Origin
+            const orderIndex = directions.routes[0].waypoint_order[index - 1];
+            const lead = selectedRouteLeads[orderIndex];
+            return { leg, lead, stopNumber: index };
+            })
+            .filter((item) => item.leg && item.lead) ?? [];
+        
+        return { waypointOrderMap, sortedRouteLegs };
+    }, [directions, selectedRouteLeads]);
+
 
   if (loadError) {
     return <div>Error loading maps. Please check your API key and network connection.</div>
@@ -934,7 +958,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       </div>
     )
   }
-
+  
   const formatAddress = (address?: { street?: string; city?: string; state?: string } | string) => {
     if (!address) return 'Address not available';
     if (typeof address === 'string') return address;
@@ -948,31 +972,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   const infoWindowOptions = {
     pixelOffset: new window.google.maps.Size(0, -30),
   };
-
-  const { waypointOrderMap, sortedRouteLegs } = useMemo(() => {
-    const waypointOrderMap = new Map<string, number>();
-    if (directions) {
-      directions.routes[0].waypoint_order.forEach((originalIndex, optimizedIndex) => {
-        const lead = selectedRouteLeads[originalIndex];
-        if (lead) {
-          waypointOrderMap.set(lead.id, optimizedIndex + 1);
-        }
-      });
-    }
-
-    const sortedRouteLegs =
-      directions?.routes[0]?.legs
-        .map((leg, index) => {
-          if (index === 0) return { leg, lead: null, stopNumber: 0 }; // Origin
-          const orderIndex = directions.routes[0].waypoint_order[index - 1];
-          const lead = selectedRouteLeads[orderIndex];
-          return { leg, lead, stopNumber: index };
-        })
-        .filter((item) => item.leg && item.lead) ?? [];
-    
-    return { waypointOrderMap, sortedRouteLegs };
-  }, [directions, selectedRouteLeads]);
-
 
   return (
     <>
