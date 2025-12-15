@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -25,17 +24,14 @@ import {
 import { app, firestore } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import type { UserProfile } from '@/lib/types';
+import type { UserProfile, SavedRoute } from '@/lib/types';
+import { getUserRoutes } from '@/services/firebase';
 
-interface UserDetails {
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-}
 
 interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
+    savedRoutes: SavedRoute[];
     loading: boolean;
     isSigningIn: boolean;
     isSigningOut: boolean;
@@ -47,6 +43,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
+    savedRoutes: [],
     loading: true,
     isSigningIn: false,
     isSigningOut: false,
@@ -58,6 +55,7 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [isSigningOut, setIsSigningOut] = useState(false);
@@ -84,16 +82,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         };
                         setUserProfile(fullProfile);
 
+                        // Fetch saved routes
+                        const routes = await getUserRoutes(user.uid);
+                        setSavedRoutes(routes);
+
+
                         if (user.displayName !== displayName) {
                             await updateProfile(user, { displayName });
-                            // After updating the profile, the auth state listener will
-                            // fire again with the updated user object. We don't need to reload manually.
                         }
                     } else {
                         setUserProfile(null);
+                        setSavedRoutes([]);
                     }
                 } else {
                     setUserProfile(null);
+                    setSavedRoutes([]);
                 }
                 setLoading(false);
             });
@@ -142,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);
+        setSavedRoutes([]);
         setIsSigningOut(false);
     };
 
@@ -153,6 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const value = {
         user,
         userProfile,
+        savedRoutes,
         loading,
         isSigningIn,
         isSigningOut,

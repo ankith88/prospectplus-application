@@ -14,7 +14,7 @@ import {
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
+import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
@@ -82,8 +82,6 @@ const center = {
   lng: 133.7751,
 }
 
-type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean, isCompany?: boolean };
-
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
     existingLead?: MapLead;
@@ -101,15 +99,6 @@ type ClickedKmlFeature = {
   featureData: KmlFeatureData;
   latLng: google.maps.LatLng;
 }
-
-type SavedRoute = {
-    id?: string;
-    name: string;
-    createdAt: string;
-    leads: MapLead[];
-    directions: google.maps.DirectionsResult | null;
-    travelMode: google.maps.TravelMode;
-};
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
     const address: Partial<Address> = { country: 'Australia' };
@@ -201,8 +190,6 @@ export default function LeadsMapClient() {
   const [showRouteStops, setShowRouteStops] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
-  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(true);
   const [routeName, setRouteName] = useState('');
   
   // State for creating lead from prospect
@@ -223,7 +210,8 @@ export default function LeadsMapClient() {
 
   const router = useRouter()
   const { toast } = useToast()
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, savedRoutes: userRoutes, setSavedRoutes } = useAuth();
+  const [savedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>(userRoutes);
 
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -325,19 +313,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }
   }, [isLoaded]);
 
+  useEffect(() => {
+    setLocalSavedRoutes(userRoutes);
+  }, [userRoutes]);
   
     useEffect(() => {
         const fetchData = async () => {
             if (!isLoaded || !userProfile) return;
 
             setLoadingData(true);
-            setLoadingRoutes(true);
-
             try {
-                const [mapLeads, mapCompanies, routes] = await Promise.all([
+                const [mapLeads, mapCompanies] = await Promise.all([
                     getLeadsFromFirebase({ summary: true }),
                     getCompaniesFromFirebase(),
-                    getUserRoutes(userProfile.uid)
                 ]);
 
                 let allMapData: MapLead[] = [];
@@ -368,14 +356,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 }
                 
                 setMapData(allMapData);
-                setSavedRoutes(routes);
 
             } catch (error) {
-                console.error("Failed to fetch map data or routes:", error);
-                toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data or routes.' });
+                console.error("Failed to fetch map data:", error);
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data.' });
             } finally {
                 setLoadingData(false);
-                setLoadingRoutes(false);
             }
         };
 
@@ -914,7 +900,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         };
 
         const savedRouteId = await saveUserRoute(userProfile.uid, newRoute);
-        setSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
+        setLocalSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
         setRouteName('');
         toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved to your profile.` });
     };
@@ -930,7 +916,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     const handleDeleteRoute = async (routeId: string, routeName: string) => {
         if (!userProfile?.uid) return;
         await deleteUserRoute(userProfile.uid, routeId);
-        setSavedRoutes(prev => prev.filter(route => route.id !== routeId));
+        setLocalSavedRoutes(prev => prev.filter(route => route.id !== routeId));
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
     };
 
@@ -1213,9 +1199,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </TabsContent>
                          <TabsContent value="routes">
                              <CardContent>
-                                {loadingRoutes ? (
-                                    <div className="flex justify-center p-4"><Loader /></div>
-                                ) : savedRoutes.length > 0 ? (
+                                {savedRoutes.length > 0 ? (
                                     <ScrollArea className="h-48">
                                         <div className="space-y-2">
                                             {savedRoutes.map(route => (
@@ -1668,19 +1652,3 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
-    
-
-
-
-    
-
-
-
-
-
-    
-
-
-    
-
-    

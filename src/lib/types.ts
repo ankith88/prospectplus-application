@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -179,3 +180,14 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin' | 'Field Sales';
 }
+
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean, isCompany?: boolean };
+
+export type SavedRoute = {
+    id?: string;
+    name: string;
+    createdAt: string;
+    leads: MapLead[];
+    directions: google.maps.DirectionsResult | null;
+    travelMode: google.maps.TravelMode;
+};
