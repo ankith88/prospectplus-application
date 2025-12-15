@@ -202,6 +202,7 @@ export default function LeadsMapClient() {
   const [isDrawing, setIsDrawing] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(true);
   const [routeName, setRouteName] = useState('');
   
   // State for creating lead from prospect
@@ -364,14 +365,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [userProfile, toast]);
   
   useEffect(() => {
-    const fetchRoutes = async () => {
-        if (isLoaded && userProfile?.uid) {
-            const routes = await getUserRoutes(userProfile.uid);
-            setSavedRoutes(routes);
-        }
-    };
-    fetchRoutes();
-  }, [isLoaded, userProfile]);
+    if (isLoaded && userProfile) {
+        setLoadingRoutes(true);
+        getUserRoutes(userProfile.uid)
+            .then(routes => {
+                setSavedRoutes(routes);
+            })
+            .catch(err => {
+                console.error("Failed to fetch user routes:", err);
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not load your saved routes.' });
+            })
+            .finally(() => {
+                setLoadingRoutes(false);
+            });
+    }
+  }, [isLoaded, userProfile, toast]);
 
   useEffect(() => {
     if (isLoaded && userProfile) {
@@ -1078,21 +1086,23 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 {nearbyCompanies.length > 0 ? (
                     <div className="space-y-2 p-1">
                         {nearbyCompanies.map(company => (
-                            <div key={company.id} className="flex flex-col p-3 border rounded-lg space-y-1">
-                                <p className="font-semibold">{company.companyName}</p>
-                                <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                <div className="flex items-center gap-4 mt-1">
-                                    {company.websiteUrl && (
-                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-                                            <Globe className="h-4 w-4" />
-                                            <span>Visit Website</span>
-                                        </a>
-                                    )}
-                                    <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>View Company</Button>
+                             <Card key={company.id} className="p-3">
+                                <div className="flex flex-col space-y-1">
+                                    <p className="font-semibold">{company.companyName}</p>
+                                    <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                    <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                    {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                    <div className="flex items-center gap-4 pt-1">
+                                         {company.websiteUrl && (
+                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                                <Globe className="h-4 w-4" />
+                                                <span>Visit Website</span>
+                                            </a>
+                                        )}
+                                        <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>View Company</Button>
+                                    </div>
                                 </div>
-                            </div>
+                            </Card>
                         ))}
                     </div>
                 ) : (
@@ -1212,26 +1222,30 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </TabsContent>
                          <TabsContent value="routes">
                              <CardContent>
-                                  {savedRoutes.length > 0 ? (
-                                      <ScrollArea className="h-48">
-                                          <div className="space-y-2">
-                                              {savedRoutes.map(route => (
-                                                  <div key={route.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                                      <div>
-                                                          <p className="font-semibold">{route.name}</p>
-                                                          <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                                                      </div>
-                                                      <div className="flex items-center gap-2">
-                                                          <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
-                                                          <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
-                                                      </div>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      </ScrollArea>
-                                  ) : (
-                                      <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
-                                  )}
+                                {loadingRoutes ? (
+                                    <div className="flex justify-center p-4"><Loader /></div>
+                                ) : savedRoutes.length > 0 ? (
+                                    <ScrollArea className="h-48">
+                                        <div className="space-y-2">
+                                            {savedRoutes.map(route => (
+                                                <Card key={route.id} className="p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="font-semibold">{route.name}</p>
+                                                            <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
+                                                            <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                ) : (
+                                    <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
+                                )}
                              </CardContent>
                          </TabsContent>
                     </Tabs>
