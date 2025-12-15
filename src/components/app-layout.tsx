@@ -147,8 +147,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/territory")} tooltip="Territory Map">
-                <Link href="/territory">
+              <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Territory Map">
+                <Link href="/leads/map">
                   <Map />
                   <span>Territory Map</span>
                 </Link>
