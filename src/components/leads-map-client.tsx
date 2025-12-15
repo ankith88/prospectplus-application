@@ -23,7 +23,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -152,7 +152,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'http://maps.google.com/mapfiles/ms/icons/green-pushpin.png';
+      return 'http://maps.google.com/mapfiles/ms/icons/teal-pushpin.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -1316,17 +1316,43 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     onCloseClick={onInfoWindowClose}
                     options={infoWindowOptions}
                     >
-                    <div className="space-y-2 p-2 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
+                    <div className="space-y-3 p-1 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
                         <div className="flex items-center gap-2">
                             <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
                             <LeadStatusBadge status={selectedLead.status} />
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                            {selectedLead.industryCategory || 'N/A'}
-                        </p>
-                        <p className="text-sm">
-                            {formatAddress(selectedLead.address)}
-                        </p>
+
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                            {selectedLead.industryCategory && (
+                                <div className="flex items-center gap-2">
+                                    <Briefcase className="h-4 w-4 shrink-0" />
+                                    <span>{selectedLead.industryCategory}</span>
+                                </div>
+                            )}
+                             <div className="flex items-center gap-2">
+                                <Building className="h-4 w-4 shrink-0" />
+                                <span>{formatAddress(selectedLead.address)}</span>
+                            </div>
+                            {selectedLead.websiteUrl && (
+                                <div className="flex items-center gap-2">
+                                    <Globe className="h-4 w-4 shrink-0" />
+                                    <a href={selectedLead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1">
+                                        <span>{selectedLead.websiteUrl.replace(/^(https?:\/\/)?(www\.)?/, '')}</span>
+                                        <LinkIcon className="h-3 w-3" />
+                                    </a>
+                                </div>
+                            )}
+                            {selectedLead.customerPhone && (
+                                <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 shrink-0" />
+                                    <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
+                                        <span>{selectedLead.customerPhone}</span>
+                                        <PhoneCall className="h-3 w-3" />
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                        
                         <div className="flex flex-col gap-2">
                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
@@ -1619,4 +1645,5 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
     
+
 
