@@ -39,7 +39,7 @@ export default function RootLayout({
           `}
         </Script>
         <Script
-          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places,drawing&callback=Function.prototype`}
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places,drawing,geometry&callback=Function.prototype`}
           async
         ></Script>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
