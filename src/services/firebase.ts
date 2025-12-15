@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from './netsuite';
 
@@ -1655,6 +1655,31 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
     }
 }
 
+async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string }>> {
+    try {
+        const users = await getAllUsers();
+        const fieldSalesUsers = users.filter(u => u.role === 'Field Sales');
+        
+        let allRoutes: Array<SavedRoute & { userName: string }> = [];
+
+        for (const user of fieldSalesUsers) {
+            const userRoutes = await getUserRoutes(user.uid);
+            const routesWithUserName = userRoutes.map(route => ({
+                ...route,
+                userName: user.displayName!,
+            }));
+            allRoutes = allRoutes.concat(routesWithUserName);
+        }
+        
+        allRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        return allRoutes;
+    } catch (error) {
+        console.error('Failed to fetch all user routes:', error);
+        return [];
+    }
+}
+
 async function deleteUserRoute(userId: string, routeId: string): Promise<void> {
     try {
         const routeRef = doc(firestore, 'users', userId, 'routes', routeId);
@@ -1724,6 +1749,7 @@ export {
     saveUserRoute,
     getUserRoutes,
     deleteUserRoute,
+    getAllUserRoutes,
 };
 
 
@@ -1752,3 +1778,4 @@ export {
 
 
     
+

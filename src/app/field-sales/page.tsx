@@ -15,59 +15,75 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, updateLeadDialerRep } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, updateLeadDialerRep, getAllUserRoutes, getAllUsers } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, History, PlayCircle, Trash2, Route, Car, Footprints, Bike } from 'lucide-react'
+import { MoreHorizontal, UserX, History, PlayCircle, Trash2, Route, Car, Footprints, Bike, User } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
+type RouteWithUser = SavedRoute & { userName: string };
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && (!userProfile?.role || userProfile.role !== 'Field Sales')) {
+    if (!authLoading && (!userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role))) {
       router.replace('/leads');
     }
   }, [userProfile, authLoading, router]);
-
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
+  
   const fetchData = async () => {
     setLoading(true);
     try {
-      const leads = await getLeadsFromFirebase({ dialerAssigned: userProfile?.displayName });
-      setAllLeads(leads);
+      if (userProfile?.role === 'admin') {
+          const [leads, routes, users] = await Promise.all([
+              getLeadsFromFirebase({ summary: true }),
+              getAllUserRoutes(),
+              getAllUsers()
+          ]);
+          setAllLeads(leads.filter(l => l.dialerAssigned && users.some(u => u.displayName === l.dialerAssigned && u.role === 'Field Sales')));
+          setAllRoutes(routes);
+          setAllDialers(users.filter(u => u.role === 'Field Sales'));
+      } else if (userProfile?.displayName) {
+          const leads = await getLeadsFromFirebase({ dialerAssigned: userProfile.displayName });
+          setAllLeads(leads);
+      }
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch assigned leads.' });
+      console.error("Failed to fetch field sales data:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
     } finally {
       setLoading(false);
     }
   }
 
+  useEffect(() => {
+    if (userProfile) {
+      fetchData();
+    }
+  }, [userProfile]);
+
   const myLeads = useMemo(() => {
-    if (user?.displayName) {
+    if (userProfile?.role !== 'admin' && user?.displayName) {
       return allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status));
     }
     return [];
-  }, [allLeads, user]);
+  }, [allLeads, user, userProfile]);
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -79,6 +95,23 @@ export default function FieldSalesPage() {
       return acc;
     }, {} as Record<string, LeadWithDetails[]>);
   }, [myLeads]);
+  
+  const groupedAllAssignedLeads = useMemo(() => {
+      if (userProfile?.role !== 'admin') return {};
+      
+      return allLeads.reduce((acc, lead) => {
+          const dialer = lead.dialerAssigned!;
+          if (!acc[dialer]) {
+              acc[dialer] = {};
+          }
+          const status = lead.status;
+          if (!acc[dialer][status]) {
+              acc[dialer][status] = [];
+          }
+          acc[dialer][status].push(lead);
+          return acc;
+      }, {} as Record<string, Record<string, Lead[]>>);
+  }, [allLeads, userProfile]);
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     let sortedLeadIds = leads.map(l => l.id);
@@ -104,49 +137,56 @@ export default function FieldSalesPage() {
         toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
         return;
     }
-    const myLocation = `${userProfile?.latitude},${userProfile?.longitude}`;
-    const firstStop = route.directions.routes[0].legs[0].end_location;
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${myLocation}&destination=${firstStop.lat()},${firstStop.lng()}&travelmode=${route.travelMode?.toLowerCase()}`;
+    // Using 0,0 as a placeholder for current location as it gets picked up by Google Maps
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${route.directions.routes[0].legs[0].end_address}&travelmode=${route.travelMode?.toLowerCase()}`;
     window.open(mapsUrl, '_blank');
   };
 
-  const handleDeleteRoute = async (routeId: string, routeName: string) => {
-    if (!userProfile?.uid) return;
-    await deleteUserRoute(userProfile.uid, routeId);
-    setSavedRoutes(prev => prev.filter(route => route.id !== routeId));
-    toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
+  const handleDeleteRoute = async (route: RouteWithUser) => {
+    const routeOwner = allDialers.find(d => d.displayName === route.userName);
+    if (!routeOwner?.uid || !route.id) return;
+    await deleteUserRoute(routeOwner.uid, route.id);
+    if(userProfile?.role === 'admin') {
+      setAllRoutes(prev => prev.filter(r => r.id !== route.id));
+    } else {
+      setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
+    }
+    toast({ title: 'Route Deleted', description: `Route "${route.name}" has been removed.` });
   };
 
 
   if (loading || authLoading || !userProfile) {
     return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
   }
+  
+  const routesToShow = userProfile.role === 'admin' ? allRoutes : savedRoutes;
 
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Field Sales Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, {userProfile.firstName}. Here are your routes and assigned leads.</p>
+        <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Route className="h-5 w-5"/> My Saved Routes</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Route className="h-5 w-5"/> Saved Routes</CardTitle>
         </CardHeader>
         <CardContent>
-          {savedRoutes.length > 0 ? (
+          {routesToShow.length > 0 ? (
             <div className="space-y-2">
-              {savedRoutes.map(route => (
+              {routesToShow.map(route => (
                 <Card key={route.id} className="p-3">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
                       <p className="font-semibold">{route.name}</p>
                       <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                      {userProfile.role === 'admin' && <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
                       <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 </Card>
@@ -160,10 +200,52 @@ export default function FieldSalesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>My Assigned Leads</CardTitle>
+          <CardTitle>{userProfile.role === 'admin' ? "All Assigned Field Sales Leads" : "My Assigned Leads"}</CardTitle>
         </CardHeader>
         <CardContent>
-          {myLeads.length > 0 ? (
+         {userProfile.role === 'admin' ? (
+              Object.keys(groupedAllAssignedLeads).length > 0 ? (
+                 <Accordion type="multiple" className="w-full space-y-4">
+                    {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
+                        <AccordionItem value={dialer} key={dialer}>
+                           <AccordionTrigger className="bg-muted px-4 rounded-md">
+                                <div className="flex items-center gap-2 font-semibold">
+                                    <User className="h-5 w-5" />
+                                    <span>{dialer}</span>
+                                    <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
+                                </div>
+                            </AccordionTrigger>
+                             <AccordionContent className="pt-2">
+                                <Accordion type="multiple" className="w-full space-y-2">
+                                    {Object.entries(statusGroups).map(([status, leads]) => (
+                                        <AccordionItem value={`${dialer}-${status}`} key={`${dialer}-${status}`}>
+                                            <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <LeadStatusBadge status={status as LeadStatus} />
+                                                    <Badge variant="outline">{leads.length} Leads</Badge>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-2">
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Franchisee</TableHead><TableHead>Industry</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {leads.map(lead => (
+                                                            <TableRow key={lead.id}><TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell><TableCell>{lead.franchisee ?? 'N/A'}</TableCell><TableCell>{lead.industryCategory}</TableCell></TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                 </Accordion>
+              ) : (
+                 <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">No leads are assigned to Field Sales users.</div>
+              )
+          ) : myLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New', 'Priority Lead']} className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => (
                 <AccordionItem value={status} key={status}>
