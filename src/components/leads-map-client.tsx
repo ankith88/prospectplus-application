@@ -987,7 +987,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         )
     }
   
-    const formatAddress = (address?: { street?: string; city?: string; state?: string } | string) => {
+    const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
         if (!address) return 'Address not available';
         if (typeof address === 'string') return address;
         return [
@@ -1066,7 +1066,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </DialogHeader>
             <ScrollArea className="max-h-[60vh]">
                 {nearbyCompanies.length > 0 ? (
-                    <div className="space-y-4 p-1">
+                    <div className="space-y-2 p-1">
                         {nearbyCompanies.map(company => (
                             <div key={company.id} className="flex flex-col p-3 border rounded-lg">
                                 <Button variant="link" className="p-0 h-auto justify-start text-base" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
@@ -1327,21 +1327,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         <p className="text-sm">
                             {formatAddress(selectedLead.address)}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-col gap-2">
                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
                             {!selectedLead.isCompany && (
-                               <Button size="sm" variant="secondary" onClick={handleFindNearbyCompanies}>
-                                  <Building className="mr-2 h-4 w-4" />
-                                  Nearby Customers
-                               </Button>
-                            )}
-                            {!selectedLead.isCompany && (
-                              <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                  {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
-                              </Button>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="secondary" className="flex-1" onClick={handleFindNearbyCompanies}>
+                                        <Building className="mr-2 h-4 w-4" />
+                                        Nearby
+                                    </Button>
+                                    <Button size="sm" variant="secondary" className="flex-1" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find</span></>}
+                                    </Button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1619,3 +1619,4 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
     
+
