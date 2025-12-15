@@ -189,6 +189,8 @@ export default function LeadsMapClient() {
   const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [viewingDescription, setViewingDescription] = useState<string | null>(null);
+  const [nearbyCompanies, setNearbyCompanies] = useState<MapLead[]>([]);
+  const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
 
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -557,6 +559,27 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     
     findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
   }, [selectedLead, map, toast, findProspects]);
+
+  const handleFindNearbyCompanies = useCallback(() => {
+    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google) return;
+
+    const leadLatLng = new window.google.maps.LatLng(selectedLead.latitude, selectedLead.longitude);
+    
+    const nearby = mapData.filter(item => {
+      if (!item.isCompany || !item.latitude || !item.longitude || item.id === selectedLead.id) {
+        return false;
+      }
+      const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
+      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+      return distance <= 1000; // 1km radius
+    });
+
+    setNearbyCompanies(nearby);
+    setIsNearbyCompaniesDialogOpen(true);
+    if(nearby.length === 0) {
+        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 1km radius.' });
+    }
+  }, [selectedLead, mapData, toast]);
 
 
   const handleFindProspectsNearMe = () => {
@@ -1032,6 +1055,47 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </DialogFooter>
         </DialogContent>
     </Dialog>
+     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Nearby Signed Customers</DialogTitle>
+                <DialogDescription>
+                    Found {nearbyCompanies.length} signed customer(s) within a 1km radius of {selectedLead?.companyName}.
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh]">
+                <div className="p-1">
+                    {nearbyCompanies.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Address</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {nearbyCompanies.map(company => (
+                                    <TableRow key={company.id}>
+                                        <TableCell>
+                                            <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
+                                                {company.companyName}
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>{formatAddress(company.address)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                    )}
+                </div>
+            </ScrollArea>
+            <DialogFooter>
+                <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <div className="flex flex-col gap-4 h-full">
          <Collapsible>
             <Card>
@@ -1273,11 +1337,17 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         <p className="text-sm">
                             {formatAddress(selectedLead.address)}
                         </p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
+                            {!selectedLead.isCompany && (
+                               <Button size="sm" variant="secondary" onClick={handleFindNearbyCompanies}>
+                                  <Building className="mr-2 h-4 w-4" />
+                                  Nearby Customers
+                               </Button>
+                            )}
                             {!selectedLead.isCompany && (
                               <Button size="sm" variant="secondary" onClick={handleFindNearby} disabled={isSearchingNearby}>
                                   {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
@@ -1554,5 +1624,4 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     </>
   )
 }
-
     
