@@ -1073,6 +1073,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     {company.companyName}
                                 </Button>
                                 <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                <p className="text-sm text-muted-foreground font-semibold mt-1">Franchisee: {company.franchisee || 'N/A'}</p>
                             </div>
                         ))}
                     </div>
