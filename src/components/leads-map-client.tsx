@@ -562,7 +562,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [selectedLead, map, toast, findProspects]);
 
   const handleFindNearbyCompanies = useCallback(() => {
-    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google) return;
+    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google?.maps?.geometry) return;
 
     const leadLatLng = new window.google.maps.LatLng(selectedLead.latitude, selectedLead.longitude);
     
@@ -1068,12 +1068,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 {nearbyCompanies.length > 0 ? (
                     <div className="space-y-2 p-1">
                         {nearbyCompanies.map(company => (
-                            <div key={company.id} className="flex flex-col p-3 border rounded-lg">
+                            <div key={company.id} className="flex flex-col p-3 border rounded-lg space-y-1">
                                 <Button variant="link" className="p-0 h-auto justify-start text-base whitespace-normal" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
                                     {company.companyName}
                                 </Button>
                                 <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                <p className="text-sm text-muted-foreground font-semibold mt-1">Franchisee: {company.franchisee || 'N/A'}</p>
+                                <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                {company.websiteUrl && (
+                                    <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                        <Globe className="h-4 w-4" />
+                                        <span>Visit Website</span>
+                                    </a>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -1354,7 +1361,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </div>
                         
                         <div className="flex flex-col gap-2">
-                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
@@ -1648,3 +1655,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
 
+
+
+    
