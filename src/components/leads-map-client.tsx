@@ -572,13 +572,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       }
       const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
       const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
-      return distance <= 1000; // 1km radius
+      return distance <= 500; // 500m radius
     });
 
     setNearbyCompanies(nearby);
     setIsNearbyCompaniesDialogOpen(true);
     if(nearby.length === 0) {
-        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 1km radius.' });
+        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
     }
   }, [selectedLead, mapData, toast]);
 
@@ -1061,7 +1061,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             <DialogHeader>
                 <DialogTitle>Nearby Signed Customers</DialogTitle>
                 <DialogDescription>
-                    Found {nearbyCompanies.length} signed customer(s) within a 1km radius of {selectedLead?.companyName}.
+                    Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh]">
@@ -1615,3 +1615,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 }
     
 
+
+
+    
