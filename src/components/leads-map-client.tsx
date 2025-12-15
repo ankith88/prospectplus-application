@@ -1069,7 +1069,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     <div className="space-y-2 p-1">
                         {nearbyCompanies.map(company => (
                             <div key={company.id} className="flex flex-col p-3 border rounded-lg">
-                                <Button variant="link" className="p-0 h-auto justify-start text-base" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
+                                <Button variant="link" className="p-0 h-auto justify-start text-base whitespace-normal" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
                                     {company.companyName}
                                 </Button>
                                 <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
@@ -1360,12 +1360,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </Button>
                             {!selectedLead.isCompany && (
                                 <div className="flex gap-2">
-                                    <Button size="sm" variant="secondary" className="flex-1" onClick={handleFindNearbyCompanies}>
+                                    <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies}>
                                         <Building className="mr-2 h-4 w-4" />
-                                        Nearby
+                                        Nearby Customers
                                     </Button>
-                                    <Button size="sm" variant="secondary" className="flex-1" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find</span></>}
+                                    <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
                                     </Button>
                                 </div>
                             )}
@@ -1645,5 +1645,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
     
+
 
 
