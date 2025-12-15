@@ -326,66 +326,48 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [isLoaded]);
 
   
-  const fetchMapData = useCallback(async () => {
-    setLoadingData(true);
-    try {
-        let allLeads = await getLeadsFromFirebase({ summary: true });
-        let allCompanies = await getCompaniesFromFirebase();
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!isLoaded || !userProfile) return;
+      
+      setLoadingData(true);
+      setLoadingRoutes(true);
 
+      try {
+        const [mapLeads, mapCompanies, routes] = await Promise.all([
+          getLeadsFromFirebase({ summary: true }),
+          getCompaniesFromFirebase(),
+          getUserRoutes(userProfile.uid)
+        ]);
+
+        let allLeads = mapLeads;
         if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
-            allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
+          allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
         }
 
         const leadsWithCoords = allLeads
-            .filter(lead => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude)))
-            .map(lead => ({
-                ...lead,
-                latitude: Number(lead.latitude),
-                longitude: Number(lead.longitude),
-                isCompany: false,
-            }));
+          .filter(lead => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude)))
+          .map(lead => ({ ...lead, latitude: Number(lead.latitude), longitude: Number(lead.longitude), isCompany: false }));
 
-        const companiesWithCoords = allCompanies
-            .filter(company => company.latitude != null && company.longitude != null)
-            .map(company => ({
-                ...company,
-                status: 'Won' as LeadStatus,
-                latitude: company.latitude!,
-                longitude: company.longitude!,
-                isCompany: true,
-            }));
+        const companiesWithCoords = mapCompanies
+          .filter(company => company.latitude != null && company.longitude != null)
+          .map(company => ({ ...company, status: 'Won' as LeadStatus, latitude: company.latitude!, longitude: company.longitude!, isCompany: true }));
         
         setMapData([...leadsWithCoords, ...companiesWithCoords] as MapLead[]);
-    } catch (error) {
-        console.error("Failed to fetch map data:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data.' });
-    } finally {
+        setSavedRoutes(routes);
+
+      } catch (error) {
+        console.error("Failed to fetch map data or routes:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data or routes.' });
+      } finally {
         setLoadingData(false);
-    }
-  }, [userProfile, toast]);
-  
-  useEffect(() => {
-    if (isLoaded && userProfile) {
-        setLoadingRoutes(true);
-        getUserRoutes(userProfile.uid)
-            .then(routes => {
-                setSavedRoutes(routes);
-            })
-            .catch(err => {
-                console.error("Failed to fetch user routes:", err);
-                toast({ variant: 'destructive', title: 'Error', description: 'Could not load your saved routes.' });
-            })
-            .finally(() => {
-                setLoadingRoutes(false);
-            });
-    }
+        setLoadingRoutes(false);
+      }
+    };
+    
+    fetchData();
   }, [isLoaded, userProfile, toast]);
 
-  useEffect(() => {
-    if (isLoaded && userProfile) {
-      fetchMapData();
-    }
-  }, [isLoaded, fetchMapData, userProfile]);
   
   const filteredData = useMemo(() => {
     return mapData.filter(item => {
@@ -682,23 +664,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                await fetchMapData(); // Refresh leads on the map
+                // No need to fetch all data again, just add the new lead to mapData
+                const newMapLead: MapLead = {
+                  id: result.leadId!,
+                  companyName: newLeadData.companyName,
+                  status: 'New' as LeadStatus,
+                  address: newLeadData.address as Address,
+                  industryCategory: newLeadData.industryCategory,
+                  latitude: newLeadData.address.lat,
+                  longitude: newLeadData.address.lng,
+                  dialerAssigned: undefined,
+                  customerPhone: newLeadData.contact.phone,
+                };
+                setMapData(prev => [...prev, newMapLead]);
                 setProspects(prev => prev.map(p => p.place.place_id === placeId
-                    ? {
-                        ...p,
-                        isAdding: false,
-                        existingLead: {
-                            id: result.leadId!,
-                            companyName: newLeadData.companyName,
-                            status: 'New' as LeadStatus,
-                            address: newLeadData.address as Address,
-                            industryCategory: newLeadData.industryCategory,
-                            latitude: newLeadData.address.lat,
-                            longitude: newLeadData.address.lng,
-                            dialerAssigned: undefined,
-                            customerPhone: newLeadData.contact.phone,
-                        }
-                    }
+                    ? { ...p, isAdding: false, existingLead: newMapLead }
                     : p
                 ));
             } else {
@@ -1088,19 +1068,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         {nearbyCompanies.map(company => (
                              <Card key={company.id} className="p-3">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="font-semibold">{company.companyName}</p>
+                                    <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
                                     <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
                                     <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
                                     {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                    <div className="flex items-center gap-4 pt-1">
-                                         {company.websiteUrl && (
-                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-                                                <Globe className="h-4 w-4" />
-                                                <span>Visit Website</span>
-                                            </a>
-                                        )}
-                                        <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>View Company</Button>
-                                    </div>
+                                    {company.websiteUrl && (
+                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
+                                            <Globe className="h-4 w-4" />
+                                            <span>Visit Website</span>
+                                        </a>
+                                    )}
                                 </div>
                             </Card>
                         ))}
@@ -1386,7 +1363,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </div>
                         
                         <div className="flex flex-col gap-2">
-                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
@@ -1689,5 +1666,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
     
 
+
+    
 
     
