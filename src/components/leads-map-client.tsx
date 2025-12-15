@@ -13,7 +13,7 @@ import {
   DrawingManagerF,
   CircleF,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -104,10 +104,11 @@ type ClickedKmlFeature = {
 }
 
 type SavedRoute = {
+    id?: string;
     name: string;
     createdAt: string;
     leads: MapLead[];
-    directions: google.maps.DirectionsResult;
+    directions: google.maps.DirectionsResult | null;
     travelMode: google.maps.TravelMode;
 };
 
@@ -364,12 +365,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [userProfile, toast]);
   
   useEffect(() => {
-    if (userProfile?.uid) {
-        const storedRoutes = localStorage.getItem(`savedMapRoutes_${userProfile.uid}`);
-        if (storedRoutes) {
-            setSavedRoutes(JSON.parse(storedRoutes));
+    const fetchRoutes = async () => {
+        if (userProfile?.uid) {
+            const routes = await getUserRoutes(userProfile.uid);
+            setSavedRoutes(routes);
         }
-    }
+    };
+    fetchRoutes();
   }, [userProfile]);
 
   useEffect(() => {
@@ -888,13 +890,17 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     setSelectedProspects([]);
   };
   
-    const handleSaveRoute = () => {
+    const handleSaveRoute = async () => {
         if (!routeName) {
             toast({ variant: 'destructive', title: 'Route Name Required', description: 'Please enter a name for your route.' });
             return;
         }
-        if (!directions || selectedRouteLeads.length === 0 || !travelMode) {
-            toast({ variant: 'destructive', title: 'Cannot Save', description: 'An active route is required to save.' });
+        if (selectedRouteLeads.length === 0 || !travelMode) {
+            toast({ variant: 'destructive', title: 'Cannot Save', description: 'An active route with leads is required to save.' });
+            return;
+        }
+        if (!userProfile?.uid) {
+            toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not identify user to save route.' });
             return;
         }
 
@@ -906,13 +912,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             travelMode,
         };
 
-        const updatedRoutes = [...savedRoutes, newRoute];
-        setSavedRoutes(updatedRoutes);
-        if (userProfile?.uid) {
-            localStorage.setItem(`savedMapRoutes_${userProfile.uid}`, JSON.stringify(updatedRoutes));
-        }
+        const savedRouteId = await saveUserRoute(userProfile.uid, newRoute);
+        setSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
         setRouteName('');
-        toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved.` });
+        toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved to your profile.` });
     };
 
     const handleLoadRoute = (route: SavedRoute) => {
@@ -923,13 +926,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
     };
 
-    const handleDeleteRoute = (routeName: string) => {
-        const updatedRoutes = savedRoutes.filter(route => route.name !== routeName);
-        setSavedRoutes(updatedRoutes);
-        if (userProfile?.uid) {
-            localStorage.setItem(`savedMapRoutes_${userProfile.uid}`, JSON.stringify(updatedRoutes));
-        }
+    const handleDeleteRoute = async (routeId: string, routeName: string) => {
+        if (!userProfile?.uid) return;
+        await deleteUserRoute(userProfile.uid, routeId);
+        setSavedRoutes(prev => prev.filter(route => route.id !== routeId));
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
+    };
+
+    const handleStartRoute = () => {
+        if (!directions || !myLocation) {
+            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route or current location available.' });
+            return;
+        }
+        const firstStop = directions.routes[0].legs[0].end_location;
+        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${firstStop.lat()},${firstStop.lng()}&travelmode=${travelMode?.toLowerCase()}`;
+        window.open(mapsUrl, '_blank');
     };
 
     const startDrawing = () => {
@@ -1069,18 +1080,19 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     <div className="space-y-2 p-1">
                         {nearbyCompanies.map(company => (
                             <div key={company.id} className="flex flex-col p-3 border rounded-lg space-y-1">
-                                <Button variant="link" className="p-0 h-auto justify-start text-base whitespace-normal" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
-                                    {company.companyName}
-                                </Button>
+                                <p className="font-semibold">{company.companyName}</p>
                                 <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
                                 <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
                                 {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                {company.websiteUrl && (
-                                    <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-                                        <Globe className="h-4 w-4" />
-                                        <span>Visit Website</span>
-                                    </a>
-                                )}
+                                <div className="flex items-center gap-4 mt-1">
+                                    {company.websiteUrl && (
+                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                            <Globe className="h-4 w-4" />
+                                            <span>Visit Website</span>
+                                        </a>
+                                    )}
+                                    <Button variant="link" className="p-0 h-auto text-sm" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>View Company</Button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -1205,14 +1217,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                       <ScrollArea className="h-48">
                                           <div className="space-y-2">
                                               {savedRoutes.map(route => (
-                                                  <div key={route.name} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                                  <div key={route.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                                       <div>
                                                           <p className="font-semibold">{route.name}</p>
                                                           <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
                                                       </div>
                                                       <div className="flex items-center gap-2">
                                                           <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
-                                                          <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.name)}><Trash2 className="h-4 w-4" /></Button>
+                                                          <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
                                                       </div>
                                                   </div>
                                               ))}
@@ -1336,8 +1348,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     <span>{selectedLead.industryCategory}</span>
                                 </div>
                             )}
-                             <div className="flex items-center gap-2">
-                                <Building className="h-4 w-4 shrink-0" />
+                             <div className="flex items-start gap-2">
+                                <Building className="h-4 w-4 shrink-0 mt-0.5" />
                                 <span>{formatAddress(selectedLead.address)}</span>
                             </div>
                             {selectedLead.websiteUrl && (
@@ -1352,7 +1364,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             {selectedLead.customerPhone && (
                                 <div className="flex items-center gap-2">
                                     <Phone className="h-4 w-4 shrink-0" />
-                                    <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
+                                     <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
                                         <span>{selectedLead.customerPhone}</span>
                                         <PhoneCall className="h-3 w-3" />
                                     </a>
@@ -1365,7 +1377,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
-                            {!selectedLead.isCompany && (
+                           {!selectedLead.isCompany && (
                                 <div className="flex gap-2">
                                     <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies}>
                                         <Building className="mr-2 h-4 w-4" />
@@ -1406,11 +1418,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
               </CardTitle>
                 <div className="space-y-2 pt-2">
                     {directions ? (
-                        <CardDescription>
-                            Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
-                            <br />
-                            Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
-                        </CardDescription>
+                         <div className="flex flex-col gap-2">
+                            <CardDescription>
+                                Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                                <br />
+                                Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                            </CardDescription>
+                            <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
+                                Start Route
+                            </Button>
+                        </div>
                     ) : (
                         <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
                     )}

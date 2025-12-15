@@ -1552,6 +1552,118 @@ async function deleteLead(leadIds: string | string[]): Promise<void> {
     }
 }
 
+type StorableRoute = {
+    id?: string;
+    name: string;
+    createdAt: string;
+    leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
+    travelMode: google.maps.TravelMode;
+    // Store a simplified version of directions
+    directions?: {
+        routes: {
+            legs: {
+                distance: { text: string; value: number };
+                duration: { text: string; value: number };
+                end_address: string;
+                start_address: string;
+            }[];
+            waypoint_order: number[];
+        }[];
+    };
+};
+
+// Function to simplify DirectionsResult
+const simplifyDirections = (directions: google.maps.DirectionsResult): StorableRoute['directions'] => {
+    return {
+        routes: directions.routes.map(route => ({
+            waypoint_order: route.waypoint_order,
+            legs: route.legs.map(leg => ({
+                distance: { text: leg.distance!.text, value: leg.distance!.value },
+                duration: { text: leg.duration!.text, value: leg.duration!.value },
+                end_address: leg.end_address,
+                start_address: leg.start_address,
+            })),
+        })),
+    };
+};
+
+
+async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
+    try {
+        const routesRef = collection(firestore, 'users', userId, 'routes');
+        const storableRoute: StorableRoute = {
+            name: routeData.name,
+            createdAt: routeData.createdAt,
+            travelMode: routeData.travelMode,
+            leads: routeData.leads.map(l => ({ 
+                id: l.id, 
+                latitude: l.latitude!, 
+                longitude: l.longitude!,
+                companyName: l.companyName,
+                address: l.address!
+            })),
+            directions: routeData.directions ? simplifyDirections(routeData.directions) : undefined,
+        };
+
+        const docRef = await addDoc(routesRef, storableRoute);
+        return docRef.id;
+    } catch (error) {
+        console.error(`Failed to save route for user ${userId}:`, error);
+        throw new Error('Failed to save route to Firebase');
+    }
+}
+
+async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
+    try {
+        const routesRef = collection(firestore, 'users', userId, 'routes');
+        const q = query(routesRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data() as StorableRoute;
+            return {
+                id: doc.id,
+                ...data,
+                // Reconstruct the DirectionsResult object as best as possible
+                directions: data.directions ? {
+                    routes: data.directions.routes.map(r => ({
+                        ...r,
+                        bounds: new google.maps.LatLngBounds(), // Not stored
+                        copyrights: '', // Not stored
+                        overview_polyline: '', // Not stored
+                        warnings: [], // Not stored
+                        fare: undefined, // Not stored
+                        legs: r.legs.map(l => ({
+                            ...l,
+                            end_location: new google.maps.LatLng(0,0), // Not stored precisely
+                            start_location: new google.maps.LatLng(0,0), // Not stored precisely
+                            steps: [], // Not stored
+                            via_waypoints: [], // Not stored
+                            arrival_time: undefined,
+                            departure_time: undefined,
+                        }))
+                    })),
+                    geocoded_waypoints: [], // Not stored
+                    request: {} as any, // Not stored
+                } as google.maps.DirectionsResult : null,
+            } as SavedRoute;
+        });
+    } catch (error) {
+        console.error(`Failed to get routes for user ${userId}:`, error);
+        return [];
+    }
+}
+
+async function deleteUserRoute(userId: string, routeId: string): Promise<void> {
+    try {
+        const routeRef = doc(firestore, 'users', userId, 'routes', routeId);
+        await deleteDoc(routeRef);
+    } catch (error) {
+        console.error(`Failed to delete route ${routeId} for user ${userId}:`, error);
+        throw new Error('Failed to delete route from Firebase');
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -1607,7 +1719,10 @@ export {
     prospectWebsiteTool,
     checkForDuplicateLead,
     deleteLead,
-    getSubCollection
+    getSubCollection,
+    saveUserRoute,
+    getUserRoutes,
+    deleteUserRoute,
 };
 
 
