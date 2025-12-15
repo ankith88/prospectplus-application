@@ -425,11 +425,12 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                 const data = doc.data();
 
                 // Safely parse latitude and longitude
-                const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : NaN;
-                const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : NaN;
+                const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : typeof data.latitude === 'number' ? data.latitude : NaN;
+                const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : typeof data.longitude === 'number' ? data.longitude : NaN;
 
                 // Filter out records with invalid coordinates
                 if (isNaN(lat) || isNaN(lng)) {
+                    console.warn(`[getCompaniesFromFirebase] Skipping company ${data.companyName || doc.id} due to invalid coordinates.`);
                     return null;
                 }
 

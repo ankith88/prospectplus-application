@@ -326,47 +326,61 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [isLoaded]);
 
   
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!isLoaded || !userProfile) return;
-      
-      setLoadingData(true);
-      setLoadingRoutes(true);
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!isLoaded || !userProfile) return;
 
-      try {
-        const [mapLeads, mapCompanies, routes] = await Promise.all([
-          getLeadsFromFirebase({ summary: true }),
-          getCompaniesFromFirebase(),
-          getUserRoutes(userProfile.uid)
-        ]);
+            setLoadingData(true);
+            setLoadingRoutes(true);
 
-        let allLeads = mapLeads;
-        if (userProfile && userProfile.role !== 'admin' && userProfile.displayName) {
-          allLeads = allLeads.filter(lead => lead.dialerAssigned === userProfile.displayName);
-        }
+            try {
+                const [mapLeads, mapCompanies, routes] = await Promise.all([
+                    getLeadsFromFirebase({ summary: true }),
+                    getCompaniesFromFirebase(),
+                    getUserRoutes(userProfile.uid)
+                ]);
 
-        const leadsWithCoords = allLeads
-          .filter(lead => lead.latitude != null && lead.longitude != null && !isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude)))
-          .map(lead => ({ ...lead, latitude: Number(lead.latitude), longitude: Number(lead.longitude), isCompany: false }));
+                let allMapData: MapLead[] = [];
 
-        const companiesWithCoords = mapCompanies
-          .filter(company => company.latitude != null && company.longitude != null)
-          .map(company => ({ ...company, status: 'Won' as LeadStatus, latitude: company.latitude!, longitude: company.longitude!, isCompany: true }));
-        
-        setMapData([...leadsWithCoords, ...companiesWithCoords] as MapLead[]);
-        setSavedRoutes(routes);
+                if (mapLeads) {
+                    const leadsWithCoords = mapLeads
+                        .filter(lead => lead.latitude != null && lead.longitude != null)
+                        .map(lead => ({
+                            ...lead,
+                            latitude: Number(lead.latitude),
+                            longitude: Number(lead.longitude),
+                            isCompany: false
+                        }));
+                    allMapData = [...allMapData, ...leadsWithCoords];
+                }
 
-      } catch (error) {
-        console.error("Failed to fetch map data or routes:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data or routes.' });
-      } finally {
-        setLoadingData(false);
-        setLoadingRoutes(false);
-      }
-    };
-    
-    fetchData();
-  }, [isLoaded, userProfile, toast]);
+                if (mapCompanies) {
+                    const companiesWithCoords = mapCompanies
+                        .filter(company => company.latitude != null && company.longitude != null)
+                        .map(company => ({
+                            ...company,
+                            status: 'Won' as LeadStatus,
+                            latitude: Number(company.latitude),
+                            longitude: Number(company.longitude),
+                            isCompany: true
+                        }));
+                    allMapData = [...allMapData, ...companiesWithCoords];
+                }
+                
+                setMapData(allMapData);
+                setSavedRoutes(routes);
+
+            } catch (error) {
+                console.error("Failed to fetch map data or routes:", error);
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data or routes.' });
+            } finally {
+                setLoadingData(false);
+                setLoadingRoutes(false);
+            }
+        };
+
+        fetchData();
+    }, [isLoaded, userProfile, toast]);
 
   
   const filteredData = useMemo(() => {
@@ -1362,8 +1376,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             )}
                         </div>
                         
-                        <div className="flex flex-col gap-2">
-                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                         <div className="flex flex-col gap-2">
+                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
