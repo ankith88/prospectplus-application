@@ -410,79 +410,73 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 }
 
 async function getCompaniesFromFirebase(): Promise<Lead[]> {
+    console.log(`[getCompaniesFromFirebase] Starting to fetch companies from Firebase...`);
     try {
-        console.log(`Fetching companies from Firebase...`);
         const companiesQuery = query(collection(firestore, 'companies'));
         const snapshot = await getDocs(companiesQuery);
 
         if (snapshot.empty) {
-            console.log("No companies found in Firebase.");
+            console.log("[getCompaniesFromFirebase] No companies found in Firebase.");
             return [];
         }
 
-        const companiesArray: Lead[] = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            const companyName = data.companyName || 'Unknown Company';
-            
-            let address: Address | undefined;
-            if (data.address && typeof data.address === 'object') {
-                address = data.address;
-            } else if (data.street || data.city || data.state || data.zip || data.country) {
-                address = {
-                    address1: data.address1,
-                    street: data.street || '',
-                    city: data.city || '',
-                    state: data.state || '',
-                    zip: data.zip || '',
-                    country: data.country || ''
+        const companiesArray = snapshot.docs
+            .map((doc): Lead | null => {
+                const data = doc.data();
+
+                // Safely parse latitude and longitude
+                const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : NaN;
+                const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : NaN;
+
+                // Filter out records with invalid coordinates
+                if (isNaN(lat) || isNaN(lng)) {
+                    return null;
+                }
+
+                let address: Address | undefined;
+                if (data.address && typeof data.address === 'object') {
+                    address = data.address;
+                } else if (data.street || data.city || data.state || data.zip || data.country) {
+                    address = {
+                        address1: data.address1,
+                        street: data.street || '',
+                        city: data.city || '',
+                        state: data.state || '',
+                        zip: data.zip || '',
+                        country: data.country || ''
+                    };
+                }
+
+                const transformedCompany: Lead = {
+                    id: doc.id,
+                    entityId: data['customerEntityId'] || data['internalid'],
+                    salesRecordInternalId: data.salesRecordInternalId,
+                    companyName: data.companyName || 'Unknown Company',
+                    status: 'Won', // Hardcoded as companies are 'Won' leads
+                    profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
+                    address: address,
+                    latitude: lat,
+                    longitude: lng,
+                    franchisee: data.franchisee,
+                    websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
+                    industryCategory: data.industryCategory,
+                    customerServiceEmail: data.customerServiceEmail,
+                    customerPhone: data.customerPhone,
                 };
-            }
-            
-            const latString = data.latitude;
-            const lngString = data.longitude;
 
-            // Safely parse latitude and longitude
-            const latitude = (typeof latString === 'string' && latString.trim() !== '') ? parseFloat(latString) : undefined;
-            const longitude = (typeof lngString === 'string' && lngString.trim() !== '') ? parseFloat(lngString) : undefined;
+                return transformedCompany;
+            })
+            .filter((company): company is Lead => company !== null);
 
-            const transformedCompany: Lead = {
-                id: doc.id,
-                entityId: data['customerEntityId'] || data['internalid'],
-                salesRecordInternalId: data.salesRecordInternalId,
-                companyName: companyName,
-                status: safeGetStatus(data.customerStatus),
-                statusReason: data.statusReason,
-                profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
-                address: address,
-                latitude: !isNaN(latitude!) ? latitude : undefined,
-                longitude: !isNaN(longitude!) ? longitude : undefined,
-                franchisee: data.franchisee,
-                websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
-                industryCategory: data.industryCategory,
-                industrySubCategory: data.industrySubCategory,
-                salesRepAssigned: data.salesRepAssigned,
-                salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
-                dialerAssigned: data.dialerAssigned,
-                campaign: data.customerSource,
-                customerServiceEmail: data.customerServiceEmail,
-                customerPhone: data.customerPhone,
-                contactCount: data.contactCount || 0,
-                aiScore: data.aiScore,
-                aiReason: data.aiReason,
-                discoveryData: data.discoveryData,
-                companyDescription: data.companyDescription,
-                leadType: data.leadType,
-                demoCompleted: data.demoCompleted,
-            };
-
-            return transformedCompany;
-        });
+        console.log(`[getCompaniesFromFirebase] Successfully fetched and processed ${companiesArray.length} companies with valid coordinates.`);
         return companiesArray;
+
     } catch (error) {
-        console.error("Firebase fetch for companies failed:", error);
+        console.error("[getCompaniesFromFirebase] Firebase fetch for companies failed:", error);
         return [];
     }
 }
+
 
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
@@ -1639,3 +1633,6 @@ export {
     
 
 
+
+
+    
