@@ -12,12 +12,12 @@ export default function NewLeadPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && (!userProfile?.role || !['admin', 'lead gen'].includes(userProfile.role))) {
+    if (!loading && (!userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role))) {
       router.replace('/leads');
     }
   }, [userProfile, loading, router]);
 
-  if (loading || !userProfile?.role || !['admin', 'lead gen'].includes(userProfile.role)) {
+  if (loading || !userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />

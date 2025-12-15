@@ -128,7 +128,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {userProfile?.role && ['admin', 'lead gen'].includes(userProfile.role) && (
+            {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
                   <Link href="/leads/new">

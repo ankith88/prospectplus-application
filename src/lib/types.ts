@@ -177,5 +177,5 @@ export interface UserProfile {
     displayName?: string;
     phoneNumber: string;
     aircallUserId?: string;
-    role?: 'user' | 'admin' | 'lead gen';
+    role?: 'user' | 'admin' | 'Field Sales';
 }
