@@ -69,6 +69,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
+import { Separator } from './ui/separator'
 
 
 const containerStyle = {
@@ -1064,32 +1065,20 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh]">
-                <div className="p-1">
-                    {nearbyCompanies.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Company</TableHead>
-                                    <TableHead>Address</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {nearbyCompanies.map(company => (
-                                    <TableRow key={company.id}>
-                                        <TableCell>
-                                            <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
-                                                {company.companyName}
-                                            </Button>
-                                        </TableCell>
-                                        <TableCell>{formatAddress(company.address)}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    ) : (
-                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-                    )}
-                </div>
+                {nearbyCompanies.length > 0 ? (
+                    <div className="space-y-4 p-1">
+                        {nearbyCompanies.map(company => (
+                            <div key={company.id} className="flex flex-col p-3 border rounded-lg">
+                                <Button variant="link" className="p-0 h-auto justify-start text-base" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>
+                                    {company.companyName}
+                                </Button>
+                                <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                )}
             </ScrollArea>
             <DialogFooter>
                 <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
@@ -1625,3 +1614,4 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   )
 }
     
+
