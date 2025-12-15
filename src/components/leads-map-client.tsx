@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -261,7 +260,7 @@ export default function LeadsMapClient() {
 
   // Automatically show location for Lead Gen users
   useEffect(() => {
-    if (isLoaded && map && userProfile?.role === 'lead gen' && !myLocation) {
+    if (isLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
       handleShowMyLocation();
     }
   }, [isLoaded, map, userProfile, myLocation, handleShowMyLocation]);
@@ -366,13 +365,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   
   useEffect(() => {
     const fetchRoutes = async () => {
-        if (userProfile?.uid) {
+        if (isLoaded && userProfile?.uid) {
             const routes = await getUserRoutes(userProfile.uid);
             setSavedRoutes(routes);
         }
     };
     fetchRoutes();
-  }, [userProfile]);
+  }, [isLoaded, userProfile]);
 
   useEffect(() => {
     if (isLoaded && userProfile) {
@@ -1373,7 +1372,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         </div>
                         
                         <div className="flex flex-col gap-2">
-                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                 <Briefcase className="mr-2 h-4 w-4" />
                                 View Profile
                             </Button>
@@ -1672,6 +1671,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
 
+
+
+    
 
 
     
