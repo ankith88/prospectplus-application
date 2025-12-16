@@ -38,7 +38,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
-  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
+  const isActive = (path: string) => {
+    if (path === '/leads') {
+        return pathname === '/leads';
+    }
+    return pathname === path || pathname.startsWith(`${path}/`);
+  }
 
 
   const handleSignOut = async () => {
@@ -130,10 +135,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
                <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Dashboard">
+                <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
                     <Route />
-                    <span>Dashboard</span>
+                    <span>Door-to-Door</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
