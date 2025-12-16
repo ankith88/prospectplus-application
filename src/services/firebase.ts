@@ -209,7 +209,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 getSubCollection<Transcript>('leads', leadId, 'transcripts', 'date'),
                 getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate'),
-                getSubCollection<Invoice>('leads', leadId, 'invoices', documentId())
+                getSubCollection<Invoice>('leads', leadId, 'invoices', 'invoiceDate', 'desc')
             ]);
 
             transformedLead.contacts = contacts;
@@ -306,7 +306,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
                 getSubCollection<Transcript>('companies', companyId, 'transcripts', 'date'),
                 getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('companies', companyId, 'appointments', 'duedate'),
-                getSubCollection<Invoice>('companies', companyId, 'invoices', documentId())
+                getSubCollection<Invoice>('companies', companyId, 'invoices', 'invoiceDate', 'desc')
             ]);
 
             transformedCompany.contacts = contacts;
@@ -569,7 +569,7 @@ async function getSubCollection<T>(parentCollection: string, docId: string, subC
         return snapshot.docs.map(doc => {
             const data = doc.data();
             // Special handling for invoiceType
-            if (subCollectionName === 'invoices' && !data.invoiceType) {
+            if (subCollectionName === 'invoices' && (!data.invoiceType || data.invoiceType === '- None -')) {
                 data.invoiceType = 'Service';
             }
             return { id: doc.id, ...data } as T;
@@ -1766,6 +1766,7 @@ export {
     
 
     
+
 
 
 

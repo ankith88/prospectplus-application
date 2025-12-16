@@ -24,6 +24,7 @@ import {
   FileDigit,
   ClipboardEdit,
   Tag,
+  ExternalLink,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Contact, Activity, Note, Address, Invoice } from '@/lib/types'
@@ -74,7 +75,7 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
       setLoadingInvoices(true);
       try {
         const invoicesRef = collection(firestore, 'companies', company.id, 'invoices');
-        const invoicesSnapshot = await getDocs(invoicesRef);
+        const invoicesSnapshot = await getDocs(query(invoicesRef, orderBy('invoiceDate', 'desc')));
         const invoicesData = invoicesSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
@@ -397,8 +398,9 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                                     <TableRow>
                                         <TableHead>Invoice Date</TableHead>
                                         <TableHead>Invoice ID</TableHead>
-                                        <TableHead>Service Type</TableHead>
+                                        <TableHead>Invoice Type</TableHead>
                                         <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -406,8 +408,17 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                                         <TableRow key={invoice.id}>
                                             <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
                                             <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
-                                            <TableCell>{invoice.invoiceType || 'Service'}</TableCell>
+                                            <TableCell>{!invoice.invoiceType || invoice.invoiceType === '- None -' ? 'Service' : invoice.invoiceType}</TableCell>
                                             <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">
+                                                {invoice.invoiceURL && (
+                                                    <Button asChild variant="outline" size="sm">
+                                                        <a href={invoice.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="mr-2 h-4 w-4" /> View
+                                                        </a>
+                                                    </Button>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

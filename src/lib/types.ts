@@ -130,6 +130,7 @@ export interface Invoice {
     invoiceDate?: string;
     invoiceTotal: number;
     invoiceType: string;
+    invoiceURL?: string;
 }
 
 export interface Lead {
