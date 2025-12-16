@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -653,7 +652,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const signupButton = (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant={isFieldSales ? "default" : "outline"}><Briefcase className="mr-2 h-4 w-4" />Signup</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant={isFieldSales ? "default" : "outline"}>
+                <Briefcase className="mr-2 h-4 w-4" />
+                Signup
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
@@ -665,7 +669,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const freeTrialButton = (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant={isFieldSales ? "default" : "outline"}> <Sparkles className="mr-2 h-4 w-4" />Free Trial</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant={isFieldSales ? "default" : "outline"}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Free Trial
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
@@ -676,7 +685,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const scheduleAppointmentButton = (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant={isNormalUser || isAdmin ? "default" : "outline"}><Calendar className="mr-2 h-4 w-4" />Schedule Appointment</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant={isNormalUser || isAdmin ? "default" : "outline"}>
+                <Calendar className="mr-2 h-4 w-4" />
+                Schedule Appointment
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent>
             {salesReps.map(rep => (
                 <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
@@ -735,6 +749,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   return (
     <>
+    <ServiceSelectionDialog
+        isOpen={isServiceSelectionOpen}
+        onOpenChange={setIsServiceSelectionOpen}
+        leadId={lead.id}
+        mode={serviceSelectionMode}
+    />
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
       <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -783,12 +803,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
     />
-     <ServiceSelectionDialog
-        isOpen={isServiceSelectionOpen}
-        onOpenChange={setIsServiceSelectionOpen}
-        leadId={lead.id}
-        mode={serviceSelectionMode}
-      />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
