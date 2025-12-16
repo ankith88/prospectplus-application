@@ -1281,7 +1281,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 />
                 {filteredData.map((item) => (
                     <MarkerF
-                        key={item.id}
+                        key={`${item.isCompany ? 'company' : 'lead'}-${item.id}`}
                         position={{ lat: item.latitude!, lng: item.longitude! }}
                         onClick={() => onMarkerClick(item)}
                         icon={{ 
