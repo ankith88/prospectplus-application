@@ -646,6 +646,93 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     ].filter(Boolean).join(', ');
   }
 
+  const renderActionButtons = () => {
+    const isAdmin = userProfile?.role === 'admin';
+    const isFieldSales = userProfile?.role === 'Field Sales';
+    const isNormalUser = !isAdmin && !isFieldSales;
+
+    const signupButton = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant={isFieldSales ? "default" : "outline"}><Briefcase className="mr-2 h-4 w-4" />Signup</Button></DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                <DropdownMenuItem>All 3</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
+    const freeTrialButton = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant={isFieldSales ? "default" : "outline"}> <Sparkles className="mr-2 h-4 w-4" />Free Trial</Button></DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
+    const scheduleAppointmentButton = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant={isNormalUser || isAdmin ? "default" : "outline"}><Calendar className="mr-2 h-4 w-4" />Schedule Appointment</Button></DropdownMenuTrigger>
+            <DropdownMenuContent>
+            {salesReps.map(rep => (
+                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
+            ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+    
+    const logOutcomeButton = (
+        <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
+            <PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}
+        </Button>
+    );
+
+    const logNoteButton = (
+        <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
+            <Button variant="outline"><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>
+        </LogNoteDialog>
+    );
+    
+    const viewScriptButton = (
+        <Button variant="outline" onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}>
+            <BookText className="mr-2 h-4 w-4" />View Script
+        </Button>
+    );
+    
+    const scorecardButton = (
+        <ColdCallScorecardDialog lead={lead} dialerName={lead.dialerAssigned || userProfile.displayName || ''} onScorecardSubmit={() => {}} />
+    );
+
+    if (isFieldSales) {
+        return <div className="flex flex-wrap items-center gap-2">{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}</div>;
+    }
+    
+    if (isNormalUser) {
+        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logOutcomeButton}{logNoteButton}{viewScriptButton}</div>;
+    }
+
+    if (isAdmin) {
+        return (
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-muted-foreground mr-2">Field Sales Actions:</p>
+                    {signupButton}{freeTrialButton}{logOutcomeButton}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-muted-foreground mr-2">Dialer Actions:</p>
+                    {scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{scorecardButton}
+                </div>
+            </div>
+        );
+    }
+
+    return null;
+  };
+
   return (
     <>
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
@@ -682,7 +769,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </ScrollArea>
            <DialogFooter>
               <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
-          </DialogFooter>
+           </DialogFooter>
       </DialogContent>
     </Dialog>
     <PostCallOutcomeDialog
@@ -736,72 +823,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           <Button variant="outline" onClick={()=>{ setLastCallActivity(null); setShowPostCallDialog(true); }}>
-              <PhoneCall className="mr-2 h-4 w-4" />
-              {userProfile?.role === 'Field Sales' ? 'Log Outcome' : 'Log a Call'}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Schedule Appointment
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {salesReps.map(rep => (
-                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
-                        {rep.name}
-                    </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
-            <Button variant="outline">
-              <ClipboardEdit className="mr-2 h-4 w-4" />
-              Log a Note
-            </Button>
-          </LogNoteDialog>
-           {userProfile?.role !== 'Field Sales' && (
-             <Button
-                variant="outline"
-                onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}
-              >
-                <BookText className="mr-2 h-4 w-4" />
-                View Script
-              </Button>
-            )}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline">Free Trial</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                    <DropdownMenuItem>MP Products</DropdownMenuItem>
-                    <DropdownMenuItem>LocalMile</DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline">Signup</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                    <DropdownMenuItem>MP Products</DropdownMenuItem>
-                    <DropdownMenuItem>LocalMile</DropdownMenuItem>
-                    <DropdownMenuItem>All 3</DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            {userProfile?.role === 'admin' && (
-              <ColdCallScorecardDialog 
-                lead={lead} 
-                dialerName={lead.dialerAssigned || userProfile.displayName || ''} 
-                onScorecardSubmit={() => {
-                  // This could refetch scorecards if they were displayed directly on the profile
-                }}
-              />
-            )}
+            {renderActionButtons()}
         </div>
       </header>
 
