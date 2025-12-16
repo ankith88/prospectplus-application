@@ -901,25 +901,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     const handleLoadRoute = (route: SavedRoute) => {
+        if (!isLoaded) return;
         setSelectedRouteLeads(route.leads);
+        
         // Reconstruct DirectionsResult on the client side
         if (route.directions) {
-            const storableDirections = route.directions as StorableRoute['directions'];
-            const reconstructedRoutes = storableDirections!.routes.map(r => ({
-                ...r,
-                bounds: new window.google.maps.LatLngBounds(),
-                copyrights: '',
-                overview_polyline: '',
-                warnings: [],
-                legs: r.legs.map(l => ({
-                    ...l,
-                    end_location: new window.google.maps.LatLng(0,0), // Placeholder
-                    start_location: new window.google.maps.LatLng(0,0), // Placeholder
-                    steps: [],
-                    via_waypoints: [],
-                }) as google.maps.DirectionsLeg),
-            }));
-            setDirections({ routes: reconstructedRoutes } as google.maps.DirectionsResult);
+            // This is now a simplified object, so we pass it to DirectionsRenderer which can handle it.
+            // The renderer itself doesn't need full LatLng objects for waypoints.
+            setDirections(route.directions as google.maps.DirectionsResult);
         } else {
             setDirections(null);
         }
@@ -941,8 +930,17 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route or current location available.' });
             return;
         }
-        const firstStop = directions.routes[0].legs[0].end_location;
-        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${firstStop.lat()},${firstStop.lng()}&travelmode=${travelMode?.toLowerCase()}`;
+    
+        const waypoints = directions.routes[0].legs
+            .slice(0, -1) // All legs except the last one (destination to origin)
+            .map(leg => leg.end_address)
+            .join('|');
+    
+        const origin = 'Current+Location';
+        const destination = directions.routes[0].legs.slice(-1)[0].end_address;
+    
+        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${travelMode?.toLowerCase()}`;
+        
         window.open(mapsUrl, '_blank');
     };
 

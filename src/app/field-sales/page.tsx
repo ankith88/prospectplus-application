@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -157,8 +158,15 @@ export default function FieldSalesPage() {
         toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
         return;
     }
-    // Using 0,0 as a placeholder for current location as it gets picked up by Google Maps
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${(route.directions as any).routes[0].legs[0].end_address}&travelmode=${route.travelMode?.toLowerCase()}`;
+    const directionsData = route.directions as any; // Cast to access nested properties
+    const origin = 'Current+Location';
+    const destination = directionsData.routes[0].legs.slice(-1)[0].end_address;
+    const waypoints = directionsData.routes[0].legs
+        .slice(0, -1) // All legs except the last one
+        .map((leg: any) => leg.end_address)
+        .join('|');
+
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
     window.open(mapsUrl, '_blank');
   };
 
