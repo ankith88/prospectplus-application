@@ -182,6 +182,7 @@ export default function LeadsMapClient() {
   const [viewingDescription, setViewingDescription] = useState<string | null>(null);
   const [nearbyCompanies, setNearbyCompanies] = useState<MapLead[]>([]);
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+  const [isFindingNearby, setIsFindingNearby] = useState(false);
 
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -1022,97 +1023,97 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     return (
-      <>
-        <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        A lead with this name or address already exists in the system.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
-                        View Existing Lead
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-        <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Create New Lead</DialogTitle>
-                    <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
-                    <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
-                    <Label htmlFor="initial-notes">Initial Notes</Label>
-                    <Textarea 
-                        id="initial-notes"
-                        value={initialNotes}
-                        onChange={(e) => setInitialNotes(e.target.value)}
-                        placeholder="Add any initial notes or comments here..."
-                    />
+    <>
+      <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
+                <AlertDialogDescription>
+                    A lead with this name or address already exists in the system.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
+                    View Existing Lead
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Create New Lead</DialogTitle>
+                <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
+                <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
+                <Label htmlFor="initial-notes">Initial Notes</Label>
+                <Textarea 
+                    id="initial-notes"
+                    value={initialNotes}
+                    onChange={(e) => setInitialNotes(e.target.value)}
+                    placeholder="Add any initial notes or comments here..."
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>AI Prospect Description</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh]">
+                <div className="py-4 text-sm text-muted-foreground pr-6">
+                    {viewingDescription}
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-        <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>AI Prospect Description</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh]">
-                    <div className="py-4 text-sm text-muted-foreground pr-6">
-                        {viewingDescription}
+            </ScrollArea>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Nearby Signed Customers</DialogTitle>
+                <DialogDescription>
+                    Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh]">
+                {nearbyCompanies.length > 0 ? (
+                    <div className="space-y-2 p-1">
+                        {nearbyCompanies.map(company => (
+                             <Card key={company.id} className="p-3">
+                                <div className="flex flex-col space-y-1">
+                                    <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
+                                    <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                    <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                    {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                    {company.websiteUrl && (
+                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
+                                            <Globe className="h-4 w-4" />
+                                            <span>Visit Website</span>
+                                        </a>
+                                    )}
+                                </div>
+                            </Card>
+                        ))}
                     </div>
-                </ScrollArea>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-        <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Nearby Signed Customers</DialogTitle>
-                    <DialogDescription>
-                        Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
-                    </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh]">
-                    {nearbyCompanies.length > 0 ? (
-                        <div className="space-y-2 p-1">
-                            {nearbyCompanies.map(company => (
-                                 <Card key={company.id} className="p-3">
-                                    <div className="flex flex-col space-y-1">
-                                        <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                        <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                        <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                        {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                        {company.websiteUrl && (
-                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
-                                                <Globe className="h-4 w-4" />
-                                                <span>Visit Website</span>
-                                            </a>
-                                        )}
-                                    </div>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-                    )}
-                </ScrollArea>
-                <DialogFooter>
-                    <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                ) : (
+                    <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                )}
+            </ScrollArea>
+            <DialogFooter>
+                <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
         <div className="flex flex-col gap-4 h-full">
             <Collapsible>
                 <Card>
@@ -1389,7 +1390,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 </Button>
                             {!selectedLead.isCompany && (
                                     <div className="flex gap-2">
-                                        <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies}>
+                                        <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
                                             <Building className="mr-2 h-4 w-4" />
                                             Nearby Customers
                                         </Button>

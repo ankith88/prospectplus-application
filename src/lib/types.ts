@@ -136,7 +136,8 @@ export interface Invoice {
 export interface ServiceSelection {
     name: 'Pickup & Delivery from PO' | 'Outgoing Mail Lodgement' | 'Express Banking';
     frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
-    trialDays?: number;
+    trialStartDate?: string;
+    trialEndDate?: string;
 }
 
 export interface Lead {

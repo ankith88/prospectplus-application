@@ -24,10 +24,15 @@ import {
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import { updateLeadServices } from '@/services/firebase';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { CalendarIcon } from 'lucide-react';
+import { Calendar } from './ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import type { DateRange } from 'react-day-picker';
 
 const services = [
   { id: 'pickup', label: 'Pickup & Delivery from PO' },
@@ -40,7 +45,7 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 const formSchema = z.object({
   selectedServices: z.array(z.string()).min(1, 'Please select at least one service.'),
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
-  trialDays: z.number().min(1).max(5).optional(),
+  trialDateRange: z.custom<DateRange>().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -72,12 +77,17 @@ export function ServiceSelectionDialog({
   const selectedServices = form.watch('selectedServices');
 
   const handleSubmit = async (values: FormValues) => {
+    if (mode === 'Free Trial' && !values.trialDateRange?.from) {
+        form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
+        return;
+    }
     setIsSubmitting(true);
     try {
         const serviceSelections = values.selectedServices.map(serviceName => ({
-            name: serviceName as any, // Cast to the specific literal type
+            name: serviceName as any,
             frequency: values.frequencies[serviceName],
-            trialDays: mode === 'Free Trial' ? values.trialDays : undefined,
+            trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
+            trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
         }));
         
       await updateLeadServices(leadId, serviceSelections);
@@ -217,24 +227,50 @@ export function ServiceSelectionDialog({
             ))}
             
             {mode === 'Free Trial' && (
-              <FormField
+               <FormField
                 control={form.control}
-                name="trialDays"
+                name="trialDateRange"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Free Trial Duration</FormLabel>
-                    <Select onValueChange={(value) => field.onChange(Number(value))} >
-                        <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select number of days..." />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {[1, 2, 3, 4, 5].map(day => (
-                                <SelectItem key={day} value={String(day)}>{day} day(s)</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Free Trial Period</FormLabel>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-[300px] justify-start text-left font-normal",
+                                        !field.value?.from && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {field.value?.from ? (
+                                        field.value.to ? (
+                                            <>
+                                                {format(field.value.from, "LLL dd, y")} -{" "}
+                                                {format(field.value.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(field.value.from, "LLL dd, y")
+                                        )
+                                    ) : (
+                                        <span>Pick a date range</span>
+                                    )}
+                                </Button>
+                            </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={field.value?.from}
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                numberOfMonths={2}
+                                disabled={(date) => date < new Date() || date < new Date("1900-01-01")}
+                            />
+                        </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}

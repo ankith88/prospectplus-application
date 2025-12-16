@@ -1,5 +1,3 @@
-
-
 'use server';
 
 /**
@@ -191,6 +189,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
           invoices: [],
+          services: data.services || [],
         };
 
         if (includeSubCollections) {
@@ -288,6 +287,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          services: data.services || [],
         };
         
         if (includeSubCollections) {
@@ -396,6 +396,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          services: data.services || [],
         };
 
         return transformedLead;
@@ -460,6 +461,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     industryCategory: data.industryCategory,
                     customerServiceEmail: data.customerServiceEmail,
                     customerPhone: data.customerPhone,
+                    services: data.services || [],
                 };
 
                 return transformedCompany;
@@ -506,6 +508,7 @@ async function getArchivedLeads(): Promise<Lead[]> {
                     dialerAssigned: data.dialerAssigned,
                     industryCategory: data.industryCategory,
                     discoveryData: data.discoveryData,
+                    services: data.services || [],
                 };
                 
                 const lastActivity = await getLastActivity(doc.id);
@@ -1753,37 +1756,3 @@ export {
     moveUserRoute,
     updateLeadServices,
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-    
-
-
-
-    
-
-
-
-
-    
-
-    
-
-
-
-
-
