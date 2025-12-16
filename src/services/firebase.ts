@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -1593,6 +1594,16 @@ async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<str
     }
 }
 
+async function updateUserRoute(userId: string, routeId: string, routeUpdate: Partial<StorableRoute>): Promise<void> {
+    try {
+        const routeRef = doc(firestore, 'users', userId, 'routes', routeId);
+        await updateDoc(routeRef, routeUpdate);
+    } catch (error) {
+        console.error(`Failed to update route ${routeId} for user ${userId}:`, error);
+        throw new Error('Failed to update route in Firebase');
+    }
+}
+
 async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
     try {
         const routesRef = collection(firestore, 'users', userId, 'routes');
@@ -1755,4 +1766,5 @@ export {
     getAllUserRoutes,
     moveUserRoute,
     updateLeadServices,
+    updateUserRoute,
 };

@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -13,7 +12,7 @@ import {
   DrawingManagerF,
   CircleF,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -184,6 +183,7 @@ export default function LeadsMapClient() {
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [localSavedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>([]);
+  const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
 
 
   // Routing and Drawing state
@@ -724,48 +724,54 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setRouteName('');
         setTravelMode(null);
         setIsRouteActive(false);
+        setLoadedRoute(null);
     };
 
-  const handleCheckIn = (lead: MapLead) => {
-    if (lead.isProspect) {
-      const url = new URL('/leads/new', window.location.origin);
-      url.searchParams.set('companyName', lead.companyName);
-      if (lead.websiteUrl) {
-          url.searchParams.set('websiteUrl', lead.websiteUrl);
-      }
-      if (lead.customerPhone) {
-        url.searchParams.set('phone', lead.customerPhone);
-      }
-      if (prospectSearchQuery) {
-          url.searchParams.set('industryCategory', prospectSearchQuery);
-      }
-      if (lead.address) {
-        if(lead.address.street) url.searchParams.set('street', lead.address.street);
-        if(lead.address.city) url.searchParams.set('city', lead.address.city);
-        if(lead.address.state) url.searchParams.set('state', lead.address.state);
-        if(lead.address.zip) url.searchParams.set('zip', lead.address.zip);
-        if (lead.address.lat) url.searchParams.set('lat', lead.address.lat.toString());
-        if (lead.address.lng) url.searchParams.set('lng', lead.address.lng.toString());
-      }
-      window.open(url.toString(), '_blank');
-    } else if (lead.id) {
-        const path = lead.isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`;
-        window.open(path, '_blank');
-        logActivity(lead.id, {
-            type: 'Update',
-            notes: 'Checked in at location via map.'
-        });
-    }
-
-    // If the lead is part of the current route, remove it.
-    if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
-        setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
-        toast({
-            title: 'Stop Completed',
-            description: `${lead.companyName} has been removed from your active route.`,
-        });
-    }
-  };
+    const handleCheckIn = async (lead: MapLead) => {
+        if (lead.isProspect) {
+            const url = new URL('/leads/new', window.location.origin);
+            url.searchParams.set('companyName', lead.companyName);
+            if (lead.websiteUrl) url.searchParams.set('websiteUrl', lead.websiteUrl);
+            if (lead.customerPhone) url.searchParams.set('phone', lead.customerPhone);
+            if (prospectSearchQuery) url.searchParams.set('industryCategory', prospectSearchQuery);
+            if (lead.address) {
+                if(lead.address.street) url.searchParams.set('street', lead.address.street);
+                if(lead.address.city) url.searchParams.set('city', lead.address.city);
+                if(lead.address.state) url.searchParams.set('state', lead.address.state);
+                if(lead.address.zip) url.searchParams.set('zip', lead.address.zip);
+                if (lead.address.lat) url.searchParams.set('lat', lead.address.lat.toString());
+                if (lead.address.lng) url.searchParams.set('lng', lead.address.lng.toString());
+            }
+            window.open(url.toString(), '_blank');
+        } else if (lead.id) {
+            const path = lead.isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`;
+            window.open(path, '_blank');
+            logActivity(lead.id, { type: 'Update', notes: 'Checked in at location via map.' });
+        }
+    
+        if (loadedRoute && userProfile?.uid) {
+            const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
+            if (updatedLeads.length === 0) {
+                await deleteUserRoute(userProfile.uid, loadedRoute.id!);
+                setLocalSavedRoutes(prev => prev.filter(r => r.id !== loadedRoute.id));
+                handleClearRoute();
+                toast({ title: 'Route Complete!', description: `You have completed all stops for "${loadedRoute.name}". The route has been removed.` });
+            } else {
+                setSelectedRouteLeads(updatedLeads);
+                const updatedRouteData: Partial<StorableRoute> = { 
+                    leads: updatedLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! }))
+                };
+                await updateUserRoute(userProfile.uid, loadedRoute.id!, updatedRouteData);
+                setLocalSavedRoutes(prev => prev.map(r => r.id === loadedRoute.id ? { ...r, leads: updatedLeads } as SavedRoute : r));
+                setLoadedRoute(prev => prev ? { ...prev, leads: updatedLeads } as SavedRoute : null);
+                toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
+            }
+        } else if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
+            setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
+            toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
+        }
+    };
+    
 
   const handleAnalyzeTerritory = useCallback(async () => {
     if (!drawnTerritory?.center || selectedRouteLeads.length === 0) {
@@ -824,9 +830,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         
         if (!center || !radius) return;
 
-        // Use filteredData to respect the current user's view
         const leadsInCircle = filteredData.filter(lead => {
-            // Field Sales should not be able to route to signed companies
             if (userProfile?.role === 'Field Sales' && lead.isCompany) {
                 return false;
             }
@@ -938,16 +942,14 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (!isLoaded) return;
         setSelectedRouteLeads(route.leads);
         
-        // Reconstruct DirectionsResult on the client side
         if (route.directions) {
-            // This is now a simplified object, so we pass it to DirectionsRenderer which can handle it.
-            // The renderer itself doesn't need full LatLng objects for waypoints.
             setDirections(route.directions as google.maps.DirectionsResult);
         } else {
             setDirections(null);
         }
         setTravelMode(route.travelMode);
         setShowRouteStops(true);
+        setLoadedRoute(route);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
     };
 
