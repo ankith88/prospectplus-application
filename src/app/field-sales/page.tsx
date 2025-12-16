@@ -15,29 +15,49 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, updateLeadDialerRep, getAllUserRoutes, getAllUsers } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, updateLeadDialerRep, getAllUserRoutes, getAllUsers, moveUserRoute } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, History, PlayCircle, Trash2, Route, Car, Footprints, Bike, User } from 'lucide-react'
+import { MoreHorizontal, UserX, History, PlayCircle, Trash2, Route, Car, Footprints, Bike, User, Move } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
-type RouteWithUser = SavedRoute & { userName: string };
+type RouteWithUser = SavedRoute & { userName: string; userId: string };
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [routeToMove, setRouteToMove] = useState<RouteWithUser | null>(null);
+  const [targetUserId, setTargetUserId] = useState<string>('');
+  const [isMovingRoute, setIsMovingRoute] = useState(false);
+
   const router = useRouter();
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
   const { toast } = useToast();
@@ -138,7 +158,7 @@ export default function FieldSalesPage() {
         return;
     }
     // Using 0,0 as a placeholder for current location as it gets picked up by Google Maps
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${route.directions.routes[0].legs[0].end_address}&travelmode=${route.travelMode?.toLowerCase()}`;
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${(route.directions as any).routes[0].legs[0].end_address}&travelmode=${route.travelMode?.toLowerCase()}`;
     window.open(mapsUrl, '_blank');
   };
 
@@ -152,6 +172,23 @@ export default function FieldSalesPage() {
       setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
     }
     toast({ title: 'Route Deleted', description: `Route "${route.name}" has been removed.` });
+  };
+
+  const handleMoveRoute = async () => {
+    if (!routeToMove || !targetUserId || !userProfile?.uid) return;
+    setIsMovingRoute(true);
+    try {
+        await moveUserRoute(routeToMove.userId, targetUserId, routeToMove.id!);
+        toast({ title: 'Route Moved', description: `Route "${routeToMove.name}" has been moved successfully.` });
+        fetchData(); // Refetch all data to reflect the change
+        setRouteToMove(null);
+        setTargetUserId('');
+    } catch (error) {
+        console.error("Failed to move route:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not move the route.' });
+    } finally {
+        setIsMovingRoute(false);
+    }
   };
 
 
@@ -177,18 +214,32 @@ export default function FieldSalesPage() {
             <div className="space-y-2">
               {routesToShow.map(route => (
                 <Card key={route.id} className="p-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
+                  {userProfile.role === 'admin' ? (
+                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                            <p className="font-semibold">{route.name}</p>
+                            <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
+                            <Move className="mr-2 h-4 w-4" /> Move
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                     </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold">{route.name}</p>
-                      <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                      {userProfile.role === 'admin' && <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>}
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
+                        <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
-                      <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -317,6 +368,40 @@ export default function FieldSalesPage() {
           )}
         </CardContent>
       </Card>
+      
+       <Dialog open={!!routeToMove} onOpenChange={(open) => !open && setRouteToMove(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move Route</DialogTitle>
+                    <DialogDescription>
+                        Move the route "{routeToMove?.name}" from {(routeToMove as RouteWithUser)?.userName} to another user.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label htmlFor="target-user">New Owner</Label>
+                     <Select onValueChange={setTargetUserId}>
+                        <SelectTrigger id="target-user">
+                            <SelectValue placeholder="Select a new user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allDialers
+                                .filter(d => d.uid !== (routeToMove as RouteWithUser)?.userId)
+                                .map(d => (
+                                <SelectItem key={d.uid} value={d.uid}>{d.displayName}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setRouteToMove(null)}>Cancel</Button>
+                    <Button onClick={handleMoveRoute} disabled={isMovingRoute || !targetUserId}>
+                        {isMovingRoute ? <Loader /> : 'Confirm Move'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }
+
+    

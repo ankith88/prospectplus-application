@@ -1615,18 +1615,19 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
     }
 }
 
-async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string }>> {
+async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string, userId: string }>> {
     try {
         const users = await getAllUsers();
         const fieldSalesUsers = users.filter(u => u.role === 'Field Sales');
         
-        let allRoutes: Array<SavedRoute & { userName: string }> = [];
+        let allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
 
         for (const user of fieldSalesUsers) {
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
                 ...route,
                 userName: user.displayName!,
+                userId: user.uid,
             }));
             allRoutes = allRoutes.concat(routesWithUserName);
         }
@@ -1647,6 +1648,35 @@ async function deleteUserRoute(userId: string, routeId: string): Promise<void> {
     } catch (error) {
         console.error(`Failed to delete route ${routeId} for user ${userId}:`, error);
         throw new Error('Failed to delete route from Firebase');
+    }
+}
+
+async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId: string): Promise<void> {
+    try {
+        const sourceRouteRef = doc(firestore, 'users', sourceUserId, 'routes', routeId);
+        const routeDoc = await getDoc(sourceRouteRef);
+
+        if (!routeDoc.exists()) {
+            throw new Error(`Route with ID ${routeId} does not exist for user ${sourceUserId}.`);
+        }
+
+        const routeData = routeDoc.data();
+        const targetRoutesRef = collection(firestore, 'users', targetUserId, 'routes');
+
+        const batch = writeBatch(firestore);
+        
+        // Add the route to the new user's collection
+        const newRouteRef = doc(targetRoutesRef, routeId); // Use same ID for consistency
+        batch.set(newRouteRef, routeData);
+
+        // Delete the route from the old user's collection
+        batch.delete(sourceRouteRef);
+
+        await batch.commit();
+        console.log(`Successfully moved route ${routeId} from user ${sourceUserId} to ${targetUserId}.`);
+    } catch (error) {
+        console.error(`Failed to move route ${routeId}:`, error);
+        throw new Error('Failed to move route in Firebase');
     }
 }
 
@@ -1710,6 +1740,7 @@ export {
     getUserRoutes,
     deleteUserRoute,
     getAllUserRoutes,
+    moveUserRoute,
 };
 
 
@@ -1740,3 +1771,6 @@ export {
     
 
 
+
+
+    
