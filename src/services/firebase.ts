@@ -1496,21 +1496,27 @@ async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; 
 }
 
 async function checkForDuplicateLead(companyName: string, phoneNumber: string): Promise<string | null> {
-    const leadsRef = collection(firestore, 'leads');
+    const collectionsToSearch = ['leads', 'companies'];
     
-    // Check for duplicate by company name (case-insensitive)
-    const nameQuery = query(leadsRef, where('companyName', '==', companyName), limit(1));
-    const nameSnapshot = await getDocs(nameQuery);
-    if (!nameSnapshot.empty) {
-        return nameSnapshot.docs[0].id;
-    }
-    
-    // Check for duplicate by phone number if provided
-    if (phoneNumber) {
-        const phoneQuery = query(leadsRef, where('customerPhone', '==', phoneNumber), limit(1));
-        const phoneSnapshot = await getDocs(phoneQuery);
-        if (!phoneSnapshot.empty) {
-            return phoneSnapshot.docs[0].id;
+    for (const collectionName of collectionsToSearch) {
+        const collectionRef = collection(firestore, collectionName);
+        
+        // Check by company name (case-insensitive can be tricky, so we do exact match for now, but Firestore queries are case-sensitive)
+        const nameQuery = query(collectionRef, where('companyName', '==', companyName), limit(1));
+        const nameSnapshot = await getDocs(nameQuery);
+        if (!nameSnapshot.empty) {
+            console.warn(`Duplicate found in '${collectionName}' by name: ${companyName}`);
+            return nameSnapshot.docs[0].id;
+        }
+
+        // Check by phone number if provided
+        if (phoneNumber) {
+            const phoneQuery = query(collectionRef, where('customerPhone', '==', phoneNumber), limit(1));
+            const phoneSnapshot = await getDocs(phoneQuery);
+            if (!phoneSnapshot.empty) {
+                console.warn(`Duplicate found in '${collectionName}' by phone: ${phoneNumber}`);
+                return phoneSnapshot.docs[0].id;
+            }
         }
     }
     
