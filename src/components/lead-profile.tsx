@@ -160,6 +160,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [loadingBack, setLoadingBack] = useState(false);
   const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+  const [isFindingNearby, setIsFindingNearby] = useState(false);
 
 
   const router = useRouter();
@@ -576,22 +577,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return;
     }
 
-    const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-    const allCompanies = await getCompaniesFromFirebase();
-    
-    const nearby = allCompanies.filter(company => {
-      if (!company.latitude || !company.longitude || company.id === lead.id) {
-        return false;
-      }
-      const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
-      return distance <= 500; // 500m radius
-    });
+    setIsFindingNearby(true);
+    try {
+        const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+        const allCompanies = await getCompaniesFromFirebase();
+        
+        const nearby = allCompanies.filter(company => {
+          if (!company.latitude || !company.longitude || company.id === lead.id) {
+            return false;
+          }
+          const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+          const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+          return distance <= 500; // 500m radius
+        });
 
-    setNearbyCompanies(nearby);
-    setIsNearbyCompaniesDialogOpen(true);
-    if(nearby.length === 0) {
-        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
+        setNearbyCompanies(nearby);
+        setIsNearbyCompaniesDialogOpen(true);
+        if(nearby.length === 0) {
+            toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
+        }
+    } catch (error) {
+        console.error("Error finding nearby companies:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch nearby companies.' });
+    } finally {
+        setIsFindingNearby(false);
     }
   }, [lead, toast]);
 
@@ -775,8 +784,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
                         {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies}>
-                      <Building className="mr-2 h-4 w-4" /> Nearby Customers
+                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
+                        {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
                     </Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
                       <DialogTrigger asChild>
