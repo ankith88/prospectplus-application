@@ -30,7 +30,7 @@ import { updateLeadServices } from '@/services/firebase';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon } from 'lucide-react';
 import { Calendar } from './ui/calendar';
-import { format } from 'date-fns';
+import { format, differenceInDays, isWeekend } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 
@@ -75,6 +75,23 @@ export function ServiceSelectionDialog({
   });
 
   const selectedServices = form.watch('selectedServices');
+
+  const handleDateSelect = (
+    range: DateRange | undefined,
+    onChange: (...event: any[]) => void
+  ) => {
+    if (range?.from && range?.to) {
+      if (differenceInDays(range.to, range.from) > 4) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid Date Range',
+          description: 'Free trial period cannot exceed 5 days.',
+        });
+        return;
+      }
+    }
+    onChange(range);
+  };
 
   const handleSubmit = async (values: FormValues) => {
     if (mode === 'Free Trial' && !values.trialDateRange?.from) {
@@ -232,7 +249,7 @@ export function ServiceSelectionDialog({
                 name="trialDateRange"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Free Trial Period</FormLabel>
+                    <FormLabel>Free Trial Period (max 5 days, no weekends)</FormLabel>
                     <Popover>
                         <PopoverTrigger asChild>
                             <FormControl>
@@ -265,9 +282,9 @@ export function ServiceSelectionDialog({
                                 mode="range"
                                 defaultMonth={field.value?.from}
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(range) => handleDateSelect(range, field.onChange)}
                                 numberOfMonths={2}
-                                disabled={(date) => date < new Date() || date < new Date("1900-01-01")}
+                                disabled={(date) => isWeekend(date) || date < new Date()}
                             />
                         </PopoverContent>
                     </Popover>
