@@ -46,6 +46,7 @@ const formSchema = z.object({
   selectedServices: z.array(z.string()).min(1, 'Please select at least one service.'),
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
   trialDateRange: z.custom<DateRange>().optional(),
+  startDate: z.date().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -98,6 +99,10 @@ export function ServiceSelectionDialog({
         form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
         return;
     }
+    if (mode === 'Signup' && !values.startDate) {
+        form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
+        return;
+    }
     setIsSubmitting(true);
     try {
         const serviceSelections = values.selectedServices.map(serviceName => ({
@@ -105,6 +110,7 @@ export function ServiceSelectionDialog({
             frequency: values.frequencies[serviceName],
             trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
             trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
+            startDate: mode === 'Signup' ? values.startDate?.toISOString() : undefined,
         }));
         
       await updateLeadServices(leadId, serviceSelections);
@@ -138,7 +144,7 @@ export function ServiceSelectionDialog({
         <DialogHeader>
           <DialogTitle>{mode} for Services</DialogTitle>
           <DialogDescription>
-            Configure the required services, their frequency, and trial duration if applicable.
+            Configure the required services, their frequency, and other details.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -287,6 +293,50 @@ export function ServiceSelectionDialog({
                                 disabled={(date) => isWeekend(date) || date < new Date()}
                             />
                         </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {mode === 'Signup' && (
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Service Start Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-[240px] pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date < new Date() || isWeekend(date)
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
                     </Popover>
                     <FormMessage />
                   </FormItem>

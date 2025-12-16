@@ -138,6 +138,7 @@ export interface ServiceSelection {
     frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
     trialStartDate?: string;
     trialEndDate?: string;
+    startDate?: string;
 }
 
 export interface Lead {
