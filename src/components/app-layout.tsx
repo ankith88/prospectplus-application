@@ -174,7 +174,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
+                <Link href="/reports">
+                  <BarChart2 />
+                  <span>Outbound Reporting</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
+                <Link href="/signed-customers">
+                  <Star />
+                  <span>Signed Customers</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <History />
@@ -208,22 +224,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Reports">
-                <Link href="/reports">
-                  <BarChart2 />
-                  <span>Reports</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
-                <Link href="/signed-customers">
-                  <Star />
-                  <span>Signed Customers</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">
