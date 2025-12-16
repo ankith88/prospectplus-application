@@ -451,7 +451,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     entityId: data['customerEntityId'] || data['internalid'],
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
-                    status: 'Won', 
+                    status: safeGetStatus(data.customerStatus),
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
                     address: address,
                     latitude: lat,
@@ -1769,9 +1769,5 @@ export {
 
     
 
-
-
-
     
 
-    

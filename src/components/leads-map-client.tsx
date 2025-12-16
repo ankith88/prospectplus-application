@@ -342,7 +342,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         .filter(company => company.latitude != null && company.longitude != null)
                         .map(company => ({
                             ...company,
-                            status: 'Won' as LeadStatus,
                             latitude: Number(company.latitude),
                             longitude: Number(company.longitude),
                             isCompany: true
@@ -926,19 +925,18 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     const handleStartRoute = () => {
-        if (!directions || !myLocation) {
-            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route or current location available.' });
+        if (!directions) {
+            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route available.' });
             return;
         }
-    
-        const waypoints = directions.routes[0].legs
-            .slice(0, -1) // All legs except the last one (destination to origin)
-            .map(leg => leg.end_address)
-            .join('|');
-    
+
         const origin = 'Current+Location';
         const destination = directions.routes[0].legs.slice(-1)[0].end_address;
-    
+        const waypoints = directions.routes[0].legs
+            .slice(0, -1) // All legs except the last one
+            .map((leg: any) => leg.end_address)
+            .join('|');
+
         const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${travelMode?.toLowerCase()}`;
         
         window.open(mapsUrl, '_blank');
