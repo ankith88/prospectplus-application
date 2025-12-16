@@ -28,7 +28,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -174,14 +174,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
-                <Link href="/reports">
-                  <BarChart2 />
-                  <span>Outbound Reporting</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
+                  <Link href="/reports">
+                    <BarChart2 />
+                    <span>Outbound Reporting</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
+                  <Link href="/door-to-door-reporting">
+                    <BarChart3 />
+                    <span>D2D Reporting</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                 <Link href="/signed-customers">

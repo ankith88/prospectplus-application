@@ -98,6 +98,12 @@ export default function ReportsClientPage() {
     return Array.from(assignees as string[]).map(a => ({ value: a, label: a })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allAppointments]);
 
+   useEffect(() => {
+    if (!authLoading && (!userProfile?.role || !['admin', 'user'].includes(userProfile.role))) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router]);
+
   useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
@@ -622,8 +628,8 @@ export default function ReportsClientPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground">Performance dashboard.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1>
+        <p className="text-muted-foreground">Performance dashboard for outbound calling.</p>
       </header>
 
        <Collapsible>
