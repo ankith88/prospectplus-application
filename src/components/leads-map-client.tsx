@@ -195,6 +195,7 @@ export default function LeadsMapClient() {
   const [isDrawing, setIsDrawing] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const [routeName, setRouteName] = useState('');
+  const [isRouteActive, setIsRouteActive] = useState(false);
   
   // State for creating lead from prospect
   const [prospectToCreate, setProspectToCreate] = useState<MapLead | null>(null);
@@ -722,6 +723,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setShowRouteStops(false);
         setRouteName('');
         setTravelMode(null);
+        setIsRouteActive(false);
     };
 
   const handleCheckIn = (lead: MapLead) => {
@@ -981,6 +983,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${travelMode?.toLowerCase()}`;
         
         window.open(mapsUrl, '_blank');
+        setIsRouteActive(true);
+    };
+
+    const handleStopRoute = () => {
+        setIsRouteActive(false);
+        handleClearRoute();
+        toast({ title: 'Route Stopped', description: 'Active route has been cleared.' });
     };
 
     const startDrawing = () => {
@@ -1454,7 +1463,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             <>
                 <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})</span>
+                    <span className="flex items-center gap-2">
+                        <Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})
+                        {isRouteActive && <Badge variant="destructive">Active</Badge>}
+                    </span>
                     <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
                 </CardTitle>
                     <div className="space-y-2 pt-2">
@@ -1465,9 +1477,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     <br />
                                     Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
                                 </CardDescription>
-                                <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
-                                    Start Route
-                                </Button>
+                                {isRouteActive ? (
+                                    <Button onClick={handleStopRoute} className="w-full" variant="destructive">
+                                        <X className="mr-2 h-4 w-4" />
+                                        Stop Route
+                                    </Button>
+                                ) : (
+                                    <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
+                                        Start Route
+                                    </Button>
+                                )}
                             </div>
                         ) : (
                             <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
