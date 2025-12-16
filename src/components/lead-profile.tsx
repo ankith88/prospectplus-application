@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -63,6 +64,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal
 } from '@/components/ui/dropdown-menu'
 import {
   AlertDialog,
@@ -122,6 +127,8 @@ import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ColdCallScorecardDialog } from './cold-call-scorecard';
 import { ScrollArea } from './ui/scroll-area'
+import { ServiceSelectionDialog } from './service-selection-dialog';
+
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -161,6 +168,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
+  const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
 
 
   const router = useRouter();
@@ -671,7 +680,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
               )}
           </ScrollArea>
-          <DialogFooter>
+           <DialogFooter>
               <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
           </DialogFooter>
       </DialogContent>
@@ -687,6 +696,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
     />
+     <ServiceSelectionDialog
+        isOpen={isServiceSelectionOpen}
+        onOpenChange={setIsServiceSelectionOpen}
+        leadId={lead.id}
+        mode={serviceSelectionMode}
+      />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -756,26 +771,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </Button>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">Free Trial</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem>Service</DropdownMenuItem>
-                <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem>LocalMile</DropdownMenuItem>
-              </DropdownMenuContent>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline">Free Trial</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                    <DropdownMenuItem>MP Products</DropdownMenuItem>
+                    <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                </DropdownMenuContent>
             </DropdownMenu>
+
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">Signup</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem>Service</DropdownMenuItem>
-                <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem>LocalMile</DropdownMenuItem>
-                <DropdownMenuItem>All 3</DropdownMenuItem>
-              </DropdownMenuContent>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline">Signup</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                    <DropdownMenuItem>MP Products</DropdownMenuItem>
+                    <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                    <DropdownMenuItem>All 3</DropdownMenuItem>
+                </DropdownMenuContent>
             </DropdownMenu>
+
             {userProfile?.role === 'admin' && (
               <ColdCallScorecardDialog 
                 lead={lead} 
@@ -808,7 +825,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
-                      {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
+                        {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
                     </Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
                       <DialogTrigger asChild>

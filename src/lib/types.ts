@@ -133,6 +133,12 @@ export interface Invoice {
     invoiceURL?: string;
 }
 
+export interface ServiceSelection {
+    name: 'Pickup & Delivery from PO' | 'Outgoing Mail Lodgement' | 'Express Banking';
+    frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
+    trialDays?: number;
+}
+
 export interface Lead {
   id: string
   entityId: string
@@ -148,6 +154,7 @@ export interface Lead {
   tasks?: Task[]
   appointments?: Appointment[]
   invoices?: Invoice[]
+  services?: ServiceSelection[];
   contactCount?: number
   address?: Address
   latitude?: number;

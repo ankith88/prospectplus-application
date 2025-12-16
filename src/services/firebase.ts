@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from './netsuite';
 
@@ -1675,6 +1675,21 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
     }
 }
 
+async function updateLeadServices(leadId: string, services: ServiceSelection[]): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, { services: services });
+        await logActivity(leadId, {
+            type: 'Update',
+            notes: `Services configured: ${services.map(s => s.name).join(', ')}`,
+        });
+        console.log(`Services for lead ${leadId} updated.`);
+    } catch (error) {
+        console.error(`Failed to update services for lead ${leadId}:`, error);
+        throw new Error('Failed to update services in Firebase');
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -1736,6 +1751,7 @@ export {
     deleteUserRoute,
     getAllUserRoutes,
     moveUserRoute,
+    updateLeadServices,
 };
 
 
@@ -1766,6 +1782,7 @@ export {
     
 
     
+
 
 
 
