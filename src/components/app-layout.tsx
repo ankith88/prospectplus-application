@@ -174,7 +174,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+            {userProfile?.role === 'admin' && (
+              <SidebarMenuItem>
+                <SidebarMenuButton>
+                  <BarChart2 />
+                  <span>Reporting</span>
+                </SidebarMenuButton>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
+                      <Link href="/reports">
+                        <BarChart2 />
+                        <span>Outbound Reporting</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/door-to-door-reporting")}>
+                      <Link href="/door-to-door-reporting">
+                        <BarChart3 />
+                        <span>D2D Reporting</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuItem>
+            )}
+            {userProfile?.role === 'user' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
                   <Link href="/reports">
@@ -184,7 +210,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
+            {userProfile?.role === 'Field Sales' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
                   <Link href="/door-to-door-reporting">
