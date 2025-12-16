@@ -323,7 +323,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     getCompaniesFromFirebase(),
                 ]);
                 
-                console.log(`Fetched ${mapCompanies.length} companies from Firebase.`);
+                console.log(`leads-map-client.tsx:325 Fetched ${mapLeads.length} leads from Firebase.`);
+                console.log(`leads-map-client.tsx:326 Fetched ${mapCompanies.length} companies from Firebase.`);
+
 
                 let allMapData: MapLead[] = [];
 
@@ -925,18 +927,26 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     const handleStartRoute = () => {
-        if (!directions) {
+        if (!directions || !directions.routes || directions.routes.length === 0) {
             toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route available.' });
             return;
         }
-
+    
+        const firstLeg = directions.routes[0].legs[0];
+        const lastLeg = directions.routes[0].legs[directions.routes[0].legs.length - 1];
+    
+        if (!firstLeg || !lastLeg) {
+            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'Invalid route data.' });
+            return;
+        }
+    
         const origin = 'Current+Location';
-        const destination = directions.routes[0].legs.slice(-1)[0].end_address;
+        const destination = lastLeg.end_address;
         const waypoints = directions.routes[0].legs
             .slice(0, -1) // All legs except the last one
             .map((leg: any) => leg.end_address)
             .join('|');
-
+    
         const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${travelMode?.toLowerCase()}`;
         
         window.open(mapsUrl, '_blank');
@@ -1011,656 +1021,655 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         pixelOffset: new window.google.maps.Size(0, -30),
     };
 
-  return (
-    <>
-    <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
-                <AlertDialogDescription>
-                    A lead with this name or address already exists in the system.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
-                    View Existing Lead
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-    </AlertDialog>
-    <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Create New Lead</DialogTitle>
-                <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
-                <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
-                <Label htmlFor="initial-notes">Initial Notes</Label>
-                <Textarea 
-                    id="initial-notes"
-                    value={initialNotes}
-                    onChange={(e) => setInitialNotes(e.target.value)}
-                    placeholder="Add any initial notes or comments here..."
-                />
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-     <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>AI Prospect Description</DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh]">
-                <div className="py-4 text-sm text-muted-foreground pr-6">
-                    {viewingDescription}
+    return (
+      <>
+        <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        A lead with this name or address already exists in the system.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
+                        View Existing Lead
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create New Lead</DialogTitle>
+                    <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
+                    <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
+                    <Label htmlFor="initial-notes">Initial Notes</Label>
+                    <Textarea 
+                        id="initial-notes"
+                        value={initialNotes}
+                        onChange={(e) => setInitialNotes(e.target.value)}
+                        placeholder="Add any initial notes or comments here..."
+                    />
                 </div>
-            </ScrollArea>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
-        <DialogContent className="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Nearby Signed Customers</DialogTitle>
-                <DialogDescription>
-                    Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh]">
-                {nearbyCompanies.length > 0 ? (
-                    <div className="space-y-2 p-1">
-                        {nearbyCompanies.map(company => (
-                             <Card key={company.id} className="p-3">
-                                <div className="flex flex-col space-y-1">
-                                    <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                    <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                    <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                    {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                    {company.websiteUrl && (
-                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
-                                            <Globe className="h-4 w-4" />
-                                            <span>Visit Website</span>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>AI Prospect Description</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh]">
+                    <div className="py-4 text-sm text-muted-foreground pr-6">
+                        {viewingDescription}
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Nearby Signed Customers</DialogTitle>
+                    <DialogDescription>
+                        Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh]">
+                    {nearbyCompanies.length > 0 ? (
+                        <div className="space-y-2 p-1">
+                            {nearbyCompanies.map(company => (
+                                 <Card key={company.id} className="p-3">
+                                    <div className="flex flex-col space-y-1">
+                                        <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
+                                        <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                        <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                        {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                        {company.websiteUrl && (
+                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
+                                                <Globe className="h-4 w-4" />
+                                                <span>Visit Website</span>
+                                            </a>
+                                        )}
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                    )}
+                </ScrollArea>
+                <DialogFooter>
+                    <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <div className="flex flex-col gap-4 h-full">
+            <Collapsible>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <MapIcon className="h-5 w-5" />
+                            <CardTitle>Map Controls</CardTitle>
+                            <Badge variant="secondary">{filteredData.length} Location(s)</Badge>
+                        </div>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="ml-2">Toggle Controls</span>
+                            </Button>
+                        </CollapsibleTrigger>
+                    </CardHeader>
+                    <CollapsibleContent>
+                        <Tabs defaultValue="filters">
+                            <CardContent>
+                                <TabsList className="grid w-full grid-cols-3">
+                                    <TabsTrigger value="filters">Filters</TabsTrigger>
+                                    <TabsTrigger value="actions">Actions</TabsTrigger>
+                                    <TabsTrigger value="routes">Routes</TabsTrigger>
+                                </TabsList>
+                            </CardContent>
+                            <TabsContent value="filters">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                    <div className="space-y-2">
+                                    <Label htmlFor="type">Show</Label>
+                                    <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
+                                        <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                        <SelectItem value="all">All Locations</SelectItem>
+                                        <SelectItem value="leads">Leads Only</SelectItem>
+                                        <SelectItem value="companies">Signed Customers Only</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="franchisee">Franchisee</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueFranchisees}
+                                            selected={filters.franchisee}
+                                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                            placeholder="Select Franchisees..."
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="status">Status</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueStatuses}
+                                            selected={filters.status}
+                                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                                            placeholder="Select Statuses..."
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="state">State</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueStates}
+                                            selected={filters.state}
+                                            onSelectedChange={(selected) => handleFilterChange('state', selected)}
+                                            placeholder="Select States..."
+                                        />
+                                    </div>
+                                </CardContent>
+                            </TabsContent>
+                            <TabsContent value="actions">
+                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="geo-search">Go to Location</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>My Location</Label>
+                                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
+                                                {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4"/>}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Draw to Route</Label>
+                                        <div className="flex gap-2">
+                                            <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
+                                                <PenSquare className="mr-2 h-4 w-4" /> Select Area
+                                            </Button>
+                                            {isDrawing && (
+                                                <Button onClick={cancelDrawing} variant="destructive">
+                                                    <X className="mr-2 h-4 w-4" /> Cancel
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </TabsContent>
+                            <TabsContent value="routes">
+                                <CardContent>
+                                    {savedRoutes.length > 0 ? (
+                                        <ScrollArea className="h-48">
+                                            <div className="space-y-2">
+                                                {savedRoutes.map(route => (
+                                                    <Card key={route.id} className="p-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="font-semibold">{route.name}</p>
+                                                                <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
+                                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    ) : (
+                                        <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
+                                    )}
+                                </CardContent>
+                            </TabsContent>
+                        </Tabs>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
+            
+            <div className="flex-grow min-h-[300px] h-full relative">
+                <div className="h-full w-full absolute top-0 left-0">
+                    <GoogleMap
+                    mapContainerStyle={containerStyle}
+                    center={center}
+                    zoom={4}
+                    onLoad={mapInstance => {
+                        setMap(mapInstance);
+                    }}
+                    onClick={onMapClick}
+                    options={{
+                        streetViewControl: false,
+                        mapTypeControl: false,
+                    }}
+                    >
+                    {isDrawing && window.google && (
+                        <DrawingManagerF
+                        onLoad={(dm) => (drawingManagerRef.current = dm)}
+                        onCircleComplete={onCircleComplete}
+                        drawingMode={window.google.maps.drawing.OverlayType.CIRCLE}
+                        options={{
+                            drawingControl: false,
+                            circleOptions: {
+                            fillColor: '#8884d8',
+                            fillOpacity: 0.2,
+                            strokeColor: '#8884d8',
+                            strokeWeight: 2,
+                            clickable: false,
+                            editable: false,
+                            zIndex: 1,
+                            },
+                        }}
+                        />
+                    )}
+                    <KmlLayer
+                        url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
+                        options={{ preserveViewport: true, suppressInfoWindows: true }}
+                        onClick={onKmlLayerClick}
+                    />
+                    {filteredData.map((item) => (
+                        <MarkerF
+                            key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
+                            position={{ lat: item.latitude!, lng: item.longitude! }}
+                            onClick={() => onMarkerClick(item)}
+                            icon={{ 
+                            url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
+                            scaledSize: new window.google.maps.Size(32, 32)
+                            }}
+                            visible={directions === null} // Hide original markers when route is active
+                        />
+                    ))}
+                    
+                    {directions && selectedRouteLeads.map(lead => (
+                        <MarkerF
+                            key={`route-${lead.id}`}
+                            position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                            onClick={() => onMarkerClick(lead)}
+                            label={(waypointOrderMap.get(lead.id) || 0).toString()}
+                        />
+                    ))}
+
+                    {myLocation && (
+                        <MarkerF
+                            position={myLocation}
+                            icon={{
+                                path: window.google.maps.SymbolPath.CIRCLE,
+                                scale: 8,
+                                fillColor: '#4285F4',
+                                fillOpacity: 1,
+                                strokeColor: 'white',
+                                strokeWeight: 2,
+                            }}
+                        />
+                    )}
+
+                    {directions && (
+                        <DirectionsRenderer
+                            directions={directions}
+                            options={{
+                                suppressMarkers: true, // We use our custom markers
+                                polylineOptions: {
+                                    strokeColor: '#095c7b',
+                                    strokeWeight: 6,
+                                    strokeOpacity: 0.8,
+                                },
+                            }}
+                        />
+                    )}
+
+                    {selectedLead && (
+                        <InfoWindowF
+                        position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+                        onCloseClick={onInfoWindowClose}
+                        options={infoWindowOptions}
+                        >
+                        <div className="space-y-3 p-1 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                                <LeadStatusBadge status={selectedLead.status} />
+                            </div>
+
+                            <div className="space-y-2 text-sm text-muted-foreground">
+                                {selectedLead.industryCategory && (
+                                    <div className="flex items-center gap-2">
+                                        <Briefcase className="h-4 w-4 shrink-0" />
+                                        <span>{selectedLead.industryCategory}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-start gap-2">
+                                    <Building className="h-4 w-4 shrink-0 mt-0.5" />
+                                    <span>{formatAddress(selectedLead.address)}</span>
+                                </div>
+                                {selectedLead.websiteUrl && (
+                                    <div className="flex items-center gap-2">
+                                        <Globe className="h-4 w-4 shrink-0" />
+                                        <a href={selectedLead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1">
+                                            <span>{selectedLead.websiteUrl.replace(/^(https?:\/\/)?(www\.)?/, '')}</span>
+                                            <LinkIcon className="h-3 w-3" />
                                         </a>
+                                    </div>
+                                )}
+                                {selectedLead.customerPhone && (
+                                    <div className="flex items-center gap-2">
+                                        <Phone className="h-4 w-4 shrink-0" />
+                                        <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
+                                            <span>{selectedLead.customerPhone}</span>
+                                            <PhoneCall className="h-3 w-3" />
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex flex-col gap-2">
+                                <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                                    <Briefcase className="mr-2 h-4 w-4" />
+                                    View Profile
+                                </Button>
+                            {!selectedLead.isCompany && (
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies}>
+                                            <Building className="mr-2 h-4 w-4" />
+                                            Nearby Customers
+                                        </Button>
+                                        <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                            {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        </InfoWindowF>
+                    )}
+
+                    {clickedKmlFeature && (
+                        <InfoWindowF
+                            position={clickedKmlFeature.latLng}
+                            onCloseClick={onInfoWindowClose}
+                        >
+                            <div className="p-2">
+                                <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
+                            </div>
+                        </InfoWindowF>
+                    )}
+                </GoogleMap>
+            </div>
+            <aside className={cn(
+            "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
+            (selectedRouteLeads.length > 0) ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
+        )}>
+            {(selectedRouteLeads.length > 0) && (
+            <>
+                <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})</span>
+                    <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
+                </CardTitle>
+                    <div className="space-y-2 pt-2">
+                        {directions ? (
+                            <div className="flex flex-col gap-2">
+                                <CardDescription>
+                                    Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                                    <br />
+                                    Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                                </CardDescription>
+                                <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
+                                    Start Route
+                                </Button>
+                            </div>
+                        ) : (
+                            <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
+                        )}
+                        <div className="space-y-1">
+                            <Label htmlFor="route-name">Route Name</Label>
+                            <div className="flex gap-2">
+                            <Input 
+                                id="route-name" 
+                                placeholder="e.g. Tuesday Afternoon Run" 
+                                value={routeName}
+                                onChange={(e) => setRouteName(e.target.value)}
+                            />
+                            <Button onClick={handleSaveRoute} disabled={!routeName || !directions}>
+                                <Save className="mr-2 h-4 w-4" /> Save
+                            </Button>
+                            </div>
+                        </div>
+                    </div>
+                </CardHeader>
+                <ScrollArea className="flex-grow">
+                <CardContent className="space-y-2 pt-2">
+                    {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
+                    if (!item.lead) return null;
+                    const lead = item.lead;
+                    const leg = (item as any).leg;
+                    return (
+                        <Card key={lead.id} className="p-3">
+                        <div className="flex justify-between items-start">
+                            <div>
+                            <p className="font-bold">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</p>
+                            <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                            </div>
+                            <LeadStatusBadge status={lead.status} />
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                            {leg && (
+                                <p className="text-xs text-muted-foreground">
+                                    {leg?.duration?.text} • {leg?.distance?.text}
+                                </p>
+                            )}
+                            <div className='flex gap-2'>
+                            <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                                {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
+                                {lead.isProspect ? 'Add New Lead' : 'Check In'}
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                            </div>
+                        </div>
+                        </Card>
+                    )
+                    })}
+                </CardContent>
+                </ScrollArea>
+                <CardFooter className="flex flex-col gap-2">
+                    {drawnTerritory && (
+                        <Button onClick={handleAnalyzeTerritory} disabled={analyzingTerritory} className="w-full">
+                            {analyzingTerritory ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                            Analyze Territory for Opportunities
+                        </Button>
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                                {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
+                                {directions ? 'Re-calculate Route' : 'Create Route'}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
+                                <Car className="mr-2 h-4 w-4" />
+                                Driving
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
+                                <Footprints className="mr-2 h-4 w-4" />
+                                Walking
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
+                                <Bike className="mr-2 h-4 w-4" />
+                                Bicycling
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button variant="secondary" onClick={() => { setSelectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
+                        Clear Selection
+                    </Button>
+                </CardFooter>
+            </>
+            )}
+        </aside>
+            </div>
+        </div>
+        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+                <DialogHeader>
+                    <DialogTitle>Nearby Prospects</DialogTitle>
+                    <DialogDescription>
+                        Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="max-h-[60vh] overflow-y-auto">
+                    {/* Mobile View: List of Cards */}
+                    <div className="md:hidden space-y-4">
+                        {prospects.map(prospectInfo => (
+                            <Card key={prospectInfo.place.place_id} className="p-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="font-medium pr-2">{prospectInfo.place.name}</div>
+                                    <Checkbox 
+                                        checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
+                                        onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
+                                    />
+                                </div>
+                                <div className="text-sm text-muted-foreground mt-1">
+                                    {prospectInfo.place.vicinity}
+                                </div>
+                                {prospectInfo.description && (
+                                    <div>
+                                    <p className="text-sm my-2 text-muted-foreground line-clamp-2">
+                                        {prospectInfo.description}
+                                    </p>
+                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center mt-2">
+                                    <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
+                                        {prospectInfo.classification}
+                                    </Badge>
+                                    {prospectInfo.existingLead ? (
+                                        <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                            <Eye className="mr-2 h-4 w-4" /> View
+                                        </Button>
+                                    ) : (
+                                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                            {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                                            Add
+                                        </Button>
                                     )}
                                 </div>
                             </Card>
                         ))}
                     </div>
-                ) : (
-                    <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-                )}
-            </ScrollArea>
-            <DialogFooter>
-                <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-    <div className="flex flex-col gap-4 h-full">
-         <Collapsible>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <MapIcon className="h-5 w-5" />
-                        <CardTitle>Map Controls</CardTitle>
-                        <Badge variant="secondary">{filteredData.length} Location(s)</Badge>
-                    </div>
-                     <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                            <SlidersHorizontal className="h-4 w-4" />
-                            <span className="ml-2">Toggle Controls</span>
-                        </Button>
-                    </CollapsibleTrigger>
-                </CardHeader>
-                <CollapsibleContent>
-                    <Tabs defaultValue="filters">
-                         <CardContent>
-                            <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="filters">Filters</TabsTrigger>
-                                <TabsTrigger value="actions">Actions</TabsTrigger>
-                                <TabsTrigger value="routes">Routes</TabsTrigger>
-                            </TabsList>
-                        </CardContent>
-                        <TabsContent value="filters">
-                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                                <div className="space-y-2">
-                                  <Label htmlFor="type">Show</Label>
-                                  <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">All Locations</SelectItem>
-                                      <SelectItem value="leads">Leads Only</SelectItem>
-                                      <SelectItem value="companies">Signed Customers Only</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="franchisee">Franchisee</Label>
-                                    <MultiSelectCombobox
-                                        options={uniqueFranchisees}
-                                        selected={filters.franchisee}
-                                        onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                                        placeholder="Select Franchisees..."
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="status">Status</Label>
-                                     <MultiSelectCombobox
-                                        options={uniqueStatuses}
-                                        selected={filters.status}
-                                        onSelectedChange={(selected) => handleFilterChange('status', selected)}
-                                        placeholder="Select Statuses..."
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="state">State</Label>
-                                    <MultiSelectCombobox
-                                        options={uniqueStates}
-                                        selected={filters.state}
-                                        onSelectedChange={(selected) => handleFilterChange('state', selected)}
-                                        placeholder="Select States..."
-                                    />
-                                </div>
-                            </CardContent>
-                        </TabsContent>
-                        <TabsContent value="actions">
-                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                  <div className="space-y-2">
-                                    <Label htmlFor="geo-search">Go to Location</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                                        <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>My Location</Label>
-                                    <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                                        <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
-                                            {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4"/>}
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Draw to Route</Label>
-                                     <div className="flex gap-2">
-                                        <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
-                                            <PenSquare className="mr-2 h-4 w-4" /> Select Area
-                                        </Button>
-                                        {isDrawing && (
-                                            <Button onClick={cancelDrawing} variant="destructive">
-                                                <X className="mr-2 h-4 w-4" /> Cancel
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </TabsContent>
-                         <TabsContent value="routes">
-                             <CardContent>
-                                {savedRoutes.length > 0 ? (
-                                    <ScrollArea className="h-48">
-                                        <div className="space-y-2">
-                                            {savedRoutes.map(route => (
-                                                <Card key={route.id} className="p-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <p className="font-semibold">{route.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
-                                                            <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
-                                                        </div>
+
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Address</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {prospects.map(prospectInfo => (
+                                    <TableRow key={prospectInfo.place.place_id}>
+                                        <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
+                                        <TableCell>
+                                            <div className="font-medium">{prospectInfo.place.name}</div>
+                                            <div className="flex gap-2 items-center">
+                                                {prospectInfo.place.website && (
+                                                    <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                                                        <Globe className="h-3 w-3" />
+                                                        <span>Website</span>
+                                                    </a>
+                                                )}
+                                                {prospectInfo.place.formatted_phone_number && (
+                                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        <Phone className="h-3 w-3" />
+                                                        <span>{prospectInfo.place.formatted_phone_number}</span>
                                                     </div>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                ) : (
-                                    <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
-                                )}
-                             </CardContent>
-                         </TabsContent>
-                    </Tabs>
-                </CollapsibleContent>
-            </Card>
-        </Collapsible>
-        
-        <div className="flex-grow min-h-[300px] h-full relative">
-            <div className="h-full w-full absolute top-0 left-0">
-                <GoogleMap
-                mapContainerStyle={containerStyle}
-                center={center}
-                zoom={4}
-                onLoad={mapInstance => {
-                    setMap(mapInstance);
-                }}
-                onClick={onMapClick}
-                options={{
-                    streetViewControl: false,
-                    mapTypeControl: false,
-                }}
-                >
-                {isDrawing && window.google && (
-                    <DrawingManagerF
-                    onLoad={(dm) => (drawingManagerRef.current = dm)}
-                    onCircleComplete={onCircleComplete}
-                    drawingMode={window.google.maps.drawing.OverlayType.CIRCLE}
-                    options={{
-                        drawingControl: false,
-                        circleOptions: {
-                        fillColor: '#8884d8',
-                        fillOpacity: 0.2,
-                        strokeColor: '#8884d8',
-                        strokeWeight: 2,
-                        clickable: false,
-                        editable: false,
-                        zIndex: 1,
-                        },
-                    }}
-                    />
-                )}
-                <KmlLayer
-                    url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
-                    options={{ preserveViewport: true, suppressInfoWindows: true }}
-                    onClick={onKmlLayerClick}
-                />
-                {filteredData.map((item) => (
-                    <MarkerF
-                        key={`${item.isCompany ? 'company' : 'lead'}-${item.id}`}
-                        position={{ lat: item.latitude!, lng: item.longitude! }}
-                        onClick={() => onMarkerClick(item)}
-                        icon={{ 
-                        url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
-                        scaledSize: new window.google.maps.Size(32, 32)
-                        }}
-                        visible={directions === null} // Hide original markers when route is active
-                    />
-                ))}
-                
-                {directions && selectedRouteLeads.map(lead => (
-                    <MarkerF
-                        key={`route-${lead.id}`}
-                        position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                        onClick={() => onMarkerClick(lead)}
-                        label={(waypointOrderMap.get(lead.id) || 0).toString()}
-                    />
-                ))}
-
-                {myLocation && (
-                    <MarkerF
-                        position={myLocation}
-                        icon={{
-                            path: window.google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: '#4285F4',
-                            fillOpacity: 1,
-                            strokeColor: 'white',
-                            strokeWeight: 2,
-                        }}
-                    />
-                )}
-
-                {directions && (
-                    <DirectionsRenderer
-                        directions={directions}
-                        options={{
-                            suppressMarkers: true, // We use our custom markers
-                            polylineOptions: {
-                                strokeColor: '#095c7b',
-                                strokeWeight: 6,
-                                strokeOpacity: 0.8,
-                            },
-                        }}
-                    />
-                )}
-
-                {selectedLead && (
-                    <InfoWindowF
-                    position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
-                    onCloseClick={onInfoWindowClose}
-                    options={infoWindowOptions}
-                    >
-                    <div className="space-y-3 p-1 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                            <LeadStatusBadge status={selectedLead.status} />
-                        </div>
-
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                            {selectedLead.industryCategory && (
-                                <div className="flex items-center gap-2">
-                                    <Briefcase className="h-4 w-4 shrink-0" />
-                                    <span>{selectedLead.industryCategory}</span>
-                                </div>
-                            )}
-                             <div className="flex items-start gap-2">
-                                <Building className="h-4 w-4 shrink-0 mt-0.5" />
-                                <span>{formatAddress(selectedLead.address)}</span>
-                            </div>
-                            {selectedLead.websiteUrl && (
-                                <div className="flex items-center gap-2">
-                                    <Globe className="h-4 w-4 shrink-0" />
-                                    <a href={selectedLead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1">
-                                        <span>{selectedLead.websiteUrl.replace(/^(https?:\/\/)?(www\.)?/, '')}</span>
-                                        <LinkIcon className="h-3 w-3" />
-                                    </a>
-                                </div>
-                            )}
-                            {selectedLead.customerPhone && (
-                                <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 shrink-0" />
-                                     <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
-                                        <span>{selectedLead.customerPhone}</span>
-                                        <PhoneCall className="h-3 w-3" />
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-                        
-                         <div className="flex flex-col gap-2">
-                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
-                                <Briefcase className="mr-2 h-4 w-4" />
-                                View Profile
-                            </Button>
-                           {!selectedLead.isCompany && (
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies}>
-                                        <Building className="mr-2 h-4 w-4" />
-                                        Nearby Customers
-                                    </Button>
-                                    <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    </InfoWindowF>
-                )}
-
-                {clickedKmlFeature && (
-                    <InfoWindowF
-                        position={clickedKmlFeature.latLng}
-                        onCloseClick={onInfoWindowClose}
-                    >
-                        <div className="p-2">
-                            <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
-                        </div>
-                    </InfoWindowF>
-                )}
-            </GoogleMap>
-        </div>
-        <aside className={cn(
-        "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
-        (selectedRouteLeads.length > 0) ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
-      )}>
-        {(selectedRouteLeads.length > 0) && (
-          <>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2"><Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})</span>
-                <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
-              </CardTitle>
-                <div className="space-y-2 pt-2">
-                    {directions ? (
-                         <div className="flex flex-col gap-2">
-                            <CardDescription>
-                                Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
-                                <br />
-                                Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
-                            </CardDescription>
-                            <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
-                                Start Route
-                            </Button>
-                        </div>
-                    ) : (
-                        <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
-                    )}
-                    <div className="space-y-1">
-                        <Label htmlFor="route-name">Route Name</Label>
-                        <div className="flex gap-2">
-                        <Input 
-                            id="route-name" 
-                            placeholder="e.g. Tuesday Afternoon Run" 
-                            value={routeName}
-                            onChange={(e) => setRouteName(e.target.value)}
-                        />
-                        <Button onClick={handleSaveRoute} disabled={!routeName || !directions}>
-                            <Save className="mr-2 h-4 w-4" /> Save
-                        </Button>
-                        </div>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                                <div className="flex flex-col items-start max-w-xs">
+                                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                                        {prospectInfo.description}
+                                                    </p>
+                                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                                </div>
+                                        </TableCell>
+                                        <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                                        <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
+                                        <TableCell className="text-right">
+                                            {prospectInfo.existingLead ? (
+                                                <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                                    <Eye className="mr-2 h-4 w-4" />
+                                                    View
+                                                </Button>
+                                            ) : (
+                                                <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                    {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                                                    {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
+                                                </Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </div>
                 </div>
-            </CardHeader>
-            <ScrollArea className="flex-grow">
-              <CardContent className="space-y-2 pt-2">
-                {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
-                  if (!item.lead) return null;
-                  const lead = item.lead;
-                  const leg = (item as any).leg;
-                  return (
-                    <Card key={lead.id} className="p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                           <p className="font-bold">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</p>
-                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
-                        </div>
-                        <LeadStatusBadge status={lead.status} />
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        {leg && (
-                            <p className="text-xs text-muted-foreground">
-                                {leg?.duration?.text} • {leg?.distance?.text}
-                            </p>
-                        )}
-                        <div className='flex gap-2'>
-                          <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                              {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
-                              {lead.isProspect ? 'Add New Lead' : 'Check In'}
-                          </Button>
-                         <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  )
-                })}
-              </CardContent>
-            </ScrollArea>
-             <CardFooter className="flex flex-col gap-2">
-                {drawnTerritory && (
-                    <Button onClick={handleAnalyzeTerritory} disabled={analyzingTerritory} className="w-full">
-                        {analyzingTerritory ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                        Analyze Territory for Opportunities
-                    </Button>
-                )}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                         <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
-                            {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
-                            {directions ? 'Re-calculate Route' : 'Create Route'}
-                        </Button>
-                    </DropdownMenuTrigger>
-                     <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
-                            <Car className="mr-2 h-4 w-4" />
-                            Driving
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
-                            <Footprints className="mr-2 h-4 w-4" />
-                            Walking
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
-                             <Bike className="mr-2 h-4 w-4" />
-                            Bicycling
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                 <Button variant="secondary" onClick={() => { setSelectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
-                    Clear Selection
-                </Button>
-             </CardFooter>
-          </>
-        )}
-      </aside>
-        </div>
-    </div>
-      
-       <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-          <DialogContent className="max-w-4xl w-[95vw] md:w-full">
-              <DialogHeader>
-                  <DialogTitle>Nearby Prospects</DialogTitle>
-                  <DialogDescription>
-                      Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
-                  </DialogDescription>
-              </DialogHeader>
-              <div className="max-h-[60vh] overflow-y-auto">
-                   {/* Mobile View: List of Cards */}
-                  <div className="md:hidden space-y-4">
-                      {prospects.map(prospectInfo => (
-                          <Card key={prospectInfo.place.place_id} className="p-4">
-                              <div className="flex items-start justify-between">
-                                  <div className="font-medium pr-2">{prospectInfo.place.name}</div>
-                                  <Checkbox 
-                                      checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
-                                      onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
-                                  />
-                              </div>
-                               <div className="text-sm text-muted-foreground mt-1">
-                                  {prospectInfo.place.vicinity}
-                              </div>
-                              {prospectInfo.description && (
-                                <div>
-                                  <p className="text-sm my-2 text-muted-foreground line-clamp-2">
-                                    {prospectInfo.description}
-                                  </p>
-                                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                </div>
-                              )}
-                              <div className="flex justify-between items-center mt-2">
-                                  <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
-                                      {prospectInfo.classification}
-                                  </Badge>
-                                  {prospectInfo.existingLead ? (
-                                      <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                          <Eye className="mr-2 h-4 w-4" /> View
-                                      </Button>
-                                  ) : (
-                                      <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                          {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                                          Add
-                                      </Button>
-                                  )}
-                              </div>
-                          </Card>
-                      ))}
-                  </div>
-
-                  {/* Desktop View: Table */}
-                  <div className="hidden md:block">
-                      <Table>
-                          <TableHeader>
-                              <TableRow>
-                                  <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
-                                  <TableHead>Company</TableHead>
-                                  <TableHead>Description</TableHead>
-                                  <TableHead>Address</TableHead>
-                                  <TableHead>Type</TableHead>
-                                  <TableHead className="text-right">Action</TableHead>
-                              </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                              {prospects.map(prospectInfo => (
-                                  <TableRow key={prospectInfo.place.place_id}>
-                                      <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
-                                      <TableCell>
-                                          <div className="font-medium">{prospectInfo.place.name}</div>
-                                          <div className="flex gap-2 items-center">
-                                            {prospectInfo.place.website && (
-                                                <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                                                    <Globe className="h-3 w-3" />
-                                                    <span>Website</span>
-                                                </a>
-                                            )}
-                                            {prospectInfo.place.formatted_phone_number && (
-                                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                    <Phone className="h-3 w-3" />
-                                                    <span>{prospectInfo.place.formatted_phone_number}</span>
-                                                </div>
-                                            )}
-                                          </div>
-                                      </TableCell>
-                                       <TableCell>
-                                            <div className="flex flex-col items-start max-w-xs">
-                                                <p className="text-sm text-muted-foreground line-clamp-2">
-                                                    {prospectInfo.description}
-                                                </p>
-                                                 <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                            </div>
-                                       </TableCell>
-                                      <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                      <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
-                                      <TableCell className="text-right">
-                                          {prospectInfo.existingLead ? (
-                                              <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                                  <Eye className="mr-2 h-4 w-4" />
-                                                  View
-                                              </Button>
-                                          ) : (
-                                              <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                                  {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
-                                                  {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
-                                              </Button>
-                                          )}
-                                      </TableCell>
-                                  </TableRow>
-                              ))}
-                          </TableBody>
-                      </Table>
-                  </div>
-              </div>
-              <DialogFooter>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button disabled={selectedProspects.length === 0}>
-                            <Route className="mr-2 h-4 w-4" />
-                            Create Route from Selected ({selectedProspects.length})
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
-                            <Car className="mr-2 h-4 w-4" />
-                            Driving
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
-                            <Footprints className="mr-2 h-4 w-4" />
-                            Walking
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
-                             <Bike className="mr-2 h-4 w-4" />
-                            Bicycling
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
-    </>
-  )
+                <DialogFooter>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button disabled={selectedProspects.length === 0}>
+                                <Route className="mr-2 h-4 w-4" />
+                                Create Route from Selected ({selectedProspects.length})
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
+                                <Car className="mr-2 h-4 w-4" />
+                                Driving
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
+                                <Footprints className="mr-2 h-4 w-4" />
+                                Walking
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
+                                <Bike className="mr-2 h-4 w-4" />
+                                Bicycling
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      </>
+    );
 }

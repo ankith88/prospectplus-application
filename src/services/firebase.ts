@@ -337,7 +337,6 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
       return lead ? [lead] : [];
   }
   try {
-    console.log(`Fetching leads from Firebase (summary: ${summary}, dialer: ${dialerAssigned || 'all'})...`);
     
     let leadsQuery = query(collection(firestore, 'leads'));
     if (dialerAssigned) {
@@ -1767,4 +1766,6 @@ export {
     
 
     
+
+
 
