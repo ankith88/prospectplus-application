@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -183,6 +182,8 @@ export default function LeadsMapClient() {
   const [nearbyCompanies, setNearbyCompanies] = useState<MapLead[]>([]);
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
+  const [localSavedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>([]);
+
 
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -212,7 +213,11 @@ export default function LeadsMapClient() {
 
   const router = useRouter()
   const { toast } = useToast()
-  const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
+  const { userProfile, loading: authLoading, savedRoutes } = useAuth();
+
+  useEffect(() => {
+    setLocalSavedRoutes(savedRoutes);
+  }, [savedRoutes]);
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -558,7 +563,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     
     findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
   }, [selectedLead, map, toast, findProspects]);
-
+  
   const handleFindNearbyCompanies = useCallback(() => {
     if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google?.maps?.geometry) return;
 
@@ -907,7 +912,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         };
 
         const savedRouteId = await saveUserRoute(userProfile.uid, newRoute);
-        setSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
+        setLocalSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
         setRouteName('');
         toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved to your profile.` });
     };
@@ -933,7 +938,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     const handleDeleteRoute = async (routeId: string, routeName: string) => {
         if (!userProfile?.uid) return;
         await deleteUserRoute(userProfile.uid, routeId);
-        setSavedRoutes(prev => prev.filter(route => route.id !== routeId));
+        setLocalSavedRoutes(prev => prev.filter(route => route.id !== routeId));
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
     };
 
@@ -1232,10 +1237,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </TabsContent>
                             <TabsContent value="routes">
                                 <CardContent>
-                                    {savedRoutes.length > 0 ? (
+                                    {localSavedRoutes.length > 0 ? (
                                         <ScrollArea className="h-48">
                                             <div className="space-y-2">
-                                                {savedRoutes.map(route => (
+                                                {localSavedRoutes.map(route => (
                                                     <Card key={route.id} className="p-3">
                                                         <div className="flex items-center justify-between">
                                                             <div>
@@ -1684,3 +1689,5 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       </>
     );
 }
+
+    
