@@ -324,10 +324,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     getCompaniesFromFirebase(),
                 ]);
                 
-                console.log(`leads-map-client.tsx:325 Fetched ${mapLeads.length} leads from Firebase.`);
-                console.log(`leads-map-client.tsx:326 Fetched ${mapCompanies.length} companies from Firebase.`);
-
-
                 let allMapData: MapLead[] = [];
 
                 if (mapLeads) {
@@ -371,7 +367,21 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
   
   const filteredData = useMemo(() => {
-    return mapData.filter(item => {
+    let dataToFilter = mapData;
+
+    // For Field Sales users, filter to only their assigned leads (and all companies).
+    if (userProfile?.role === 'Field Sales') {
+      dataToFilter = mapData.filter(item => {
+        // Always include companies (signed customers)
+        if (item.isCompany) {
+          return true;
+        }
+        // Only include leads assigned to them
+        return item.dialerAssigned === userProfile.displayName;
+      });
+    }
+
+    return dataToFilter.filter(item => {
       const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
       
       const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
@@ -382,7 +392,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
       return franchiseeMatch && statusMatch && stateMatch && typeMatch;
     });
-  }, [mapData, filters]);
+  }, [mapData, filters, userProfile]);
 
 
   const onMarkerClick = useCallback((item: MapLead) => {
