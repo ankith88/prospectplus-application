@@ -421,14 +421,12 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
         }
 
         const companiesArray = snapshot.docs
-            .map((doc): Lead | null => {
+            .map((doc): (Lead & { isCompany: boolean, isProspect: boolean }) | null => {
                 const data = doc.data();
 
-                // Safely parse latitude and longitude
                 const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : typeof data.latitude === 'number' ? data.latitude : NaN;
                 const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : typeof data.longitude === 'number' ? data.longitude : NaN;
 
-                // Filter out records with invalid coordinates
                 if (isNaN(lat) || isNaN(lng)) {
                     console.warn(`[getCompaniesFromFirebase] Skipping company ${data.companyName || doc.id} due to invalid coordinates.`);
                     return null;
@@ -448,12 +446,12 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     };
                 }
 
-                const transformedCompany: Lead = {
+                const transformedCompany: Lead & { isCompany: boolean, isProspect: boolean } = {
                     id: doc.id,
                     entityId: data['customerEntityId'] || data['internalid'],
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
-                    status: 'Won', // Hardcoded as companies are 'Won' leads
+                    status: 'Won', 
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
                     address: address,
                     latitude: lat,
@@ -463,6 +461,8 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     industryCategory: data.industryCategory,
                     customerServiceEmail: data.customerServiceEmail,
                     customerPhone: data.customerPhone,
+                    isCompany: true,
+                    isProspect: false,
                 };
 
                 return transformedCompany;
@@ -1583,7 +1583,7 @@ async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<str
                 companyName: l.companyName,
                 address: l.address!
             })),
-            directions: routeData.directions ? simplifyDirections(routeData.directions) : undefined,
+            directions: routeData.directions ? simplifyDirections(routeData.directions as google.maps.DirectionsResult) : undefined,
         };
 
         const docRef = await addDoc(routesRef, storableRoute);
@@ -1605,8 +1605,7 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
             return {
                 id: doc.id,
                 ...data,
-                // Pass the simplified directions object. The client will reconstruct it.
-                directions: data.directions as any,
+                directions: data.directions,
             } as SavedRoute;
         });
     } catch (error) {
