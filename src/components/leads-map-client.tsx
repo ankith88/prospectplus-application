@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -812,7 +813,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         
         if (!center || !radius) return;
 
+        // Use filteredData to respect the current user's view
         const leadsInCircle = filteredData.filter(lead => {
+            // Field Sales should not be able to route to signed companies
+            if (userProfile?.role === 'Field Sales' && lead.isCompany) {
+                return false;
+            }
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
                 const distance = window.google.maps.geometry.spherical.computeDistanceBetween(center, leadLatLng);
@@ -825,7 +831,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setDrawnTerritory({ center, radius });
 
         toast({
-          title: `${leadsInCircle.length} Leads Selected`,
+          title: `${leadsInCircle.length} Stops Selected`,
           description: "You can now create a route or analyze the territory.",
         });
         
@@ -834,7 +840,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
-    }, [map, filteredData, toast]);
+    }, [map, filteredData, toast, userProfile]);
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
