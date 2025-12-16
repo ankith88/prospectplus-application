@@ -418,7 +418,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
   const uniqueStatuses: Option[] = useMemo(() => {
     const statuses = new Set(mapData.map(item => item.status));
-    return Array.from(statuses).map(s => ({ value: s, label: s === 'Won' ? 'Signed Customer' : s})).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(statuses).map(s => ({ value: s, label: s})).sort((a, b) => a.label.localeCompare(b.label));
   }, [mapData]);
 
   const uniqueStates: Option[] = useMemo(() => {
