@@ -754,6 +754,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             notes: 'Checked in at location via map.'
         });
     }
+
+    // If the lead is part of the current route, remove it.
+    if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
+        setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
+        toast({
+            title: 'Stop Completed',
+            description: `${lead.companyName} has been removed from your active route.`,
+        });
+    }
   };
 
   const handleAnalyzeTerritory = useCallback(async () => {
