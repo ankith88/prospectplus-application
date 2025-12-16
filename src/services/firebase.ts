@@ -1618,11 +1618,11 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
 async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string, userId: string }>> {
     try {
         const users = await getAllUsers();
-        const fieldSalesUsers = users.filter(u => u.role === 'Field Sales');
+        const relevantUsers = users.filter(u => u.role === 'Field Sales' || u.role === 'admin');
         
         let allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
 
-        for (const user of fieldSalesUsers) {
+        for (const user of relevantUsers) {
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
                 ...route,
@@ -1772,5 +1772,7 @@ export {
 
 
 
+
+    
 
     
