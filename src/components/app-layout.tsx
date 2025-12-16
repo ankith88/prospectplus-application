@@ -150,7 +150,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
             {userProfile?.role === 'admin' && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/leads")} tooltip="Leads">
+                <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
                   <Link href="/leads">
                     <Briefcase />
                     <span>Outbound Leads</span>
