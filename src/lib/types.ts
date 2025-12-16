@@ -183,11 +183,27 @@ export interface UserProfile {
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean, isCompany?: boolean };
 
-export type SavedRoute = {
+export type StorableRoute = {
     id?: string;
     name: string;
     createdAt: string;
-    leads: MapLead[];
-    directions: google.maps.DirectionsResult | null;
+    leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
     travelMode: google.maps.TravelMode;
+    // Store a simplified version of directions
+    directions?: {
+        routes: {
+            legs: {
+                distance: { text: string; value: number };
+                duration: { text: string; value: number };
+                end_address: string;
+                start_address: string;
+            }[];
+            waypoint_order: number[];
+        }[];
+    };
+};
+
+
+export type SavedRoute = Omit<StorableRoute, 'directions'> & {
+    directions: google.maps.DirectionsResult | null | StorableRoute['directions'];
 };

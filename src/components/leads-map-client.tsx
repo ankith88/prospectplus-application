@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -14,7 +15,7 @@ import {
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute } from '@/lib/types'
+import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
@@ -210,10 +211,8 @@ export default function LeadsMapClient() {
 
   const router = useRouter()
   const { toast } = useToast()
-  const { userProfile, loading: authLoading, savedRoutes: userRoutes, setSavedRoutes } = useAuth();
-  const [savedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>(userRoutes);
-
-
+  const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
+  
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -312,10 +311,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       setTravelMode(null);
     }
   }, [isLoaded]);
-
-  useEffect(() => {
-    setLocalSavedRoutes(userRoutes);
-  }, [userRoutes]);
   
     useEffect(() => {
         const fetchData = async () => {
@@ -900,23 +895,44 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         };
 
         const savedRouteId = await saveUserRoute(userProfile.uid, newRoute);
-        setLocalSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
+        setSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
         setRouteName('');
         toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved to your profile.` });
     };
 
     const handleLoadRoute = (route: SavedRoute) => {
         setSelectedRouteLeads(route.leads);
-        setDirections(route.directions);
+        // Reconstruct DirectionsResult on the client side
+        if (route.directions) {
+            const storableDirections = route.directions as StorableRoute['directions'];
+            const reconstructedRoutes = storableDirections!.routes.map(r => ({
+                ...r,
+                bounds: new window.google.maps.LatLngBounds(),
+                copyrights: '',
+                overview_polyline: '',
+                warnings: [],
+                legs: r.legs.map(l => ({
+                    ...l,
+                    end_location: new window.google.maps.LatLng(0,0), // Placeholder
+                    start_location: new window.google.maps.LatLng(0,0), // Placeholder
+                    steps: [],
+                    via_waypoints: [],
+                }) as google.maps.DirectionsLeg),
+            }));
+            setDirections({ routes: reconstructedRoutes } as google.maps.DirectionsResult);
+        } else {
+            setDirections(null);
+        }
         setTravelMode(route.travelMode);
         setShowRouteStops(true);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
     };
 
+
     const handleDeleteRoute = async (routeId: string, routeName: string) => {
         if (!userProfile?.uid) return;
         await deleteUserRoute(userProfile.uid, routeId);
-        setLocalSavedRoutes(prev => prev.filter(route => route.id !== routeId));
+        setSavedRoutes(prev => prev.filter(route => route.id !== routeId));
         toast({ title: 'Route Deleted', description: `Route "${routeName}" has been removed.` });
     };
 

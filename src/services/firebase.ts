@@ -6,7 +6,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from './netsuite';
 
@@ -1553,26 +1553,6 @@ async function deleteLead(leadIds: string | string[]): Promise<void> {
     }
 }
 
-type StorableRoute = {
-    id?: string;
-    name: string;
-    createdAt: string;
-    leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
-    travelMode: google.maps.TravelMode;
-    // Store a simplified version of directions
-    directions?: {
-        routes: {
-            legs: {
-                distance: { text: string; value: number };
-                duration: { text: string; value: number };
-                end_address: string;
-                start_address: string;
-            }[];
-            waypoint_order: number[];
-        }[];
-    };
-};
-
 // Function to simplify DirectionsResult
 const simplifyDirections = (directions: google.maps.DirectionsResult): StorableRoute['directions'] => {
     return {
@@ -1625,28 +1605,8 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
             return {
                 id: doc.id,
                 ...data,
-                // Reconstruct the DirectionsResult object as best as possible
-                directions: data.directions ? {
-                    routes: data.directions.routes.map(r => ({
-                        ...r,
-                        bounds: new google.maps.LatLngBounds(), // Not stored
-                        copyrights: '', // Not stored
-                        overview_polyline: '', // Not stored
-                        warnings: [], // Not stored
-                        fare: undefined, // Not stored
-                        legs: r.legs.map(l => ({
-                            ...l,
-                            end_location: new google.maps.LatLng(0,0), // Not stored precisely
-                            start_location: new google.maps.LatLng(0,0), // Not stored precisely
-                            steps: [], // Not stored
-                            via_waypoints: [], // Not stored
-                            arrival_time: undefined,
-                            departure_time: undefined,
-                        }))
-                    })),
-                    geocoded_waypoints: [], // Not stored
-                    request: {} as any, // Not stored
-                } as google.maps.DirectionsResult : null,
+                // Pass the simplified directions object. The client will reconstruct it.
+                directions: data.directions as any,
             } as SavedRoute;
         });
     } catch (error) {
@@ -1778,4 +1738,5 @@ export {
 
 
     
+
 
