@@ -52,7 +52,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -120,6 +120,7 @@ import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ColdCallScorecardDialog } from './cold-call-scorecard';
+import { ScrollArea } from './ui/scroll-area'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -156,6 +157,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
+  const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
+  const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+
 
   const router = useRouter();
   const pathname = usePathname();
@@ -565,6 +569,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return calendlyUrl.toString();
   }
 
+  const handleFindNearbyCompanies = useCallback(async () => {
+    if (!lead.latitude || !lead.longitude || !window.google?.maps?.geometry) {
+        toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
+        return;
+    }
+
+    const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+    const allCompanies = await getCompaniesFromFirebase();
+    
+    const nearby = allCompanies.filter(company => {
+      if (!company.latitude || !company.longitude || company.id === lead.id) {
+        return false;
+      }
+      const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+      return distance <= 500; // 500m radius
+    });
+
+    setNearbyCompanies(nearby);
+    setIsNearbyCompaniesDialogOpen(true);
+    if(nearby.length === 0) {
+        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
+    }
+  }, [lead, toast]);
+
 
   if (!lead || !user) {
     return (
@@ -588,8 +617,55 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
 
+  const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
+    if (!address) return 'Address not available';
+    if (typeof address === 'string') return address;
+    return [
+        address.street,
+        address.city,
+        address.state,
+    ].filter(Boolean).join(', ');
+  }
+
   return (
     <>
+    <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+      <DialogContent className="max-w-2xl">
+          <DialogHeader>
+              <DialogTitle>Nearby Signed Customers</DialogTitle>
+              <DialogDescription>
+                  Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {lead?.companyName}.
+              </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+              {nearbyCompanies.length > 0 ? (
+                  <div className="space-y-2 p-1">
+                      {nearbyCompanies.map(company => (
+                           <Card key={company.id} className="p-3">
+                              <div className="flex flex-col space-y-1">
+                                  <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
+                                  <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                  <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                  {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                  {company.websiteUrl && (
+                                      <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
+                                          <Globe className="h-4 w-4" />
+                                          <span>Visit Website</span>
+                                      </a>
+                                  )}
+                              </div>
+                          </Card>
+                      ))}
+                  </div>
+              ) : (
+                  <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+              )}
+          </ScrollArea>
+          <DialogFooter>
+              <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <PostCallOutcomeDialog
         isOpen={showPostCallDialog}
         onClose={() => {
@@ -696,7 +772,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                </CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
-                        {isProspecting ? <Loader /> : <><Search className="mr-2 h-4 w-4" /><span>Prospect Website</span></>}
+                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies}>
+                      <Building className="mr-2 h-4 w-4" /> Nearby Customers
                     </Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
                       <DialogTrigger asChild>
