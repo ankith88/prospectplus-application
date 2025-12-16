@@ -157,8 +157,8 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
         </div>
       </header>
 
-      <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 flex flex-col gap-6">
+      <main className="grid grid-cols-1 gap-6">
+        <div className="flex flex-col gap-6">
           <Card>
              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                <CardTitle className="flex items-center gap-2">
@@ -393,36 +393,38 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                         {loadingInvoices ? (
                             <div className="flex justify-center py-10"><Loader /></div>
                         ) : invoices.length > 0 ? (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Invoice Date</TableHead>
-                                        <TableHead>Invoice ID</TableHead>
-                                        <TableHead>Invoice Type</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {invoices.map((invoice) => (
-                                        <TableRow key={invoice.id}>
-                                            <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
-                                            <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
-                                            <TableCell>{!invoice.invoiceType || invoice.invoiceType === '- None -' ? 'Service' : invoice.invoiceType}</TableCell>
-                                            <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">
-                                                {invoice.invoiceURL && (
-                                                    <Button asChild variant="outline" size="sm">
-                                                        <a href={invoice.invoiceURL} target="_blank" rel="noopener noreferrer">
-                                                            <ExternalLink className="mr-2 h-4 w-4" /> View
-                                                        </a>
-                                                    </Button>
-                                                )}
-                                            </TableCell>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Invoice Date</TableHead>
+                                            <TableHead>Invoice ID</TableHead>
+                                            <TableHead>Invoice Type</TableHead>
+                                            <TableHead className="text-right">Total</TableHead>
+                                            <TableHead className="text-right">Action</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invoices.map((invoice) => (
+                                            <TableRow key={invoice.id}>
+                                                <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
+                                                <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
+                                                <TableCell>{!invoice.invoiceType || invoice.invoiceType === '- None -' ? 'Service' : invoice.invoiceType}</TableCell>
+                                                <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {invoice.invoiceURL && (
+                                                        <Button asChild variant="outline" size="sm">
+                                                            <a href={invoice.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                                <ExternalLink className="mr-2 h-4 w-4" /> View
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         ) : (
                             <div className="text-center py-10 text-muted-foreground">
                                 No invoices found for this company.
@@ -496,8 +498,6 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                     </Tabs>
                 </CardContent>
           </Card>
-        </div>
-        <div className="lg:col-span-1 flex flex-col gap-6">
         </div>
       </main>
     </div>
