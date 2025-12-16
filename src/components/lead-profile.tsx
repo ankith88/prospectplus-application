@@ -723,7 +723,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="flex flex-wrap items-center gap-2">
            <Button variant="outline" onClick={()=>{ setLastCallActivity(null); setShowPostCallDialog(true); }}>
               <PhoneCall className="mr-2 h-4 w-4" />
-              Log a Call
+              {userProfile?.role === 'Field Sales' ? 'Log Outcome' : 'Log a Call'}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -746,13 +746,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               Log a Note
             </Button>
           </LogNoteDialog>
-           <Button
-              variant="outline"
-              onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}
-            >
-              <BookText className="mr-2 h-4 w-4" />
-              View Script
-            </Button>
+           {userProfile?.role !== 'Field Sales' && (
+             <Button
+                variant="outline"
+                onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}
+              >
+                <BookText className="mr-2 h-4 w-4" />
+                View Script
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">Free Trial</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem>Service</DropdownMenuItem>
+                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">Signup</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem>Service</DropdownMenuItem>
+                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                <DropdownMenuItem>All 3</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {userProfile?.role === 'admin' && (
               <ColdCallScorecardDialog 
                 lead={lead} 
@@ -785,7 +808,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
-                        {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
+                      {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
                     </Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
                       <DialogTrigger asChild>
@@ -1385,3 +1408,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
