@@ -24,8 +24,11 @@ import {
   SidebarFooter,
   SidebarTrigger,
   SidebarInset,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -153,7 +156,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role === 'admin' && (
+            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
                   <Link href="/leads">
@@ -171,30 +174,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/appointments")} tooltip="All Appointments">
-                <Link href="/appointments">
-                  <Calendar />
-                  <span>All Appointments</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/calls")} tooltip="All Calls">
-                <Link href="/calls">
-                  <Phone />
-                  <span>All Calls</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/transcripts")} tooltip="All Transcripts">
-                <Link href="/transcripts">
-                  <FileText />
-                  <span>All Transcripts</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+              <SidebarMenuItem>
+                <SidebarMenuButton>
+                  <History />
+                  <span>History</span>
+                </SidebarMenuButton>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
+                      <Link href="/appointments">
+                        <Calendar />
+                        <span>All Appointments</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
+                      <Link href="/calls">
+                        <Phone />
+                        <span>All Calls</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
+                      <Link href="/transcripts">
+                        <FileText />
+                        <span>All Transcripts</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Reports">
                 <Link href="/reports">
