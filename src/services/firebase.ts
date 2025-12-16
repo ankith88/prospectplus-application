@@ -421,7 +421,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
         }
 
         const companiesArray = snapshot.docs
-            .map((doc): (Lead & { isCompany: boolean, isProspect: boolean }) | null => {
+            .map((doc): Lead | null => {
                 const data = doc.data();
 
                 const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : typeof data.latitude === 'number' ? data.latitude : NaN;
@@ -446,7 +446,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     };
                 }
 
-                const transformedCompany: Lead & { isCompany: boolean, isProspect: boolean } = {
+                const transformedCompany: Lead = {
                     id: doc.id,
                     entityId: data['customerEntityId'] || data['internalid'],
                     salesRecordInternalId: data.salesRecordInternalId,
@@ -461,8 +461,6 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     industryCategory: data.industryCategory,
                     customerServiceEmail: data.customerServiceEmail,
                     customerPhone: data.customerPhone,
-                    isCompany: true,
-                    isProspect: false,
                 };
 
                 return transformedCompany;
@@ -1769,3 +1767,4 @@ export {
     
 
     
+

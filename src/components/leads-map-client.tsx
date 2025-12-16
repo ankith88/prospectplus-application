@@ -322,6 +322,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     getLeadsFromFirebase({ summary: true }),
                     getCompaniesFromFirebase(),
                 ]);
+                
+                console.log(`Fetched ${mapCompanies.length} companies from Firebase.`);
 
                 let allMapData: MapLead[] = [];
 
@@ -332,7 +334,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             ...lead,
                             latitude: Number(lead.latitude),
                             longitude: Number(lead.longitude),
-                            isCompany: false
+                            isCompany: false,
+                            isProspect: false
                         }));
                     allMapData = [...allMapData, ...leadsWithCoords];
                 }
@@ -344,7 +347,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             ...company,
                             latitude: Number(company.latitude),
                             longitude: Number(company.longitude),
-                            isCompany: true
+                            isCompany: true,
+                            isProspect: false,
                         }));
                     allMapData = [...allMapData, ...companiesWithCoords];
                 }
@@ -367,11 +371,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     return mapData.filter(item => {
       const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
       
-      let selectedStatuses = filters.status;
-      if (selectedStatuses.includes('Signed Customer')) {
-          selectedStatuses = [...selectedStatuses.filter(s => s !== 'Signed Customer'), 'Won'];
-      }
-      const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+      const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
       
       const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
       
