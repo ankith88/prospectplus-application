@@ -295,11 +295,7 @@ export default function FieldSalesPage() {
     }
   };
 
-  if (loading || authLoading || !userProfile) {
-    return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
-  }
-  
-  const routesToShow = userProfile.role === 'admin' ? allRoutes : savedRoutes;
+  const routesToShow = userProfile?.role === 'admin' ? allRoutes : savedRoutes;
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
@@ -307,6 +303,10 @@ export default function FieldSalesPage() {
   }, [allLeads]);
   const hasActiveFilters = filters.companyName !== '' || filters.status.length > 0 || filters.franchisee.length > 0;
 
+  if (loading || authLoading || !userProfile) {
+    return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
+  }
+  
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -584,3 +584,4 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
