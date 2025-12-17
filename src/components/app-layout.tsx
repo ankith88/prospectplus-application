@@ -282,7 +282,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex-1 flex justify-center">
-             <h2 className="text-xl font-bold">ProspectPlus</h2>
+             <h2 className="text-xl font-bold hidden sm:block">ProspectPlus</h2>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
@@ -291,13 +291,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
                  <User className="h-5 w-5" />
-                 <div className="flex flex-col items-start">
+                 <div className="hidden md:flex flex-col items-start">
                    <span className="font-medium text-sm truncate group-hover:text-sidebar-hover-foreground">{user?.displayName}</span>
                    {userProfile?.phoneNumber && (
                     <span className="text-xs text-sidebar-foreground/70 group-hover:text-sidebar-hover-foreground/70">{formatAustralianPhoneNumber(userProfile.phoneNumber)}</span>
                    )}
                  </div>
-                 <ChevronsUpDown className="h-4 w-4" />
+                 <ChevronsUpDown className="h-4 w-4 hidden md:block" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

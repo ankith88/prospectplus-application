@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -327,9 +328,9 @@ export default function TranscriptsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Lead / Phone Number</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Call ID</TableHead>
-                  <TableHead>Date & Time</TableHead>
+                  <TableHead className="hidden md:table-cell">User</TableHead>
+                  <TableHead className="hidden sm:table-cell">Call ID</TableHead>
+                  <TableHead className="hidden sm:table-cell">Date & Time</TableHead>
                   <TableHead>Transcript</TableHead>
                   <TableHead>Recording</TableHead>
                 </TableRow>
@@ -345,30 +346,30 @@ export default function TranscriptsPage() {
                     return (
                     <TableRow key={transcript.id}>
                       <TableCell>
-                        <div className="flex items-center gap-2 font-medium">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex flex-col">
                             {lead ? (
-                                <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                                <Button variant="link" className="p-0 h-auto justify-start" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                     {lead.companyName}
                                 </Button>
                             ) : (
                                 <span>{transcript.phoneNumber || 'Unknown'}</span>
                             )}
+                            <span className="text-xs text-muted-foreground">{transcript.phoneNumber || 'Unknown'}</span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
                           {lead?.dialerAssigned || 'Unassigned'}
                         </div>
                       </TableCell>
-                       <TableCell>
+                       <TableCell className="hidden sm:table-cell">
                         <div className="flex items-center gap-2 font-medium">
                             <Hash className="h-4 w-4 text-muted-foreground" />
                             <span>{transcript.callId || 'N/A'}</span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="flex flex-col text-sm">
                             <div className="flex items-center gap-2">
                                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -393,7 +394,7 @@ export default function TranscriptsPage() {
                               size="sm" 
                               onClick={() => window.open(`https://assets.aircall.io/calls/${transcript.callId}/recording/info`, '_blank')}>
                               <Voicemail className="mr-2 h-4 w-4" />
-                              View Recording
+                              <span className="hidden sm:inline">Recording</span>
                             </Button>
                           ) : (
                             <span>N/A</span>

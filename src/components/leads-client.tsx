@@ -772,7 +772,7 @@ export default function LeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -897,7 +897,7 @@ export default function LeadsClientPage() {
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                                        <TableHead className="hidden md:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('industryCategory')} className="group -ml-4">Industry{getSortIndicator('industryCategory')}</Button></TableHead>
+                                        <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>

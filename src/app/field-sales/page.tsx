@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -585,7 +586,7 @@ export default function FieldSalesPage() {
                 </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="companyName">Company Name</Label>
                         <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -646,7 +647,7 @@ export default function FieldSalesPage() {
                         </div>
                      </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <p className="font-semibold">{route.name}</p>
                       <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
@@ -805,6 +806,7 @@ export default function FieldSalesPage() {
                                                 </div>
                                             </AccordionTrigger>
                                             <AccordionContent className="p-2">
+                                                <div className="overflow-x-auto">
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
@@ -818,8 +820,8 @@ export default function FieldSalesPage() {
                                                                 />
                                                             </TableHead>
                                                             <TableHead>Company</TableHead>
-                                                            <TableHead>Franchisee</TableHead>
-                                                            <TableHead>Industry</TableHead>
+                                                            <TableHead className="hidden sm:table-cell">Franchisee</TableHead>
+                                                            <TableHead className="hidden md:table-cell">Industry</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -832,12 +834,13 @@ export default function FieldSalesPage() {
                                                                     />
                                                                 </TableCell>
                                                                 <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
-                                                                <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
-                                                                <TableCell>{lead.industryCategory}</TableCell>
+                                                                <TableCell className="hidden sm:table-cell">{lead.franchisee ?? 'N/A'}</TableCell>
+                                                                <TableCell className="hidden md:table-cell">{lead.industryCategory}</TableCell>
                                                             </TableRow>
                                                         ))}
                                                     </TableBody>
                                                 </Table>
+                                                </div>
                                             </AccordionContent>
                                         </AccordionItem>
                                     ))}

@@ -318,7 +318,7 @@ export function NewLeadForm() {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
-          <CardContent className="p-6 space-y-8">
+          <CardContent className="p-4 sm:p-6 space-y-8">
             {/* Section 1: Business Search */}
             <div className="space-y-4">
                <h3 className="text-lg font-medium flex items-center gap-2"><Search className="w-5 h-5" />Find a Business</h3>
