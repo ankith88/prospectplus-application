@@ -159,7 +159,7 @@ export default function FieldSalesPage() {
 
   const myLeads = useMemo(() => {
     if (userProfile?.role !== 'admin' && user?.displayName) {
-      const actionableLeads = allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status));
+      const actionableLeads = allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status) && (lead as any).fieldSales === true);
       if (!myLeadsSearchQuery) {
         return actionableLeads;
       }
