@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -181,12 +180,8 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
       if (userProfile?.role !== 'admin') return {};
       
-      const fieldSalesUserDisplayNames = new Set(allDialers.map(d => d.displayName));
-
       const relevantLeads = allLeads.filter(lead => 
-        lead.dialerAssigned &&
-        fieldSalesUserDisplayNames.has(lead.dialerAssigned) &&
-        (lead as any).fieldSales === true
+        lead.dialerAssigned && (lead as any).fieldSales === true
       );
       
       return relevantLeads.reduce((acc, lead) => {
@@ -201,7 +196,7 @@ export default function FieldSalesPage() {
           acc[dialer][status].push(lead);
           return acc;
       }, {} as Record<string, Record<string, Lead[]>>);
-  }, [allLeads, userProfile, allDialers]);
+  }, [allLeads, userProfile]);
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     let sortedLeadIds = leads.map(l => l.id);
