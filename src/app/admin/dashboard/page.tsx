@@ -83,8 +83,8 @@ export default function AdminDashboardPage() {
         const topDialer = Object.entries(dialerAppointments).sort((a, b) => b[1] - a[1])[0];
 
         const fieldRepWins = leads.filter(l => l.fieldSales && (l.status === 'Won' || l.status === 'Trialing ShipMate')).reduce((acc, curr) => {
-            if (curr.dialerAssigned) {
-                 acc[curr.dialerAssigned] = (acc[curr.dialerAssigned] || 0) + 1;
+            if (curr.salesRepAssigned) {
+                 acc[curr.salesRepAssigned] = (acc[curr.salesRepAssigned] || 0) + 1;
             }
             return acc;
         }, {} as Record<string, number>);
