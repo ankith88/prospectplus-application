@@ -76,26 +76,21 @@ export default function FieldSalesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (userProfile?.role === 'admin') {
-          const [leads, routes, users, activities] = await Promise.all([
-              getLeadsFromFirebase({ summary: true }), // Fetch all leads for admin
-              getAllUserRoutes(),
-              getAllUsers(),
-              getAllActivities(),
-          ]);
-          setAllLeads(leads);
-          setAllActivities(activities);
-          setAllRoutes(routes);
-          setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
-      } else if (userProfile?.displayName) {
-          const [leads, activities] = await Promise.all([
-             getLeadsFromFirebase({ dialerAssigned: userProfile.displayName }),
-             getAllActivities()
-          ]);
-          const fieldSalesLeads = leads.filter(lead => (lead as any).fieldSales === true);
-          setAllLeads(fieldSalesLeads);
-          setAllActivities(activities);
-      }
+        const [leads, activities, routes, users] = await Promise.all([
+            getLeadsFromFirebase({ summary: true }),
+            getAllActivities(),
+            userProfile?.role === 'admin' ? getAllUserRoutes() : Promise.resolve([]),
+            userProfile?.role === 'admin' ? getAllUsers() : Promise.resolve([]),
+        ]);
+
+        const fieldSalesLeads = leads.filter(lead => (lead as any).fieldSales === true);
+        setAllLeads(fieldSalesLeads);
+        setAllActivities(activities);
+
+        if (userProfile?.role === 'admin') {
+            setAllRoutes(routes);
+            setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
+        }
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
@@ -116,11 +111,6 @@ export default function FieldSalesPage() {
     const now = new Date();
     const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
     const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
-
-    const leadsThisWeek = allLeads.filter(l => {
-        const activityDate = l.activity?.[0]?.date ? new Date(l.activity[0].date) : null;
-        return activityDate && activityDate >= startOfThisWeek && activityDate <= endOfThisWeek;
-    });
     
     const activitiesThisWeek = allActivities.filter(a => {
         const activityDate = new Date(a.date);
@@ -129,6 +119,10 @@ export default function FieldSalesPage() {
 
     const checkInActivities = activitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
     const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
+    
+    const leadsThisWeek = allLeads.filter(l => {
+        return checkInActivities.some(a => a.leadId === l.id);
+    });
     
     const signedUpLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Won');
     const trialingLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Trialing ShipMate');
@@ -159,19 +153,17 @@ export default function FieldSalesPage() {
   );
 
   const myLeads = useMemo(() => {
-    if (user?.displayName) {
-      const actionableLeads = allLeads.filter(lead => 
-        (lead as any).fieldSales === true &&
-        lead.dialerAssigned === user.displayName && 
-        !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
-      );
+    if (!user?.displayName) return [];
+    
+    const actionableLeads = allLeads.filter(lead => 
+      lead.dialerAssigned === user.displayName && 
+      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
+    );
 
-      if (!myLeadsSearchQuery) {
-        return actionableLeads;
-      }
-      return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
+    if (!myLeadsSearchQuery) {
+      return actionableLeads;
     }
-    return [];
+    return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
   }, [allLeads, user, myLeadsSearchQuery]);
 
   const groupedMyLeads = useMemo(() => {
@@ -188,8 +180,8 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
+    // Show leads assigned to other users (not the current admin)
     const relevantLeads = allLeads.filter(lead => 
-        (lead as any).fieldSales === true && 
         lead.dialerAssigned &&
         lead.dialerAssigned !== userProfile.displayName
     );
@@ -520,5 +512,7 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
 
     
