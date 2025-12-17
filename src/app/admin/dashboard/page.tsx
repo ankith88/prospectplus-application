@@ -20,6 +20,7 @@ import {
   Target,
   ArrowRight,
   Route,
+  CheckSquare,
 } from 'lucide-react';
 import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers, getAllUserRoutes } from '@/services/firebase';
 import { isThisWeek, isToday, format, isFuture, isSameDay } from 'date-fns';
@@ -41,7 +42,8 @@ type DashboardStats = {
     callsToday: number;
     topDialer: { name: string; count: number } | null;
     topFieldRep: { name: string; count: number } | null;
-    topConverter: { name: string; rate: number } | null;
+    topOutboundPerformer: { name: string; rate: number } | null;
+    topFieldSalesPerformer: { name: string; rate: number } | null;
     recentWins: Lead[];
     upcomingAppointments: (Appointment & { leadName: string })[];
     activeFieldSalesLeads: number;
@@ -89,7 +91,11 @@ export default function AdminDashboardPage() {
         
         const signedCustomers = leads.filter(l => l.status === 'Won').length;
         const appointmentsThisWeek = appointments.filter(a => isThisWeek(new Date(a.duedate), { weekStartsOn: 1 })).length;
-        const callsToday = calls.filter(c => isToday(new Date(c.date))).length;
+        
+        // Correctly count unique calls today
+        const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
+        const callsToday = uniqueCallsToday;
+
         
         const dialerAppointments = appointments.reduce((acc, curr) => {
             if(curr.dialerAssigned) {
@@ -98,7 +104,7 @@ export default function AdminDashboardPage() {
             return acc;
         }, {} as Record<string, number>);
         const topDialer = Object.entries(dialerAppointments).sort((a, b) => b[1] - a[1])[0];
-
+        
         const fieldRepWins = leads.filter(l => l.salesRepAssigned && (l.status === 'Won' || l.status === 'Trialing ShipMate')).reduce((acc, curr) => {
             if (curr.salesRepAssigned) {
                  acc[curr.salesRepAssigned] = (acc[curr.salesRepAssigned] || 0) + 1;
@@ -107,24 +113,56 @@ export default function AdminDashboardPage() {
         }, {} as Record<string, number>);
         const topFieldRep = Object.entries(fieldRepWins).sort((a,b) => b[1] - a[1])[0];
 
-        // Correctly associate calls with dialers
-        const callsByDialer = calls.reduce((acc, curr) => {
-            const lead = leadsMap.get(curr.leadId);
-            const dialer = lead?.dialerAssigned;
-            if (dialer) {
-                acc[dialer] = (acc[dialer] || 0) + 1;
+        // Correctly associate unique calls with dialers for outbound
+        const outboundCallsByDialer = calls.reduce((acc, call) => {
+            const lead = leadsMap.get(call.leadId);
+            if (lead && !lead.fieldSales && call.dialerAssigned && call.callId) {
+                if (!acc[call.dialerAssigned]) {
+                    acc[call.dialerAssigned] = new Set<string>();
+                }
+                acc[call.dialerAssigned].add(call.callId);
+            }
+            return acc;
+        }, {} as Record<string, Set<string>>);
+
+        let topOutboundPerformer: { name: string; rate: number } | null = null;
+        Object.keys(dialerAppointments).forEach(dialer => {
+            const numAppointments = dialerAppointments[dialer];
+            const numCalls = outboundCallsByDialer[dialer]?.size || 0;
+            if (numCalls > 10) { 
+                const rate = (numAppointments / numCalls) * 100;
+                if (!topOutboundPerformer || rate > topOutboundPerformer.rate) {
+                    topOutboundPerformer = { name: dialer, rate: parseFloat(rate.toFixed(2)) };
+                }
+            }
+        });
+
+        // Calculate Top Field Sales Performer (Check-in to Won/Trial ratio)
+        const checkInActivities = calls.filter(a => a.notes?.includes('Checked in at location via map.'));
+        const checkInsByRep = checkInActivities.reduce((acc, activity) => {
+            if (activity.author) {
+                if (!acc[activity.author]) acc[activity.author] = new Set<string>();
+                acc[activity.author].add(activity.leadId);
+            }
+            return acc;
+        }, {} as Record<string, Set<string>>);
+        
+        const fieldSalesSuccesses = leads.filter(l => l.fieldSales && (l.status === 'Won' || l.status === 'Trialing ShipMate'));
+        const successesByRep = fieldSalesSuccesses.reduce((acc, lead) => {
+            if (lead.dialerAssigned) {
+                acc[lead.dialerAssigned] = (acc[lead.dialerAssigned] || 0) + 1;
             }
             return acc;
         }, {} as Record<string, number>);
         
-        let topConverter: { name: string; rate: number } | null = null;
-        Object.keys(dialerAppointments).forEach(dialer => {
-            const numAppointments = dialerAppointments[dialer];
-            const numCalls = callsByDialer[dialer] || 0;
-            if (numCalls > 10) { // Only consider dialers with a minimum number of calls
-                const rate = (numAppointments / numCalls) * 100;
-                if (!topConverter || rate > topConverter.rate) {
-                    topConverter = { name: dialer, rate: parseFloat(rate.toFixed(2)) };
+        let topFieldSalesPerformer: { name: string; rate: number } | null = null;
+        Object.keys(checkInsByRep).forEach(rep => {
+            const numCheckIns = checkInsByRep[rep].size;
+            const numSuccesses = successesByRep[rep] || 0;
+            if (numCheckIns > 5) { // Minimum 5 check-ins to be considered
+                const rate = (numSuccesses / numCheckIns) * 100;
+                if (!topFieldSalesPerformer || rate > topFieldSalesPerformer.rate) {
+                    topFieldSalesPerformer = { name: rep, rate: parseFloat(rate.toFixed(2)) };
                 }
             }
         });
@@ -162,7 +200,8 @@ export default function AdminDashboardPage() {
           callsToday,
           topDialer: topDialer ? { name: topDialer[0], count: topDialer[1] } : null,
           topFieldRep: topFieldRep ? { name: topFieldRep[0], count: topFieldRep[1] } : null,
-          topConverter,
+          topOutboundPerformer,
+          topFieldSalesPerformer,
           recentWins,
           upcomingAppointments,
           activeFieldSalesLeads,
@@ -232,15 +271,16 @@ export default function AdminDashboardPage() {
         <StatCard title="Active Leads" value={stats?.totalLeads ?? 0} icon={Users} description="Total leads in the pipeline" />
         <StatCard title="Signed Customers" value={stats?.signedCustomers ?? 0} icon={Star} description="Total leads marked as 'Won'" />
         <StatCard title="Appointments This Week" value={stats?.appointmentsThisWeek ?? 0} icon={Calendar} description="Across the whole team" />
-        <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Total calls made today" />
+        <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Total unique calls made today" />
         <StatCard title="Field Sales Leads" value={stats?.activeFieldSalesLeads ?? 0} icon={Target} description="Leads in the D2D bucket" />
         <StatCard title="Outbound Leads" value={stats?.activeOutboundLeads ?? 0} icon={Phone} description="Leads in the outbound bucket" />
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <LeaderboardCard title="Top Dialer (Appointments)" user={stats?.topDialer?.name || null} metric={`${stats?.topDialer?.count || 0} appointments this month`} icon={Trophy} />
         <LeaderboardCard title="Top Field Rep (Wins)" user={stats?.topFieldRep?.name || null} metric={`${stats?.topFieldRep?.count || 0} wins/trials this month`} icon={Target} />
-        <LeaderboardCard title="Top Performer (Conversion)" user={stats?.topConverter?.name || null} metric={`${stats?.topConverter?.rate || 0}% call-to-appt rate`} icon={LineChart} />
+        <LeaderboardCard title="Top Outbound Performer" user={stats?.topOutboundPerformer?.name || null} metric={`${stats?.topOutboundPerformer?.rate || 0}% call-to-appt rate`} icon={LineChart} />
+        <LeaderboardCard title="Top Field Sales Performer" user={stats?.topFieldSalesPerformer?.name || null} metric={`${stats?.topFieldSalesPerformer?.rate || 0}% check-in to win/trial rate`} icon={CheckSquare} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -268,7 +308,7 @@ export default function AdminDashboardPage() {
                                     </Button>
                                 </TableCell>
                                 <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                <TableCell className="text-right">{lead.dialerAssigned || 'N/A'}</TableCell>
+                                <TableCell className="text-right">{lead.salesRepAssigned || lead.dialerAssigned || 'N/A'}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
