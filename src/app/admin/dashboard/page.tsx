@@ -21,7 +21,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers } from '@/services/firebase';
-import { startOfWeek, endOfWeek, isThisWeek, isToday, format } from 'date-fns';
+import { isThisWeek, isToday, format, isFuture, isSameDay } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -42,7 +42,7 @@ type DashboardStats = {
     topFieldRep: { name: string; count: number } | null;
     topConverter: { name: string; rate: number } | null;
     recentWins: Lead[];
-    recentAppointments: (Appointment & { leadName: string })[];
+    upcomingAppointments: (Appointment & { leadName: string })[];
 };
 
 export default function AdminDashboardPage() {
@@ -72,6 +72,8 @@ export default function AdminDashboardPage() {
         const calls = callsResponse || [];
         const appointments = appointmentsResponse || [];
         const users = usersResponse || [];
+        
+        const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
 
         // Calculate KPIs
         const totalLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status)).length;
@@ -118,16 +120,25 @@ export default function AdminDashboardPage() {
         // Recent Wins
         const recentWins = leads
             .filter(l => l.status === 'Won')
-            .sort((a, b) => new Date(b.activity?.[0]?.date || 0).getTime() - new Date(a.activity?.[0]?.date || 0).getTime())
+            .sort((a, b) => {
+                 const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
+                 const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
+                 return dateB - dateA;
+            })
             .slice(0, 5);
 
-        // Recent Appointments
-        const recentAppointments = appointments
-            .sort((a, b) => new Date(a.appointmentDate || 0).getTime() - new Date(b.appointmentDate || 0).getTime())
+        // Upcoming Appointments
+        const now = new Date();
+        const upcomingAppointments = appointments
+            .filter(a => {
+                const apptDate = new Date(a.duedate);
+                return isFuture(apptDate) || isSameDay(now, apptDate);
+            })
+            .sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime())
             .slice(0, 5)
             .map(appt => ({
                 ...appt,
-                leadName: leads.find(l => l.id === appt.leadId)?.companyName || 'Unknown Lead'
+                leadName: leadsMap.get(appt.leadId)?.companyName || 'Unknown Lead'
             }));
 
 
@@ -140,7 +151,7 @@ export default function AdminDashboardPage() {
           topFieldRep: topFieldRep ? { name: topFieldRep[0], count: topFieldRep[1] } : null,
           topConverter,
           recentWins,
-          recentAppointments,
+          upcomingAppointments,
         });
 
       } catch (error) {
@@ -255,7 +266,7 @@ export default function AdminDashboardPage() {
             <CardDescription>The next few appointments on the calendar.</CardDescription>
           </CardHeader>
           <CardContent>
-             {stats?.recentAppointments && stats.recentAppointments.length > 0 ? (
+             {stats?.upcomingAppointments && stats.upcomingAppointments.length > 0 ? (
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -265,7 +276,7 @@ export default function AdminDashboardPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stats.recentAppointments.map(appt => (
+                        {stats.upcomingAppointments.map(appt => (
                             <TableRow key={appt.id}>
                                 <TableCell>
                                     <Button variant="link" className="p-0 h-auto" asChild>
