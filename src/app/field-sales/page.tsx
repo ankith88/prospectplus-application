@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -236,7 +235,7 @@ export default function FieldSalesPage() {
     }
   }, [userProfile]);
   
-    const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -249,7 +248,7 @@ export default function FieldSalesPage() {
   };
 
   const weeklyStats = useMemo(() => {
-    if (userProfile?.role !== 'Field Sales' || !userProfile.displayName) return null;
+    if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
 
     const now = new Date();
     const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
@@ -539,7 +538,7 @@ export default function FieldSalesPage() {
                     Confirm Reassignment
                 </Button>
             </DialogFooter>
-        </Dialog>
+        </DialogContent>
        </Dialog>
       <MoveLeadDialog
         leads={leadsToMove}
