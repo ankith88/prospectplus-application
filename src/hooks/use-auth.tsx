@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -76,10 +77,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
-                        const displayName = `${profileData.firstName} ${profileData.lastName}`.trim();
+                        const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
                         const fullProfile: UserProfile = { 
                             uid: user.uid, 
-                            displayName,
+                            displayName: displayName || user.email || '',
                             ...profileData 
                         };
                         setUserProfile(fullProfile);
@@ -128,8 +129,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
                     const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
-                    const displayName = `${profileData.firstName} ${profileData.lastName}`.trim();
-                    setUserProfile({ uid: loggedInUser.uid, displayName, ...profileData });
+                    const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
+                    setUserProfile({ uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData });
                 }
             }
              return userCredential;

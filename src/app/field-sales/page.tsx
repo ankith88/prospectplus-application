@@ -17,14 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, PlayCircle, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -37,7 +37,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectContent,
@@ -51,6 +62,7 @@ import { startOfWeek, endOfWeek } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
@@ -168,6 +180,12 @@ export default function FieldSalesPage() {
   const [isMovingRoute, setIsMovingRoute] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+  const [leadsToMove, setLeadsToMove] = useState<Lead[]>([]);
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
+  const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   
   const [filters, setFilters] = useState({
     companyName: '',
@@ -401,10 +419,54 @@ export default function FieldSalesPage() {
   
   const openMoveLeadsDialog = () => {
     const leads = allLeads.filter(l => selectedLeads.includes(l.id));
-    // Here you can set the leads to be moved and open the dialog
-    // For now, let's just log it
-    console.log("Moving leads:", leads);
+    setLeadsToMove(leads);
     setIsMoveLeadDialogOpen(true);
+  };
+
+  const handleBulkReassign = async () => {
+    if (selectedLeads.length === 0 || reassignToUsers.length === 0) return;
+    try {
+        await bulkUpdateLeadDialerRep(selectedLeads, reassignToUsers);
+        
+        toast({ title: "Success", description: `${selectedLeads.length} lead(s) randomly reassigned to ${reassignToUsers.length} user(s).` });
+        fetchData(); // Refresh data
+    } catch (error) {
+        console.error("Failed to bulk reassign leads:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to reassign leads." });
+    } finally {
+        setSelectedLeads([]);
+        setReassignToUsers([]);
+        setIsReassignDialogOpen(false);
+    }
+  };
+
+  const handleReassignUserSelect = (checked: boolean, userId: string) => {
+    setReassignToUsers(prev => 
+        checked ? [...prev, userId] : prev.filter(id => id !== userId)
+    );
+  };
+
+  const confirmDelete = (ids: string[]) => {
+    if (ids.length > 0) {
+        setLeadsToDelete(ids);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (leadsToDelete.length === 0) return;
+    setIsDeleting(true);
+    try {
+        await deleteLead(leadsToDelete);
+        toast({ title: 'Success', description: `${leadsToDelete.length} lead(s) have been permanently deleted.` });
+        fetchData();
+        setSelectedLeads([]);
+    } catch (error) {
+        console.error("Failed to delete leads:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the selected leads.' });
+    } finally {
+        setIsDeleting(false);
+        setLeadsToDelete([]);
+    }
   };
 
   const routesToShow = userProfile?.role === 'admin' ? allRoutes : savedRoutes;
@@ -421,16 +483,74 @@ export default function FieldSalesPage() {
   
   return (
     <div className="flex flex-col gap-6">
+      <AlertDialog open={leadsToDelete.length > 0} onOpenChange={(open) => !open && setLeadsToDelete([])}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete {leadsToDelete.length} lead(s) and all associated data. This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+                    {isDeleting ? <Loader /> : 'Delete'}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={isReassignDialogOpen} onOpenChange={(open) => {
+        setIsReassignDialogOpen(open);
+        if (!open) {
+            setReassignToUsers([]);
+        }
+       }}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reassign Leads</DialogTitle>
+                <DialogDescription>
+                    You are about to reassign {selectedLeads.length} lead(s). Select one or more users to randomly distribute the leads to.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label>Assign to</Label>
+                <ScrollArea className="h-48 mt-2 border rounded-md p-2">
+                    <div className="space-y-2">
+                        {allDialers.map((u) => (
+                            <div key={u.uid} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`reassign-${u.uid}`}
+                                    checked={reassignToUsers.includes(u.displayName!)}
+                                    onCheckedChange={(checked) => handleReassignUserSelect(!!checked, u.displayName!)}
+                                />
+                                <Label htmlFor={`reassign-${u.uid}`} className="font-normal">
+                                    {u.displayName}
+                                </Label>
+                            </div>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </div>
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleBulkReassign} disabled={reassignToUsers.length === 0}>
+                    Confirm Reassignment
+                </Button>
+            </DialogFooter>
+        </Dialog>
+       </Dialog>
       <MoveLeadDialog
-        leads={allLeads.filter(l => selectedLeads.includes(l.id))}
+        leads={leadsToMove}
         isOpen={isMoveLeadDialogOpen}
         onOpenChange={setIsMoveLeadDialogOpen}
         onLeadsMoved={() => {
-            fetchData(); // Refresh data after moving
+            fetchData();
             setSelectedLeads([]);
         }}
-        targetBucket="outbound" // We are moving from field sales to outbound
-    />
+        targetBucket="outbound"
+      />
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Field Sales Dashboard</h1>
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
@@ -551,9 +671,15 @@ export default function FieldSalesPage() {
                 <CardTitle>My Assigned Leads</CardTitle>
                 <div className="flex items-center gap-2">
                    {selectedLeads.length > 0 && (
-                      <Button size="sm" variant="outline" onClick={openMoveLeadsDialog}>
-                         <Move className="h-4 w-4 mr-2" /> Move to Outbound ({selectedLeads.length})
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={openMoveLeadsDialog}>
+                            <Move className="h-4 w-4 mr-2" /> Move to Outbound ({selectedLeads.length})
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete ({selectedLeads.length})
+                        </Button>
+                      </>
                    )}
                 </div>
             </div>
@@ -637,11 +763,29 @@ export default function FieldSalesPage() {
        {userProfile?.role === 'admin' && (
           <Card>
             <CardHeader>
-                <CardTitle>All Assigned Field Sales Leads</CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <CardTitle>All Assigned Field Sales Leads</CardTitle>
+                     <div className="flex items-center gap-2">
+                        {selectedLeads.length > 0 && (
+                            <>
+                               <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete ({selectedLeads.length})
+                               </Button>
+                               <Button size="sm" variant="outline" onClick={openMoveLeadsDialog}>
+                                   <Move className="h-4 w-4 mr-2" /> Move to Outbound ({selectedLeads.length})
+                               </Button>
+                               <Button size="sm" variant="outline" onClick={() => setIsReassignDialogOpen(true)}>
+                                   <UserCog className="h-4 w-4 mr-2" /> Reassign ({selectedLeads.length})
+                               </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
               {Object.keys(groupedAllAssignedLeads).length > 0 ? (
-                 <Accordion type="multiple" className="w-full space-y-4">
+                 <Accordion type="multiple" className="w-full space-y-4" defaultValue={Object.keys(groupedAllAssignedLeads)}>
                     {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
                         <AccordionItem value={dialer} key={dialer}>
                            <AccordionTrigger className="bg-muted px-4 rounded-md">
@@ -663,10 +807,35 @@ export default function FieldSalesPage() {
                                             </AccordionTrigger>
                                             <AccordionContent className="p-2">
                                                 <Table>
-                                                    <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Franchisee</TableHead><TableHead>Industry</TableHead></TableRow></TableHeader>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="w-8">
+                                                                <Checkbox
+                                                                    checked={leads.length > 0 && leads.every(l => selectedLeads.includes(l.id))}
+                                                                    onCheckedChange={(checked) => {
+                                                                        const leadIds = leads.map(l => l.id);
+                                                                        setSelectedLeads(prev => checked ? [...new Set([...prev, ...leadIds])] : prev.filter(id => !leadIds.includes(id)));
+                                                                    }}
+                                                                />
+                                                            </TableHead>
+                                                            <TableHead>Company</TableHead>
+                                                            <TableHead>Franchisee</TableHead>
+                                                            <TableHead>Industry</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
                                                     <TableBody>
                                                         {leads.map(lead => (
-                                                            <TableRow key={lead.id}><TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell><TableCell>{lead.franchisee ?? 'N/A'}</TableCell><TableCell>{lead.industryCategory}</TableCell></TableRow>
+                                                            <TableRow key={lead.id} data-state={selectedLeads.includes(lead.id) && "selected"}>
+                                                                <TableCell>
+                                                                    <Checkbox
+                                                                        checked={selectedLeads.includes(lead.id)}
+                                                                        onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                                                <TableCell>{lead.franchisee ?? 'N/A'}</TableCell>
+                                                                <TableCell>{lead.industryCategory}</TableCell>
+                                                            </TableRow>
                                                         ))}
                                                     </TableBody>
                                                 </Table>
@@ -719,4 +888,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-

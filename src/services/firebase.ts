@@ -1384,11 +1384,11 @@ async function getAllUsers(): Promise<UserProfile[]> {
         }
         return snapshot.docs.map(doc => {
             const data = doc.data();
-            const displayName = `${data.firstName} ${data.lastName}`.trim();
+            const displayName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
             return {
                 uid: doc.id,
                 ...data,
-                displayName
+                displayName: displayName || data.email, // Fallback to email if name is empty
             } as UserProfile;
         });
     } catch (error) {
@@ -1841,3 +1841,4 @@ export {
 };
 
     
+
