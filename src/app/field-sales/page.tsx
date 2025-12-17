@@ -80,7 +80,7 @@ export default function FieldSalesPage() {
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
             userProfile?.role === 'admin' ? getAllUserRoutes() : Promise.resolve([]),
-            userProfile?.role === 'admin' ? getAllUsers() : Promise.resolve([]),
+            getAllUsers(),
         ]);
 
         const fieldSalesLeads = leads.filter(lead => (lead as any).fieldSales === true);
@@ -89,8 +89,8 @@ export default function FieldSalesPage() {
 
         if (userProfile?.role === 'admin') {
             setAllRoutes(routes);
-            setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
         }
+        setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
@@ -153,11 +153,10 @@ export default function FieldSalesPage() {
   );
 
   const myLeads = useMemo(() => {
-    if (!user?.displayName) return [];
+    if (!userProfile?.displayName) return [];
     
     const actionableLeads = allLeads.filter(lead => 
-      lead.dialerAssigned === user.displayName && 
-      (lead as any).fieldSales === true &&
+      lead.dialerAssigned === userProfile.displayName && 
       !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
     );
 
@@ -165,7 +164,7 @@ export default function FieldSalesPage() {
       return actionableLeads;
     }
     return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
-  }, [allLeads, user, myLeadsSearchQuery]);
+  }, [allLeads, userProfile, myLeadsSearchQuery]);
 
 
   const groupedMyLeads = useMemo(() => {
@@ -183,9 +182,8 @@ export default function FieldSalesPage() {
     if (userProfile?.role !== 'admin') return {};
     
     const relevantLeads = allLeads.filter(lead => 
-        (lead as any).fieldSales === true && // Ensure it's a field sales lead
-        lead.dialerAssigned && // Ensure it's assigned
-        lead.dialerAssigned !== userProfile.displayName // Ensure it's not the admin's own lead
+        lead.dialerAssigned &&
+        lead.dialerAssigned !== userProfile.displayName
     );
       
     return relevantLeads.reduce((acc, lead) => {
@@ -514,5 +512,7 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
 
     

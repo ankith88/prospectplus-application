@@ -32,6 +32,7 @@ interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
     savedRoutes: SavedRoute[];
+    setSavedRoutes: React.Dispatch<React.SetStateAction<SavedRoute[]>>;
     loading: boolean;
     isSigningIn: boolean;
     isSigningOut: boolean;
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
     savedRoutes: [],
+    setSavedRoutes: () => {},
     loading: true,
     isSigningIn: false,
     isSigningOut: false,
@@ -74,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
-                        const displayName = `${profileData.firstName} ${profileData.lastName}`;
+                        const displayName = `${profileData.firstName} ${profileData.lastName}`.trim();
                         const fullProfile: UserProfile = { 
                             uid: user.uid, 
                             displayName,
@@ -126,7 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
                     const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
-                    const displayName = `${profileData.firstName} ${profileData.lastName}`;
+                    const displayName = `${profileData.firstName} ${profileData.lastName}`.trim();
                     setUserProfile({ uid: loggedInUser.uid, displayName, ...profileData });
                 }
             }
@@ -158,6 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         userProfile,
         savedRoutes,
+        setSavedRoutes,
         loading,
         isSigningIn,
         isSigningOut,
@@ -172,3 +175,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
     return useContext(AuthContext);
 };
+
+    

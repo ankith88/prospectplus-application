@@ -397,6 +397,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          fieldSales: data.fieldSales,
           services: data.services || [],
         };
 
@@ -552,6 +553,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee, // Add this line
+                fieldSales: data.fieldSales,
                 activity: [] // Activity will be populated by other functions if needed
             } as Lead;
         });
@@ -1376,7 +1378,7 @@ async function getAllUsers(): Promise<UserProfile[]> {
             return [];
         }
         return snapshot.docs.map(doc => {
-            const data = doc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+            const data = doc.data();
             const displayName = `${data.firstName} ${data.lastName}`.trim();
             return {
                 uid: doc.id,
@@ -1638,6 +1640,7 @@ async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string
         let allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
 
         for (const user of relevantUsers) {
+            if (!user.displayName) continue;
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
                 ...route,
@@ -1774,3 +1777,5 @@ export {
     updateLeadServices,
     updateUserRoute,
 };
+
+    
