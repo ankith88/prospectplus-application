@@ -246,8 +246,8 @@ export default function FieldSalesPage() {
       franchisee: [],
     });
   };
-
-  const weeklyStats = useMemo(() => {
+  
+    const weeklyStats = useMemo(() => {
     if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
 
     const now = new Date();
@@ -685,7 +685,7 @@ export default function FieldSalesPage() {
         </CardHeader>
         <CardContent>
          {filteredMyLeads.length > 0 ? (
-            <Accordion type="multiple" defaultValue={['New', 'Priority Lead']} className="w-full space-y-2">
+            <Accordion type="multiple" className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => (
                 <AccordionItem value={status} key={status}>
                   <div className="bg-muted px-4 rounded-md flex items-center justify-between">
@@ -784,7 +784,7 @@ export default function FieldSalesPage() {
             </CardHeader>
             <CardContent>
               {Object.keys(groupedAllAssignedLeads).length > 0 ? (
-                 <Accordion type="multiple" className="w-full space-y-4" defaultValue={Object.keys(groupedAllAssignedLeads)}>
+                 <Accordion type="multiple" className="w-full space-y-4">
                     {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
                         <AccordionItem value={dialer} key={dialer}>
                            <AccordionTrigger className="bg-muted px-4 rounded-md">
@@ -795,7 +795,7 @@ export default function FieldSalesPage() {
                                 </div>
                             </AccordionTrigger>
                              <AccordionContent className="pt-2">
-                                <Accordion type="multiple" className="w-full space-y-2" defaultValue={Object.keys(statusGroups)}>
+                                <Accordion type="multiple" className="w-full space-y-2">
                                     {Object.entries(statusGroups).map(([status, leads]) => (
                                         <AccordionItem value={`${dialer}-${status}`} key={`${dialer}-${status}`}>
                                             <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
@@ -887,3 +887,5 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
