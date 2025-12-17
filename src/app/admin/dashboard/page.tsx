@@ -61,12 +61,17 @@ export default function AdminDashboardPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [leads, calls, appointments, users] = await Promise.all([
+        const [leadsResponse, callsResponse, appointmentsResponse, usersResponse] = await Promise.all([
           getAllLeadsForReport(),
           getAllCallActivities(),
           getAllAppointments(),
           getAllUsers(),
         ]);
+
+        const leads = leadsResponse || [];
+        const calls = callsResponse || [];
+        const appointments = appointmentsResponse || [];
+        const users = usersResponse || [];
 
         // Calculate KPIs
         const totalLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status)).length;
