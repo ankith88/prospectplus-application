@@ -92,7 +92,8 @@ export default function FieldSalesPage() {
              getLeadsFromFirebase({ dialerAssigned: userProfile.displayName }),
              getAllActivities()
           ]);
-          setAllLeads(leads);
+          const fieldSalesLeads = leads.filter(lead => (lead as any).fieldSales === true);
+          setAllLeads(fieldSalesLeads);
           setAllActivities(activities);
       }
     } catch (error) {
