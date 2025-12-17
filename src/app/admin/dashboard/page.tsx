@@ -107,9 +107,12 @@ export default function AdminDashboardPage() {
         }, {} as Record<string, number>);
         const topFieldRep = Object.entries(fieldRepWins).sort((a,b) => b[1] - a[1])[0];
 
+        // Correctly associate calls with dialers
         const callsByDialer = calls.reduce((acc, curr) => {
-            if (curr.dialerAssigned) {
-                acc[curr.dialerAssigned] = (acc[curr.dialerAssigned] || 0) + 1;
+            const lead = leadsMap.get(curr.leadId);
+            const dialer = lead?.dialerAssigned;
+            if (dialer) {
+                acc[dialer] = (acc[dialer] || 0) + 1;
             }
             return acc;
         }, {} as Record<string, number>);
@@ -363,5 +366,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
