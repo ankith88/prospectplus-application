@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
@@ -50,10 +50,112 @@ import { Input } from '@/components/ui/input'
 import { startOfWeek, endOfWeek } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import { Checkbox } from '@/components/ui/checkbox'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
 const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
+
+interface MoveLeadDialogProps {
+  leads: Lead[];
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onLeadsMoved: () => void;
+  targetBucket: 'field' | 'outbound';
+}
+
+
+function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucket }: MoveLeadDialogProps) {
+    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [selectedUser, setSelectedUser] = useState<string>('');
+    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
+    const { toast } = useToast();
+    
+    useEffect(() => {
+        const fetchUsers = async () => {
+            if (!isOpen) return;
+
+            setIsLoadingUsers(true);
+            const allUsers = await getAllUsers();
+            const filteredUsers = allUsers.filter(u => {
+                if (targetBucket === 'field') {
+                    return u.role === 'Field Sales' || u.role === 'admin';
+                }
+                if (targetBucket === 'outbound') {
+                    return u.role === 'user';
+                }
+                return false;
+            });
+            setUsers(filteredUsers);
+            setIsLoadingUsers(false);
+        };
+        fetchUsers();
+    }, [isOpen, targetBucket]);
+
+    const handleMoveLeads = async () => {
+        if (leads.length === 0 || !selectedUser) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select leads and a user to assign them to.' });
+            return;
+        }
+        setIsMoving(true);
+        try {
+            await bulkMoveLeadsToBucket({
+                leadIds: leads.map(l => l.id),
+                fieldSales: targetBucket === 'field',
+                assigneeDisplayName: selectedUser,
+            });
+            toast({ title: 'Success', description: `${leads.length} lead(s) have been moved and reassigned.` });
+            onLeadsMoved();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to move leads:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not move the selected leads.' });
+        } finally {
+            setIsMoving(false);
+        }
+    };
+    
+    useEffect(() => {
+        if (!isOpen) {
+            setSelectedUser('');
+        }
+    }, [isOpen]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move {leads.length} Lead(s)</DialogTitle>
+                    <DialogDescription>Move selected leads to the {targetBucket === 'field' ? 'Field Sales' : 'Outbound'} bucket and reassign.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Assign To</Label>
+                         <Select value={selectedUser} onValueChange={setSelectedUser}>
+                            <SelectTrigger disabled={isLoadingUsers}>
+                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${targetBucket === 'field' ? 'Field Sales Rep' : 'Dialer'}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {users.map(user => (
+                                    <SelectItem key={user.uid} value={user.displayName!}>
+                                        {user.displayName} ({user.role})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                         </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={handleMoveLeads} disabled={!selectedUser || isMoving}>
+                        {isMoving ? <Loader/> : 'Confirm Move'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -64,7 +166,9 @@ export default function FieldSalesPage() {
   const [routeToMove, setRouteToMove] = useState<RouteWithUser | null>(null);
   const [targetUserId, setTargetUserId] = useState<string>('');
   const [isMovingRoute, setIsMovingRoute] = useState(false);
-  const [myLeadsSearchQuery, setMyLeadsSearchQuery] = useState('');
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+  
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
@@ -177,8 +281,9 @@ export default function FieldSalesPage() {
     if (!userProfile?.displayName) return [];
     
     let leads = allLeads.filter(lead => 
-      lead.dialerAssigned === userProfile.displayName && 
-      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
+      lead.dialerAssigned === userProfile.displayName &&
+      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status) &&
+      lead.fieldSales === true
     );
 
     if (filters.companyName) {
@@ -190,13 +295,9 @@ export default function FieldSalesPage() {
     if (filters.franchisee.length > 0) {
       leads = leads.filter(lead => lead.franchisee && filters.franchisee.includes(lead.franchisee));
     }
-    
-    if (myLeadsSearchQuery) {
-      leads = leads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
-    }
 
     return leads;
-  }, [allLeads, userProfile, myLeadsSearchQuery, filters]);
+  }, [allLeads, userProfile, filters]);
 
 
   const groupedMyLeads = useMemo(() => {
@@ -213,10 +314,7 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
-    let relevantLeads = allLeads.filter(lead => 
-        lead.dialerAssigned &&
-        lead.dialerAssigned !== userProfile.displayName
-    );
+    let relevantLeads = allLeads.filter(lead => lead.fieldSales === true);
 
     if (filters.companyName) {
       relevantLeads = relevantLeads.filter(lead => lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()));
@@ -295,6 +393,20 @@ export default function FieldSalesPage() {
     }
   };
 
+  const handleSelectLead = (leadId: string, checked: boolean) => {
+    setSelectedLeads(prev => 
+        checked ? [...prev, leadId] : prev.filter(id => id !== leadId)
+    );
+  };
+  
+  const openMoveLeadsDialog = () => {
+    const leads = allLeads.filter(l => selectedLeads.includes(l.id));
+    // Here you can set the leads to be moved and open the dialog
+    // For now, let's just log it
+    console.log("Moving leads:", leads);
+    setIsMoveLeadDialogOpen(true);
+  };
+
   const routesToShow = userProfile?.role === 'admin' ? allRoutes : savedRoutes;
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -309,6 +421,16 @@ export default function FieldSalesPage() {
   
   return (
     <div className="flex flex-col gap-6">
+      <MoveLeadDialog
+        leads={allLeads.filter(l => selectedLeads.includes(l.id))}
+        isOpen={isMoveLeadDialogOpen}
+        onOpenChange={setIsMoveLeadDialogOpen}
+        onLeadsMoved={() => {
+            fetchData(); // Refresh data after moving
+            setSelectedLeads([]);
+        }}
+        targetBucket="outbound" // We are moving from field sales to outbound
+    />
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Field Sales Dashboard</h1>
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
@@ -422,20 +544,18 @@ export default function FieldSalesPage() {
           )}
         </CardContent>
       </Card>
-
+      
       <Card>
         <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <CardTitle>My Assigned Leads</CardTitle>
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Search my leads..."
-                      className="pl-9"
-                      value={myLeadsSearchQuery}
-                      onChange={(e) => setMyLeadsSearchQuery(e.target.value)}
-                    />
-                  </div>
+                <div className="flex items-center gap-2">
+                   {selectedLeads.length > 0 && (
+                      <Button size="sm" variant="outline" onClick={openMoveLeadsDialog}>
+                         <Move className="h-4 w-4 mr-2" /> Move to Outbound ({selectedLeads.length})
+                      </Button>
+                   )}
+                </div>
             </div>
         </CardHeader>
         <CardContent>
@@ -456,6 +576,15 @@ export default function FieldSalesPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-8">
+                                <Checkbox
+                                    checked={leads.length > 0 && leads.every(l => selectedLeads.includes(l.id))}
+                                    onCheckedChange={(checked) => {
+                                        const leadIds = leads.map(l => l.id);
+                                        setSelectedLeads(prev => checked ? [...new Set([...prev, ...leadIds])] : prev.filter(id => !leadIds.includes(id)));
+                                    }}
+                                />
+                            </TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead className="hidden sm:table-cell">Franchisee</TableHead>
                             <TableHead className="hidden md:table-cell">Industry</TableHead>
@@ -465,7 +594,13 @@ export default function FieldSalesPage() {
                         <TableBody>
                           {leads.map((lead) => (
                             <Fragment key={lead.id}>
-                              <TableRow>
+                              <TableRow data-state={selectedLeads.includes(lead.id) && "selected"}>
+                                <TableCell>
+                                    <Checkbox
+                                        checked={selectedLeads.includes(lead.id)}
+                                        onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
+                                    />
+                                </TableCell>
                                 <TableCell>
                                   <Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button>
                                 </TableCell>
@@ -493,7 +628,7 @@ export default function FieldSalesPage() {
             </Accordion>
           ) : (
             <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-              {myLeadsSearchQuery || hasActiveFilters ? 'No leads match your search/filters.' : 'You have no actionable leads assigned.'}
+              {hasActiveFilters ? 'No leads match your search/filters.' : 'You have no actionable field sales leads assigned.'}
             </div>
           )}
         </CardContent>
