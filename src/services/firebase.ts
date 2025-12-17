@@ -189,6 +189,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          fieldSales: data.fieldSales,
           invoices: [],
           services: data.services || [],
         };
@@ -288,6 +289,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           companyDescription: data.companyDescription,
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
+          fieldSales: data.fieldSales,
           services: data.services || [],
         };
         
@@ -463,6 +465,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     industryCategory: data.industryCategory,
                     customerServiceEmail: data.customerServiceEmail,
                     customerPhone: data.customerPhone,
+                    fieldSales: data.fieldSales,
                     services: data.services || [],
                 };
 
@@ -510,6 +513,7 @@ async function getArchivedLeads(): Promise<Lead[]> {
                     dialerAssigned: data.dialerAssigned,
                     industryCategory: data.industryCategory,
                     discoveryData: data.discoveryData,
+                    fieldSales: data.fieldSales,
                     services: data.services || [],
                 };
                 
@@ -1713,6 +1717,27 @@ async function updateLeadServices(leadId: string, services: ServiceSelection[]):
     }
 }
 
+async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; assigneeDisplayName: string }): Promise<void> {
+    const { leadId, fieldSales, assigneeDisplayName } = payload;
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, {
+            fieldSales: fieldSales,
+            dialerAssigned: assigneeDisplayName,
+        });
+
+        const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
+        await logActivity(leadId, {
+            type: 'Update',
+            notes: `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`,
+        });
+        console.log(`Lead ${leadId} moved and reassigned successfully.`);
+    } catch (error) {
+        console.error(`Failed to move lead ${leadId}:`, error);
+        throw new Error('Failed to move lead in Firebase');
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -1776,6 +1801,7 @@ export {
     moveUserRoute,
     updateLeadServices,
     updateUserRoute,
+    moveLeadToBucket,
 };
 
     

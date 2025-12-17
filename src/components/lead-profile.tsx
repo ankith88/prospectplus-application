@@ -45,14 +45,15 @@ import {
   History,
   XCircle,
   FileDigit,
+  Move,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -127,10 +128,131 @@ import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ColdCallScorecardDialog } from './cold-call-scorecard';
 import { ScrollArea } from './ui/scroll-area'
 import { ServiceSelectionDialog } from './service-selection-dialog';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
+import { Label } from './ui/label'
 
 
 interface LeadProfileProps {
   initialLead: Lead;
+}
+
+interface MoveLeadDialogProps {
+  lead: Lead;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onLeadMoved: () => void;
+}
+
+function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDialogProps) {
+    const [bucket, setBucket] = useState<'field' | 'outbound' | ''>('');
+    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [selectedUser, setSelectedUser] = useState<string>('');
+    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
+    const { toast } = useToast();
+    
+    useEffect(() => {
+        const fetchUsers = async () => {
+            if (!bucket) {
+                setUsers([]);
+                return;
+            }
+            setIsLoadingUsers(true);
+            const allUsers = await getAllUsers();
+            const filteredUsers = allUsers.filter(u => {
+                if (bucket === 'field') {
+                    return u.role === 'Field Sales' || u.role === 'admin';
+                }
+                if (bucket === 'outbound') {
+                    return u.role === 'user';
+                }
+                return false;
+            });
+            setUsers(filteredUsers);
+            setIsLoadingUsers(false);
+        };
+        fetchUsers();
+    }, [bucket]);
+
+    const handleMoveLead = async () => {
+        if (!bucket || !selectedUser) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select a bucket and a user.' });
+            return;
+        }
+        setIsMoving(true);
+        try {
+            await moveLeadToBucket({
+                leadId: lead.id,
+                fieldSales: bucket === 'field',
+                assigneeDisplayName: selectedUser,
+            });
+            toast({ title: 'Success', description: 'Lead has been moved and reassigned.' });
+            onLeadMoved();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to move lead:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not move the lead.' });
+        } finally {
+            setIsMoving(false);
+        }
+    };
+    
+    useEffect(() => {
+        if (!isOpen) {
+            setBucket('');
+            setSelectedUser('');
+        }
+    }, [isOpen]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move Lead</DialogTitle>
+                    <DialogDescription>Move {lead.companyName} to a different sales bucket and reassign.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Bucket</Label>
+                        <RadioGroup value={bucket} onValueChange={(value) => setBucket(value as 'field' | 'outbound')}>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="field" id="field" />
+                                <Label htmlFor="field">Field Sales (fieldSales = true)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="outbound" id="outbound" />
+                                <Label htmlFor="outbound">Outbound (fieldSales = false)</Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+                    {bucket && (
+                         <div className="space-y-2">
+                             <Label>Assign To</Label>
+                             <Select value={selectedUser} onValueChange={setSelectedUser}>
+                                <SelectTrigger disabled={isLoadingUsers}>
+                                    <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : 'Select a user'} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {users.map(user => (
+                                        <SelectItem key={user.uid} value={user.displayName!}>
+                                            {user.displayName} ({user.role})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                             </Select>
+                         </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={handleMoveLead} disabled={!bucket || !selectedUser || isMoving}>
+                        {isMoving ? <Loader/> : 'Confirm Move'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 const salesReps = [
@@ -169,6 +291,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
+  const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
 
 
   const router = useRouter();
@@ -720,13 +843,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const scorecardButton = (
         <ColdCallScorecardDialog lead={lead} dialerName={lead.dialerAssigned || userProfile.displayName || ''} onScorecardSubmit={() => {}} />
     );
+    
+    const moveLeadButton = (
+        <Button variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}>
+            <Move className="mr-2 h-4 w-4" />
+            Move Lead
+        </Button>
+    );
+
 
     if (isFieldSales) {
-        return <div className="flex flex-wrap items-center gap-2">{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}</div>;
+        return <div className="flex flex-wrap items-center gap-2">{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
     }
     
     if (isNormalUser) {
-        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logOutcomeButton}{logNoteButton}{viewScriptButton}</div>;
+        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logOutcomeButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
     }
 
     if (isAdmin) {
@@ -740,6 +871,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <p className="text-sm font-semibold text-muted-foreground mr-2">Dialer Actions:</p>
                     {scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{scorecardButton}
                 </div>
+                 <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-muted-foreground mr-2">Admin Actions:</p>
+                    {moveLeadButton}
+                </div>
             </div>
         );
     }
@@ -749,6 +884,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   return (
     <>
+    <MoveLeadDialog
+        lead={lead}
+        isOpen={isMoveLeadDialogOpen}
+        onOpenChange={setIsMoveLeadDialogOpen}
+        onLeadMoved={() => router.refresh()} // Refresh page data after moving
+    />
     <ServiceSelectionDialog
         isOpen={isServiceSelectionOpen}
         onOpenChange={setIsServiceSelectionOpen}

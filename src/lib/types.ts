@@ -178,6 +178,7 @@ export interface Lead {
   companyDescription?: string;
   leadType?: string;
   demoCompleted?: 'Yes';
+  fieldSales?: boolean;
 }
 
 export interface UserProfile {
@@ -191,7 +192,7 @@ export interface UserProfile {
     role?: 'user' | 'admin' | 'Field Sales';
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone'> & { isProspect?: boolean, isCompany?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales'> & { isProspect?: boolean, isCompany?: boolean };
 
 export type StorableRoute = {
     id?: string;
