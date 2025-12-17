@@ -94,7 +94,7 @@ export default function LeadsClientPage() {
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
-    franchisee: [] as string[],
+    franchisee: [],
   });
   
   useEffect(() => {
@@ -172,8 +172,9 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status);
+      const isFieldSalesLead = (lead as any).fieldSales === true;
 
-      return !isArchived && companyMatch && statusMatch && franchiseeMatch;
+      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch;
     });
 
     if (sortConfig !== null) {
@@ -1282,3 +1283,5 @@ export default function LeadsClientPage() {
     </>
   )
 }
+
+    
