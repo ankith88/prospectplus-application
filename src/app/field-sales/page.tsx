@@ -24,7 +24,7 @@ import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, PlayCircle, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search } from 'lucide-react'
+import { MoreHorizontal, UserX, PlayCircle, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -48,9 +48,12 @@ import {
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { startOfWeek, endOfWeek } from 'date-fns'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -62,6 +65,11 @@ export default function FieldSalesPage() {
   const [targetUserId, setTargetUserId] = useState<string>('');
   const [isMovingRoute, setIsMovingRoute] = useState(false);
   const [myLeadsSearchQuery, setMyLeadsSearchQuery] = useState('');
+  const [filters, setFilters] = useState({
+    companyName: '',
+    status: [] as string[],
+    franchisee: [] as string[],
+  });
 
 
   const router = useRouter();
@@ -106,6 +114,18 @@ export default function FieldSalesPage() {
     }
   }, [userProfile]);
   
+    const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      companyName: '',
+      status: [],
+      franchisee: [],
+    });
+  };
+
   const weeklyStats = useMemo(() => {
     if (userProfile?.role !== 'Field Sales' || !userProfile.displayName) return null;
 
@@ -152,24 +172,35 @@ export default function FieldSalesPage() {
       </CardContent>
     </Card>
   );
-
-  const myLeads = useMemo(() => {
+  
+  const filteredMyLeads = useMemo(() => {
     if (!userProfile?.displayName) return [];
     
-    const actionableLeads = allLeads.filter(lead => 
+    let leads = allLeads.filter(lead => 
       lead.dialerAssigned === userProfile.displayName && 
       !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
     );
 
-    if (!myLeadsSearchQuery) {
-      return actionableLeads;
+    if (filters.companyName) {
+      leads = leads.filter(lead => lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()));
     }
-    return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
-  }, [allLeads, userProfile, myLeadsSearchQuery]);
+    if (filters.status.length > 0) {
+      leads = leads.filter(lead => filters.status.includes(lead.status));
+    }
+    if (filters.franchisee.length > 0) {
+      leads = leads.filter(lead => lead.franchisee && filters.franchisee.includes(lead.franchisee));
+    }
+    
+    if (myLeadsSearchQuery) {
+      leads = leads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
+    }
+
+    return leads;
+  }, [allLeads, userProfile, myLeadsSearchQuery, filters]);
 
 
   const groupedMyLeads = useMemo(() => {
-    return myLeads.reduce((acc, lead) => {
+    return filteredMyLeads.reduce((acc, lead) => {
       const status = lead.status;
       if (!acc[status]) {
         acc[status] = [];
@@ -177,15 +208,25 @@ export default function FieldSalesPage() {
       acc[status].push(lead);
       return acc;
     }, {} as Record<string, LeadWithDetails[]>);
-  }, [myLeads]);
+  }, [filteredMyLeads]);
   
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
-    const relevantLeads = allLeads.filter(lead => 
+    let relevantLeads = allLeads.filter(lead => 
         lead.dialerAssigned &&
         lead.dialerAssigned !== userProfile.displayName
     );
+
+    if (filters.companyName) {
+      relevantLeads = relevantLeads.filter(lead => lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()));
+    }
+    if (filters.status.length > 0) {
+      relevantLeads = relevantLeads.filter(lead => filters.status.includes(lead.status));
+    }
+    if (filters.franchisee.length > 0) {
+      relevantLeads = relevantLeads.filter(lead => lead.franchisee && filters.franchisee.includes(lead.franchisee));
+    }
       
     return relevantLeads.reduce((acc, lead) => {
         const dialer = lead.dialerAssigned || 'Unassigned';
@@ -199,19 +240,7 @@ export default function FieldSalesPage() {
         acc[dialer][status].push(lead);
         return acc;
     }, {} as Record<string, Record<string, Lead[]>>);
-  }, [allLeads, userProfile]);
-
-  const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
-    let sortedLeadIds = leads.map(l => l.id);
-    if (startingFromLeadId) {
-      const startIndex = sortedLeadIds.indexOf(startingFromLeadId);
-      if (startIndex !== -1) {
-        sortedLeadIds = [...sortedLeadIds.slice(startIndex), ...sortedLeadIds.slice(0, startIndex)];
-      }
-    }
-    localStorage.setItem('dialingSessionLeads', JSON.stringify(sortedLeadIds));
-    router.push(`/leads/${sortedLeadIds[0]}`);
-  };
+  }, [allLeads, userProfile, filters]);
 
   const handleLoadRoute = (route: SavedRoute) => {
     const leadIds = route.leads.map(l => l.id);
@@ -266,12 +295,17 @@ export default function FieldSalesPage() {
     }
   };
 
-
   if (loading || authLoading || !userProfile) {
     return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
   }
   
   const routesToShow = userProfile.role === 'admin' ? allRoutes : savedRoutes;
+  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+  const uniqueFranchisees: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  const hasActiveFilters = filters.companyName !== '' || filters.status.length > 0 || filters.franchisee.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -294,6 +328,56 @@ export default function FieldSalesPage() {
             </CardContent>
         </Card>
       )}
+
+      <Collapsible>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    <span>Filters</span>
+                </CardTitle>
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                        <SlidersHorizontal className="h-4 w-4" />
+                        <span className="ml-2">Toggle Filters</span>
+                    </Button>
+                </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="companyName">Company Name</Label>
+                        <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Status</Label>
+                        <MultiSelectCombobox
+                            options={leadStatusOptions}
+                            selected={filters.status}
+                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            placeholder="Select statuses..."
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="franchisee">Franchisee</Label>
+                         <MultiSelectCombobox
+                            options={uniqueFranchisees}
+                            selected={filters.franchisee}
+                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                            placeholder="Select franchisees..."
+                        />
+                    </div>
+                </CardContent>
+                {hasActiveFilters && (
+                    <CardContent>
+                        <Button variant="ghost" onClick={clearFilters}>
+                            <X className="mr-2 h-4 w-4" /> Clear Filters
+                        </Button>
+                    </CardContent>
+                )}
+            </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Card>
         <CardHeader>
@@ -355,7 +439,7 @@ export default function FieldSalesPage() {
             </div>
         </CardHeader>
         <CardContent>
-         {myLeads.length > 0 ? (
+         {filteredMyLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New', 'Priority Lead']} className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => (
                 <AccordionItem value={status} key={status}>
@@ -409,7 +493,7 @@ export default function FieldSalesPage() {
             </Accordion>
           ) : (
             <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-              {myLeadsSearchQuery ? 'No leads match your search.' : 'You have no actionable leads assigned.'}
+              {myLeadsSearchQuery || hasActiveFilters ? 'No leads match your search/filters.' : 'You have no actionable leads assigned.'}
             </div>
           )}
         </CardContent>
@@ -500,5 +584,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
