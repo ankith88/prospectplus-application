@@ -77,12 +77,14 @@ export default function FieldSalesPage() {
     setLoading(true);
     try {
       if (userProfile?.role === 'admin') {
-          const [leads, routes, users] = await Promise.all([
-              getLeadsFromFirebase({ summary: true }),
+          const [leads, routes, users, activities] = await Promise.all([
+              getLeadsFromFirebase({ summary: true }), // Fetch all leads for admin
               getAllUserRoutes(),
-              getAllUsers()
+              getAllUsers(),
+              getAllActivities(),
           ]);
           setAllLeads(leads);
+          setAllActivities(activities);
           setAllRoutes(routes);
           setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
       } else if (userProfile?.displayName) {
@@ -180,9 +182,7 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
-    const relevantLeads = allLeads.filter(lead => {
-        return (lead as any).fieldSales === true;
-    });
+    const relevantLeads = allLeads.filter(lead => (lead as any).fieldSales === true);
       
     return relevantLeads.reduce((acc, lead) => {
         const dialer = lead.dialerAssigned || 'Unassigned';
@@ -503,5 +503,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    

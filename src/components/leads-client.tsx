@@ -828,10 +828,7 @@ export default function LeadsClientPage() {
                                                             <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent>
-                                                            <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}>
-                                                                <History className="mr-2 h-4 w-4"/>
-                                                                View History
-                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
@@ -1283,5 +1280,3 @@ export default function LeadsClientPage() {
     </>
   )
 }
-
-    
