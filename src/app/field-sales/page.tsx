@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -83,7 +84,7 @@ export default function FieldSalesPage() {
             getAllUsers(),
         ]);
 
-        const fieldSalesLeads = leads.filter(lead => (lead as any).fieldSales === true);
+        const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
 
@@ -365,18 +366,6 @@ export default function FieldSalesPage() {
                         <Badge>{leads.length} Leads</Badge>
                       </div>
                     </AccordionTrigger>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartDialing(leads);
-                      }}
-                      className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
-                    >
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      Start Session
-                    </Button>
                   </div>
                   <AccordionContent className="pt-2">
                     <div className="overflow-x-auto">
@@ -405,7 +394,6 @@ export default function FieldSalesPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent>
                                       <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start session from here</DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </TableCell>
@@ -512,7 +500,5 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
 
     
