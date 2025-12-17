@@ -7,6 +7,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription
 } from '@/components/ui/card'
 import {
   Table,
@@ -16,19 +17,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, updateLeadDialerRep, getAllUserRoutes, getAllUsers, moveUserRoute } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, History, PlayCircle, Trash2, Route, Car, Footprints, Bike, User, Move } from 'lucide-react'
+import { MoreHorizontal, UserX, PlayCircle, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
-import { format } from 'date-fns'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
@@ -46,18 +46,23 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { startOfWeek, endOfWeek } from 'date-fns'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [routeToMove, setRouteToMove] = useState<RouteWithUser | null>(null);
   const [targetUserId, setTargetUserId] = useState<string>('');
   const [isMovingRoute, setIsMovingRoute] = useState(false);
+  const [myLeadsSearchQuery, setMyLeadsSearchQuery] = useState('');
+
 
   const router = useRouter();
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
@@ -82,8 +87,12 @@ export default function FieldSalesPage() {
           setAllRoutes(routes);
           setAllDialers(users.filter(u => u.role === 'Field Sales'));
       } else if (userProfile?.displayName) {
-          const leads = await getLeadsFromFirebase({ dialerAssigned: userProfile.displayName });
+          const [leads, activities] = await Promise.all([
+             getLeadsFromFirebase({ dialerAssigned: userProfile.displayName }),
+             getAllActivities()
+          ]);
           setAllLeads(leads);
+          setAllActivities(activities);
       }
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
@@ -98,13 +107,65 @@ export default function FieldSalesPage() {
       fetchData();
     }
   }, [userProfile]);
+  
+  const weeklyStats = useMemo(() => {
+    if (userProfile?.role !== 'Field Sales' || !userProfile.displayName) return null;
+
+    const now = new Date();
+    const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
+    const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
+
+    const leadsThisWeek = allLeads.filter(l => {
+        const activityDate = l.activity?.[0]?.date ? new Date(l.activity[0].date) : null;
+        return activityDate && activityDate >= startOfThisWeek && activityDate <= endOfThisWeek;
+    });
+    
+    const activitiesThisWeek = allActivities.filter(a => {
+        const activityDate = new Date(a.date);
+        return a.author === userProfile.displayName && activityDate >= startOfThisWeek && activityDate <= endOfThisWeek;
+    });
+
+    const checkInActivities = activitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
+    const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
+    
+    const signedUpLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Won');
+    const trialingLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Trialing ShipMate');
+    
+    const totalSignups = signedUpLeads.length;
+    const totalTrials = trialingLeads.length;
+    
+    const conversionRate = totalCheckIns > 0 ? ((totalSignups + totalTrials) / totalCheckIns) * 100 : 0;
+
+    return {
+      totalCheckIns,
+      totalSignups,
+      totalTrials,
+      conversionRate: parseFloat(conversionRate.toFixed(2)),
+    };
+  }, [allLeads, allActivities, userProfile]);
+
+  const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  );
 
   const myLeads = useMemo(() => {
     if (userProfile?.role !== 'admin' && user?.displayName) {
-      return allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status));
+      const actionableLeads = allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status));
+      if (!myLeadsSearchQuery) {
+        return actionableLeads;
+      }
+      return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
     }
     return [];
-  }, [allLeads, user, userProfile]);
+  }, [allLeads, user, userProfile, myLeadsSearchQuery]);
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -213,6 +274,21 @@ export default function FieldSalesPage() {
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
       </header>
 
+      {userProfile.role === 'Field Sales' && weeklyStats && (
+        <Card>
+            <CardHeader>
+                <CardTitle>This Week's Performance</CardTitle>
+                <CardDescription>Metrics from {format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')} to {format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')}.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard title="Check-ins" value={weeklyStats.totalCheckIns} icon={CheckSquare} />
+                <StatCard title="New Signups" value={weeklyStats.totalSignups} icon={UserPlus} />
+                <StatCard title="New Free Trials" value={weeklyStats.totalTrials} icon={TrendingUp} />
+                <StatCard title="Visit Conversion Rate" value={`${weeklyStats.conversionRate}%`} icon={Percent} />
+            </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Route className="h-5 w-5"/> Saved Routes</CardTitle>
@@ -259,7 +335,20 @@ export default function FieldSalesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{userProfile.role === 'admin' ? "All Assigned Field Sales Leads" : "My Assigned Leads"}</CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <CardTitle>{userProfile.role === 'admin' ? "All Assigned Field Sales Leads" : "My Assigned Leads"}</CardTitle>
+                {userProfile.role !== 'admin' && (
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search my leads..."
+                      className="pl-9"
+                      value={myLeadsSearchQuery}
+                      onChange={(e) => setMyLeadsSearchQuery(e.target.value)}
+                    />
+                  </div>
+                )}
+            </div>
         </CardHeader>
         <CardContent>
          {userProfile.role === 'admin' ? (
@@ -371,7 +460,7 @@ export default function FieldSalesPage() {
             </Accordion>
           ) : (
             <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-              You have no actionable leads assigned.
+              {myLeadsSearchQuery ? 'No leads match your search.' : 'You have no actionable leads assigned.'}
             </div>
           )}
         </CardContent>
