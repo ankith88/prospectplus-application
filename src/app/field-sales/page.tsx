@@ -84,7 +84,7 @@ export default function FieldSalesPage() {
           ]);
           setAllLeads(leads);
           setAllRoutes(routes);
-          setAllDialers(users.filter(u => u.role === 'Field Sales'));
+          setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
       } else if (userProfile?.displayName) {
           const [leads, activities] = await Promise.all([
              getLeadsFromFirebase({ dialerAssigned: userProfile.displayName }),
@@ -181,11 +181,11 @@ export default function FieldSalesPage() {
     if (userProfile?.role !== 'admin') return {};
     
     const relevantLeads = allLeads.filter(lead => {
-        return (lead as any).fieldSales === true && lead.dialerAssigned;
+        return (lead as any).fieldSales === true;
     });
       
     return relevantLeads.reduce((acc, lead) => {
-        const dialer = lead.dialerAssigned!;
+        const dialer = lead.dialerAssigned || 'Unassigned';
         if (!acc[dialer]) {
             acc[dialer] = {};
         }
@@ -356,7 +356,7 @@ export default function FieldSalesPage() {
         <CardContent>
          {userProfile.role === 'admin' ? (
               Object.keys(groupedAllAssignedLeads).length > 0 ? (
-                 <Accordion type="multiple" className="w-full space-y-4">
+                 <Accordion type="multiple" className="w-full space-y-4" defaultValue={Object.keys(groupedAllAssignedLeads)}>
                     {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
                         <AccordionItem value={dialer} key={dialer}>
                            <AccordionTrigger className="bg-muted px-4 rounded-md">
@@ -367,7 +367,7 @@ export default function FieldSalesPage() {
                                 </div>
                             </AccordionTrigger>
                              <AccordionContent className="pt-2">
-                                <Accordion type="multiple" className="w-full space-y-2">
+                                <Accordion type="multiple" className="w-full space-y-2" defaultValue={Object.keys(statusGroups)}>
                                     {Object.entries(statusGroups).map(([status, leads]) => (
                                         <AccordionItem value={`${dialer}-${status}`} key={`${dialer}-${status}`}>
                                             <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
@@ -503,3 +503,5 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
