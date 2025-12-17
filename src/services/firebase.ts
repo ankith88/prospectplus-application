@@ -552,14 +552,16 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
             const data = doc.data();
             return {
                 id: doc.id,
+                companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
+                salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
                 campaign: data.customerSource,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
-                franchisee: data.franchisee, // Add this line
+                franchisee: data.franchisee,
                 fieldSales: data.fieldSales,
-                activity: [] // Activity will be populated by other functions if needed
+                activity: []
             } as Lead;
         });
 
