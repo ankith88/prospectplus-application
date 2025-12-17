@@ -158,15 +158,20 @@ export default function FieldSalesPage() {
   );
 
   const myLeads = useMemo(() => {
-    if (userProfile?.role !== 'admin' && user?.displayName) {
-      const actionableLeads = allLeads.filter(lead => lead.dialerAssigned === user.displayName && !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status) && (lead as any).fieldSales === true);
+    if (user?.displayName) {
+      const actionableLeads = allLeads.filter(lead => 
+        (lead as any).fieldSales === true &&
+        lead.dialerAssigned === user.displayName && 
+        !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
+      );
+
       if (!myLeadsSearchQuery) {
         return actionableLeads;
       }
       return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
     }
     return [];
-  }, [allLeads, user, userProfile, myLeadsSearchQuery]);
+  }, [allLeads, user, myLeadsSearchQuery]);
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -182,7 +187,11 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
-    const relevantLeads = allLeads.filter(lead => (lead as any).fieldSales === true);
+    const relevantLeads = allLeads.filter(lead => 
+        (lead as any).fieldSales === true && 
+        lead.dialerAssigned &&
+        lead.dialerAssigned !== userProfile.displayName
+    );
       
     return relevantLeads.reduce((acc, lead) => {
         const dialer = lead.dialerAssigned || 'Unassigned';
@@ -339,8 +348,7 @@ export default function FieldSalesPage() {
       <Card>
         <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle>{userProfile.role === 'admin' ? "All Field Sales Leads" : "My Assigned Leads"}</CardTitle>
-                {userProfile.role !== 'admin' && (
+                <CardTitle>My Assigned Leads</CardTitle>
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -350,53 +358,10 @@ export default function FieldSalesPage() {
                       onChange={(e) => setMyLeadsSearchQuery(e.target.value)}
                     />
                   </div>
-                )}
             </div>
         </CardHeader>
         <CardContent>
-         {userProfile.role === 'admin' ? (
-              Object.keys(groupedAllAssignedLeads).length > 0 ? (
-                 <Accordion type="multiple" className="w-full space-y-4" defaultValue={Object.keys(groupedAllAssignedLeads)}>
-                    {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
-                        <AccordionItem value={dialer} key={dialer}>
-                           <AccordionTrigger className="bg-muted px-4 rounded-md">
-                                <div className="flex items-center gap-2 font-semibold">
-                                    <User className="h-5 w-5" />
-                                    <span>{dialer}</span>
-                                    <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
-                                </div>
-                            </AccordionTrigger>
-                             <AccordionContent className="pt-2">
-                                <Accordion type="multiple" className="w-full space-y-2" defaultValue={Object.keys(statusGroups)}>
-                                    {Object.entries(statusGroups).map(([status, leads]) => (
-                                        <AccordionItem value={`${dialer}-${status}`} key={`${dialer}-${status}`}>
-                                            <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <LeadStatusBadge status={status as LeadStatus} />
-                                                    <Badge variant="outline">{leads.length} Leads</Badge>
-                                                </div>
-                                            </AccordionTrigger>
-                                            <AccordionContent className="p-2">
-                                                <Table>
-                                                    <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Franchisee</TableHead><TableHead>Industry</TableHead></TableRow></TableHeader>
-                                                    <TableBody>
-                                                        {leads.map(lead => (
-                                                            <TableRow key={lead.id}><TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell><TableCell>{lead.franchisee ?? 'N/A'}</TableCell><TableCell>{lead.industryCategory}</TableCell></TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    ))}
-                                </Accordion>
-                            </AccordionContent>
-                        </AccordionItem>
-                    ))}
-                 </Accordion>
-              ) : (
-                 <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">No leads are marked for Field Sales.</div>
-              )
-          ) : myLeads.length > 0 ? (
+         {myLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New', 'Priority Lead']} className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => (
                 <AccordionItem value={status} key={status}>
@@ -469,6 +434,57 @@ export default function FieldSalesPage() {
         </CardContent>
       </Card>
       
+       {userProfile?.role === 'admin' && (
+          <Card>
+            <CardHeader>
+                <CardTitle>All Assigned Field Sales Leads</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {Object.keys(groupedAllAssignedLeads).length > 0 ? (
+                 <Accordion type="multiple" className="w-full space-y-4">
+                    {Object.entries(groupedAllAssignedLeads).sort(([dialerA], [dialerB]) => dialerA.localeCompare(dialerB)).map(([dialer, statusGroups]) => (
+                        <AccordionItem value={dialer} key={dialer}>
+                           <AccordionTrigger className="bg-muted px-4 rounded-md">
+                                <div className="flex items-center gap-2 font-semibold">
+                                    <User className="h-5 w-5" />
+                                    <span>{dialer}</span>
+                                    <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>
+                                </div>
+                            </AccordionTrigger>
+                             <AccordionContent className="pt-2">
+                                <Accordion type="multiple" className="w-full space-y-2" defaultValue={Object.keys(statusGroups)}>
+                                    {Object.entries(statusGroups).map(([status, leads]) => (
+                                        <AccordionItem value={`${dialer}-${status}`} key={`${dialer}-${status}`}>
+                                            <AccordionTrigger className="bg-secondary/50 px-4 rounded-md text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <LeadStatusBadge status={status as LeadStatus} />
+                                                    <Badge variant="outline">{leads.length} Leads</Badge>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-2">
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Franchisee</TableHead><TableHead>Industry</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {leads.map(lead => (
+                                                            <TableRow key={lead.id}><TableCell><Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell><TableCell>{lead.franchisee ?? 'N/A'}</TableCell><TableCell>{lead.industryCategory}</TableCell></TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                 </Accordion>
+              ) : (
+                 <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">No other field sales leads are currently assigned.</div>
+              )}
+            </CardContent>
+          </Card>
+      )}
+      
        <Dialog open={!!routeToMove} onOpenChange={(open) => !open && setRouteToMove(null)}>
             <DialogContent>
                 <DialogHeader>
@@ -503,3 +519,5 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
