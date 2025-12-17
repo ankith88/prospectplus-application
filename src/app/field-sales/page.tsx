@@ -178,24 +178,24 @@ export default function FieldSalesPage() {
   }, [myLeads]);
   
   const groupedAllAssignedLeads = useMemo(() => {
-      if (userProfile?.role !== 'admin') return {};
+    if (userProfile?.role !== 'admin') return {};
+    
+    const relevantLeads = allLeads.filter(lead => {
+        return (lead as any).fieldSales === true && lead.dialerAssigned;
+    });
       
-      const relevantLeads = allLeads.filter(lead => 
-        lead.dialerAssigned && (lead as any).fieldSales === true
-      );
-      
-      return relevantLeads.reduce((acc, lead) => {
-          const dialer = lead.dialerAssigned!;
-          if (!acc[dialer]) {
-              acc[dialer] = {};
-          }
-          const status = lead.status;
-          if (!acc[dialer][status]) {
-              acc[dialer][status] = [];
-          }
-          acc[dialer][status].push(lead);
-          return acc;
-      }, {} as Record<string, Record<string, Lead[]>>);
+    return relevantLeads.reduce((acc, lead) => {
+        const dialer = lead.dialerAssigned!;
+        if (!acc[dialer]) {
+            acc[dialer] = {};
+        }
+        const status = lead.status;
+        if (!acc[dialer][status]) {
+            acc[dialer][status] = [];
+        }
+        acc[dialer][status].push(lead);
+        return acc;
+    }, {} as Record<string, Record<string, Lead[]>>);
   }, [allLeads, userProfile]);
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
@@ -503,5 +503,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
