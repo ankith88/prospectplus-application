@@ -157,6 +157,7 @@ export default function FieldSalesPage() {
     
     const actionableLeads = allLeads.filter(lead => 
       lead.dialerAssigned === user.displayName && 
+      (lead as any).fieldSales === true &&
       !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status)
     );
 
@@ -165,6 +166,7 @@ export default function FieldSalesPage() {
     }
     return actionableLeads.filter(lead => lead.companyName.toLowerCase().includes(myLeadsSearchQuery.toLowerCase()));
   }, [allLeads, user, myLeadsSearchQuery]);
+
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -180,10 +182,10 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin') return {};
     
-    // Show leads assigned to other users (not the current admin)
     const relevantLeads = allLeads.filter(lead => 
-        lead.dialerAssigned &&
-        lead.dialerAssigned !== userProfile.displayName
+        (lead as any).fieldSales === true && // Ensure it's a field sales lead
+        lead.dialerAssigned && // Ensure it's assigned
+        lead.dialerAssigned !== userProfile.displayName // Ensure it's not the admin's own lead
     );
       
     return relevantLeads.reduce((acc, lead) => {
@@ -512,7 +514,5 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
 
     
