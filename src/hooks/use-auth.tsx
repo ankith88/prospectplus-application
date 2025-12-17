@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -23,7 +22,7 @@ import {
     signInWithEmailLink,
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import type { UserProfile, SavedRoute } from '@/lib/types';
 import { getUserRoutes } from '@/services/firebase';
@@ -64,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [auth, setAuth] = useState<Auth | null>(null);
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         if (app) {
@@ -112,10 +112,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [router]);
 
     useEffect(() => {
-        if (!loading && !user && window.location.pathname !== '/signup' && window.location.pathname !== '/signin') {
+        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin') {
             router.push('/signin');
         }
-    }, [user, loading, router]);
+    }, [user, loading, router, pathname]);
 
 
     const signIn = async (email: string, pass: string) => {
@@ -176,5 +176,3 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
     return useContext(AuthContext);
 };
-
-    
