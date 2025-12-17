@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
@@ -51,7 +52,10 @@ export default function DoorToDoorReportingPage() {
             getAllUsers(),
             getAllActivities(),
         ]);
-        setAllLeads(refreshedLeads);
+        
+        const fieldSalesLeads = refreshedLeads.filter(lead => (lead as any).fieldSales === true);
+
+        setAllLeads(fieldSalesLeads);
         setAllActivities(refreshedActivities);
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
         toast({ title: 'Success', description: 'Report data has been loaded.' });

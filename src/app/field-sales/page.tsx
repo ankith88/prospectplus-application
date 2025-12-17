@@ -83,7 +83,7 @@ export default function FieldSalesPage() {
               getAllUserRoutes(),
               getAllUsers()
           ]);
-          setAllLeads(leads.filter(l => l.dialerAssigned && users.some(u => u.displayName === l.dialerAssigned && u.role === 'Field Sales')));
+          setAllLeads(leads);
           setAllRoutes(routes);
           setAllDialers(users.filter(u => u.role === 'Field Sales'));
       } else if (userProfile?.displayName) {
@@ -181,7 +181,15 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
       if (userProfile?.role !== 'admin') return {};
       
-      return allLeads.reduce((acc, lead) => {
+      const fieldSalesUserDisplayNames = new Set(allDialers.map(d => d.displayName));
+
+      const relevantLeads = allLeads.filter(lead => 
+        lead.dialerAssigned &&
+        fieldSalesUserDisplayNames.has(lead.dialerAssigned) &&
+        (lead as any).fieldSales === true
+      );
+      
+      return relevantLeads.reduce((acc, lead) => {
           const dialer = lead.dialerAssigned!;
           if (!acc[dialer]) {
               acc[dialer] = {};
@@ -193,7 +201,7 @@ export default function FieldSalesPage() {
           acc[dialer][status].push(lead);
           return acc;
       }, {} as Record<string, Record<string, Lead[]>>);
-  }, [allLeads, userProfile]);
+  }, [allLeads, userProfile, allDialers]);
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     let sortedLeadIds = leads.map(l => l.id);
@@ -278,7 +286,7 @@ export default function FieldSalesPage() {
         <Card>
             <CardHeader>
                 <CardTitle>This Week's Performance</CardTitle>
-                <CardDescription>Metrics from {format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')} to {format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')}.</CardDescription>
+                <CardDescription>Metrics from {startOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()} to {endOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()}.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Check-ins" value={weeklyStats.totalCheckIns} icon={CheckSquare} />
@@ -336,7 +344,7 @@ export default function FieldSalesPage() {
       <Card>
         <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle>{userProfile.role === 'admin' ? "All Assigned Field Sales Leads" : "My Assigned Leads"}</CardTitle>
+                <CardTitle>{userProfile.role === 'admin' ? "All Field Sales Leads" : "My Assigned Leads"}</CardTitle>
                 {userProfile.role !== 'admin' && (
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -391,7 +399,7 @@ export default function FieldSalesPage() {
                     ))}
                  </Accordion>
               ) : (
-                 <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">No leads are assigned to Field Sales users.</div>
+                 <div className="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">No leads are marked for Field Sales.</div>
               )
           ) : myLeads.length > 0 ? (
             <Accordion type="multiple" defaultValue={['New', 'Priority Lead']} className="w-full space-y-2">
