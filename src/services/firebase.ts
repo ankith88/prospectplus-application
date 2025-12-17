@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -1396,7 +1397,7 @@ async function getAllUsers(): Promise<UserProfile[]> {
     }
 }
 
-async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: string[]): Promise<void> {
+async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
     if (newDialerReps.length === 0) {
         throw new Error("No users selected for reassignment.");
     }
@@ -1410,18 +1411,52 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: string[
 
             const activityRef = collection(leadRef, 'activity');
             const newActivityRef = doc(activityRef);
+            const notes = userToAssign ? `Lead reassigned to ${userToAssign}.` : 'Lead unassigned.';
             batch.set(newActivityRef, {
                 type: 'Update',
                 date: new Date().toISOString(),
-                notes: `Lead reassigned to ${userToAssign}.`
+                notes: notes,
             });
         });
         
         await batch.commit();
-        console.log(`Successfully reassigned ${leadIds.length} leads randomly among ${newDialerReps.length} users.`);
+        console.log(`Successfully reassigned ${leadIds.length} leads.`);
     } catch (error) {
         console.error('Failed to bulk update lead dialer reps:', error);
         throw new Error('Failed to bulk update leads in Firebase');
+    }
+}
+
+async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string }): Promise<void> {
+    const { leadIds, fieldSales, assigneeDisplayName } = payload;
+    if (leadIds.length === 0) {
+        throw new Error("No leads selected to move.");
+    }
+    try {
+        const batch = writeBatch(firestore);
+        const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
+
+        leadIds.forEach(leadId => {
+            const leadRef = doc(firestore, 'leads', leadId);
+            batch.update(leadRef, {
+                fieldSales: fieldSales,
+                dialerAssigned: assigneeDisplayName
+            });
+
+            const activityRef = collection(leadRef, 'activity');
+            const newActivityRef = doc(activityRef);
+            batch.set(newActivityRef, {
+                type: 'Update',
+                date: new Date().toISOString(),
+                notes: `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`
+            });
+        });
+
+        await batch.commit();
+        console.log(`Successfully moved ${leadIds.length} leads to ${bucketName} bucket.`);
+    } catch (error) {
+        console.error(`Failed to bulk move leads:`, error);
+        throw new Error('Failed to bulk move leads in Firebase');
     }
 }
 
@@ -1802,6 +1837,7 @@ export {
     updateLeadServices,
     updateUserRoute,
     moveLeadToBucket,
+    bulkMoveLeadsToBucket,
 };
 
     
