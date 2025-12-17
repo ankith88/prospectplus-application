@@ -49,6 +49,8 @@ type DashboardStats = {
     activeFieldSalesLeads: number;
     activeOutboundLeads: number;
     activeRoutes: (SavedRoute & { userName?: string })[];
+    routesToday: number;
+    routesThisWeek: number;
 };
 
 export default function AdminDashboardPage() {
@@ -95,6 +97,9 @@ export default function AdminDashboardPage() {
         // Correctly count unique calls today
         const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
         const callsToday = uniqueCallsToday;
+        
+        const routesToday = routes.filter(r => isToday(new Date(r.createdAt))).length;
+        const routesThisWeek = routes.filter(r => isThisWeek(new Date(r.createdAt), { weekStartsOn: 1 })).length;
 
         
         const dialerAppointments = appointments.reduce((acc, curr) => {
@@ -207,6 +212,8 @@ export default function AdminDashboardPage() {
           activeFieldSalesLeads,
           activeOutboundLeads,
           activeRoutes: routes,
+          routesToday,
+          routesThisWeek,
         });
 
       } catch (error) {
@@ -267,13 +274,15 @@ export default function AdminDashboardPage() {
         <p className="text-muted-foreground">Welcome back, {userProfile.firstName}. Here's your mission control.</p>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        <StatCard title="Active Leads" value={stats?.totalLeads ?? 0} icon={Users} description="Total leads in the pipeline" />
-        <StatCard title="Signed Customers" value={stats?.signedCustomers ?? 0} icon={Star} description="Total leads marked as 'Won'" />
-        <StatCard title="Appointments This Week" value={stats?.appointmentsThisWeek ?? 0} icon={Calendar} description="Across the whole team" />
-        <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Total unique calls made today" />
-        <StatCard title="Field Sales Leads" value={stats?.activeFieldSalesLeads ?? 0} icon={Target} description="Leads in the D2D bucket" />
-        <StatCard title="Outbound Leads" value={stats?.activeOutboundLeads ?? 0} icon={Phone} description="Leads in the outbound bucket" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        <StatCard title="Active Leads" value={stats?.totalLeads ?? 0} icon={Users} description="In pipeline" />
+        <StatCard title="Signed Customers" value={stats?.signedCustomers ?? 0} icon={Star} description="Total won" />
+        <StatCard title="Appts This Week" value={stats?.appointmentsThisWeek ?? 0} icon={Calendar} description="Team total" />
+        <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Unique calls" />
+        <StatCard title="Field Sales Leads" value={stats?.activeFieldSalesLeads ?? 0} icon={Target} description="D2D bucket" />
+        <StatCard title="Outbound Leads" value={stats?.activeOutboundLeads ?? 0} icon={Phone} description="Outbound bucket" />
+        <StatCard title="Routes Today" value={stats?.routesToday ?? 0} icon={Route} description="Created today" />
+        <StatCard title="Routes This Week" value={stats?.routesThisWeek ?? 0} icon={Route} description="Created this week" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
