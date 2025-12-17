@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, Appointment, UserProfile } from '@/lib/types';
+import type { Lead, Activity, Appointment, UserProfile, SavedRoute } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,9 @@ import {
   BarChart,
   Target,
   ArrowRight,
+  Route,
 } from 'lucide-react';
-import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers } from '@/services/firebase';
+import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers, getAllUserRoutes } from '@/services/firebase';
 import { isThisWeek, isToday, format, isFuture, isSameDay } from 'date-fns';
 import {
   Table,
@@ -43,6 +44,9 @@ type DashboardStats = {
     topConverter: { name: string; rate: number } | null;
     recentWins: Lead[];
     upcomingAppointments: (Appointment & { leadName: string })[];
+    activeFieldSalesLeads: number;
+    activeOutboundLeads: number;
+    activeRoutes: (SavedRoute & { userName?: string })[];
 };
 
 export default function AdminDashboardPage() {
@@ -61,22 +65,28 @@ export default function AdminDashboardPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [leadsResponse, callsResponse, appointmentsResponse, usersResponse] = await Promise.all([
+        const [leadsResponse, callsResponse, appointmentsResponse, usersResponse, routesResponse] = await Promise.all([
           getAllLeadsForReport(),
           getAllCallActivities(),
           getAllAppointments(),
           getAllUsers(),
+          getAllUserRoutes(),
         ]);
 
         const leads = leadsResponse || [];
         const calls = callsResponse || [];
         const appointments = appointmentsResponse || [];
         const users = usersResponse || [];
+        const routes = routesResponse || [];
         
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
 
         // Calculate KPIs
-        const totalLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status)).length;
+        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status));
+        const totalLeads = activeLeads.length;
+        const activeFieldSalesLeads = activeLeads.filter(l => l.fieldSales === true).length;
+        const activeOutboundLeads = activeLeads.filter(l => l.fieldSales !== true).length;
+        
         const signedCustomers = leads.filter(l => l.status === 'Won').length;
         const appointmentsThisWeek = appointments.filter(a => isThisWeek(new Date(a.duedate), { weekStartsOn: 1 })).length;
         const callsToday = calls.filter(c => isToday(new Date(c.date))).length;
@@ -89,7 +99,7 @@ export default function AdminDashboardPage() {
         }, {} as Record<string, number>);
         const topDialer = Object.entries(dialerAppointments).sort((a, b) => b[1] - a[1])[0];
 
-        const fieldRepWins = leads.filter(l => l.fieldSales && (l.status === 'Won' || l.status === 'Trialing ShipMate')).reduce((acc, curr) => {
+        const fieldRepWins = leads.filter(l => l.salesRepAssigned && (l.status === 'Won' || l.status === 'Trialing ShipMate')).reduce((acc, curr) => {
             if (curr.salesRepAssigned) {
                  acc[curr.salesRepAssigned] = (acc[curr.salesRepAssigned] || 0) + 1;
             }
@@ -152,6 +162,9 @@ export default function AdminDashboardPage() {
           topConverter,
           recentWins,
           upcomingAppointments,
+          activeFieldSalesLeads,
+          activeOutboundLeads,
+          activeRoutes: routes,
         });
 
       } catch (error) {
@@ -212,11 +225,13 @@ export default function AdminDashboardPage() {
         <p className="text-muted-foreground">Welcome back, {userProfile.firstName}. Here's your mission control.</p>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <StatCard title="Active Leads" value={stats?.totalLeads ?? 0} icon={Users} description="Total leads in the pipeline" />
         <StatCard title="Signed Customers" value={stats?.signedCustomers ?? 0} icon={Star} description="Total leads marked as 'Won'" />
         <StatCard title="Appointments This Week" value={stats?.appointmentsThisWeek ?? 0} icon={Calendar} description="Across the whole team" />
         <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Total calls made today" />
+        <StatCard title="Field Sales Leads" value={stats?.activeFieldSalesLeads ?? 0} icon={Target} description="Leads in the D2D bucket" />
+        <StatCard title="Outbound Leads" value={stats?.activeOutboundLeads ?? 0} icon={Phone} description="Leads in the outbound bucket" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -225,8 +240,8 @@ export default function AdminDashboardPage() {
         <LeaderboardCard title="Top Performer (Conversion)" user={stats?.topConverter?.name || null} metric={`${stats?.topConverter?.rate || 0}% call-to-appt rate`} icon={LineChart} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Recent Wins</CardTitle>
             <CardDescription>The latest customers to come on board.</CardDescription>
@@ -260,7 +275,7 @@ export default function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
-         <Card>
+         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Upcoming Appointments</CardTitle>
             <CardDescription>The next few appointments on the calendar.</CardDescription>
@@ -294,6 +309,36 @@ export default function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
+        <Card className="xl:col-span-1">
+          <CardHeader>
+            <CardTitle>Saved Routes</CardTitle>
+            <CardDescription>Active routes for field sales.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stats?.activeRoutes && stats.activeRoutes.length > 0 ? (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Route Name</TableHead>
+                            <TableHead>User</TableHead>
+                            <TableHead className="text-right">Stops</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {stats.activeRoutes.map(route => (
+                            <TableRow key={route.id}>
+                                <TableCell className="font-medium">{route.name}</TableCell>
+                                <TableCell>{route.userName}</TableCell>
+                                <TableCell className="text-right">{route.leads.length}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No saved routes.</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
        <Card>
@@ -318,3 +363,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
