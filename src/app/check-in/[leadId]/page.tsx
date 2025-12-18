@@ -127,13 +127,14 @@ export default function CheckInPage() {
             ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
             ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 6
             ['currentProvider', 'eCommerceTech'], // Step 7
+            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
         ];
 
         const fieldsToValidate = stepFields[currentStep];
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
-            if (currentStep === TOTAL_STEPS -1) {
+            if (currentStep === TOTAL_STEPS) {
                 const allFieldsValid = await methods.trigger();
                 if (allFieldsValid) {
                     const discoveryData = calculateScoreAndRouting(methods.getValues());
@@ -230,34 +231,35 @@ export default function CheckInPage() {
     return (
         <FormProvider {...methods}>
             <div className="flex flex-col h-svh bg-background max-w-2xl mx-auto w-full">
-                <div className="p-4 flex flex-col h-full">
-                    <header className="flex-shrink-0 flex items-center justify-between mb-4">
-                        <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
-                        <div className="flex flex-col items-center">
-                            <h1 className="text-lg font-bold">{lead.companyName}</h1>
-                            <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
+                <header className="flex-shrink-0 flex items-center justify-between mb-4 p-4">
+                    <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                    <div className="flex flex-col items-center">
+                        <h1 className="text-lg font-bold">{lead.companyName}</h1>
+                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
+                    </div>
+                    <div className="w-20 text-center">
+                        <div className="border border-border rounded-full px-2 py-1 text-xs">
+                            Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
                         </div>
-                        <div className="w-20 text-center">
-                            <div className="border border-border rounded-full px-2 py-1 text-xs">
-                                Step {Math.min(currentStep, TOTAL_STEPS)}/{TOTAL_STEPS}
-                            </div>
-                        </div>
-                    </header>
+                    </div>
+                </header>
 
-                    <Progress value={(Math.min(currentStep, TOTAL_STEPS) / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
-                    
-                    <main className="flex-grow overflow-y-auto px-2 -mx-2">
-                        {renderStep()}
-                    </main>
-
-                    <footer className="mt-4 flex-shrink-0 flex items-center justify-between border-t border-border pt-4">
-                        {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS +1}>Back</Button>}
-                        <div className="flex-grow"></div>
-                        {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
-                        {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
-                    </footer>
+                <div className="px-4 flex-shrink-0">
+                  <Progress value={(Math.min(currentStep, TOTAL_STEPS + 1) / (TOTAL_STEPS + 1)) * 100} className="w-full" />
                 </div>
-                 {/* Dialogs for Final Actions */}
+                
+                <main className="flex-grow overflow-y-auto p-4">
+                    {renderStep()}
+                </main>
+
+                <footer className="flex-shrink-0 flex items-center justify-between border-t border-border p-4">
+                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS + 1}>Back</Button>}
+                    <div className="flex-grow"></div>
+                    {currentStep <= TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
+                    {currentStep === TOTAL_STEPS + 1 && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
+                </footer>
+                 
+                {/* Dialogs for Final Actions */}
                 <PostCallOutcomeDialog 
                     isOpen={isLogOutcomeOpen} 
                     onClose={() => setIsLogOutcomeOpen(false)}
@@ -551,3 +553,5 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
+
+    
