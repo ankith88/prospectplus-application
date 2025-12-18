@@ -128,7 +128,7 @@ export default function CheckInPage() {
             ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 7
         ];
 
-        const fieldsToValidate = stepFields[currentStep - 1];
+        const fieldsToValidate = stepFields[currentStep];
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
@@ -229,7 +229,7 @@ export default function CheckInPage() {
     return (
         <FormProvider {...methods}>
             <div className="flex flex-col h-screen bg-background p-4 max-w-2xl mx-auto w-full">
-                 <header className="flex items-center justify-between mb-4 text-center">
+                 <header className="flex-shrink-0 flex items-center justify-between mb-4 text-center">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
                         <h1 className="text-lg font-bold">{lead.companyName}</h1>
@@ -242,13 +242,13 @@ export default function CheckInPage() {
                     </div>
                 </header>
 
-                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4" />
+                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
                 
                 <main className="flex-grow overflow-y-auto px-2">
                     {renderStep()}
                 </main>
 
-                <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                <footer className="mt-4 flex-shrink-0 flex items-center justify-between border-t border-border pt-4">
                     {currentStep > 1 && <Button variant="ghost" onClick={handleBack}>Back</Button>}
                     <div className="flex-grow"></div>
                     {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
