@@ -104,9 +104,7 @@ export default function CheckInPage() {
                     if (leadData.discoveryData) {
                         methods.reset(leadData.discoveryData);
                     }
-                    // Log check-in activity
                     await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
-
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Lead not found.' });
                     router.push('/field-sales');
@@ -233,25 +231,27 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col bg-background max-w-2xl mx-auto w-full p-4 h-svh">
-                <header className="flex-shrink-0 flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
-                    <div className="flex flex-col items-center">
-                        <h1 className="text-lg font-bold">{lead.companyName}</h1>
-                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
-                    </div>
-                    <div className="w-20 text-center">
-                        <div className="border border-border rounded-full px-2 py-1 text-xs">
-                            Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
+            <div className="flex flex-col bg-background max-w-2xl mx-auto w-full h-svh">
+                <div className='p-4'>
+                    <header className="flex-shrink-0 flex items-center justify-between">
+                        <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                        <div className="flex flex-col items-center">
+                            <h1 className="text-lg font-bold">{lead.companyName}</h1>
+                            <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                         </div>
-                    </div>
-                </header>
+                        <div className="w-20 text-center">
+                            <div className="border border-border rounded-full px-2 py-1 text-xs">
+                                Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
+                            </div>
+                        </div>
+                    </header>
 
-                <div className="my-4 flex-shrink-0">
-                  <Progress value={(Math.min(currentStep, TOTAL_STEPS + 1) / (TOTAL_STEPS + 1)) * 100} className="w-full" />
+                    <div className="my-4 flex-shrink-0">
+                    <Progress value={(Math.min(currentStep, TOTAL_STEPS + 1) / (TOTAL_STEPS + 1)) * 100} className="w-full" />
+                    </div>
                 </div>
                 
-                <main className="flex-grow overflow-y-auto">
+                <main className="flex-grow overflow-y-auto px-4">
                     {renderStep()}
                 </main>
                  
@@ -475,7 +475,7 @@ const DiscoveryStep2 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
 };
 
 const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack }: { onNext: () => void, onBack: () void }) => {
+const DiscoveryStep3 = ({ onNext, onBack }: { onNext: () => void, onBack: () => void }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack}>
