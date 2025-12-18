@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -16,21 +17,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Lead, Address } from '@/lib/types'
+import type { Lead, Address, MapLead } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getCompaniesFromFirebase } from '@/services/firebase'
+import { getCompaniesFromFirebase, getLeadsFromFirebase } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api'
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 
 const containerStyle = {
   width: '100%',
@@ -46,7 +48,7 @@ const center = {
 const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 export default function SignedCustomersPage() {
-  const [signedLeads, setSignedLeads] = useState<Lead[]>([]);
+  const [allMapData, setAllMapData] = useState<MapLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     companyName: '',
@@ -55,11 +57,12 @@ export default function SignedCustomersPage() {
   const router = useRouter();
   const { user, authLoading } = useAuth();
   const { toast } = useToast();
-  const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<MapLead | null>(null);
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
+  const [isSearchingNearby, setIsSearchingNearby] = useState(false);
 
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -90,14 +93,25 @@ export default function SignedCustomersPage() {
     }
   }, [isLoaded, map]);
 
-  const fetchSignedLeads = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const companies = await getCompaniesFromFirebase();
-      setSignedLeads(companies);
+      const [companies, leads] = await Promise.all([
+        getCompaniesFromFirebase(),
+        getLeadsFromFirebase({ summary: true }),
+      ]);
+      const companyMapLeads = companies
+        .filter(c => c.latitude != null && c.longitude != null)
+        .map(c => ({ ...c, latitude: Number(c.latitude), longitude: Number(c.longitude), isCompany: true, isProspect: false } as MapLead));
+      
+      const leadMapLeads = leads
+        .filter(l => l.latitude != null && l.longitude != null)
+        .map(l => ({ ...l, latitude: Number(l.latitude), longitude: Number(l.longitude), isCompany: false, isProspect: false } as MapLead));
+
+      setAllMapData([...companyMapLeads, ...leadMapLeads]);
     } catch (error) {
       console.error("Failed to fetch signed customers:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch signed customers.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch map data.' });
     } finally {
       setLoading(false);
     }
@@ -110,9 +124,9 @@ export default function SignedCustomersPage() {
     }
     if (authLoading) return;
     
-    fetchSignedLeads();
+    fetchData();
 
-  }, [user, authLoading, router, toast]);
+  }, [user, authLoading, router]);
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -126,27 +140,119 @@ export default function SignedCustomersPage() {
   };
   
   const uniqueFranchisees: Option[] = useMemo(() => {
-    const franchisees = new Set(signedLeads.map(lead => lead.franchisee).filter(Boolean));
+    const franchisees = new Set(allMapData.filter(l => l.isCompany).map(lead => lead.franchisee).filter(Boolean));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [signedLeads]);
+  }, [allMapData]);
 
-  const filteredSignedLeads = useMemo(() => {
-    return signedLeads.filter(lead => {
-        const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
+  const filteredCompanies = useMemo(() => {
+    return allMapData.filter(item => {
+        if (!item.isCompany) return false;
+        const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
         return companyMatch && franchiseeMatch;
     });
-  }, [signedLeads, filters]);
+  }, [allMapData, filters]);
 
   const mapCompanies = useMemo(() => {
-    return filteredSignedLeads.filter(
+    return filteredCompanies.filter(
       (company) =>
         company.latitude != null &&
         company.longitude != null &&
         !isNaN(Number(company.latitude)) &&
         !isNaN(Number(company.longitude))
     );
-  }, [filteredSignedLeads]);
+  }, [filteredCompanies]);
+
+  const handleFindNearbyLeads = useCallback(() => {
+    if (!selectedCompany || !selectedCompany.latitude || !selectedCompany.longitude || !window.google?.maps?.geometry) return;
+    const centerLatLng = new google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
+    
+    const nearby = allMapData.filter(item => {
+      if (item.isCompany || !item.latitude || !item.longitude) return false;
+      const itemLatLng = new google.maps.LatLng(item.latitude, item.longitude);
+      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, itemLatLng);
+      return distance <= 500;
+    });
+    
+    if (nearby.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      nearby.forEach(item => bounds.extend({ lat: item.latitude!, lng: item.longitude! }));
+      map?.fitBounds(bounds);
+      toast({ title: 'Nearby Leads Found', description: `Found ${nearby.length} leads within 500m.` });
+    } else {
+      toast({ title: 'No Nearby Leads', description: 'No leads found within a 500m radius.' });
+    }
+    setSelectedCompany(null);
+  }, [selectedCompany, allMapData, map, toast]);
+
+  const handleFindSimilar = useCallback(async () => {
+    if (!selectedCompany || !map) return;
+  
+    setIsSearchingNearby(true);
+    toast({ title: "Analyzing Company...", description: "AI is identifying key attributes to find similar prospects." });
+    
+    let searchKeywords: string[] = [];
+  
+    if (selectedCompany.websiteUrl) {
+      try {
+        const prospectResult = await prospectWebsiteTool({ 
+          leadId: selectedCompany.id, 
+          websiteUrl: selectedCompany.websiteUrl 
+        });
+        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+          searchKeywords = prospectResult.searchKeywords;
+        }
+      } catch (e) {
+        console.error('AI prospecting for keywords failed, falling back.', e);
+      }
+    }
+  
+    if (searchKeywords.length === 0 && selectedCompany.industryCategory) {
+      searchKeywords = [selectedCompany.industryCategory];
+    }
+  
+    if (searchKeywords.length === 0) {
+      toast({ variant: "destructive", title: "Cannot Search", description: "No industry or keywords available for this company." });
+      setIsSearchingNearby(false);
+      return;
+    }
+    
+    const placesService = new window.google.maps.places.PlacesService(map);
+    placesService.nearbySearch({
+      location: { lat: selectedCompany.latitude!, lng: selectedCompany.longitude! },
+      radius: 2000,
+      keyword: searchKeywords.join(' '),
+    }, (results, status) => {
+        setIsSearchingNearby(false);
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            toast({ title: 'Similar Prospects Found', description: `Found ${results.length} similar businesses nearby.` });
+            const bounds = new google.maps.LatLngBounds();
+            results.forEach(place => place.geometry?.location && bounds.extend(place.geometry.location));
+            map.fitBounds(bounds);
+        } else {
+            toast({ variant: 'destructive', title: 'Search Failed', description: 'Could not find similar prospects.' });
+        }
+    });
+    setSelectedCompany(null);
+  }, [selectedCompany, map, toast]);
+
+  const handleFindMultiSites = useCallback(() => {
+    if (!selectedCompany) return;
+    const companyNameBase = selectedCompany.companyName.split(' ')[0]; // Simple logic to get base name
+    const multiSites = allMapData.filter(item => 
+      !item.isCompany && item.companyName.toLowerCase().includes(companyNameBase.toLowerCase())
+    );
+    
+    if (multiSites.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      multiSites.forEach(item => bounds.extend({ lat: item.latitude!, lng: item.longitude! }));
+      map?.fitBounds(bounds);
+      toast({ title: 'Multi-sites Found', description: `Found ${multiSites.length} potential multi-site leads.` });
+    } else {
+      toast({ title: 'No Multi-sites Found', description: 'No other leads with a similar name were found.' });
+    }
+    setSelectedCompany(null);
+  }, [selectedCompany, allMapData, map, toast]);
 
 
   const formatAddress = (address?: Address) => {
@@ -154,7 +260,7 @@ export default function SignedCustomersPage() {
     return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
   }
   
-  const onMarkerClick = useCallback((company: Lead) => {
+  const onMarkerClick = useCallback((company: MapLead) => {
     setSelectedCompany(company);
   }, []);
 
@@ -263,12 +369,24 @@ export default function SignedCustomersPage() {
                                 position={{ lat: Number(selectedCompany.latitude!), lng: Number(selectedCompany.longitude!) }}
                                 onCloseClick={onInfoWindowClose}
                             >
-                                <div className="p-2 max-w-xs">
-                                    <h3 className="font-bold text-lg mb-2">{selectedCompany.companyName}</h3>
-                                    <p className="text-sm text-muted-foreground mb-2">{formatAddress(selectedCompany.address)}</p>
-                                    <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
-                                        <ExternalLink className="mr-2 h-4 w-4" /> View Profile
-                                    </Button>
+                                <div className="p-2 max-w-xs space-y-2">
+                                    <h3 className="font-bold text-lg">{selectedCompany.companyName}</h3>
+                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedCompany.address)}</p>
+                                    <div className="flex flex-col gap-2">
+                                        <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
+                                            <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
+                                            <Search className="mr-2 h-4 w-4" /> Nearby Leads
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
+                                            {isSearchingNearby ? <Loader/> : <Sparkles className="mr-2 h-4 w-4"/>}
+                                            AI Find Similar
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
+                                            <Building className="mr-2 h-4 w-4" /> Find Multi-sites
+                                        </Button>
+                                    </div>
                                 </div>
                             </InfoWindowF>
                         )}
@@ -289,7 +407,7 @@ export default function SignedCustomersPage() {
                   <Star className="h-5 w-5" />
                   <span>All Signed Customers</span>
                 </CardTitle>
-                <Badge variant="secondary">{filteredSignedLeads.length} customer(s)</Badge>
+                <Badge variant="secondary">{filteredCompanies.length} customer(s)</Badge>
             </div>
         </CardHeader>
         <CardContent>
@@ -309,8 +427,8 @@ export default function SignedCustomersPage() {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : filteredSignedLeads.length > 0 ? (
-                  filteredSignedLeads.map((lead) => (
+                ) : filteredCompanies.length > 0 ? (
+                  filteredCompanies.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
