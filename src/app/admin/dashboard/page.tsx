@@ -84,11 +84,14 @@ export default function AdminDashboardPage() {
         const allRoutes = routesResponse || [];
         
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
-        const usersMap = new Map(users.map(user => [user.uid, user]));
+        const usersMap = new Map(users.map(user => {
+            const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+            return [user.uid, displayName || user.email || 'Unknown User'];
+        }));
 
         const enrichedRoutes = allRoutes.map(route => ({
           ...route,
-          userName: usersMap.get((route as any).userId)?.displayName || 'Unknown User'
+          userName: usersMap.get((route as any).userId) || 'Unknown User'
         }));
 
 
