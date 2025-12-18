@@ -193,6 +193,7 @@ export interface UserProfile {
     phoneNumber: string;
     aircallUserId?: string;
     role?: 'user' | 'admin' | 'Field Sales';
+    disabled?: boolean;
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales'> & { isProspect?: boolean, isCompany?: boolean };

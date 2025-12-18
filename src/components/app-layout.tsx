@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -47,6 +47,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
 
+  const isSuperAdmin = userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
   const handleSignOut = async () => {
     await signOut()
@@ -145,6 +146,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+             {isSuperAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton>
+                  <Settings />
+                  <span>Super Admin</span>
+                </SidebarMenuButton>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/admin/settings")}>
+                      <Link href="/admin/settings">
+                        <User />
+                        <span>User Settings</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/admin/data")}>
+                      <Link href="/admin/data">
+                        <Database />
+                        <span>Data Management</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuItem>
+             )}
             {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">

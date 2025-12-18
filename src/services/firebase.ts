@@ -1567,40 +1567,46 @@ async function checkForDuplicateLead(companyName: string, phoneNumber: string): 
 }
 
 async function deleteLead(leadIds: string | string[]): Promise<void> {
-    const idsToDelete = Array.isArray(leadIds) ? leadIds : [leadIds];
+    return deleteCollectionItem('leads', leadIds);
+}
+
+async function deleteCompany(companyIds: string | string[]): Promise<void> {
+    return deleteCollectionItem('companies', companyIds);
+}
+
+async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemIds: string | string[]): Promise<void> {
+    const idsToDelete = Array.isArray(itemIds) ? itemIds : [itemIds];
     if (idsToDelete.length === 0) {
         return;
     }
 
     try {
         const batch = writeBatch(firestore);
-        const subcollections = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments', 'scorecards'];
+        const subcollections = ['contacts', 'activity', 'notes', 'transcripts', 'tasks', 'appointments', 'scorecards', 'invoices'];
 
-        for (const leadId of idsToDelete) {
-            const leadRef = doc(firestore, 'leads', leadId);
+        for (const itemId of idsToDelete) {
+            const itemRef = doc(firestore, collectionName, itemId);
 
-            // Fetch and delete subcollections in parallel for a single lead
             await Promise.all(subcollections.map(async (subcollection) => {
-                const subcollectionRef = collection(leadRef, subcollection);
+                const subcollectionRef = collection(itemRef, subcollection);
                 const snapshot = await getDocs(subcollectionRef);
                 snapshot.docs.forEach(subDoc => {
                     batch.delete(subDoc.ref);
                 });
             }));
             
-            // Queue the main lead document for deletion
-            batch.delete(leadRef);
+            batch.delete(itemRef);
         }
 
-        // Commit all deletions in a single batch
         await batch.commit();
-        console.log(`Successfully deleted ${idsToDelete.length} lead(s) and their subcollections.`);
+        console.log(`Successfully deleted ${idsToDelete.length} item(s) from ${collectionName} and their subcollections.`);
 
     } catch (error) {
-        console.error(`Failed to delete leads:`, error);
-        throw new Error('Failed to delete lead(s) from Firebase');
+        console.error(`Failed to delete items from ${collectionName}:`, error);
+        throw new Error(`Failed to delete item(s) from ${collectionName} in Firebase`);
     }
 }
+
 
 async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
     try {
@@ -1660,13 +1666,13 @@ async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string
         const allRoutes: Array<SavedRoute & { userName: string; userId: string }> = [];
 
         for (const user of users) {
-            const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
-            if (!displayName) continue;
+             const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+            if (!userName) continue;
 
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
                 ...route,
-                userName: displayName,
+                userName: userName,
                 userId: user.uid,
             }));
             allRoutes.push(...routesWithUserName);
@@ -1811,6 +1817,7 @@ export {
     prospectWebsiteTool,
     checkForDuplicateLead,
     deleteLead,
+    deleteCompany,
     getSubCollection,
     saveUserRoute,
     getUserRoutes,
