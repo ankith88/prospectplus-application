@@ -133,7 +133,7 @@ export default function CheckInPage() {
             ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
         ];
 
-        const fieldsToValidate = stepFields[currentStep];
+        const fieldsToValidate = stepFields[currentStep -1];
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
@@ -475,7 +475,7 @@ const DiscoveryStep2 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
 };
 
 const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack }: { onNext: () => void, onBack: () => void }) => {
+const DiscoveryStep3 = ({ onNext, onBack }: { onNext: () => void, onBack: () void }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack}>
