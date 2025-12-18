@@ -27,6 +27,7 @@ import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { Badge } from '@/components/ui/badge';
 import { ScoreIndicator } from '@/components/score-indicator';
+import { Card, CardContent } from '@/components/ui/card';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -128,11 +129,11 @@ export default function CheckInPage() {
             ['currentProvider', 'eCommerceTech'], // Step 7
         ];
 
-        const fieldsToValidate = stepFields[currentStep - 1];
+        const fieldsToValidate = stepFields[currentStep];
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
-            if (currentStep === TOTAL_STEPS) {
+            if (currentStep === TOTAL_STEPS -1) {
                 const allFieldsValid = await methods.trigger();
                 if (allFieldsValid) {
                     const discoveryData = calculateScoreAndRouting(methods.getValues());
@@ -228,33 +229,34 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col h-svh bg-background p-4 max-w-2xl mx-auto w-full">
-                 <header className="flex-shrink-0 flex items-center justify-between mb-4 text-center">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
-                    <div className="flex flex-col items-center">
-                        <h1 className="text-lg font-bold">{lead.companyName}</h1>
-                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
-                    </div>
-                    <div className="w-20 text-center">
-                        <div className="border border-border rounded-full px-2 py-1 text-xs">
-                            Step {Math.min(currentStep, TOTAL_STEPS)}/{TOTAL_STEPS}
+            <div className="flex flex-col h-svh bg-background max-w-2xl mx-auto w-full">
+                <div className="p-4 flex flex-col h-full">
+                    <header className="flex-shrink-0 flex items-center justify-between mb-4">
+                        <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                        <div className="flex flex-col items-center">
+                            <h1 className="text-lg font-bold">{lead.companyName}</h1>
+                            <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                         </div>
-                    </div>
-                </header>
+                        <div className="w-20 text-center">
+                            <div className="border border-border rounded-full px-2 py-1 text-xs">
+                                Step {Math.min(currentStep, TOTAL_STEPS)}/{TOTAL_STEPS}
+                            </div>
+                        </div>
+                    </header>
 
-                <Progress value={(Math.min(currentStep, TOTAL_STEPS) / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
-                
-                <main className="flex-grow overflow-y-auto px-2">
-                    {renderStep()}
-                </main>
+                    <Progress value={(Math.min(currentStep, TOTAL_STEPS) / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
+                    
+                    <main className="flex-grow overflow-y-auto px-2 -mx-2">
+                        {renderStep()}
+                    </main>
 
-                <footer className="mt-4 flex-shrink-0 flex items-center justify-between border-t border-border pt-4">
-                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS +1}>Back</Button>}
-                    <div className="flex-grow"></div>
-                    {currentStep <= TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
-                    {currentStep > TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
-                </footer>
-
+                    <footer className="mt-4 flex-shrink-0 flex items-center justify-between border-t border-border pt-4">
+                        {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS +1}>Back</Button>}
+                        <div className="flex-grow"></div>
+                        {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
+                        {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
+                    </footer>
+                </div>
                  {/* Dialogs for Final Actions */}
                 <PostCallOutcomeDialog 
                     isOpen={isLogOutcomeOpen} 
@@ -330,7 +332,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
             <div className="space-y-4">
                 <h4 className="font-semibold text-lg">Existing Contacts</h4>
                 <p className="text-sm text-muted-foreground">Select the title of the person you are speaking with.</p>
-                {contacts.length > 0 ? (
+                 {contacts.length > 0 ? (
                     <div className="space-y-3">
                     {contacts.map(contact => (
                         <Card key={contact.id} className="p-3 bg-secondary/30">
