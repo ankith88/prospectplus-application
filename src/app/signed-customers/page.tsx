@@ -16,12 +16,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Lead, Address } from '@/lib/types'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +29,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api'
+
+const containerStyle = {
+  width: '100%',
+  height: '500px',
+  borderRadius: '0.5rem',
+};
+
+const center = {
+  lat: -25.2744,
+  lng: 133.7751,
+};
 
 export default function SignedCustomersPage() {
   const [signedLeads, setSignedLeads] = useState<Lead[]>([]);
@@ -40,6 +52,12 @@ export default function SignedCustomersPage() {
   const router = useRouter();
   const { user, authLoading } = useAuth();
   const { toast } = useToast();
+  const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+  });
 
   const fetchSignedLeads = async () => {
     try {
@@ -86,11 +104,29 @@ export default function SignedCustomersPage() {
     });
   }, [signedLeads, filters]);
 
+  const mapCompanies = useMemo(() => {
+    return filteredSignedLeads.filter(
+      (company) =>
+        company.latitude != null &&
+        company.longitude != null &&
+        !isNaN(Number(company.latitude)) &&
+        !isNaN(Number(company.longitude))
+    );
+  }, [filteredSignedLeads]);
+
 
   const formatAddress = (address?: Address) => {
     if (!address) return 'N/A';
     return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
   }
+  
+  const onMarkerClick = useCallback((company: Lead) => {
+    setSelectedCompany(company);
+  }, []);
+
+  const onInfoWindowClose = useCallback(() => {
+    setSelectedCompany(null);
+  }, []);
 
   if (loading || authLoading) {
     return (
@@ -150,6 +186,54 @@ export default function SignedCustomersPage() {
           </Card>
       </Collapsible>
       
+      <Card>
+        <CardHeader>
+            <CardTitle>Customer Map</CardTitle>
+            <CardDescription>Visual representation of your signed customers.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div style={{ height: '500px', width: '100%' }}>
+                {isLoaded ? (
+                    <GoogleMap
+                        mapContainerStyle={containerStyle}
+                        center={center}
+                        zoom={4}
+                    >
+                        {mapCompanies.map(company => (
+                            <MarkerF
+                                key={company.id}
+                                position={{ lat: Number(company.latitude!), lng: Number(company.longitude!) }}
+                                onClick={() => onMarkerClick(company)}
+                                icon={{
+                                    url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                                }}
+                            />
+                        ))}
+
+                        {selectedCompany && (
+                            <InfoWindowF
+                                position={{ lat: Number(selectedCompany.latitude!), lng: Number(selectedCompany.longitude!) }}
+                                onCloseClick={onInfoWindowClose}
+                            >
+                                <div className="p-2 max-w-xs">
+                                    <h3 className="font-bold text-lg mb-2">{selectedCompany.companyName}</h3>
+                                    <p className="text-sm text-muted-foreground mb-2">{formatAddress(selectedCompany.address)}</p>
+                                    <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
+                                        <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                    </Button>
+                                </div>
+                            </InfoWindowF>
+                        )}
+                    </GoogleMap>
+                ) : loadError ? (
+                  <div className="flex h-full items-center justify-center text-destructive">Error loading map.</div>
+                ) : (
+                  <div className="flex h-full items-center justify-center"><Loader /></div>
+                )}
+            </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
