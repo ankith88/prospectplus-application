@@ -84,16 +84,6 @@ export default function AdminDashboardPage() {
         const allRoutes = routesResponse || [];
         
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
-        const usersMap = new Map(users.map(user => {
-            const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-            return [user.uid, displayName || user.email || 'Unknown User'];
-        }));
-
-        const enrichedRoutes = allRoutes.map(route => ({
-          ...route,
-          userName: usersMap.get((route as any).userId) || 'Unknown User'
-        }));
-
 
         // Calculate KPIs
         const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status));
@@ -108,8 +98,8 @@ export default function AdminDashboardPage() {
         const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
         const callsToday = uniqueCallsToday;
         
-        const routesToday = enrichedRoutes.filter(r => r.scheduledDate && isToday(new Date(r.scheduledDate))).length;
-        const routesThisWeek = enrichedRoutes.filter(r => r.scheduledDate && isThisWeek(new Date(r.scheduledDate), { weekStartsOn: 1 })).length;
+        const routesToday = allRoutes.filter(r => r.scheduledDate && isToday(new Date(r.scheduledDate))).length;
+        const routesThisWeek = allRoutes.filter(r => r.scheduledDate && isThisWeek(new Date(r.scheduledDate), { weekStartsOn: 1 })).length;
 
         
         const dialerAppointments = appointments.reduce((acc, curr) => {
@@ -222,7 +212,7 @@ export default function AdminDashboardPage() {
           upcomingAppointments,
           activeFieldSalesLeads,
           activeOutboundLeads,
-          allSavedRoutes: enrichedRoutes,
+          allSavedRoutes,
           routesToday,
           routesThisWeek,
         });
