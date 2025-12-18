@@ -186,40 +186,40 @@ export default function CheckInPage() {
     };
 
     if (loading) {
-        return <div className="flex h-screen w-full items-center justify-center bg-gray-900"><Loader /></div>;
+        return <div className="flex h-screen w-full items-center justify-center"><Loader /></div>;
     }
 
     if (!lead) {
-        return <div className="flex h-screen w-full items-center justify-center bg-gray-900 text-white"><p>Lead not found.</p></div>;
+        return <div className="flex h-screen w-full items-center justify-center"><p>Lead not found.</p></div>;
     }
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col h-screen bg-gray-900 text-white p-4">
+            <div className="flex flex-col h-screen bg-background p-4 max-w-2xl mx-auto w-full">
                  <header className="flex items-center justify-between mb-4 text-center">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
                         <h1 className="text-lg font-bold">{lead.companyName}</h1>
-                        <p className="text-sm text-gray-400">{lead.address?.city || ''} &bull; Territory auto-match</p>
+                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''} &bull; Territory auto-match</p>
                     </div>
-                    <div className="w-10">
-                        <div className="border border-gray-600 rounded-full px-2 py-1 text-xs">
+                    <div className="w-20 text-center">
+                        <div className="border border-border rounded-full px-2 py-1 text-xs">
                             Step {currentStep}/{TOTAL_STEPS}
                         </div>
                     </div>
                 </header>
 
-                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4 bg-gray-700 [&>div]:bg-blue-500" />
+                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4" />
                 
                 <main className="flex-grow overflow-y-auto px-2">
                     {renderStep()}
                 </main>
 
-                <footer className="mt-4 flex items-center justify-between border-t border-gray-700 pt-4">
-                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack} className="bg-gray-800 hover:bg-gray-700">Back</Button>}
+                <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack}>Back</Button>}
                     <div className="flex-grow"></div>
-                    {currentStep < TOTAL_STEPS && <Button onClick={handleNext} className="bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white">Continue</Button>}
-                    {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving} className="bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white">{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
+                    {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
+                    {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
                 </footer>
 
                  {/* Dialogs for Final Actions */}
@@ -250,9 +250,9 @@ const StepWrapper = ({ title, description, children }: { title: string, descript
     <div className="space-y-6">
         <div className="text-center">
             <h2 className="text-2xl font-bold">{title}</h2>
-            <p className="text-gray-400">{description}</p>
+            <p className="text-muted-foreground">{description}</p>
         </div>
-        <div className="bg-gray-800 p-6 rounded-lg space-y-6">
+        <div className="bg-card p-6 rounded-lg space-y-6">
             {children}
         </div>
     </div>
@@ -263,27 +263,35 @@ const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
     <StepWrapper title="Prospect Header" description="Minimal details first - you can fill the rest after you've confirmed relevance.">
          <div className="space-y-4">
             <div className="space-y-2">
-                <Label htmlFor="businessName" className="text-gray-400">Business name</Label>
-                <Input id="businessName" readOnly value={lead.companyName} className="bg-gray-700 border-gray-600" />
+                <Label htmlFor="businessName">Business name</Label>
+                <Input id="businessName" readOnly value={lead.companyName} />
             </div>
              <div className="space-y-2">
-                <Label htmlFor="address" className="text-gray-400">Address</Label>
-                <Input id="address" readOnly value={[lead.address?.street, lead.address?.city].filter(Boolean).join(', ')} className="bg-gray-700 border-gray-600" />
+                <Label>Address</Label>
+                <div className="grid grid-cols-1 gap-2 border p-3 rounded-md bg-secondary/30">
+                    <Input readOnly value={lead.address?.address1 || 'N/A'} placeholder="Address 1" />
+                    <Input readOnly value={lead.address?.street || 'N/A'} placeholder="Street" />
+                    <div className="grid grid-cols-3 gap-2">
+                        <Input readOnly value={lead.address?.city || 'N/A'} placeholder="Suburb" />
+                        <Input readOnly value={lead.address?.state || 'N/A'} placeholder="State" />
+                        <Input readOnly value={lead.address?.zip || 'N/A'} placeholder="Postcode" />
+                    </div>
+                </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
-                    <Label htmlFor="contactName" className="text-gray-400">Contact name</Label>
-                    <Input id="contactName" readOnly value={lead.contacts?.[0]?.name || 'Optional'} className="bg-gray-700 border-gray-600" />
+                    <Label htmlFor="contactName">Contact name</Label>
+                    <Input id="contactName" readOnly value={lead.contacts?.[0]?.name || 'Optional'} />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-gray-400">Phone</Label>
-                    <Input id="phone" readOnly value={lead.contacts?.[0]?.phone || lead.customerPhone || 'Optional'} className="bg-gray-700 border-gray-600" />
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input id="phone" readOnly value={lead.contacts?.[0]?.phone || lead.customerPhone || 'Optional'} />
                 </div>
             </div>
              <div className="space-y-2">
-                <Label htmlFor="decisionMaker" className="text-gray-400">I'm speaking with</Label>
+                <Label htmlFor="decisionMaker">I'm speaking with</Label>
                 <Select>
-                    <SelectTrigger className="w-full bg-gray-700 border-gray-600">
+                    <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -292,7 +300,7 @@ const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
                         <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
                     </SelectContent>
                 </Select>
-                 <p className="text-xs text-gray-500 pt-2">Tip: if you're unsure who they are, continue anyway — authority is checked later.</p>
+                 <p className="text-xs text-muted-foreground pt-2">Tip: if you're unsure who they are, continue anyway — authority is checked later.</p>
             </div>
          </div>
     </StepWrapper>
@@ -303,34 +311,34 @@ const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contac
         <div className="space-y-4">
             {contacts.length > 0 ? (
                 contacts.map(contact => (
-                    <div key={contact.id} className="p-3 border border-gray-700 rounded-md bg-gray-700/50">
-                        <p className="font-semibold">{contact.name} <span className="font-normal text-gray-400">- {contact.title}</span></p>
-                        <div className="text-sm text-gray-400 mt-1 space-y-1">
+                    <div key={contact.id} className="p-3 border rounded-md bg-secondary/30">
+                        <p className="font-semibold">{contact.name} <span className="font-normal text-muted-foreground">- {contact.title}</span></p>
+                        <div className="text-sm text-muted-foreground mt-1 space-y-1">
                             <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
                             <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
                         </div>
                     </div>
                 ))
-            ) : <p className="text-sm text-center text-gray-500">No contacts found.</p>}
+            ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
             
-            <hr className="my-4 border-gray-700" />
+            <hr className="my-4 border-border" />
 
             <h4 className="font-semibold">Add New Contact</h4>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4">
                     <FormField control={form.control} name="name" render={({ field }) => (
-                        <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" /></FormControl><FormMessage /></FormItem>
                     )}/>
                      <FormField control={form.control} name="title" render={({ field }) => (
-                        <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" /></FormControl><FormMessage /></FormItem>
                     )}/>
                      <FormField control={form.control} name="email" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
                     )}/>
                      <FormField control={form.control} name="phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
                     )}/>
-                    <Button type="submit" disabled={isAddingContact} className="bg-blue-600 hover:bg-blue-700">{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
+                    <Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
                 </form>
             </Form>
         </div>
@@ -364,10 +372,10 @@ const DiscoveryStep2 = () => {
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?">
             <FormField control={control} name="shippingVolume" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['&lt;5', '&lt;20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="expressVsStandard" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4">{(['Mostly Standard (&gt;=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (&gt;=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="packageType" render={() => (
                 <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
@@ -379,12 +387,12 @@ const DiscoveryStep2 = () => {
 const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
-         <StepWrapper title="Discovery: Providers &amp; Tech" description="Who are they using and what tech do they have?">
+         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?">
             <FormField control={control} name="currentProvider" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="eCommerceTech" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
         </StepWrapper>
     )
@@ -401,7 +409,7 @@ const DiscoveryStep4 = () => {
                 <FormItem className="space-y-3"><FormLabel>Who decides shipping?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">{(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (<FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="painPoints" render={({ field }) => (
-                <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
         </StepWrapper>
     )
@@ -410,10 +418,10 @@ const DiscoveryStep4 = () => {
 const FinalActionsStep = ({ onOpenDialog }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void }) => (
     <StepWrapper title="Next Steps" description="The discovery phase is complete. Choose the next action for this lead.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Button size="lg" className="h-auto py-4 bg-blue-600 hover:bg-blue-700" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
+            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
             <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => onOpenDialog('free-trial')}><Star className="mr-2"/> Free Trial</Button>
-            <Button size="lg" className="h-auto py-4 bg-gray-700 hover:bg-gray-600" onClick={() => onOpenDialog('log-outcome')}><PhoneCall className="mr-2"/> Log Outcome</Button>
-            <Button size="lg" className="h-auto py-4 bg-gray-700 hover:bg-gray-600" onClick={() => onOpenDialog('log-note')}><ClipboardEdit className="mr-2"/> Log a Note</Button>
+            <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => onOpenDialog('log-outcome')}><PhoneCall className="mr-2"/> Log Outcome</Button>
+            <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => onOpenDialog('log-note')}><ClipboardEdit className="mr-2"/> Log a Note</Button>
         </div>
     </StepWrapper>
 );
