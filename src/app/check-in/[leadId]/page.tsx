@@ -226,7 +226,7 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col min-h-svh bg-background p-4 max-w-2xl mx-auto w-full">
+            <div className="flex flex-col h-svh bg-background p-4 max-w-2xl mx-auto w-full">
                  <header className="flex-shrink-0 flex items-center justify-between mb-4 text-center">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
@@ -299,7 +299,7 @@ const CompanyAndContactStep = ({ lead, contacts, onAddContact, form, isAddingCon
     };
 
     return (
-        <StepWrapper title="Company & Contact Details" description="Confirm you're at the right place and speaking to the right person.">
+        <StepWrapper title="Company &amp; Contact Details" description="Confirm you're at the right place and speaking to the right person.">
             <div className="space-y-6">
                 {/* Company Details */}
                 <div className="space-y-4">
@@ -490,7 +490,7 @@ const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', lab
 const DiscoveryStep4 = () => {
     const { control } = useFormContext();
     return (
-         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?">
+         <StepWrapper title="Discovery: Providers &amp; Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?">
             <FormField control={control} name="currentProvider" render={() => (
                 <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
@@ -519,7 +519,7 @@ const DiscoveryStep5 = () => {
 };
 
 const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void, discoveryData: DiscoveryData | null }) => (
-    <StepWrapper title="Next Steps & Analysis" description="The discovery phase is complete. Review the analysis and choose the next action for this lead.">
+    <StepWrapper title="Next Steps &amp; Analysis" description="The discovery phase is complete. Review the analysis and choose the next action for this lead.">
        {discoveryData ? (
            <div className="space-y-4">
                  <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
@@ -550,5 +550,7 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
+
+    
 
     
