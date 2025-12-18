@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -48,7 +49,7 @@ type DashboardStats = {
     upcomingAppointments: (Appointment & { leadName: string })[];
     activeFieldSalesLeads: number;
     activeOutboundLeads: number;
-    allSavedRoutes: (SavedRoute & { userName?: string })[];
+    allSavedRoutes: (SavedRoute & { userName: string })[];
     routesToday: number;
     routesThisWeek: number;
 };

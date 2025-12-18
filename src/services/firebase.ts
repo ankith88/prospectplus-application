@@ -1652,19 +1652,21 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
     }
 }
 
-async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string, userId: string }>> {
+async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string; userId: string }>> {
     try {
         const usersSnapshot = await getDocs(collection(firestore, 'users'));
-        const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+        const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() as Omit<UserProfile, 'uid'> }));
 
-        const allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
+        const allRoutes: Array<SavedRoute & { userName: string; userId: string }> = [];
 
         for (const user of users) {
-            if (!user.displayName) continue;
+            const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+            if (!displayName) continue;
+
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
                 ...route,
-                userName: user.displayName!,
+                userName: displayName,
                 userId: user.uid,
             }));
             allRoutes.push(...routesWithUserName);
