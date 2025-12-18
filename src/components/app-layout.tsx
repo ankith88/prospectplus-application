@@ -283,8 +283,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
-          <SidebarMenu>
-            {isSuperAdmin && (
+          {isSuperAdmin && (
+            <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <Settings />
@@ -309,8 +309,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </SidebarMenuItem>
-            )}
-          </SidebarMenu>
+            </SidebarMenu>
+          )}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
