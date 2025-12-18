@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -741,6 +740,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         }
 
         router.push(`/check-in/${lead.id}`);
+
+        // Log the check-in activity
+        logActivity(lead.id, { 
+            type: 'Update', 
+            notes: 'Checked in at location via map.', 
+            author: userProfile?.displayName 
+        });
 
         if (loadedRoute && userProfile?.uid) {
              const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
@@ -1596,7 +1602,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <Button variant="secondary" onClick={() => { setSelectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
+                        <Button variant="secondary" onClick={() => { selectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
                             Clear Selection
                         </Button>
                     </CardFooter>

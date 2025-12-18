@@ -398,7 +398,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
 };
 
 const DiscoveryStep0 = () => {
-    const { control } = useFormContext();
+    const { control } from useFormContext();
     return (
         <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?">
              <FormField control={control} name="relevanceCheck" render={({ field }) => (
@@ -470,7 +470,7 @@ const DiscoveryStep2 = () => {
     )
 };
 
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }1 { id: '20kg+', label: '20kg+' } ] as const;
 const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
