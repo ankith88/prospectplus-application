@@ -98,8 +98,8 @@ export default function AdminDashboardPage() {
         const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
         const callsToday = uniqueCallsToday;
         
-        const routesToday = routes.filter(r => isToday(new Date(r.createdAt))).length;
-        const routesThisWeek = routes.filter(r => isThisWeek(new Date(r.createdAt), { weekStartsOn: 1 })).length;
+        const routesToday = routes.filter(r => r.scheduledDate && isToday(new Date(r.scheduledDate))).length;
+        const routesThisWeek = routes.filter(r => r.scheduledDate && isThisWeek(new Date(r.scheduledDate), { weekStartsOn: 1 })).length;
 
         
         const dialerAppointments = appointments.reduce((acc, curr) => {
@@ -281,8 +281,8 @@ export default function AdminDashboardPage() {
         <StatCard title="Team Calls Today" value={stats?.callsToday ?? 0} icon={Phone} description="Unique calls" />
         <StatCard title="Field Sales Leads" value={stats?.activeFieldSalesLeads ?? 0} icon={Target} description="D2D bucket" />
         <StatCard title="Outbound Leads" value={stats?.activeOutboundLeads ?? 0} icon={Phone} description="Outbound bucket" />
-        <StatCard title="Routes Today" value={stats?.routesToday ?? 0} icon={Route} description="Created today" />
-        <StatCard title="Routes This Week" value={stats?.routesThisWeek ?? 0} icon={Route} description="Created this week" />
+        <StatCard title="Routes Today" value={stats?.routesToday ?? 0} icon={Route} description="Scheduled for today" />
+        <StatCard title="Routes This Week" value={stats?.routesThisWeek ?? 0} icon={Route} description="Scheduled this week" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
