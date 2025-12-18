@@ -48,7 +48,7 @@ type DashboardStats = {
     upcomingAppointments: (Appointment & { leadName: string })[];
     activeFieldSalesLeads: number;
     activeOutboundLeads: number;
-    activeRoutes: (SavedRoute & { userName?: string })[];
+    allSavedRoutes: (SavedRoute & { userName?: string })[];
     routesToday: number;
     routesThisWeek: number;
 };
@@ -222,7 +222,7 @@ export default function AdminDashboardPage() {
           upcomingAppointments,
           activeFieldSalesLeads,
           activeOutboundLeads,
-          activeRoutes: enrichedRoutes,
+          allSavedRoutes: enrichedRoutes,
           routesToday,
           routesThisWeek,
         });
@@ -375,10 +375,10 @@ export default function AdminDashboardPage() {
         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Saved Routes</CardTitle>
-            <CardDescription>Active routes for field sales.</CardDescription>
+            <CardDescription>All saved routes for field sales users.</CardDescription>
           </CardHeader>
           <CardContent>
-            {stats?.activeRoutes && stats.activeRoutes.length > 0 ? (
+            {stats?.allSavedRoutes && stats.allSavedRoutes.length > 0 ? (
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -388,7 +388,7 @@ export default function AdminDashboardPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stats.activeRoutes.map(route => (
+                        {stats.allSavedRoutes.map(route => (
                             <TableRow key={route.id}>
                                 <TableCell className="font-medium">{route.name}</TableCell>
                                 <TableCell>{route.userName}</TableCell>
@@ -398,7 +398,7 @@ export default function AdminDashboardPage() {
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No saved routes.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No saved routes found.</p>
             )}
           </CardContent>
         </Card>
