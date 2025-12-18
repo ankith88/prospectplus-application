@@ -54,7 +54,7 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 
 export default function CheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -125,15 +125,13 @@ export default function CheckInPage() {
             ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 4
             ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 5
             ['currentProvider', 'eCommerceTech'], // Step 6
-            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 7
         ];
 
-        const fieldsToValidate = stepFields[currentStep];
+        const fieldsToValidate = stepFields[currentStep - 1];
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
-            if (currentStep === TOTAL_STEPS - 1) {
-                // Now validate all fields before showing the final step
+            if (currentStep === TOTAL_STEPS) {
                 const allFieldsValid = await methods.trigger();
                 if (allFieldsValid) {
                     const discoveryData = calculateScoreAndRouting(methods.getValues());
@@ -228,7 +226,7 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col h-screen bg-background p-4 max-w-2xl mx-auto w-full">
+            <div className="flex flex-col min-h-svh bg-background p-4 max-w-2xl mx-auto w-full">
                  <header className="flex-shrink-0 flex items-center justify-between mb-4 text-center">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
@@ -237,22 +235,22 @@ export default function CheckInPage() {
                     </div>
                     <div className="w-20 text-center">
                         <div className="border border-border rounded-full px-2 py-1 text-xs">
-                            Step {currentStep}/{TOTAL_STEPS}
+                            Step {Math.min(currentStep, TOTAL_STEPS)}/{TOTAL_STEPS}
                         </div>
                     </div>
                 </header>
 
-                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
+                <Progress value={(Math.min(currentStep, TOTAL_STEPS) / TOTAL_STEPS) * 100} className="w-full mb-4 flex-shrink-0" />
                 
                 <main className="flex-grow overflow-y-auto px-2">
                     {renderStep()}
                 </main>
 
                 <footer className="mt-4 flex-shrink-0 flex items-center justify-between border-t border-border pt-4">
-                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack}>Back</Button>}
+                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS +1}>Back</Button>}
                     <div className="flex-grow"></div>
-                    {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
-                    {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
+                    {currentStep <= TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
+                    {currentStep > TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
                 </footer>
 
                  {/* Dialogs for Final Actions */}
@@ -332,35 +330,39 @@ const CompanyAndContactStep = ({ lead, contacts, onAddContact, form, isAddingCon
                     <p className="text-sm text-muted-foreground">Confirm the decision maker or add a new contact.</p>
                     <p className="text-sm italic text-primary p-2 bg-primary/10 border-l-4 border-primary rounded-r-md">"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"</p>
                     {contacts.length > 0 ? (
-                        contacts.map(contact => (
-                            <div key={contact.id} className="p-3 border rounded-md bg-secondary/30 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="font-semibold">{contact.name}</p>
-                                    <div className="w-1/2">
-                                        <Select
-                                            value={editingTitle[contact.id] ?? contact.title}
-                                            onValueChange={(value) => {
-                                                handleTitleChange(contact.id, value);
-                                                onTitleUpdate(contact.id, value);
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select title..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Owner">Owner</SelectItem>
-                                                <SelectItem value="Influencer">Influencer</SelectItem>
-                                                <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                        <div className="space-y-3">
+                        {contacts.map(contact => (
+                            <Card key={contact.id} className="p-3 bg-secondary/30">
+                                <CardContent className="p-0 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <p className="font-semibold">{contact.name}</p>
+                                        <div className="w-1/2">
+                                            <Select
+                                                value={editingTitle[contact.id] ?? contact.title}
+                                                onValueChange={(value) => {
+                                                    handleTitleChange(contact.id, value);
+                                                    onTitleUpdate(contact.id, value);
+                                                }}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select title..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Owner">Owner</SelectItem>
+                                                    <SelectItem value="Influencer">Influencer</SelectItem>
+                                                    <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1 space-y-1">
-                                    <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
-                                    <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
-                                </div>
-                            </div>
-                        ))
+                                    <div className="text-sm text-muted-foreground mt-1 space-y-1">
+                                        <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
+                                        <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                        </div>
                     ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
                     
                     <hr className="my-4 border-border" />
