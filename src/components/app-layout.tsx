@@ -284,9 +284,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter>
+        <SidebarFooter className="p-2">
           {isSuperAdmin && (
-            <SidebarGroup>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton>
@@ -313,7 +312,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </SidebarMenuSub>
                 </SidebarMenuItem>
               </SidebarMenu>
-            </SidebarGroup>
           )}
         </SidebarFooter>
       </Sidebar>
