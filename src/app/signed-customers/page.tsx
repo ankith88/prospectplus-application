@@ -42,6 +42,8 @@ const center = {
   lng: 133.7751,
 };
 
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+
 export default function SignedCustomersPage() {
   const [signedLeads, setSignedLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export default function SignedCustomersPage() {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries,
   });
 
   const fetchSignedLeads = async () => {
