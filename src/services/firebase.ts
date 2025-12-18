@@ -1,8 +1,3 @@
-
-
-
-
-
 'use server';
 
 /**
@@ -605,7 +600,7 @@ async function getPagedLeadSubCollection<T>(
     lastDocId: string | null
 ): Promise<{ items: T[], lastDocId: string | null }> {
     try {
-        const ref = collection(firestore, 'leads', leadId, collectionName);
+        const ref = collection(firestore, 'leads', leadId, 'collectionName');
         let q = query(ref, orderBy(orderByField, 'desc'), limit(limitNum));
 
         if (lastDocId) {
@@ -1851,6 +1846,3 @@ export {
 };
 
     
-
-
-
