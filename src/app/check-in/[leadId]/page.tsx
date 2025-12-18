@@ -29,7 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScoreIndicator } from '@/components/score-indicator';
 
 const discoverySchema = z.object({
-  relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }).optional(),
+  relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
   reasonsToLeave: z.array(z.string()).optional(),
   postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
   logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc'], { required_error: "This field is required." }),
