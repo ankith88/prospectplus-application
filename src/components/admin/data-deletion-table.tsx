@@ -58,8 +58,10 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     if (!debouncedSearchTerm) {
       return items;
     }
+    const lowercasedTerm = debouncedSearchTerm.toLowerCase();
     return items.filter(item =>
-      item.companyName.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      item.companyName.toLowerCase().includes(lowercasedTerm) ||
+      item.id.toLowerCase().includes(lowercasedTerm)
     );
   }, [items, debouncedSearchTerm]);
 
@@ -85,7 +87,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
       <div className="flex items-center gap-2">
         <Search className="h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder={`Search by ${collectionName === 'leads' ? 'lead' : 'company'} name...`}
+          placeholder={`Search by name or ID...`}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -96,6 +98,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>ID</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -103,12 +106,13 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={3} className="text-center"><Loader /></TableCell>
+                <TableCell colSpan={4} className="text-center"><Loader /></TableCell>
               </TableRow>
             ) : filteredItems.length > 0 ? (
               filteredItems.slice(0, 50).map((item) => ( // Limit to 50 results for performance
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.companyName}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.id}</TableCell>
                   <TableCell>{item.status}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="destructive" size="sm" onClick={() => setItemToDelete(item)}>
@@ -120,7 +124,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={3} className="h-24 text-center">
+                <TableCell colSpan={4} className="h-24 text-center">
                   No results found.
                 </TableCell>
               </TableRow>

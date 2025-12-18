@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { DataDeletionTable } from '@/components/admin/data-deletion-table';
+import { GranularDeletion } from '@/components/admin/granular-deletion';
 
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading } = useAuth();
@@ -30,11 +31,21 @@ export default function AdminDataPage() {
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
         <p className="text-muted-foreground">Permanently delete records from the system.</p>
       </header>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Granular Record Deletion</CardTitle>
+          <CardDescription>Search for a lead to view and delete its individual sub-collection items like notes, activities, or contacts.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <GranularDeletion />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Delete Leads</CardTitle>
-          <CardDescription>Search for and delete leads. This action is irreversible and will delete all associated sub-collections.</CardDescription>
+          <CardTitle>Bulk Delete Leads</CardTitle>
+          <CardDescription>Search for and delete entire lead records. This action is irreversible and will delete all associated sub-collections.</CardDescription>
         </CardHeader>
         <CardContent>
           <DataDeletionTable collectionName="leads" />
@@ -43,8 +54,8 @@ export default function AdminDataPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Delete Signed Customers</CardTitle>
-          <CardDescription>Search for and delete signed customers (companies). This action is irreversible and will delete all associated sub-collections.</CardDescription>
+          <CardTitle>Bulk Delete Signed Customers</CardTitle>
+          <CardDescription>Search for and delete entire signed customer (company) records. This action is irreversible.</CardDescription>
         </CardHeader>
         <CardContent>
           <DataDeletionTable collectionName="companies" />

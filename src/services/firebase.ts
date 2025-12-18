@@ -1,5 +1,6 @@
 
 
+
 'use server';
 
 /**
@@ -1607,6 +1608,17 @@ async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemI
     }
 }
 
+async function deleteSubCollectionItem(leadId: string, subCollectionName: 'contacts' | 'notes' | 'activity' | 'appointments', itemId: string): Promise<void> {
+    try {
+        const itemRef = doc(firestore, 'leads', leadId, subCollectionName, itemId);
+        await deleteDoc(itemRef);
+        console.log(`Successfully deleted item ${itemId} from ${subCollectionName} in lead ${leadId}.`);
+    } catch (error) {
+        console.error(`Failed to delete item ${itemId} from lead ${leadId}:`, error);
+        throw new Error(`Failed to delete item from ${subCollectionName} in Firebase`);
+    }
+}
+
 
 async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
     try {
@@ -1818,6 +1830,7 @@ export {
     checkForDuplicateLead,
     deleteLead,
     deleteCompany,
+    deleteSubCollectionItem,
     getSubCollection,
     saveUserRoute,
     getUserRoutes,
@@ -1831,3 +1844,4 @@ export {
 };
 
     
+
