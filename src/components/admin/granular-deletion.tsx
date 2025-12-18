@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Trash2, Search } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 type SubcollectionType = 'contacts' | 'notes' | 'activity' | 'appointments';
 type ItemToDelete = {
