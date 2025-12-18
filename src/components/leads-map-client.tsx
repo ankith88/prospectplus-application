@@ -1460,7 +1460,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 (selectedRouteLeads.length > 0) ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
             )}>
                 {(selectedRouteLeads.length > 0) && (
-                <>
+                <div className="flex flex-col h-full">
                     <CardHeader className="pb-2 flex-shrink-0">
                     <CardTitle className="flex items-center justify-between">
                         <span className="flex items-center gap-2">
@@ -1531,7 +1531,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </div>
                         )}
                     </CardHeader>
-                    <ScrollArea className="flex-grow">
+                    <ScrollArea className="flex-grow min-h-0">
                         <CardContent className="space-y-2 pt-2">
                             {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
                             if (!item.lead) return null;
@@ -1600,7 +1600,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             Clear Selection
                         </Button>
                     </CardFooter>
-                </>
+                </div>
                 )}
             </aside>
             </div>
