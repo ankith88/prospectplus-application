@@ -22,6 +22,7 @@ import { PostCallOutcomeDialog } from '@/components/post-call-outcome-dialog';
 import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { LogNoteDialog } from '@/components/log-note-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const discoverySchema = z.object({
   postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
@@ -338,7 +339,7 @@ const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contac
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+const packageTypes = [ { id: '500g', label: '&lt;500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
 
 const DiscoveryStep1 = () => {
     const { control, watch } = useFormContext();
@@ -363,10 +364,10 @@ const DiscoveryStep2 = () => {
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?">
             <FormField control={control} name="shippingVolume" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['&lt;5', '&lt;20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="expressVsStandard" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4">{(['Mostly Standard (&gt;=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (&gt;=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="packageType" render={() => (
                 <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
@@ -378,7 +379,7 @@ const DiscoveryStep2 = () => {
 const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
-         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?">
+         <StepWrapper title="Discovery: Providers &amp; Tech" description="Who are they using and what tech do they have?">
             <FormField control={control} name="currentProvider" render={() => (
                 <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." className="bg-gray-700 border-gray-600" /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
