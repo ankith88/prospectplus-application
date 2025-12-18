@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -184,6 +185,7 @@ export default function LeadsMapClient() {
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [localSavedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>([]);
   const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
+  const [routeDate, setRouteDate] = useState<Date>();
 
 
   // Routing and Drawing state
@@ -725,6 +727,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setTravelMode(null);
         setIsRouteActive(false);
         setLoadedRoute(null);
+        setRouteDate(undefined);
     };
 
     const handleCheckIn = async (lead: MapLead) => {
@@ -831,8 +834,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (!center || !radius) return;
 
         const leadsInCircle = filteredData.filter(lead => {
-            if (userProfile?.role === 'Field Sales' && lead.isCompany) {
-                return false;
+            if (lead.isCompany) {
+                return false; // Exclude companies from selection
             }
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
@@ -855,7 +858,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
-    }, [map, filteredData, toast, userProfile]);
+    }, [map, filteredData, toast]);
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
@@ -910,15 +913,18 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     setSelectedProspects([]);
   };
   
+    useEffect(() => {
+        if (routeDate) {
+            const dateString = format(routeDate, 'ddMMyyyy - EEE').toUpperCase();
+            setRouteName(prevName => {
+                // If there's an existing manually entered part, keep it
+                const manualPart = prevName.split(' - ').slice(1).join(' - ').trim();
+                return manualPart ? `${dateString} - ${manualPart}` : `${dateString} -`;
+            });
+        }
+    }, [routeDate]);
+
     const handleSaveRoute = async () => {
-        if (!routeName) {
-            toast({ variant: 'destructive', title: 'Route Name Required', description: 'Please enter a name for your route.' });
-            return;
-        }
-        if (selectedRouteLeads.length === 0 || !travelMode) {
-            toast({ variant: 'destructive', title: 'Cannot Save', description: 'An active route with leads is required to save.' });
-            return;
-        }
         if (!userProfile?.uid) {
             toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not identify user to save route.' });
             return;
@@ -930,11 +936,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             leads: selectedRouteLeads,
             directions,
             travelMode,
+            scheduledDate: routeDate,
         };
 
         const savedRouteId = await saveUserRoute(userProfile.uid, newRoute);
         setLocalSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
         setRouteName('');
+        setRouteDate(undefined);
         toast({ title: 'Route Saved', description: `Route "${routeName}" has been saved to your profile.` });
     };
 
@@ -1472,7 +1480,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
                 </CardTitle>
                     <div className="space-y-2 pt-2">
-                        {directions ? (
+                        {directions && (
+                            <>
                             <div className="flex flex-col gap-2">
                                 <CardDescription>
                                     Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
@@ -1490,23 +1499,49 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     </Button>
                                 )}
                             </div>
-                        ) : (
-                            <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>
-                        )}
-                        <div className="space-y-1">
-                            <Label htmlFor="route-name">Route Name</Label>
-                            <div className="flex gap-2">
-                            <Input 
-                                id="route-name" 
-                                placeholder="e.g. Tuesday Afternoon Run" 
-                                value={routeName}
-                                onChange={(e) => setRouteName(e.target.value)}
-                            />
-                            <Button onClick={handleSaveRoute} disabled={!routeName || !directions}>
-                                <Save className="mr-2 h-4 w-4" /> Save
-                            </Button>
+                            <div className="space-y-1">
+                                <Label htmlFor="route-name">Route Name</Label>
+                                <div className="flex gap-2">
+                                <Input 
+                                    id="route-name" 
+                                    placeholder="e.g. Tuesday Afternoon Run" 
+                                    value={routeName}
+                                    onChange={(e) => setRouteName(e.target.value)}
+                                />
+                                <Button onClick={handleSaveRoute} disabled={!routeName && !routeDate}>
+                                    <Save className="mr-2 h-4 w-4" /> Save
+                                </Button>
+                                </div>
+                                <div className="space-y-1">
+                                <Label htmlFor="route-date">Schedule Date (Optional)</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="route-date"
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !routeDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 z-[11]">
+                                        <Calendar
+                                            mode="single"
+                                            selected={routeDate}
+                                            onSelect={setRouteDate}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                </div>
                             </div>
-                        </div>
+                            </>
+                        )}
+                        {!directions && <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>}
                     </div>
                 </CardHeader>
                 <ScrollArea className="flex-grow">
