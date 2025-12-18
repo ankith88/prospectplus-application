@@ -389,6 +389,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             longitude: Number(company.longitude),
                             isCompany: true,
                             isProspect: false,
+                            status: 'Won' as LeadStatus, // Assign 'Won' status to all companies
                         }));
                     allMapData = [...allMapData, ...companiesWithCoords];
                 }
@@ -411,21 +412,26 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     let dataToFilter = mapData;
 
     if (userProfile?.role === 'Field Sales') {
-      dataToFilter = mapData.filter(item => {
-        return item.isCompany || (item.dialerAssigned === userProfile.displayName);
-      });
+        dataToFilter = mapData.filter(item => {
+            return item.isCompany || (item.dialerAssigned === userProfile.displayName);
+        });
     }
 
     return dataToFilter.filter(item => {
-      const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-      
-      const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
-      
-      const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-      
-      const typeMatch = filters.type === 'all' || (filters.type === 'leads' && !item.isCompany) || (filters.type === 'companies' && item.isCompany);
+        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+        
+        let statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+        if (filters.type === 'companies') {
+            statusMatch = true; // Ignore status filter if showing only companies
+        }
 
-      return franchiseeMatch && statusMatch && stateMatch && typeMatch;
+        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+        
+        const typeMatch = filters.type === 'all' || 
+                          (filters.type === 'leads' && !item.isCompany) || 
+                          (filters.type === 'companies' && item.isCompany);
+
+        return franchiseeMatch && statusMatch && stateMatch && typeMatch;
     });
   }, [mapData, filters, userProfile]);
 
