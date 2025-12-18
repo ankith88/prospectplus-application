@@ -88,7 +88,7 @@ export default function AdminDashboardPage() {
 
         const enrichedRoutes = allRoutes.map(route => ({
           ...route,
-          userName: (route as any).userName || usersMap.get((route as any).userId)?.displayName || 'Unknown User'
+          userName: usersMap.get((route as any).userId)?.displayName || 'Unknown User'
         }));
 
 
