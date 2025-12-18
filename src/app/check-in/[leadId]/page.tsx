@@ -124,7 +124,7 @@ export default function CheckInPage() {
     const handleNext = async () => {
         const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
             [], // Step 1 is company info
-            [], // Step 2 is contact info
+            [], // Step 2 is contact info - no validation needed
             ['relevanceCheck'], // Step 3
             ['reasonsToLeave'], // Step 4
             ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
