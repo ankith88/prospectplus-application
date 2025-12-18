@@ -59,6 +59,8 @@ export default function SignedCustomersPage() {
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
+
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -68,6 +70,7 @@ export default function SignedCustomersPage() {
   
   const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
     if (node !== null && isLoaded && map && !autocompleteRef.current) {
+        geoSearchInputNodeRef.current = node;
         const autocomplete = new window.google.maps.places.Autocomplete(node, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
@@ -117,6 +120,9 @@ export default function SignedCustomersPage() {
   
   const clearFilters = () => {
     setFilters({ companyName: '', franchisee: [] });
+    if (geoSearchInputNodeRef.current) {
+        geoSearchInputNodeRef.current.value = '';
+    }
   };
   
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -164,7 +170,7 @@ export default function SignedCustomersPage() {
     )
   }
   
-  const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0;
+  const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || (geoSearchInputNodeRef.current && geoSearchInputNodeRef.current.value !== '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -350,5 +356,3 @@ export default function SignedCustomersPage() {
     </div>
   )
 }
-
-    
