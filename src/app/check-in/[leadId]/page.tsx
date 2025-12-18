@@ -27,7 +27,7 @@ import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { Badge } from '@/components/ui/badge';
 import { ScoreIndicator } from '@/components/score-indicator';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -104,6 +104,9 @@ export default function CheckInPage() {
                     if (leadData.discoveryData) {
                         methods.reset(leadData.discoveryData);
                     }
+                    // Log check-in activity
+                    await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
+
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Lead not found.' });
                     router.push('/field-sales');
@@ -230,8 +233,8 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div className="flex flex-col h-svh bg-background max-w-2xl mx-auto w-full">
-                <header className="flex-shrink-0 flex items-center justify-between p-4">
+            <div className="flex flex-col bg-background max-w-2xl mx-auto w-full p-4">
+                <header className="flex-shrink-0 flex items-center justify-between">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
                         <h1 className="text-lg font-bold">{lead.companyName}</h1>
@@ -244,20 +247,13 @@ export default function CheckInPage() {
                     </div>
                 </header>
 
-                <div className="px-4 flex-shrink-0">
+                <div className="my-4 flex-shrink-0">
                   <Progress value={(Math.min(currentStep, TOTAL_STEPS + 1) / (TOTAL_STEPS + 1)) * 100} className="w-full" />
                 </div>
                 
-                <main className="flex-grow overflow-y-auto p-4">
+                <main className="flex-grow">
                     {renderStep()}
                 </main>
-
-                <footer className="flex-shrink-0 flex items-center justify-between border-t border-border p-4 bg-background">
-                    {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS + 1}>Back</Button>}
-                    <div className="flex-grow"></div>
-                    {currentStep <= TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
-                    {currentStep === TOTAL_STEPS + 1 && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
-                </footer>
                  
                 {/* Dialogs for Final Actions */}
                 <PostCallOutcomeDialog 
@@ -290,9 +286,11 @@ const StepWrapper = ({ title, description, script, children }: { title: string, 
             <p className="text-muted-foreground">{description}</p>
             {script && <p className="text-sm italic text-primary p-2 bg-primary/10 border-l-4 border-primary rounded-r-md">"{script}"</p>}
         </div>
-        <div className="bg-card p-6 rounded-lg space-y-6">
-            {children}
-        </div>
+        <Card>
+            <CardContent className="p-6">
+                {children}
+            </CardContent>
+        </Card>
     </div>
 );
 
