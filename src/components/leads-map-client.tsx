@@ -217,26 +217,11 @@ export default function LeadsMapClient() {
     state: [] as string[],
     type: 'all' as 'all' | 'leads' | 'companies'
   });
-
-  const geoSearchInputRef = useRef<HTMLInputElement | null>(null);
+  
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const router = useRouter()
-  const { toast } = useToast()
-  const { userProfile, loading: authLoading, savedRoutes } = useAuth();
-
-  useEffect(() => {
-    setLocalSavedRoutes(savedRoutes);
-  }, [savedRoutes]);
-  
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places', 'drawing', 'geometry']
-  })
-  
-  useEffect(() => {
-    if (isLoaded && geoSearchInputRef.current && map && !autocompleteRef.current) {
-        const autocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
+  const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
+    if (node !== null && isLoaded && map && !autocompleteRef.current) {
+        const autocomplete = new window.google.maps.places.Autocomplete(node, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
         });
@@ -254,6 +239,20 @@ export default function LeadsMapClient() {
         autocompleteRef.current = autocomplete;
     }
   }, [isLoaded, map]);
+
+  const router = useRouter()
+  const { toast } = useToast()
+  const { userProfile, loading: authLoading, savedRoutes } = useAuth();
+
+  useEffect(() => {
+    setLocalSavedRoutes(savedRoutes);
+  }, [savedRoutes]);
+  
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: ['places', 'drawing', 'geometry']
+  })
 
   const handleShowMyLocation = useCallback(() => {
     setLocationError(null);
@@ -1213,9 +1212,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-        <div className="flex flex-col md:flex-row-reverse h-full flex-grow gap-4">
+        <div className="flex flex-col h-full flex-grow gap-4">
             {selectedRouteLeads.length > 0 && (
-                <div className="w-full md:w-1/3 flex-shrink-0">
+                <div className="w-full flex-shrink-0">
                     <Card className="h-full flex flex-col">
                         <CardHeader className="pb-2 flex-shrink-0">
                             <CardTitle className="flex items-center justify-between">
