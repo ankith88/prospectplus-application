@@ -6,6 +6,11 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Ensure Google Places Autocomplete dropdown appears above other UI elements */
+.pac-container {
+  z-index: 1050 !important;
+}
+
 @layer base {
   :root {
     --background: 111 20% 84%;
