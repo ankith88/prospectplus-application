@@ -212,7 +212,7 @@ export default function AdminDashboardPage() {
           upcomingAppointments,
           activeFieldSalesLeads,
           activeOutboundLeads,
-          allSavedRoutes,
+          allSavedRoutes: allRoutes,
           routesToday,
           routesThisWeek,
         });
@@ -365,7 +365,7 @@ export default function AdminDashboardPage() {
         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Saved Routes</CardTitle>
-            <CardDescription>All saved routes for field sales users.</CardDescription>
+            <CardDescription>All saved routes across all users.</CardDescription>
           </CardHeader>
           <CardContent>
             {stats?.allSavedRoutes && stats.allSavedRoutes.length > 0 ? (
