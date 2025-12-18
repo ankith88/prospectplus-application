@@ -207,17 +207,16 @@ export default function FieldSalesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-        const [leads, activities, routes, users] = await Promise.all([
+        const [leads, activities, users, routes] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
-            getAllUserRoutes(),
             getAllUsers(),
+            userProfile?.role === 'admin' ? getAllUserRoutes() : Promise.resolve([]),
         ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
-
         if (userProfile?.role === 'admin') {
             setAllRoutes(routes);
         }

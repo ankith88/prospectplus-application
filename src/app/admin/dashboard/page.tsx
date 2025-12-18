@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
         const activeOutboundLeads = activeLeads.filter(l => l.fieldSales !== true).length;
         
         const signedCustomers = leads.filter(l => l.status === 'Won').length;
-        const appointmentsThisWeek = appointments.filter(a => isThisWeek(new Date(a.duedate), { weekStartsOn: 1 })).length;
+        const appointmentsThisWeek = appointments.filter(a => a.duedate && isThisWeek(new Date(a.duedate), { weekStartsOn: 1 })).length;
         
         // Correctly count unique calls today
         const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
@@ -188,6 +188,7 @@ export default function AdminDashboardPage() {
         const now = new Date();
         const upcomingAppointments = appointments
             .filter(a => {
+                if (!a.duedate) return false;
                 const apptDate = new Date(a.duedate);
                 return isFuture(apptDate) || isSameDay(now, apptDate);
             })
@@ -416,3 +417,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+

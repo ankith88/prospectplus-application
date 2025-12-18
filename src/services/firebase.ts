@@ -1605,26 +1605,13 @@ async function deleteLead(leadIds: string | string[]): Promise<void> {
 async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
     try {
         const routesRef = collection(firestore, 'users', userId, 'routes');
-        const storableRoute: Partial<StorableRoute> = {
+        const storableRoute: StorableRoute = {
             name: routeData.name,
             createdAt: routeData.createdAt,
             travelMode: routeData.travelMode,
             directions: routeData.directions ? JSON.stringify(routeData.directions) : undefined,
-            leads: (routeData.leads || []).map(l => ({ 
-                id: l.id, 
-                latitude: l.latitude!, 
-                longitude: l.longitude!,
-                companyName: l.companyName,
-                address: {
-                    street: l.address?.street || '',
-                    city: l.address?.city || '',
-                    state: l.address?.state || '',
-                    zip: l.address?.zip || '',
-                    country: l.address?.country || 'Australia',
-                    address1: l.address?.address1 || ''
-                }
-            })),
-            scheduledDate: routeData.scheduledDate instanceof Date ? routeData.scheduledDate.toISOString() : routeData.scheduledDate,
+            leads: routeData.leads,
+            scheduledDate: routeData.scheduledDate ? new Date(routeData.scheduledDate).toISOString() : undefined,
         };
 
         const docRef = await addDoc(routesRef, storableRoute);
