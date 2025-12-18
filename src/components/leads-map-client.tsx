@@ -282,9 +282,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     
     let leadsToRoute = [...leadsForRoute];
     if (leadsToRoute.length > 25) {
+        const remainingStops = leadsToRoute.length - 25;
         toast({
             title: 'Too many stops for one route',
-            description: `Google Maps allows a maximum of 25 stops. We'll create a route for the first 25, and you can create another for the remaining ${leadsToRoute.length - 25}.`,
+            description: `Route created with the first 25 stops. ${remainingStops} stops remain in your queue.`,
         });
         leadsToRoute = leadsForRoute.slice(0, 25);
     }
@@ -316,7 +317,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             if (status === window.google.maps.DirectionsStatus.OK) {
                 setDirections(result);
                 // Also set the selected leads for the route stops UI
-                setSelectedRouteLeads(leadsToRoute);
+                setSelectedRouteLeads(leadsForRoute);
             } else {
                 console.error(`error fetching directions ${result}`);
                 toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
