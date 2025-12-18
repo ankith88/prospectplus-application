@@ -1602,37 +1602,22 @@ async function deleteLead(leadIds: string | string[]): Promise<void> {
     }
 }
 
-// Function to simplify DirectionsResult
-const simplifyDirections = (directions: google.maps.DirectionsResult): StorableRoute['directions'] => {
-    return {
-        routes: directions.routes.map(route => ({
-            waypoint_order: route.waypoint_order,
-            legs: route.legs.map(leg => ({
-                distance: { text: leg.distance!.text, value: leg.distance!.value },
-                duration: { text: leg.duration!.text, value: leg.duration!.value },
-                end_address: leg.end_address,
-                start_address: leg.start_address,
-            })),
-        })),
-    };
-};
-
-
 async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
     try {
         const routesRef = collection(firestore, 'users', userId, 'routes');
-        const storableRoute: StorableRoute = {
+        const storableRoute: Partial<StorableRoute> = {
             name: routeData.name,
             createdAt: routeData.createdAt,
             travelMode: routeData.travelMode,
-            leads: routeData.leads.map(l => ({ 
+            directions: routeData.directions ? JSON.stringify(routeData.directions) : undefined,
+            leads: (routeData.leads || []).map(l => ({ 
                 id: l.id, 
                 latitude: l.latitude!, 
                 longitude: l.longitude!,
                 companyName: l.companyName,
                 address: l.address!
             })),
-            directions: routeData.directions ? simplifyDirections(routeData.directions as google.maps.DirectionsResult) : undefined,
+            scheduledDate: routeData.scheduledDate ? (routeData.scheduledDate as Date).toISOString() : undefined,
         };
 
         const docRef = await addDoc(routesRef, storableRoute);
@@ -1662,9 +1647,9 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
         return snapshot.docs.map(doc => {
             const data = doc.data() as StorableRoute;
             return {
-                id: doc.id,
                 ...data,
-                directions: data.directions,
+                id: doc.id,
+                directions: data.directions ? JSON.parse(data.directions) : null,
             } as SavedRoute;
         });
     } catch (error) {
@@ -1843,4 +1828,3 @@ export {
 };
 
     
-

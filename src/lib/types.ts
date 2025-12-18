@@ -200,21 +200,12 @@ export type StorableRoute = {
     createdAt: string;
     leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
     travelMode: google.maps.TravelMode;
-    // Store a simplified version of directions
-    directions?: {
-        routes: {
-            legs: {
-                distance: { text: string; value: number };
-                duration: { text: string; value: number };
-                end_address: string;
-                start_address: string;
-            }[];
-            waypoint_order: number[];
-        }[];
-    };
+    directions?: string;
+    scheduledDate?: string;
 };
 
 
 export type SavedRoute = Omit<StorableRoute, 'directions'> & {
-    directions: google.maps.DirectionsResult | null | StorableRoute['directions'];
+    directions: google.maps.DirectionsResult | null;
+    scheduledDate?: string | Date;
 };
