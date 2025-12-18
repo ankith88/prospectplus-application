@@ -1078,12 +1078,15 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
                     </div>
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                            <SlidersHorizontal className="h-4 w-4" />
-                            <span className="ml-2">Toggle Controls</span>
-                        </Button>
-                    </CollapsibleTrigger>
+                    <div className="flex items-center gap-2">
+                        <Button onClick={handleShowMyLocation} variant="outline" size="sm"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="ml-2">Toggle Controls</span>
+                            </Button>
+                        </CollapsibleTrigger>
+                    </div>
                 </CardHeader>
                 <CollapsibleContent>
                     <Tabs defaultValue="filters">
@@ -1152,10 +1155,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                           }
                                         }}
                                     />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>My Location</Label>
-                                    <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="prospect-search-mobile">Find Prospects Near Me</Label>
