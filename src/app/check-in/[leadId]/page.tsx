@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScoreIndicator } from '@/components/score-indicator';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import React from 'react';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -453,7 +454,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
     );
 };
 
-const DiscoveryStep0 = ({ onNext, onBack }: { onNext: () => void, onBack: () => void }) => {
+const DiscoveryStep0 = ({ onNext, onBack }: { onNext: () => void; onBack: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack}>
@@ -465,7 +466,7 @@ const DiscoveryStep0 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
 };
 
 const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
-const DiscoveryStep1 = ({ onNext, onBack }: { onNext: () => void, onBack: () => void }) => {
+const DiscoveryStep1 = ({ onNext, onBack }: { onNext: () => void; onBack: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?" onNext={onNext} onBack={onBack}>
@@ -550,11 +551,49 @@ const DiscoveryStep4 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack}>
-            <FormField control={control} name="currentProvider" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+            <FormField
+                control={control}
+                name="currentProvider"
+                render={() => (
+                    <FormItem>
+                        <FormLabel className="text-base">Who do you use for shipping?</FormLabel>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
+                            {currentProviders.map((item) => (
+                                <FormField
+                                    key={item.id}
+                                    control={control}
+                                    name="currentProvider"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value?.includes(item.label)}
+                                                    onCheckedChange={(checked) => {
+                                                        const newValue = checked
+                                                            ? [...(field.value || []), item.label]
+                                                            : field.value?.filter((value) => value !== item.label);
+                                                        field.onChange(newValue);
+                                                    }}
+                                                />
+                                            </FormControl>
+                                            <FormLabel className="font-normal">{item.label}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
+                            ))}
+                        </div>
+                        <FormField control={control} name="otherProvider" render={({ field }) => (
+                            <FormItem className="mt-2">
+                                <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
+                                <FormControl><Input {...field} placeholder="Other provider..." /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}/>
+                        <FormMessage />
+                    </FormItem>
             )}/>
             <FormField control={control} name="eCommerceTech" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
         </StepWrapper>
     )
@@ -609,7 +648,5 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData, onBack }: { onOpenDialo
         </div>
     </StepWrapper>
 );
-
-    
 
     
