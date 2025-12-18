@@ -2,6 +2,7 @@
 
 
 
+
 'use server';
 
 /**
@@ -1836,7 +1837,6 @@ export {
     checkForDuplicateLead,
     deleteLead,
     deleteCompany,
-    deleteSubCollectionItem,
     bulkDeleteSubCollectionItems,
     getSubCollection,
     saveUserRoute,
@@ -1851,5 +1851,6 @@ export {
 };
 
     
+
 
 
