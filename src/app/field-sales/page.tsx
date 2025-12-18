@@ -204,7 +204,7 @@ export default function FieldSalesPage() {
     }
   }, [userProfile, authLoading, router]);
   
-  const fetchData = async () => {
+ const fetchData = useCallback(async () => {
     setLoading(true);
     try {
         const [leads, activities, users, routes] = await Promise.all([
@@ -227,13 +227,13 @@ export default function FieldSalesPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [userProfile, toast]);
 
   useEffect(() => {
     if (userProfile) {
       fetchData();
     }
-  }, [userProfile]);
+  }, [userProfile, fetchData]);
   
   const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -468,7 +468,19 @@ export default function FieldSalesPage() {
     }
   };
 
-  const routesToShow = userProfile?.role === 'admin' ? allRoutes : savedRoutes;
+ const routesToShow = useMemo(() => {
+    if (userProfile?.role === 'admin') {
+      const adminRoutes = savedRoutes.map(r => ({ ...r, userName: userProfile.displayName!, userId: userProfile.uid! }));
+      const otherUserRoutes = allRoutes.filter(r => r.userId !== userProfile.uid);
+      const combined = [...adminRoutes, ...otherUserRoutes];
+      
+      const uniqueRoutes = Array.from(new Map(combined.map(r => [r.id, r])).values());
+      return uniqueRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return savedRoutes;
+  }, [userProfile, savedRoutes, allRoutes]);
+
+
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
@@ -634,7 +646,7 @@ export default function FieldSalesPage() {
                         <div>
                             <p className="font-semibold">{route.name}</p>
                             <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {route.userName}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
