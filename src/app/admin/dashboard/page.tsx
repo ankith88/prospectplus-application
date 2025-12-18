@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -85,6 +84,7 @@ export default function AdminDashboardPage() {
         const routes = routesResponse || [];
         
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
+        const usersMap = new Map(users.map(user => [user.uid, user]));
 
         // Calculate KPIs
         const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status));
