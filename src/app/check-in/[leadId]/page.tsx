@@ -1,0 +1,388 @@
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useForm, FormProvider } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead } from '@/services/firebase';
+import type { Lead, DiscoveryData, Contact } from '@/lib/types';
+import { Loader } from '@/components/ui/loader';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { PostCallOutcomeDialog } from '@/components/post-call-outcome-dialog';
+import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
+import { LogNoteDialog } from '@/components/log-note-dialog';
+
+const discoverySchema = z.object({
+  postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
+  logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc'], { required_error: "This field is required." }),
+  servicePayment: z.enum(['Yes', 'No']).optional(),
+  shippingVolume: z.enum(['<5', '<20', '20-100', '100+'], { required_error: "This field is required." }),
+  expressVsStandard: z.enum(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'], { required_error: "This field is required." }),
+  packageType: z.array(z.string()).min(1, "Please select at least one package type."),
+  currentProvider: z.array(z.string()).min(1, "Please select at least one provider."),
+  otherProvider: z.string().optional(),
+  eCommerceTech: z.array(z.string()).min(1, "Please select at least one platform."),
+  otherECommerceTech: z.string().optional(),
+  sameDayCourier: z.enum(['Yes', 'Occasional', 'Never'], { required_error: "This field is required." }),
+  decisionMaker: z.enum(['Owner', 'Influencer', 'Gatekeeper'], { required_error: "This field is required." }),
+  painPoints: z.string().optional(),
+  checkInCompleted: z.boolean().default(true),
+});
+
+const newContactSchema = z.object({
+    name: z.string().min(1, "Name is required."),
+    title: z.string().min(1, "Title is required."),
+    email: z.string().email("A valid email is required."),
+    phone: z.string().min(1, "Phone number is required."),
+});
+
+const TOTAL_STEPS = 7;
+
+export default function CheckInPage() {
+    const [lead, setLead] = useState<Lead | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [currentStep, setCurrentStep] = useState(1);
+    const [isSaving, setIsSaving] = useState(false);
+    
+    // State for final action dialogs
+    const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
+    const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+    const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
+    const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+
+    const [isAddingContact, setIsAddingContact] = useState(false);
+    const [contacts, setContacts] = useState<Contact[]>([]);
+
+    const params = useParams();
+    const router = useRouter();
+    const { toast } = useToast();
+
+    const methods = useForm<z.infer<typeof discoverySchema>>({
+        resolver: zodResolver(discoverySchema),
+        defaultValues: {
+            checkInCompleted: true
+        }
+    });
+    
+    const newContactForm = useForm<z.infer<typeof newContactSchema>>({
+        resolver: zodResolver(newContactSchema),
+        defaultValues: { name: '', title: '', email: '', phone: '' }
+    });
+
+    useEffect(() => {
+        const fetchLeadData = async () => {
+            const leadId = params.leadId as string;
+            if (!leadId) {
+                router.push('/field-sales');
+                return;
+            }
+            try {
+                const leadData = await getLeadFromFirebase(leadId, true);
+                if (leadData) {
+                    setLead(leadData);
+                    setContacts(leadData.contacts || []);
+                    if (leadData.discoveryData) {
+                        methods.reset(leadData.discoveryData);
+                    }
+                } else {
+                    toast({ variant: 'destructive', title: 'Error', description: 'Lead not found.' });
+                    router.push('/field-sales');
+                }
+            } catch (error) {
+                console.error(error);
+                toast({ variant: 'destructive', title: 'Error', description: 'Failed to load lead data.' });
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchLeadData();
+    }, [params.leadId, router, toast, methods]);
+
+    const handleNext = async () => {
+        let isValid = true;
+        if (currentStep === 3) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
+        if (currentStep === 4) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
+        if (currentStep === 5) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
+        if (currentStep === 6) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
+
+        if (isValid) {
+            setCurrentStep(prev => prev + 1);
+        } else {
+            toast({ variant: "destructive", title: "Missing Information", description: "Please fill out all required fields before proceeding." });
+        }
+    };
+    const handleBack = () => setCurrentStep(prev => prev - 1);
+    
+    const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
+        if (!lead) return;
+        setIsAddingContact(true);
+        try {
+            const newContactId = await addContactToLead(lead.id, values);
+            const newContact: Contact = { ...values, id: newContactId };
+            setContacts(prev => [...prev, newContact]);
+            newContactForm.reset();
+            toast({ title: "Success", description: "New contact added." });
+        } catch (error) {
+            console.error(error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to add contact." });
+        } finally {
+            setIsAddingContact(false);
+        }
+    };
+
+    const handleSaveDiscovery = async () => {
+        const isValid = await methods.trigger();
+        if (!isValid) {
+            toast({ variant: "destructive", title: "Missing Information", description: "Please ensure all required discovery questions are answered." });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            await updateLeadDiscoveryData(lead!.id, methods.getValues());
+            toast({ title: "Success", description: "Check-in and discovery data saved." });
+            router.push(`/leads/${lead!.id}`);
+        } catch (error) {
+            console.error(error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to save data." });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const renderStep = () => {
+        switch (currentStep) {
+            case 1: return <CompanyDetailsStep lead={lead!} />;
+            case 2: return <ContactStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} />;
+            case 3: return <DiscoveryStep1 />;
+            case 4: return <DiscoveryStep2 />;
+            case 5: return <DiscoveryStep3 />;
+            case 6: return <DiscoveryStep4 />;
+            case 7: return <FinalActionsStep onOpenDialog={(type) => {
+                if (type === 'log-outcome') setIsLogOutcomeOpen(true);
+                if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
+                if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
+                if (type === 'log-note') setIsLogNoteOpen(true);
+            }} />;
+            default: return null;
+        }
+    };
+
+    if (loading) {
+        return <div className="flex h-screen w-full items-center justify-center"><Loader /></div>;
+    }
+
+    if (!lead) {
+        return <div className="flex h-screen w-full items-center justify-center"><p>Lead not found.</p></div>;
+    }
+
+    return (
+        <FormProvider {...methods}>
+            <div className="flex flex-col h-screen bg-gray-50 p-4">
+                <header className="flex items-center justify-between mb-4">
+                    <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                    <h1 className="text-lg font-bold">{lead.companyName}</h1>
+                    <div className="w-10"></div>
+                </header>
+
+                <Progress value={(currentStep / TOTAL_STEPS) * 100} className="w-full mb-4" />
+                
+                <main className="flex-grow overflow-y-auto">
+                    {renderStep()}
+                </main>
+
+                <footer className="mt-4 flex items-center justify-between">
+                    {currentStep > 1 && <Button variant="outline" onClick={handleBack}>Back</Button>}
+                    <div className="flex-grow"></div>
+                    {currentStep < TOTAL_STEPS && <Button onClick={handleNext}>Next</Button>}
+                    {currentStep === TOTAL_STEPS && <Button onClick={handleSaveDiscovery} disabled={isSaving}>{isSaving ? <Loader /> : 'Save & Exit'}</Button>}
+                </footer>
+
+                 {/* Dialogs for Final Actions */}
+                <PostCallOutcomeDialog 
+                    isOpen={isLogOutcomeOpen} 
+                    onClose={() => setIsLogOutcomeOpen(false)}
+                    lead={lead}
+                    onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
+                />
+                <ServiceSelectionDialog 
+                    isOpen={isServiceSelectionOpen} 
+                    onOpenChange={setIsServiceSelectionOpen}
+                    leadId={lead.id}
+                    mode={serviceSelectionMode}
+                />
+                <LogNoteDialog 
+                    lead={lead} 
+                    onNoteLogged={() => { setIsLogNoteOpen(false); }}
+                >
+                    <div data-trigger-log-note={isLogNoteOpen}></div>
+                </LogNoteDialog>
+            </div>
+        </FormProvider>
+    );
+}
+
+const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
+    <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Building /> Company Overview</CardTitle>
+            <CardDescription>Review the key details before starting the conversation.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+             <div className="flex items-start gap-3"><MapPin className="h-4 w-4 mt-1 text-muted-foreground shrink-0" /><p>{[lead.address?.address1, lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ')}</p></div>
+             {lead.websiteUrl && <div className="flex items-start gap-3"><Globe className="h-4 w-4 mt-1 text-muted-foreground shrink-0" /><a href={lead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{lead.websiteUrl}</a></div>}
+             <div className="flex items-start gap-3"><Tag className="h-4 w-4 mt-1 text-muted-foreground shrink-0" /><p>{lead.industryCategory || 'N/A'}</p></div>
+             <div className="flex items-start gap-3"><User className="h-4 w-4 mt-1 text-muted-foreground shrink-0" /><p>{lead.dialerAssigned || 'N/A'}</p></div>
+        </CardContent>
+    </Card>
+);
+
+const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean }) => (
+    <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><User /> Contacts</CardTitle>
+            <CardDescription>Review existing contacts or add a new one.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            {contacts.length > 0 ? (
+                contacts.map(contact => (
+                    <div key={contact.id} className="p-3 border rounded-md">
+                        <p className="font-semibold">{contact.name} <span className="font-normal text-muted-foreground">- {contact.title}</span></p>
+                        <div className="text-sm text-muted-foreground mt-1 space-y-1">
+                            <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
+                            <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
+                        </div>
+                    </div>
+                ))
+            ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
+            
+            <hr className="my-4" />
+
+            <h4 className="font-semibold">Add New Contact</h4>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4">
+                    <FormField control={form.control} name="name" render={({ field }) => (
+                        <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                     <FormField control={form.control} name="title" render={({ field }) => (
+                        <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                     <FormField control={form.control} name="email" render={({ field }) => (
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                     <FormField control={form.control} name="phone" render={({ field }) => (
+                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
+                    )}/>
+                    <Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
+                </form>
+            </Form>
+        </CardContent>
+    </Card>
+);
+
+const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
+const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
+const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+
+const DiscoveryStep1 = () => {
+    const { control, watch } = useFormContext();
+    const watchLogisticsSetup = watch('logisticsSetup');
+    return (
+        <Card>
+            <CardHeader><CardTitle>Discovery: Logistics</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="logisticsSetup" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>How do you lodge items?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel className="font-normal">Drop-off</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Routine collection" /></FormControl><FormLabel className="font-normal">Routine collection</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                {watchLogisticsSetup === 'Routine collection' && <FormField control={control} name="servicePayment" render={({ field }) => (
+                    <FormItem className="space-y-3 ml-6"><FormLabel>If using collection: Do you pay for this service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>}
+            </CardContent>
+        </Card>
+    )
+};
+
+const DiscoveryStep2 = () => {
+    const { control } = useFormContext();
+    return (
+        <Card>
+            <CardHeader><CardTitle>Discovery: Shipping Profile</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                <FormField control={control} name="shippingVolume" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="expressVsStandard" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="packageType" render={() => (
+                    <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
+                )}/>
+            </CardContent>
+        </Card>
+    )
+};
+
+const DiscoveryStep3 = () => {
+    const { control } = useFormContext();
+    return (
+        <Card>
+            <CardHeader><CardTitle>Discovery: Providers & Tech</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                <FormField control={control} name="currentProvider" render={() => (
+                    <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="eCommerceTech" render={() => (
+                    <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                )}/>
+            </CardContent>
+        </Card>
+    )
+};
+
+const DiscoveryStep4 = () => {
+    const { control } = useFormContext();
+    return (
+        <Card>
+            <CardHeader><CardTitle>Discovery: Business Needs</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+                <FormField control={control} name="sameDayCourier" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="decisionMaker" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Who decides shipping?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">{(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (<FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="painPoints" render={({ field }) => (
+                    <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+            </CardContent>
+        </Card>
+    )
+};
+
+const FinalActionsStep = ({ onOpenDialog }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void }) => (
+    <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Sparkles/> Next Steps</CardTitle>
+            <CardDescription>The discovery phase is complete. Choose the next action for this lead.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
+            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('free-trial')}><Star className="mr-2"/> Free Trial</Button>
+            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('log-outcome')}><PhoneCall className="mr-2"/> Log Outcome</Button>
+            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('log-note')}><ClipboardEdit className="mr-2"/> Log a Note</Button>
+        </CardContent>
+    </Card>
+);

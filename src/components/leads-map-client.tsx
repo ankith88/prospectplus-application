@@ -734,49 +734,35 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         setRouteDate(undefined);
     };
 
-    const handleCheckIn = async (lead: MapLead) => {
-        if (lead.isProspect) {
-            const url = new URL('/leads/new', window.location.origin);
-            url.searchParams.set('companyName', lead.companyName);
-            if (lead.websiteUrl) url.searchParams.set('websiteUrl', lead.websiteUrl);
-            if (lead.customerPhone) url.searchParams.set('phone', lead.customerPhone);
-            if (prospectSearchQuery) url.searchParams.set('industryCategory', prospectSearchQuery);
-            if (lead.address) {
-                if(lead.address.street) url.searchParams.set('street', lead.address.street);
-                if(lead.address.city) url.searchParams.set('city', lead.address.city);
-                if(lead.address.state) url.searchParams.set('state', lead.address.state);
-                if(lead.address.zip) url.searchParams.set('zip', lead.address.zip);
-                if (lead.address.lat) url.searchParams.set('lat', lead.address.lat.toString());
-                if (lead.address.lng) url.searchParams.set('lng', lead.address.lng.toString());
-            }
-            window.open(url.toString(), '_blank');
-        } else if (lead.id) {
-            const path = lead.isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`;
-            window.open(path, '_blank');
-            logActivity(lead.id, { type: 'Update', notes: 'Checked in at location via map.' });
+    const handleCheckIn = (lead: MapLead) => {
+        if (!lead.id) {
+            toast({variant: 'destructive', title: 'Error', description: 'Cannot check in to a prospect without an ID.'});
+            return;
         }
-    
+
+        router.push(`/check-in/${lead.id}`);
+
         if (loadedRoute && userProfile?.uid) {
-            const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
-            if (updatedLeads.length === 0) {
-                await deleteUserRoute(userProfile.uid, loadedRoute.id!);
-                setLocalSavedRoutes(prev => prev.filter(r => r.id !== loadedRoute.id));
-                handleClearRoute();
-                toast({ title: 'Route Complete!', description: `You have completed all stops for "${loadedRoute.name}". The route has been removed.` });
-            } else {
-                setSelectedRouteLeads(updatedLeads);
-                const updatedRouteData: Partial<StorableRoute> = { 
-                    leads: updatedLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! }))
-                };
-                await updateUserRoute(userProfile.uid, loadedRoute.id!, updatedRouteData);
-                setLocalSavedRoutes(prev => prev.map(r => r.id === loadedRoute.id ? { ...r, leads: updatedLeads } as SavedRoute : r));
-                setLoadedRoute(prev => prev ? { ...prev, leads: updatedLeads } as SavedRoute : null);
-                toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
-            }
-        } else if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
-            setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
-            toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
-        }
+             const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
+             if (updatedLeads.length === 0) {
+                 deleteUserRoute(userProfile.uid, loadedRoute.id!);
+                 setLocalSavedRoutes(prev => prev.filter(r => r.id !== loadedRoute.id));
+                 handleClearRoute();
+                 toast({ title: 'Route Complete!', description: `You have completed all stops for "${loadedRoute.name}". The route has been removed.` });
+             } else {
+                 setSelectedRouteLeads(updatedLeads);
+                 const updatedRouteData: Partial<StorableRoute> = { 
+                     leads: updatedLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! }))
+                 };
+                 updateUserRoute(userProfile.uid, loadedRoute.id!, updatedRouteData);
+                 setLocalSavedRoutes(prev => prev.map(r => r.id === loadedRoute.id ? { ...r, leads: updatedLeads } as SavedRoute : r));
+                 setLoadedRoute(prev => prev ? { ...prev, leads: updatedLeads } as SavedRoute : null);
+                 toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
+             }
+         } else if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
+             setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
+             toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
+         }
     };
     
 
@@ -1483,9 +1469,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                     </span>
                     <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
                 </CardTitle>
-                    <div className="space-y-2 pt-2">
-                        {directions && (
-                            <>
+                    {directions && (
+                        <div className="space-y-2 pt-2">
                             <div className="flex flex-col gap-2">
                                 <CardDescription>
                                     Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
@@ -1543,10 +1528,8 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                 </Popover>
                                 </div>
                             </div>
-                            </>
-                        )}
-                        {!directions && <CardDescription>Select a travel mode to generate a route, or analyze the territory.</CardDescription>}
-                    </div>
+                        </div>
+                    )}
                 </CardHeader>
                 <ScrollArea className="flex-grow">
                 <CardContent className="space-y-2 pt-2">

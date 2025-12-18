@@ -121,6 +121,7 @@ export interface DiscoveryData {
     score?: number;
     routingTag?: string;
     scoringReason?: string;
+    checkInCompleted?: boolean;
 }
 
 export interface Invoice {
