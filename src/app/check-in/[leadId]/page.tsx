@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead } from '@/services/firebase';
 import type { Lead, DiscoveryData, Contact } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { ScoreIndicator } from '@/components/score-indicator';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }).optional(),
+  reasonsToLeave: z.array(z.string()).optional(),
   postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
   logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc'], { required_error: "This field is required." }),
   servicePayment: z.enum(['Yes', 'No']).optional(),
@@ -53,7 +54,7 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 export default function CheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -121,10 +122,11 @@ export default function CheckInPage() {
         if (currentStep === 1) { /* Company Details */ }
         if (currentStep === 2) { /* Contact Details */ }
         if (currentStep === 3) isValid = await methods.trigger(['relevanceCheck']);
-        if (currentStep === 4) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
-        if (currentStep === 5) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
-        if (currentStep === 6) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
-        if (currentStep === 7) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
+        if (currentStep === 4) isValid = await methods.trigger(['reasonsToLeave']);
+        if (currentStep === 5) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
+        if (currentStep === 6) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
+        if (currentStep === 7) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
+        if (currentStep === 8) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
 
         if (isValid) {
             if(currentStep === TOTAL_STEPS - 1) {
@@ -154,6 +156,18 @@ export default function CheckInPage() {
             setIsAddingContact(false);
         }
     };
+    
+     const handleContactTitleUpdate = async (contactId: string, newTitle: string) => {
+        if (!lead) return;
+        try {
+            await updateContactInLead(lead.id, contactId, { title: newTitle });
+            setContacts(prev => prev.map(c => c.id === contactId ? { ...c, title: newTitle } : c));
+            toast({ title: 'Success', description: 'Contact title updated.' });
+        } catch (error) {
+            console.error('Failed to update contact title:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update contact title.' });
+        }
+    };
 
     const handleSaveDiscovery = async () => {
         if (!finalDiscoveryData) {
@@ -176,13 +190,14 @@ export default function CheckInPage() {
     const renderStep = () => {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} />;
-            case 2: return <ContactStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} />;
+            case 2: return <ContactStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} />;
             case 3: return <DiscoveryStep0 />;
             case 4: return <DiscoveryStep1 />;
             case 5: return <DiscoveryStep2 />;
             case 6: return <DiscoveryStep3 />;
             case 7: return <DiscoveryStep4 />;
-            case 8: return <FinalActionsStep discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
+            case 8: return <DiscoveryStep5 />;
+            case 9: return <FinalActionsStep discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'log-outcome') setIsLogOutcomeOpen(true);
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
@@ -277,12 +292,12 @@ const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
              <div className="space-y-2">
                 <Label>Address</Label>
                 <div className="grid grid-cols-1 gap-2 border p-3 rounded-md bg-secondary/30">
-                    <Input readOnly value={lead.address?.address1 || 'N/A'} placeholder="Address 1" />
-                    <Input readOnly value={lead.address?.street || 'N/A'} placeholder="Street" />
+                    <Input readOnly value={lead.address?.address1 || ''} placeholder="Address 1" />
+                    <Input readOnly value={lead.address?.street || ''} placeholder="Street" />
                     <div className="grid grid-cols-3 gap-2">
-                        <Input readOnly value={lead.address?.city || 'N/A'} placeholder="Suburb" />
-                        <Input readOnly value={lead.address?.state || 'N/A'} placeholder="State" />
-                        <Input readOnly value={lead.address?.zip || 'N/A'} placeholder="Postcode" />
+                        <Input readOnly value={lead.address?.city || ''} placeholder="Suburb" />
+                        <Input readOnly value={lead.address?.state || ''} placeholder="State" />
+                        <Input readOnly value={lead.address?.zip || ''} placeholder="Postcode" />
                     </div>
                 </div>
             </div>
@@ -290,13 +305,46 @@ const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
     </StepWrapper>
 );
 
-const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean }) => (
+const ContactStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void }) => {
+    const [editingTitle, setEditingTitle] = useState<{ [key: string]: string }>({});
+
+    const handleTitleChange = (contactId: string, value: string) => {
+        setEditingTitle(prev => ({ ...prev, [contactId]: value }));
+    };
+
+    const handleTitleBlur = (contactId: string) => {
+        if (editingTitle[contactId] && contacts.find(c => c.id === contactId)?.title !== editingTitle[contactId]) {
+            onTitleUpdate(contactId, editingTitle[contactId]);
+        }
+    };
+    
+    return (
     <StepWrapper title="Contacts" description="Confirm the decision maker or add a new contact." script="Hi there, I was hoping to speak to the person in charge of your postage and deliveries?">
         <div className="space-y-4">
             {contacts.length > 0 ? (
                 contacts.map(contact => (
-                    <div key={contact.id} className="p-3 border rounded-md bg-secondary/30">
-                        <p className="font-semibold">{contact.name} <span className="font-normal text-muted-foreground">- {contact.title}</span></p>
+                    <div key={contact.id} className="p-3 border rounded-md bg-secondary/30 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="font-semibold">{contact.name}</p>
+                             <div className="w-1/2">
+                                <Select
+                                    value={editingTitle[contact.id] ?? contact.title}
+                                    onValueChange={(value) => {
+                                        handleTitleChange(contact.id, value);
+                                        onTitleUpdate(contact.id, value);
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select title..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Owner">Owner</SelectItem>
+                                        <SelectItem value="Influencer">Influencer</SelectItem>
+                                        <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                         <div className="text-sm text-muted-foreground mt-1 space-y-1">
                             <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
                             <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
@@ -327,11 +375,8 @@ const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contac
             </Form>
         </div>
     </StepWrapper>
-);
-
-const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
-const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+    )
+};
 
 
 const DiscoveryStep0 = () => {
@@ -345,7 +390,51 @@ const DiscoveryStep0 = () => {
     )
 };
 
+const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
 const DiscoveryStep1 = () => {
+    const { control } = useFormContext();
+    return (
+        <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?">
+            <FormField
+                control={control}
+                name="reasonsToLeave"
+                render={() => (
+                    <FormItem>
+                        <div className="grid grid-cols-2 gap-4">
+                            {reasonsToLeave.map((item) => (
+                                <FormField
+                                    key={item}
+                                    control={control}
+                                    name="reasonsToLeave"
+                                    render={({ field }) => (
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value?.includes(item)}
+                                                    onCheckedChange={(checked) => {
+                                                        const newValue = checked
+                                                            ? [...(field.value || []), item]
+                                                            : field.value?.filter((value) => value !== item);
+                                                        field.onChange(newValue);
+                                                    }}
+                                                />
+                                            </FormControl>
+                                            <FormLabel className="font-normal">{item}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                />
+                            ))}
+                        </div>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        </StepWrapper>
+    );
+};
+
+
+const DiscoveryStep2 = () => {
     const { control, watch } = useFormContext();
     const watchLogisticsSetup = watch('logisticsSetup');
     return (
@@ -363,7 +452,8 @@ const DiscoveryStep1 = () => {
     )
 };
 
-const DiscoveryStep2 = () => {
+const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?">
@@ -380,7 +470,9 @@ const DiscoveryStep2 = () => {
     )
 };
 
-const DiscoveryStep3 = () => {
+const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
+const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
+const DiscoveryStep4 = () => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?">
@@ -394,7 +486,7 @@ const DiscoveryStep3 = () => {
     )
 };
 
-const DiscoveryStep4 = () => {
+const DiscoveryStep5 = () => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?">
@@ -443,3 +535,5 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
+
+    

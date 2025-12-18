@@ -13,6 +13,10 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
           return { score: 0, routingTag: 'Not Relevant', scoringReason: 'Lead is not relevant as nobody leaves the office.' };
       }
       if (data.relevanceCheck === 'Yes') { score += 10; reasonParts.push('+10 for relevance check pass.');}
+      
+      if (data.reasonsToLeave?.includes('Post office')) { score += 5; servicePoints++; reasonParts.push('+5 for leaving for Post Office.'); }
+      if (data.reasonsToLeave?.includes('Banking / deposits')) { score += 5; servicePoints++; reasonParts.push('+5 for leaving for Banking.'); }
+
 
       if (data.postOfficeRelationship === 'Yes-Post Office walk up') { score += 10; servicePoints += 2; reasonParts.push('+10 for Post Office walk-up.'); }
       if (data.logisticsSetup === 'Drop-off') { score += 10; servicePoints++; reasonParts.push('+10 for dropping off items.'); }
@@ -50,3 +54,5 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
 
       return { score: Math.min(score, 100), routingTag, scoringReason };
   }
+
+    

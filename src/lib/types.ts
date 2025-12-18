@@ -106,6 +106,7 @@ export interface Address {
 
 export interface DiscoveryData {
     relevanceCheck?: 'Yes' | 'No';
+    reasonsToLeave?: string[];
     postOfficeRelationship?: 'Yes-Driver' | 'Yes-Post Office walk up' | 'No';
     logisticsSetup?: 'Drop-off' | 'Routine collection' | 'Ad-hoc';
     servicePayment?: 'Yes' | 'No';
@@ -211,3 +212,5 @@ export type SavedRoute = Omit<StorableRoute, 'directions'> & {
     directions: google.maps.DirectionsResult | null;
     scheduledDate?: string | Date;
 };
+
+    
