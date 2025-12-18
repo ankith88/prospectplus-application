@@ -54,7 +54,7 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
 export default function CheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -119,14 +119,13 @@ export default function CheckInPage() {
 
     const handleNext = async () => {
         const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
-            [], // Step 1
-            [], // Step 2
-            ['relevanceCheck'], // Step 3
-            ['reasonsToLeave'], // Step 4
-            ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
-            ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 6
-            ['currentProvider', 'eCommerceTech'], // Step 7
-            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
+            [], // Step 1 is combined company/contact
+            ['relevanceCheck'], // Step 2
+            ['reasonsToLeave'], // Step 3
+            ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 4
+            ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 5
+            ['currentProvider', 'eCommerceTech'], // Step 6
+            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 7
         ];
 
         const fieldsToValidate = stepFields[currentStep - 1];
@@ -202,15 +201,14 @@ export default function CheckInPage() {
     
     const renderStep = () => {
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} />;
-            case 2: return <ContactStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} />;
-            case 3: return <DiscoveryStep0 />;
-            case 4: return <DiscoveryStep1 />;
-            case 5: return <DiscoveryStep2 />;
-            case 6: return <DiscoveryStep3 />;
-            case 7: return <DiscoveryStep4 />;
-            case 8: return <DiscoveryStep5 />;
-            case 9: return <FinalActionsStep discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
+            case 1: return <CompanyAndContactStep lead={lead!} contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} />;
+            case 2: return <DiscoveryStep0 />;
+            case 3: return <DiscoveryStep1 />;
+            case 4: return <DiscoveryStep2 />;
+            case 5: return <DiscoveryStep3 />;
+            case 6: return <DiscoveryStep4 />;
+            case 7: return <DiscoveryStep5 />;
+            case 8: return <FinalActionsStep discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'log-outcome') setIsLogOutcomeOpen(true);
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
@@ -295,30 +293,7 @@ const StepWrapper = ({ title, description, script, children }: { title: string, 
 );
 
 
-const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
-    <StepWrapper title="Company Details" description="Confirm you're at the right place. These details are read-only for confirmation.">
-         <div className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="businessName">Business name</Label>
-                <Input id="businessName" readOnly value={lead.companyName} />
-            </div>
-             <div className="space-y-2">
-                <Label>Address</Label>
-                <div className="grid grid-cols-1 gap-2 border p-3 rounded-md bg-secondary/30">
-                    <Input readOnly value={lead.address?.address1 || ''} placeholder="Address 1" />
-                    <Input readOnly value={lead.address?.street || ''} placeholder="Street" />
-                    <div className="grid grid-cols-3 gap-2">
-                        <Input readOnly value={lead.address?.city || ''} placeholder="Suburb" />
-                        <Input readOnly value={lead.address?.state || ''} placeholder="State" />
-                        <Input readOnly value={lead.address?.zip || ''} placeholder="Postcode" />
-                    </div>
-                </div>
-            </div>
-         </div>
-    </StepWrapper>
-);
-
-const ContactStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void }) => {
+const CompanyAndContactStep = ({ lead, contacts, onAddContact, form, isAddingContact, onTitleUpdate }: { lead: Lead, contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void }) => {
     const [editingTitle, setEditingTitle] = useState<{ [key: string]: string }>({});
 
     const handleTitleChange = (contactId: string, value: string) => {
@@ -330,65 +305,94 @@ const ContactStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpd
             onTitleUpdate(contactId, editingTitle[contactId]);
         }
     };
-    
+
     return (
-    <StepWrapper title="Contacts" description="Confirm the decision maker or add a new contact." script="Hi there, I was hoping to speak to the person in charge of your postage and deliveries?">
-        <div className="space-y-4">
-            {contacts.length > 0 ? (
-                contacts.map(contact => (
-                    <div key={contact.id} className="p-3 border rounded-md bg-secondary/30 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <p className="font-semibold">{contact.name}</p>
-                             <div className="w-1/2">
-                                <Select
-                                    value={editingTitle[contact.id] ?? contact.title}
-                                    onValueChange={(value) => {
-                                        handleTitleChange(contact.id, value);
-                                        onTitleUpdate(contact.id, value);
-                                    }}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select title..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Owner">Owner</SelectItem>
-                                        <SelectItem value="Influencer">Influencer</SelectItem>
-                                        <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
-                                    </SelectContent>
-                                </Select>
+        <StepWrapper title="Company & Contact Details" description="Confirm you're at the right place and speaking to the right person.">
+            <div className="space-y-6">
+                {/* Company Details */}
+                <div className="space-y-4">
+                    <h4 className="font-semibold text-lg">Company Information</h4>
+                    <div className="space-y-2">
+                        <Label htmlFor="businessName">Business name</Label>
+                        <Input id="businessName" readOnly value={lead.companyName} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Address</Label>
+                        <div className="grid grid-cols-1 gap-2 border p-3 rounded-md bg-secondary/30">
+                            <Input readOnly value={lead.address?.address1 || ''} placeholder="Address 1" />
+                            <Input readOnly value={lead.address?.street || ''} placeholder="Street" />
+                            <div className="grid grid-cols-3 gap-2">
+                                <Input readOnly value={lead.address?.city || ''} placeholder="Suburb" />
+                                <Input readOnly value={lead.address?.state || ''} placeholder="State" />
+                                <Input readOnly value={lead.address?.zip || ''} placeholder="Postcode" />
                             </div>
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1 space-y-1">
-                            <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
-                            <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
-                        </div>
                     </div>
-                ))
-            ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
-            
-            <hr className="my-4 border-border" />
+                </div>
 
-            <h4 className="font-semibold">Add New Contact</h4>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4">
-                    <FormField control={form.control} name="name" render={({ field }) => (
-                        <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" /></FormControl><FormMessage /></FormItem>
-                    )}/>
-                     <FormField control={form.control} name="title" render={({ field }) => (
-                        <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" /></FormControl><FormMessage /></FormItem>
-                    )}/>
-                     <FormField control={form.control} name="email" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
-                    )}/>
-                     <FormField control={form.control} name="phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
-                    )}/>
-                    <Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
-                </form>
-            </Form>
-        </div>
-    </StepWrapper>
-    )
+                <hr className="my-6 border-border" />
+
+                {/* Contact Details */}
+                <div className="space-y-4">
+                    <h4 className="font-semibold text-lg">Contact Information</h4>
+                    <p className="text-sm text-muted-foreground">Confirm the decision maker or add a new contact.</p>
+                    <p className="text-sm italic text-primary p-2 bg-primary/10 border-l-4 border-primary rounded-r-md">"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"</p>
+                    {contacts.length > 0 ? (
+                        contacts.map(contact => (
+                            <div key={contact.id} className="p-3 border rounded-md bg-secondary/30 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <p className="font-semibold">{contact.name}</p>
+                                    <div className="w-1/2">
+                                        <Select
+                                            value={editingTitle[contact.id] ?? contact.title}
+                                            onValueChange={(value) => {
+                                                handleTitleChange(contact.id, value);
+                                                onTitleUpdate(contact.id, value);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select title..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Owner">Owner</SelectItem>
+                                                <SelectItem value="Influencer">Influencer</SelectItem>
+                                                <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="text-sm text-muted-foreground mt-1 space-y-1">
+                                    <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
+                                    <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
+                                </div>
+                            </div>
+                        ))
+                    ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
+                    
+                    <hr className="my-4 border-border" />
+
+                    <h4 className="font-semibold">Add New Contact</h4>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4">
+                            <FormField control={form.control} name="name" render={({ field }) => (
+                                <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" /></FormControl><FormMessage /></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="title" render={({ field }) => (
+                                <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" /></FormControl><FormMessage /></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="email" render={({ field }) => (
+                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="phone" render={({ field }) => (
+                                <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
+                            )}/>
+                            <Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
+                        </form>
+                    </Form>
+                </div>
+            </div>
+        </StepWrapper>
+    );
 };
 
 
@@ -548,5 +552,3 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
-
-    
