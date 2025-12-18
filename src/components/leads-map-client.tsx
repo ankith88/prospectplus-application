@@ -22,7 +22,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -200,6 +200,8 @@ export default function LeadsMapClient() {
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const [routeName, setRouteName] = useState('');
   const [isRouteActive, setIsRouteActive] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<'info' | 'select'>('info');
+  const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
   
   // State for creating lead from prospect
   const [prospectToCreate, setProspectToCreate] = useState<MapLead | null>(null);
@@ -271,16 +273,22 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ variant: "destructive", title: "Not enough stops", description: "Please select at least 1 lead to create a route." });
         return;
     }
-    if (leadsForRoute.length > 25) {
-        toast({ variant: "destructive", title: "Too many stops", description: `The maximum number of stops for a route is 25. You have selected ${leadsForRoute.length}.` });
-        return;
-    }
 
     if (!myLocation) {
         toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position before creating a route.' });
         handleShowMyLocation();
         return;
     }
+    
+    let leadsToRoute = [...leadsForRoute];
+    if (leadsToRoute.length > 25) {
+        toast({
+            title: 'Too many stops for one route',
+            description: `Google Maps allows a maximum of 25 stops. We'll create a route for the first 25, and you can create another for the remaining ${leadsToRoute.length - 25}.`,
+        });
+        leadsToRoute = leadsForRoute.slice(0, 25);
+    }
+
 
     setTravelMode(selectedTravelMode);
     setIsCalculatingRoute(true);
@@ -289,7 +297,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
     const origin = myLocation;
     const destination = myLocation;
-    const waypoints = leadsForRoute.map(lead => ({
+    const waypoints = leadsToRoute.map(lead => ({
         location: { lat: lead.latitude!, lng: lead.longitude! },
         stopover: true,
     }));
@@ -308,7 +316,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             if (status === window.google.maps.DirectionsStatus.OK) {
                 setDirections(result);
                 // Also set the selected leads for the route stops UI
-                setSelectedRouteLeads(leadsForRoute);
+                setSelectedRouteLeads(leadsToRoute);
             } else {
                 console.error(`error fetching directions ${result}`);
                 toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
@@ -406,8 +414,18 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
 
   const onMarkerClick = useCallback((item: MapLead) => {
-    setSelectedLead(item);
-  }, []);
+    if (selectionMode === 'select') {
+        setSelectedRouteLeads(prev => {
+            if (prev.some(l => l.id === item.id)) {
+                return prev.filter(l => l.id !== item.id);
+            } else {
+                return [...prev, item];
+            }
+        });
+    } else {
+        setSelectedLead(item);
+    }
+  }, [selectionMode]);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null);
@@ -425,10 +443,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, []);
   
   const onMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
-    if (selectedLead) {
-        setSelectedLead(null);
+    if (selectionMode === 'info') {
+      setSelectedLead(null);
     }
-  }, [selectedLead]);
+  }, [selectionMode]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -735,36 +753,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             toast({variant: 'destructive', title: 'Error', description: 'Cannot check in to a prospect without an ID.'});
             return;
         }
-
-        logActivity(lead.id, { 
-            type: 'Update', 
-            notes: 'Checked in at location via map.', 
-            author: userProfile?.displayName 
-        });
-
         router.push(`/check-in/${lead.id}`);
-
-        if (loadedRoute && userProfile?.uid) {
-             const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
-             if (updatedLeads.length === 0) {
-                 deleteUserRoute(userProfile.uid, loadedRoute.id!);
-                 setLocalSavedRoutes(prev => prev.filter(r => r.id !== loadedRoute.id));
-                 handleClearRoute();
-                 toast({ title: 'Route Complete!', description: `You have completed all stops for "${loadedRoute.name}". The route has been removed.` });
-             } else {
-                 setSelectedRouteLeads(updatedLeads);
-                 const updatedRouteData: Partial<StorableRoute> = { 
-                     leads: updatedLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! }))
-                 };
-                 updateUserRoute(userProfile.uid, loadedRoute.id!, updatedRouteData);
-                 setLocalSavedRoutes(prev => prev.map(r => r.id === loadedRoute.id ? { ...r, leads: updatedLeads } as SavedRoute : r));
-                 setLoadedRoute(prev => prev ? { ...prev, leads: updatedLeads } as SavedRoute : null);
-                 toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
-             }
-         } else if (selectedRouteLeads.some(routeLead => routeLead.id === lead.id)) {
-             setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id));
-             toast({ title: 'Stop Completed', description: `${lead.companyName} has been removed from your active route.` });
-         }
     };
     
 
@@ -817,40 +806,35 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   }, [drawnTerritory, selectedRouteLeads, findProspects, toast]);
 
 
-    const onCircleComplete = useCallback((circle: google.maps.Circle) => {
-        if (!window.google || !map) return;
-        
-        const center = circle.getCenter();
-        const radius = circle.getRadius();
-        
-        if (!center || !radius) return;
-
-        const leadsInCircle = filteredData.filter(lead => {
-            if (lead.isCompany) {
-                return false; // Exclude companies from selection
-            }
+    const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
+        const leadsInShape = filteredData.filter(lead => {
+            if (lead.isCompany) return false;
             if (lead.latitude && lead.longitude) {
-                const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(center, leadLatLng);
-                return distance <= radius;
+                const leadLatLng = new google.maps.LatLng(lead.latitude, lead.longitude);
+                if (overlay.get('radius')) { // It's a circle
+                    return google.maps.geometry.spherical.computeDistanceBetween(
+                        (overlay as google.maps.Circle).getCenter()!, 
+                        leadLatLng
+                    ) <= (overlay as google.maps.Circle).getRadius();
+                } else if (overlay.get('bounds')) { // It's a rectangle
+                    return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
+                } else { // It's a polygon
+                    return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
+                }
             }
             return false;
         });
 
-        setSelectedRouteLeads(leadsInCircle);
-        setDrawnTerritory({ center, radius });
-
+        setSelectedRouteLeads(prev => [...new Set([...prev, ...leadsInShape])]);
+        
         toast({
-          title: `${leadsInCircle.length} Stops Selected`,
-          description: "You can now create a route or analyze the territory.",
+          title: `${leadsInShape.length} Stops Added`,
+          description: "You can continue to select more areas or individual stops.",
         });
         
-        circle.setMap(null);
-        setIsDrawing(false);
-        if (drawingManagerRef.current) {
-            drawingManagerRef.current.setDrawingMode(null);
-        }
-    }, [map, filteredData, toast]);
+        (overlay as any).setMap(null);
+        setDrawingMode(null);
+    };
 
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
@@ -993,16 +977,18 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         toast({ title: 'Route Stopped', description: 'Active route has been cleared.' });
     };
 
-    const startDrawing = () => {
+    const startDrawing = (mode: google.maps.drawing.OverlayType) => {
         setIsDrawing(true);
+        setDrawingMode(mode);
         toast({
             title: "Drawing Mode Activated",
-            description: "Draw a circle on the map to select leads. Press Esc or click Cancel to exit.",
+            description: `Draw a ${mode.toLowerCase()} on the map to select leads. Press Esc or click Cancel to exit.`,
         });
     };
 
     const cancelDrawing = () => {
         setIsDrawing(false);
+        setDrawingMode(null);
         if (drawingManagerRef.current) {
             drawingManagerRef.current.setDrawingMode(null);
         }
@@ -1063,101 +1049,12 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     };
 
     return (
-    <div className="flex flex-col h-full gap-4">
-      <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
-                <AlertDialogDescription>
-                    A lead with this name or address already exists in the system.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
-                    View Existing Lead
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Create New Lead</DialogTitle>
-                <DialogDescription>Create a new lead for {prospectToCreate?.companyName}.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <p>Company: <span className="font-semibold">{prospectToCreate?.companyName}</span></p>
-                <p>Address: <span className="font-semibold">{formatAddress(prospectToCreate?.address)}</span></p>
-                <Label htmlFor="initial-notes">Initial Notes</Label>
-                <Textarea 
-                    id="initial-notes"
-                    value={initialNotes}
-                    onChange={(e) => setInitialNotes(e.target.value)}
-                    placeholder="Add any initial notes or comments here..."
-                />
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={viewingDescription !== null} onOpenChange={(open) => !open && setViewingDescription(null)}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>AI Prospect Description</DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh]">
-                <div className="py-4 text-sm text-muted-foreground pr-6">
-                    {viewingDescription}
-                </div>
-            </ScrollArea>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setViewingDescription(null)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
-        <DialogContent className="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Nearby Signed Customers</DialogTitle>
-                <DialogDescription>
-                    Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh]">
-                {nearbyCompanies.length > 0 ? (
-                    <div className="space-y-2 p-1">
-                        {nearbyCompanies.map(company => (
-                             <Card key={company.id} className="p-3">
-                                <div className="flex flex-col space-y-1">
-                                    <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                    <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                    <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                    {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                    {company.websiteUrl && (
-                                        <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
-                                            <Globe className="h-4 w-4" />
-                                            <span>Visit Website</span>
-                                        </a>
-                                    )}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-                )}
-            </ScrollArea>
-            <DialogFooter>
-                <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Main Layout: Controls, then Stops/Map */}
-      <div className="flex-shrink-0">
-        <Collapsible>
+    <div className="flex flex-col lg:flex-row h-full gap-4">
+       <div className={cn(
+            "flex-shrink-0 flex flex-col gap-4",
+            selectedRouteLeads.length > 0 ? "lg:w-1/3" : "lg:w-auto"
+        )}>
+         <Collapsible defaultOpen>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1181,7 +1078,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </TabsList>
                         </CardContent>
                         <TabsContent value="filters">
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                 <Label htmlFor="type-mobile">Show</Label>
                                 <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
@@ -1225,7 +1122,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </CardContent>
                         </TabsContent>
                         <TabsContent value="actions">
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="geo-search-mobile">Go to Location</Label>
                                     <div className="flex items-center gap-2">
@@ -1247,16 +1144,29 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Draw to Route</Label>
-                                    <div className="flex gap-2">
-                                        <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
-                                            <PenSquare className="mr-2 h-4 w-4" /> Select Area
-                                        </Button>
-                                        {isDrawing && (
-                                            <Button onClick={cancelDrawing} variant="destructive">
-                                                <X className="mr-2 h-4 w-4" /> Cancel
+                                    <Label>Selection Mode</Label>
+                                    <div className='flex items-center gap-2'>
+                                    <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
+                                        <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
+                                    </Button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" className="w-full" disabled={isDrawing}>
+                                                <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
                                             </Button>
-                                        )}
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    {isDrawing && (
+                                        <Button onClick={cancelDrawing} variant="destructive">
+                                            <X className="mr-2 h-4 w-4" />
+                                        </Button>
+                                    )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -1291,10 +1201,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-      </div>
 
-       {selectedRouteLeads.length > 0 && (
-             <div className="flex-shrink-0 bg-card/95 border rounded-lg">
+         {selectedRouteLeads.length > 0 && (
+             <div className="flex-shrink-0 bg-card/95 border rounded-lg mt-4 lg:mt-0 lg:flex-grow lg:min-h-0">
                 <div className="flex flex-col h-full">
                     <CardHeader className="pb-2 flex-shrink-0">
                     <CardTitle className="flex items-center justify-between">
@@ -1366,7 +1275,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </div>
                         )}
                     </CardHeader>
-                    <ScrollArea className="flex-grow min-h-0 px-6 max-h-64">
+                    <ScrollArea className="flex-grow min-h-0 px-6 max-h-64 lg:max-h-full">
                         <div className="space-y-2 pt-2">
                             {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
                             if (!item.lead) return null;
@@ -1438,9 +1347,10 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </div>
                 </div>
             )}
-        
+       </div>
+      
       {/* Map Container */}
-      <div className="flex-grow min-h-0 relative rounded-lg overflow-hidden">
+      <div className="flex-grow min-h-[50vh] lg:min-h-0 relative rounded-lg overflow-hidden">
         <GoogleMap
           mapContainerStyle={containerStyle}
           center={center}
@@ -1452,16 +1362,37 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
           options={{
             streetViewControl: false,
             mapTypeControl: false,
+            clickableIcons: false,
           }}
         >
           {isDrawing && window.google && (
             <DrawingManagerF
               onLoad={(dm) => (drawingManagerRef.current = dm)}
-              onCircleComplete={onCircleComplete}
-              drawingMode={window.google.maps.drawing.OverlayType.CIRCLE}
+              onCircleComplete={(c) => onDrawingComplete(c)}
+              onRectangleComplete={(r) => onDrawingComplete(r)}
+              onPolygonComplete={(p) => onDrawingComplete(p)}
+              drawingMode={drawingMode}
               options={{
                 drawingControl: false,
                 circleOptions: {
+                  fillColor: '#8884d8',
+                  fillOpacity: 0.2,
+                  strokeColor: '#8884d8',
+                  strokeWeight: 2,
+                  clickable: false,
+                  editable: false,
+                  zIndex: 1,
+                },
+                 rectangleOptions: {
+                  fillColor: '#8884d8',
+                  fillOpacity: 0.2,
+                  strokeColor: '#8884d8',
+                  strokeWeight: 2,
+                  clickable: false,
+                  editable: false,
+                  zIndex: 1,
+                },
+                 polygonOptions: {
                   fillColor: '#8884d8',
                   fillOpacity: 0.2,
                   strokeColor: '#8884d8',
@@ -1577,7 +1508,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             <Briefcase className="mr-2 h-4 w-4" />
                             View Profile
                         </Button>
-                        {!selectedLead.isCompany && userProfile?.role === 'Field Sales' && (
+                         {!selectedLead.isCompany && userProfile?.role === 'Field Sales' && (
                             <Button size="sm" variant="secondary" onClick={() => handleCheckIn(selectedLead)} className="flex-1">
                                 <CheckSquare className="mr-2 h-4 w-4" />
                                 Check In
