@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -409,15 +410,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
   const filteredData = useMemo(() => {
     let dataToFilter = mapData;
 
-    // For Field Sales users, filter to only their assigned leads (and all companies).
     if (userProfile?.role === 'Field Sales') {
       dataToFilter = mapData.filter(item => {
-        // Always include companies (signed customers)
-        if (item.isCompany) {
-          return true;
-        }
-        // Only include leads assigned to them
-        return item.dialerAssigned === userProfile.displayName;
+        return item.isCompany || (item.dialerAssigned === userProfile.displayName);
       });
     }
 
