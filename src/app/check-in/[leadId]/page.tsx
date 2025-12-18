@@ -300,12 +300,6 @@ const CompanyAndContactStep = ({ lead, contacts, onAddContact, form, isAddingCon
         setEditingTitle(prev => ({ ...prev, [contactId]: value }));
     };
 
-    const handleTitleBlur = (contactId: string) => {
-        if (editingTitle[contactId] && contacts.find(c => c.id === contactId)?.title !== editingTitle[contactId]) {
-            onTitleUpdate(contactId, editingTitle[contactId]);
-        }
-    };
-
     return (
         <StepWrapper title="Company & Contact Details" description="Confirm you're at the right place and speaking to the right person.">
             <div className="space-y-6">
@@ -554,3 +548,5 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
+
+    
