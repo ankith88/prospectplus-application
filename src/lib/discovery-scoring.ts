@@ -2,7 +2,7 @@
 'use client';
 import type { DiscoveryData } from './types';
 
-export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score: number, routingTag: string, scoringReason: string } {
+export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score: number, routingTag: string, scoringReason: string } & Partial<DiscoveryData> {
       let score = 0;
       const reasonParts: string[] = [];
       let servicePoints = 0;
@@ -10,7 +10,7 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
 
       // Scoring logic
       if (data.relevanceCheck === 'No') {
-          return { score: 0, routingTag: 'Not Relevant', scoringReason: 'Lead is not relevant as nobody leaves the office.' };
+          return { ...data, score: 0, routingTag: 'Not Relevant', scoringReason: 'Lead is not relevant as nobody leaves the office.' };
       }
       if (data.relevanceCheck === 'Yes') { score += 10; reasonParts.push('+10 for relevance check pass.');}
       
@@ -52,7 +52,7 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       
       const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'Score based on initial data.';
 
-      return { score: Math.min(score, 100), routingTag, scoringReason };
+      return { ...data, score: Math.min(score, 100), routingTag, scoringReason };
   }
 
     

@@ -118,26 +118,39 @@ export default function CheckInPage() {
     }, [params.leadId, router, toast, methods]);
 
     const handleNext = async () => {
-        let isValid = true;
-        if (currentStep === 1) { /* Company Details */ }
-        if (currentStep === 2) { /* Contact Details */ }
-        if (currentStep === 3) isValid = await methods.trigger(['relevanceCheck']);
-        if (currentStep === 4) isValid = await methods.trigger(['reasonsToLeave']);
-        if (currentStep === 5) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
-        if (currentStep === 6) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
-        if (currentStep === 7) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
-        if (currentStep === 8) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
+        const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
+            [], // Step 1
+            [], // Step 2
+            ['relevanceCheck'], // Step 3
+            ['reasonsToLeave'], // Step 4
+            ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
+            ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 6
+            ['currentProvider', 'eCommerceTech'], // Step 7
+            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
+        ];
 
+        const fieldsToValidate = stepFields[currentStep - 1];
+        const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
+        
         if (isValid) {
-            if(currentStep === TOTAL_STEPS - 1) {
-                const discoveryData = calculateScoreAndRouting(methods.getValues());
-                setFinalDiscoveryData(discoveryData);
+            if (currentStep === TOTAL_STEPS - 1) {
+                // Now validate all fields before showing the final step
+                const allFieldsValid = await methods.trigger();
+                if (allFieldsValid) {
+                    const discoveryData = calculateScoreAndRouting(methods.getValues());
+                    setFinalDiscoveryData(discoveryData);
+                    setCurrentStep(prev => prev + 1);
+                } else {
+                     toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
+                }
+            } else {
+                setCurrentStep(prev => prev + 1);
             }
-            setCurrentStep(prev => prev + 1);
         } else {
             toast({ variant: "destructive", title: "Missing Information", description: "Please fill out all required fields before proceeding." });
         }
     };
+
     const handleBack = () => setCurrentStep(prev => prev - 1);
     
     const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
