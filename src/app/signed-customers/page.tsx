@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Lead, Address } from '@/lib/types'
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
@@ -57,11 +57,35 @@ export default function SignedCustomersPage() {
   const { toast } = useToast();
   const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
 
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
+  
+  const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
+    if (node !== null && isLoaded && map && !autocompleteRef.current) {
+        const autocomplete = new window.google.maps.places.Autocomplete(node, {
+            types: ['geocode'],
+            componentRestrictions: { country: 'au' },
+        });
+        autocomplete.setFields(['geometry']);
+        
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.geometry?.viewport) {
+                map.fitBounds(place.geometry.viewport);
+            } else if (place.geometry?.location) {
+                map.panTo(place.geometry.location);
+                map.setZoom(15);
+            }
+        });
+        autocompleteRef.current = autocomplete;
+    }
+  }, [isLoaded, map]);
 
   const fetchSignedLeads = async () => {
     try {
@@ -178,6 +202,19 @@ export default function SignedCustomersPage() {
                             placeholder="Select franchisees..."
                         />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="geo-search">Go to Location</Label>
+                      <Input
+                          id="geo-search"
+                          ref={geoSearchInputRef}
+                          placeholder="Suburb, state, postcode..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                            }
+                          }}
+                      />
+                    </div>
                      {hasActiveFilters && (
                         <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
@@ -202,6 +239,7 @@ export default function SignedCustomersPage() {
                         mapContainerStyle={containerStyle}
                         center={center}
                         zoom={4}
+                        onLoad={setMap}
                     >
                         {mapCompanies.map(company => (
                             <MarkerF
@@ -312,3 +350,5 @@ export default function SignedCustomersPage() {
     </div>
   )
 }
+
+    
