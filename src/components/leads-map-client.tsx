@@ -739,14 +739,13 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             return;
         }
 
-        router.push(`/check-in/${lead.id}`);
-
-        // Log the check-in activity
         logActivity(lead.id, { 
             type: 'Update', 
             notes: 'Checked in at location via map.', 
             author: userProfile?.displayName 
         });
+
+        router.push(`/check-in/${lead.id}`);
 
         if (loadedRoute && userProfile?.uid) {
              const updatedLeads = selectedRouteLeads.filter(l => l.id !== lead.id);
@@ -1159,145 +1158,157 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
             </DialogFooter>
         </DialogContent>
       </Dialog>
-        <div className="flex flex-col gap-4 h-full">
-            <Collapsible>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <MapIcon className="h-5 w-5" />
-                            <CardTitle>Map Controls</CardTitle>
-                            <Badge variant="secondary">{filteredData.length} Location(s)</Badge>
-                        </div>
-                        <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                                <SlidersHorizontal className="h-4 w-4" />
-                                <span className="ml-2">Toggle Controls</span>
-                            </Button>
-                        </CollapsibleTrigger>
-                    </CardHeader>
-                    <CollapsibleContent>
-                        <Tabs defaultValue="filters">
-                            <CardContent>
-                                <TabsList className="grid w-full grid-cols-3">
-                                    <TabsTrigger value="filters">Filters</TabsTrigger>
-                                    <TabsTrigger value="actions">Actions</TabsTrigger>
-                                    <TabsTrigger value="routes">Routes</TabsTrigger>
-                                </TabsList>
-                            </CardContent>
-                            <TabsContent value="filters">
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                                    <div className="space-y-2">
-                                    <Label htmlFor="type">Show</Label>
-                                    <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Select type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                        <SelectItem value="all">All Locations</SelectItem>
-                                        <SelectItem value="leads">Leads Only</SelectItem>
-                                        <SelectItem value="companies">Signed Customers Only</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="franchisee">Franchisee</Label>
-                                        <MultiSelectCombobox
-                                            options={uniqueFranchisees}
-                                            selected={filters.franchisee}
-                                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                                            placeholder="Select Franchisees..."
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="status">Status</Label>
-                                        <MultiSelectCombobox
-                                            options={uniqueStatuses}
-                                            selected={filters.status}
-                                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
-                                            placeholder="Select Statuses..."
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="state">State</Label>
-                                        <MultiSelectCombobox
-                                            options={uniqueStates}
-                                            selected={filters.state}
-                                            onSelectedChange={(selected) => handleFilterChange('state', selected)}
-                                            placeholder="Select States..."
-                                        />
-                                    </div>
-                                </CardContent>
-                            </TabsContent>
-                            <TabsContent value="actions">
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="geo-search">Go to Location</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input id="geo-search" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
-                                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>My Location</Label>
-                                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
-                                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
-                                                {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4"/>}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Draw to Route</Label>
-                                        <div className="flex gap-2">
-                                            <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
-                                                <PenSquare className="mr-2 h-4 w-4" /> Select Area
-                                            </Button>
-                                            {isDrawing && (
-                                                <Button onClick={cancelDrawing} variant="destructive">
-                                                    <X className="mr-2 h-4 w-4" /> Cancel
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </TabsContent>
-                            <TabsContent value="routes">
-                                <CardContent>
-                                    {localSavedRoutes.length > 0 ? (
-                                        <ScrollArea className="h-48">
-                                            <div className="space-y-2">
-                                                {localSavedRoutes.map(route => (
-                                                    <Card key={route.id} className="p-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <div>
-                                                                <p className="font-semibold">{route.name}</p>
-                                                                <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
-                                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
-                                                            </div>
-                                                        </div>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </ScrollArea>
+        <div className="flex flex-col lg:flex-row gap-4 h-full">
+             <aside className={cn(
+                "transition-all duration-300 ease-in-out bg-card/95 border rounded-lg flex flex-col backdrop-blur-sm",
+                (selectedRouteLeads.length > 0) ? "w-full lg:w-96 lg:h-full lg:border-l" : "w-0 h-0 p-0 border-none hidden"
+            )}>
+                {(selectedRouteLeads.length > 0) && (
+                <div className="flex flex-col h-full">
+                    <CardHeader className="pb-2 flex-shrink-0">
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                            <Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})
+                            {isRouteActive && <Badge variant="destructive">Active</Badge>}
+                        </span>
+                        <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
+                    </CardTitle>
+                        {directions && (
+                            <div className="space-y-2 pt-2">
+                                <div className="flex flex-col gap-2">
+                                    <CardDescription>
+                                        Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
+                                        <br />
+                                        Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
+                                    </CardDescription>
+                                    {isRouteActive ? (
+                                        <Button onClick={handleStopRoute} className="w-full" variant="destructive">
+                                            <X className="mr-2 h-4 w-4" />
+                                            Stop Route
+                                        </Button>
                                     ) : (
-                                        <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
+                                        <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
+                                            Start Route
+                                        </Button>
                                     )}
-                                </CardContent>
-                            </TabsContent>
-                        </Tabs>
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
-            
-            <div className="flex-grow min-h-[300px] h-full relative">
-                <div className="h-full w-full absolute top-0 left-0">
+                                </div>
+                                <div className="space-y-1">
+                                    <Label htmlFor="route-name">Route Name</Label>
+                                    <div className="flex gap-2">
+                                    <Input 
+                                        id="route-name" 
+                                        placeholder="e.g. Tuesday Afternoon Run" 
+                                        value={routeName}
+                                        onChange={(e) => setRouteName(e.target.value)}
+                                    />
+                                    <Button onClick={handleSaveRoute} disabled={!routeName && !routeDate}>
+                                        <Save className="mr-2 h-4 w-4" /> Save
+                                    </Button>
+                                    </div>
+                                    <div className="space-y-1">
+                                    <Label htmlFor="route-date">Schedule Date (Optional)</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                id="route-date"
+                                                variant={"outline"}
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !routeDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0 z-[11]">
+                                            <Calendar
+                                                mode="single"
+                                                selected={routeDate}
+                                                onSelect={setRouteDate}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </CardHeader>
+                    <ScrollArea className="flex-grow min-h-0">
+                        <CardContent className="space-y-2 pt-2">
+                            {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
+                            if (!item.lead) return null;
+                            const lead = item.lead;
+                            const leg = (item as any).leg;
+                            return (
+                                <Card key={lead.id} className="p-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                    <p className="font-bold">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</p>
+                                    <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                    </div>
+                                    <LeadStatusBadge status={lead.status} />
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    {leg && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {leg?.duration?.text} • {leg?.distance?.text}
+                                        </p>
+                                    )}
+                                    <div className='flex gap-2'>
+                                    <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                                        {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
+                                        {lead.isProspect ? 'Add New Lead' : 'Check In'}
+                                    </Button>
+                                    <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                    </div>
+                                </div>
+                                </Card>
+                            )
+                            })}
+                        </CardContent>
+                    </ScrollArea>
+                    <CardFooter className="flex flex-col gap-2 flex-shrink-0 pt-4">
+                        {drawnTerritory && (
+                            <Button onClick={handleAnalyzeTerritory} disabled={analyzingTerritory} className="w-full">
+                                {analyzingTerritory ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                Analyze Territory for Opportunities
+                            </Button>
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                                    {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
+                                    {directions ? 'Re-calculate Route' : 'Create Route'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
+                                    <Car className="mr-2 h-4 w-4" />
+                                    Driving
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
+                                    <Footprints className="mr-2 h-4 w-4" />
+                                    Walking
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
+                                    <Bike className="mr-2 h-4 w-4" />
+                                    Bicycling
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button variant="secondary" onClick={() => { selectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
+                            Clear Selection
+                        </Button>
+                    </CardFooter>
+                </div>
+                )}
+            </aside>
+            <div className="flex-grow min-h-[60vh] h-full relative">
+                 <div className="h-full w-full absolute top-0 left-0">
                     <GoogleMap
                     mapContainerStyle={containerStyle}
                     center={center}
@@ -1459,157 +1470,143 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                             </div>
                         </InfoWindowF>
                     )}
-                </GoogleMap>
+                    </GoogleMap>
+                 </div>
             </div>
-             <aside className={cn(
-                "transition-all duration-300 ease-in-out bg-card/95 border-l rounded-lg flex flex-col absolute top-0 right-0 h-full z-10 backdrop-blur-sm",
-                (selectedRouteLeads.length > 0) ? "w-full md:w-96" : "w-0 p-0 border-none hidden"
-            )}>
-                {(selectedRouteLeads.length > 0) && (
-                <div className="flex flex-col h-full">
-                    <CardHeader className="pb-2 flex-shrink-0">
-                    <CardTitle className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                            <Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})
-                            {isRouteActive && <Badge variant="destructive">Active</Badge>}
-                        </span>
-                        <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
-                    </CardTitle>
-                        {directions && (
-                            <div className="space-y-2 pt-2">
-                                <div className="flex flex-col gap-2">
-                                    <CardDescription>
-                                        Total Distance: {directions.routes[0].legs.reduce((total, leg) => total + (leg.distance?.value || 0), 0) / 1000} km
-                                        <br />
-                                        Total Duration: {Math.round(directions.routes[0].legs.reduce((total, leg) => total + (leg.duration?.value || 0), 0) / 60)} mins
-                                    </CardDescription>
-                                    {isRouteActive ? (
-                                        <Button onClick={handleStopRoute} className="w-full" variant="destructive">
-                                            <X className="mr-2 h-4 w-4" />
-                                            Stop Route
-                                        </Button>
-                                    ) : (
-                                        <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700">
-                                            Start Route
-                                        </Button>
-                                    )}
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="route-name">Route Name</Label>
-                                    <div className="flex gap-2">
-                                    <Input 
-                                        id="route-name" 
-                                        placeholder="e.g. Tuesday Afternoon Run" 
-                                        value={routeName}
-                                        onChange={(e) => setRouteName(e.target.value)}
-                                    />
-                                    <Button onClick={handleSaveRoute} disabled={!routeName && !routeDate}>
-                                        <Save className="mr-2 h-4 w-4" /> Save
-                                    </Button>
-                                    </div>
-                                    <div className="space-y-1">
-                                    <Label htmlFor="route-date">Schedule Date (Optional)</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                id="route-date"
-                                                variant={"outline"}
-                                                className={cn(
-                                                    "w-full justify-start text-left font-normal",
-                                                    !routeDate && "text-muted-foreground"
-                                                )}
-                                            >
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0 z-[11]">
-                                            <Calendar
-                                                mode="single"
-                                                selected={routeDate}
-                                                onSelect={setRouteDate}
-                                                initialFocus
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </CardHeader>
-                    <ScrollArea className="flex-grow min-h-0">
-                        <CardContent className="space-y-2 pt-2">
-                            {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
-                            if (!item.lead) return null;
-                            const lead = item.lead;
-                            const leg = (item as any).leg;
-                            return (
-                                <Card key={lead.id} className="p-3">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                    <p className="font-bold">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</p>
-                                    <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
-                                    </div>
-                                    <LeadStatusBadge status={lead.status} />
-                                </div>
-                                <div className="flex items-center justify-between mt-2">
-                                    {leg && (
-                                        <p className="text-xs text-muted-foreground">
-                                            {leg?.duration?.text} • {leg?.distance?.text}
-                                        </p>
-                                    )}
-                                    <div className='flex gap-2'>
-                                    <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                                        {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4"/> : <CheckSquare className="mr-2 h-4 w-4"/>}
-                                        {lead.isProspect ? 'Add New Lead' : 'Check In'}
-                                    </Button>
-                                    <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    </div>
-                                </div>
-                                </Card>
-                            )
-                            })}
-                        </CardContent>
-                    </ScrollArea>
-                    <CardFooter className="flex flex-col gap-2 flex-shrink-0">
-                        {drawnTerritory && (
-                            <Button onClick={handleAnalyzeTerritory} disabled={analyzingTerritory} className="w-full">
-                                {analyzingTerritory ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                Analyze Territory for Opportunities
+             <Collapsible className="lg:hidden">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <MapIcon className="h-5 w-5" />
+                            <CardTitle>Controls</CardTitle>
+                        </div>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="ml-2">Toggle Controls</span>
                             </Button>
-                        )}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
-                                    {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
-                                    {directions ? 'Re-calculate Route' : 'Create Route'}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}>
-                                    <Car className="mr-2 h-4 w-4" />
-                                    Driving
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}>
-                                    <Footprints className="mr-2 h-4 w-4" />
-                                    Walking
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}>
-                                    <Bike className="mr-2 h-4 w-4" />
-                                    Bicycling
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button variant="secondary" onClick={() => { selectedRouteLeads([]); setDrawnTerritory(null); }} className="w-full">
-                            Clear Selection
-                        </Button>
-                    </CardFooter>
-                </div>
-                )}
-            </aside>
-            </div>
+                        </CollapsibleTrigger>
+                    </CardHeader>
+                    <CollapsibleContent>
+                        <Tabs defaultValue="filters">
+                            <CardContent>
+                                <TabsList className="grid w-full grid-cols-3">
+                                    <TabsTrigger value="filters">Filters</TabsTrigger>
+                                    <TabsTrigger value="actions">Actions</TabsTrigger>
+                                    <TabsTrigger value="routes">Routes</TabsTrigger>
+                                </TabsList>
+                            </CardContent>
+                            <TabsContent value="filters">
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                    <Label htmlFor="type-mobile">Show</Label>
+                                    <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
+                                        <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                        <SelectItem value="all">All Locations</SelectItem>
+                                        <SelectItem value="leads">Leads Only</SelectItem>
+                                        <SelectItem value="companies">Signed Customers Only</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="franchisee-mobile">Franchisee</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueFranchisees}
+                                            selected={filters.franchisee}
+                                            onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
+                                            placeholder="Select Franchisees..."
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="status-mobile">Status</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueStatuses}
+                                            selected={filters.status}
+                                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                                            placeholder="Select Statuses..."
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="state-mobile">State</Label>
+                                        <MultiSelectCombobox
+                                            options={uniqueStates}
+                                            selected={filters.state}
+                                            onSelectedChange={(selected) => handleFilterChange('state', selected)}
+                                            placeholder="Select States..."
+                                        />
+                                    </div>
+                                </CardContent>
+                            </TabsContent>
+                            <TabsContent value="actions">
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="geo-search-mobile">Go to Location</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id="geo-search-mobile" placeholder="Suburb, state, postcode..." value={geoSearchQuery} onChange={(e) => setGeoSearchQuery(e.target.value)} />
+                                            <Button onClick={handleGeoSearch}><Search className="h-4 w-4"/></Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>My Location</Label>
+                                        <Button onClick={handleShowMyLocation} variant="outline" className="w-full"><Locate className="mr-2 h-4 w-4" /> Show My Location</Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="prospect-search-mobile">Find Prospects Near Me</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input id="prospect-search-mobile" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={(e) => setProspectSearchQuery(e.target.value)} />
+                                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
+                                                {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4"/>}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Draw to Route</Label>
+                                        <div className="flex gap-2">
+                                            <Button onClick={startDrawing} variant="outline" className="w-full" disabled={isDrawing}>
+                                                <PenSquare className="mr-2 h-4 w-4" /> Select Area
+                                            </Button>
+                                            {isDrawing && (
+                                                <Button onClick={cancelDrawing} variant="destructive">
+                                                    <X className="mr-2 h-4 w-4" /> Cancel
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </TabsContent>
+                            <TabsContent value="routes">
+                                <CardContent>
+                                    {localSavedRoutes.length > 0 ? (
+                                        <ScrollArea className="h-48">
+                                            <div className="space-y-2">
+                                                {localSavedRoutes.map(route => (
+                                                    <Card key={route.id} className="p-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="font-semibold">{route.name}</p>
+                                                                <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
+                                                                <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    ) : (
+                                        <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
+                                    )}
+                                </CardContent>
+                            </TabsContent>
+                        </Tabs>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
         </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
             <DialogContent className="max-w-4xl w-[95vw] md:w-full">
@@ -1753,5 +1750,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
       </>
     );
 }
+
+    
 
     
