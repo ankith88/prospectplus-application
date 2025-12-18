@@ -8,6 +8,7 @@ import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { DataDeletionTable } from '@/components/admin/data-deletion-table';
 import { GranularDeletion } from '@/components/admin/granular-deletion';
+import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
 
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading } = useAuth();
@@ -31,6 +32,16 @@ export default function AdminDataPage() {
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
         <p className="text-muted-foreground">Permanently delete records from the system.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Search and Delete Activities</CardTitle>
+          <CardDescription>Search for specific activities across all leads (e.g., by note content) and delete them in bulk.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ActivitySearchDeletion />
+        </CardContent>
+      </Card>
       
       <Card>
         <CardHeader>

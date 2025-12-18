@@ -16,19 +16,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getLeadFromFirebase, deleteSubCollectionItem } from '@/services/firebase';
+import { getLeadFromFirebase, bulkDeleteSubCollectionItems } from '@/services/firebase';
 import type { Lead, Contact, Note, Activity, Appointment } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, Search } from 'lucide-react';
-import { useDebounce } from '@/hooks/use-debounce';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Checkbox } from '../ui/checkbox';
 
 type SubcollectionType = 'contacts' | 'notes' | 'activity' | 'appointments';
 type ItemToDelete = {
     leadId: string;
     subcollection: SubcollectionType;
-    itemId: string;
+    itemIds: string[];
     itemDescription: string;
 };
 
@@ -38,6 +38,12 @@ export function GranularDeletion() {
   const [searchTerm, setSearchTerm] = useState('');
   const [itemToDelete, setItemToDelete] = useState<ItemToDelete | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Record<SubcollectionType, string[]>>({
+      contacts: [],
+      notes: [],
+      activity: [],
+      appointments: [],
+  });
 
   const { toast } = useToast();
 
@@ -46,6 +52,7 @@ export function GranularDeletion() {
     if (!searchTerm) return;
     setLoading(true);
     setLead(null);
+    setSelectedItems({ contacts: [], notes: [], activity: [], appointments: [] });
     try {
       const fetchedLead = await getLeadFromFirebase(searchTerm, true);
       if (fetchedLead) {
@@ -59,36 +66,55 @@ export function GranularDeletion() {
       setLoading(false);
     }
   };
+  
+  const handleItemSelection = (subcollection: SubcollectionType, itemId: string, checked: boolean) => {
+      setSelectedItems(prev => ({
+          ...prev,
+          [subcollection]: checked 
+              ? [...prev[subcollection], itemId] 
+              : prev[subcollection].filter(id => id !== itemId)
+      }));
+  };
+
+  const handleSelectAll = (subcollection: SubcollectionType, items: any[], checked: boolean) => {
+      const itemIds = items.map(i => i.id);
+      setSelectedItems(prev => ({
+          ...prev,
+          [subcollection]: checked ? itemIds : []
+      }));
+  };
 
   const handleDelete = async () => {
     if (!itemToDelete) return;
     setIsDeleting(true);
     try {
-        await deleteSubCollectionItem(itemToDelete.leadId, itemToDelete.subcollection, itemToDelete.itemId);
+        await bulkDeleteSubCollectionItems(itemToDelete.leadId, itemToDelete.subcollection, itemToDelete.itemIds);
         
-        // Optimistically update UI
         setLead(prevLead => {
             if (!prevLead) return null;
-            const updatedSubcollection = (prevLead[itemToDelete.subcollection] as any[])?.filter(item => item.id !== itemToDelete.itemId);
+            const updatedSubcollection = (prevLead[itemToDelete.subcollection] as any[])?.filter(item => !itemToDelete.itemIds.includes(item.id));
             return { ...prevLead, [itemToDelete.subcollection]: updatedSubcollection };
         });
 
-        toast({ title: 'Success', description: `Item deleted successfully.` });
+        setSelectedItems(prev => ({ ...prev, [itemToDelete.subcollection]: [] }));
+        toast({ title: 'Success', description: `${itemToDelete.itemIds.length} item(s) deleted successfully.` });
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete item.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete items.' });
     } finally {
         setIsDeleting(false);
         setItemToDelete(null);
     }
   };
   
-  const confirmDelete = (subcollection: SubcollectionType, item: any, description: string) => {
-    if(!lead) return;
+  const confirmDelete = (subcollection: SubcollectionType) => {
+    const idsToDelete = selectedItems[subcollection];
+    if (idsToDelete.length === 0 || !lead) return;
+    
     setItemToDelete({
         leadId: lead.id,
         subcollection,
-        itemId: item.id,
-        itemDescription: description
+        itemIds: idsToDelete,
+        itemDescription: `${idsToDelete.length} ${subcollection} item(s)`
     });
   }
 
@@ -121,18 +147,10 @@ export function GranularDeletion() {
                         <TabsTrigger value="activity">Activity ({lead.activity?.length || 0})</TabsTrigger>
                         <TabsTrigger value="appointments">Appointments ({lead.appointments?.length || 0})</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="contacts">
-                        <SubcollectionTable items={lead.contacts || []} columns={['name', 'email', 'phone']} onDelete={(item) => confirmDelete('contacts', item, `contact: ${item.name}`)} />
-                    </TabsContent>
-                    <TabsContent value="notes">
-                        <SubcollectionTable items={lead.notes || []} columns={['content', 'author', 'date']} onDelete={(item) => confirmDelete('notes', item, `note: ${item.content.substring(0,20)}...`)} />
-                    </TabsContent>
-                    <TabsContent value="activity">
-                        <SubcollectionTable items={lead.activity || []} columns={['notes', 'type', 'date']} onDelete={(item) => confirmDelete('activity', item, `activity: ${item.notes.substring(0,20)}...`)} />
-                    </TabsContent>
-                    <TabsContent value="appointments">
-                        <SubcollectionTable items={lead.appointments || []} columns={['assignedTo', 'duedate', 'starttime']} onDelete={(item) => confirmDelete('appointments', item, `appointment on ${item.duedate}`)} />
-                    </TabsContent>
+                    <SubcollectionTabContent lead={lead} subcollection="contacts" columns={['name', 'email', 'phone']} selectedItems={selectedItems.contacts} onSelect={handleItemSelection} onSelectAll={handleSelectAll} onConfirmDelete={confirmDelete} />
+                    <SubcollectionTabContent lead={lead} subcollection="notes" columns={['content', 'author', 'date']} selectedItems={selectedItems.notes} onSelect={handleItemSelection} onSelectAll={handleSelectAll} onConfirmDelete={confirmDelete} />
+                    <SubcollectionTabContent lead={lead} subcollection="activity" columns={['notes', 'type', 'date']} selectedItems={selectedItems.activity} onSelect={handleItemSelection} onSelectAll={handleSelectAll} onConfirmDelete={confirmDelete} />
+                    <SubcollectionTabContent lead={lead} subcollection="appointments" columns={['assignedTo', 'duedate', 'starttime']} selectedItems={selectedItems.appointments} onSelect={handleItemSelection} onSelectAll={handleSelectAll} onConfirmDelete={confirmDelete} />
                 </Tabs>
             </CardContent>
         </Card>
@@ -143,7 +161,7 @@ export function GranularDeletion() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the selected item: <span className="font-bold">{itemToDelete?.itemDescription}</span>. This action cannot be undone.
+              This will permanently delete the selected {itemToDelete?.itemDescription}. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -158,42 +176,67 @@ export function GranularDeletion() {
   );
 }
 
-interface SubcollectionTableProps {
-    items: any[];
+interface SubcollectionTabContentProps {
+    lead: Lead;
+    subcollection: SubcollectionType;
     columns: string[];
-    onDelete: (item: any) => void;
+    selectedItems: string[];
+    onSelect: (subcollection: SubcollectionType, itemId: string, checked: boolean) => void;
+    onSelectAll: (subcollection: SubcollectionType, items: any[], checked: boolean) => void;
+    onConfirmDelete: (subcollection: SubcollectionType) => void;
 }
 
-function SubcollectionTable({ items, columns, onDelete }: SubcollectionTableProps) {
-    if (items.length === 0) {
-        return <div className="text-center text-muted-foreground p-8">No items found.</div>
-    }
+function SubcollectionTabContent({ lead, subcollection, columns, selectedItems, onSelect, onSelectAll, onConfirmDelete }: SubcollectionTabContentProps) {
+    const items = lead[subcollection] as any[] || [];
+    const allSelected = items.length > 0 && selectedItems.length === items.length;
+
     return (
-        <div className="rounded-md border max-h-[50vh] overflow-y-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        {columns.map(col => <TableHead key={col} className="capitalize">{col}</TableHead>)}
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {items.map(item => (
-                        <TableRow key={item.id}>
-                            {columns.map(col => (
-                                <TableCell key={col} className="max-w-[200px] truncate">
-                                    {col === 'date' || col === 'duedate' ? new Date(item[col]).toLocaleString() : item[col]}
-                                </TableCell>
-                            ))}
-                            <TableCell className="text-right">
-                                <Button variant="destructive" size="icon" onClick={() => onDelete(item)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    )
+        <TabsContent value={subcollection}>
+            <div className="space-y-2">
+                {selectedItems.length > 0 && (
+                    <Button variant="destructive" size="sm" onClick={() => onConfirmDelete(subcollection)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Selected ({selectedItems.length})
+                    </Button>
+                )}
+                {items.length > 0 ? (
+                    <div className="rounded-md border max-h-[50vh] overflow-y-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={allSelected}
+                                            onCheckedChange={(checked) => onSelectAll(subcollection, items, !!checked)}
+                                        />
+                                    </TableHead>
+                                    {columns.map(col => <TableHead key={col} className="capitalize">{col}</TableHead>)}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {items.map(item => (
+                                    <TableRow key={item.id} data-state={selectedItems.includes(item.id) && "selected"}>
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={selectedItems.includes(item.id)}
+                                                onCheckedChange={(checked) => onSelect(subcollection, item.id, !!checked)}
+                                            />
+                                        </TableCell>
+                                        {columns.map(col => (
+                                            <TableCell key={col} className="max-w-[200px] truncate">
+                                                {col === 'date' || col === 'duedate' ? new Date(item[col]).toLocaleString() : item[col]}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                ) : (
+                    <div className="text-center text-muted-foreground p-8">No items found.</div>
+                )}
+            </div>
+        </TabsContent>
+    );
 }
+

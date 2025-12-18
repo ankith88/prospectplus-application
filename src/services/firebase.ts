@@ -1,6 +1,7 @@
 
 
 
+
 'use server';
 
 /**
@@ -1608,14 +1609,19 @@ async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemI
     }
 }
 
-async function deleteSubCollectionItem(leadId: string, subCollectionName: 'contacts' | 'notes' | 'activity' | 'appointments', itemId: string): Promise<void> {
+async function bulkDeleteSubCollectionItems(leadId: string, subCollectionName: 'contacts' | 'notes' | 'activity' | 'appointments', itemIds: string[]): Promise<void> {
+    if (itemIds.length === 0) return;
     try {
-        const itemRef = doc(firestore, 'leads', leadId, subCollectionName, itemId);
-        await deleteDoc(itemRef);
-        console.log(`Successfully deleted item ${itemId} from ${subCollectionName} in lead ${leadId}.`);
+        const batch = writeBatch(firestore);
+        itemIds.forEach(itemId => {
+            const itemRef = doc(firestore, 'leads', leadId, subCollectionName, itemId);
+            batch.delete(itemRef);
+        });
+        await batch.commit();
+        console.log(`Successfully bulk deleted ${itemIds.length} items from ${subCollectionName} in lead ${leadId}.`);
     } catch (error) {
-        console.error(`Failed to delete item ${itemId} from lead ${leadId}:`, error);
-        throw new Error(`Failed to delete item from ${subCollectionName} in Firebase`);
+        console.error(`Failed to bulk delete items from lead ${leadId}:`, error);
+        throw new Error(`Failed to bulk delete items from ${subCollectionName} in Firebase`);
     }
 }
 
@@ -1678,8 +1684,8 @@ async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string
         const allRoutes: Array<SavedRoute & { userName: string; userId: string }> = [];
 
         for (const user of users) {
-             const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
-            if (!userName) continue;
+             const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Unknown User';
+            if (!user.uid) continue;
 
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
@@ -1831,6 +1837,7 @@ export {
     deleteLead,
     deleteCompany,
     deleteSubCollectionItem,
+    bulkDeleteSubCollectionItems,
     getSubCollection,
     saveUserRoute,
     getUserRoutes,
@@ -1844,4 +1851,5 @@ export {
 };
 
     
+
 
