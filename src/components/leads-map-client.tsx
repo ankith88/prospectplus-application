@@ -180,7 +180,6 @@ export default function LeadsMapClient() {
   const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
-  const [geoSearchQuery, setGeoSearchQuery] = useState('');
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [viewingDescription, setViewingDescription] = useState<string | null>(null);
   const [nearbyCompanies, setNearbyCompanies] = useState<MapLead[]>([]);
@@ -220,6 +219,7 @@ export default function LeadsMapClient() {
   });
 
   const geoSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const router = useRouter()
   const { toast } = useToast()
   const { userProfile, loading: authLoading, savedRoutes } = useAuth();
@@ -235,12 +235,13 @@ export default function LeadsMapClient() {
   })
   
   useEffect(() => {
-    if (isLoaded && geoSearchInputRef.current && map) {
+    if (isLoaded && geoSearchInputRef.current && map && !autocompleteRef.current) {
         const autocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
         });
         autocomplete.setFields(['geometry']);
+        
         autocomplete.addListener('place_changed', () => {
             const place = autocomplete.getPlace();
             if (place.geometry?.viewport) {
@@ -250,6 +251,7 @@ export default function LeadsMapClient() {
                 map.setZoom(15);
             }
         });
+        autocompleteRef.current = autocomplete;
     }
   }, [isLoaded, map]);
 
@@ -747,18 +749,6 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
         }
     };
     
-    const handleGeoSearch = () => {
-        if (!geoSearchQuery || !map) return;
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: geoSearchQuery, componentRestrictions: { country: 'AU' } }, (results, status) => {
-            if (status === 'OK' && results && results[0]) {
-                map.fitBounds(results[0].geometry.viewport);
-            } else {
-                toast({ variant: 'destructive', title: 'Location not found', description: `Could not find a location for "${geoSearchQuery}".` });
-            }
-        });
-    };
-
     const handleClearRoute = () => {
         setDirections(null);
         setSelectedRouteLeads([]);
