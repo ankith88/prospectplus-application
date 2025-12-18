@@ -231,7 +231,7 @@ export default function CheckInPage() {
     return (
         <FormProvider {...methods}>
             <div className="flex flex-col h-svh bg-background max-w-2xl mx-auto w-full">
-                <header className="flex-shrink-0 flex items-center justify-between mb-4 p-4">
+                <header className="flex-shrink-0 flex items-center justify-between p-4">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
                         <h1 className="text-lg font-bold">{lead.companyName}</h1>
@@ -252,7 +252,7 @@ export default function CheckInPage() {
                     {renderStep()}
                 </main>
 
-                <footer className="flex-shrink-0 flex items-center justify-between border-t border-border p-4">
+                <footer className="flex-shrink-0 flex items-center justify-between border-t border-border p-4 bg-background">
                     {currentStep > 1 && <Button variant="ghost" onClick={handleBack} disabled={currentStep > TOTAL_STEPS + 1}>Back</Button>}
                     <div className="flex-grow"></div>
                     {currentStep <= TOTAL_STEPS && <Button onClick={handleNext}>Continue</Button>}
@@ -398,7 +398,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
 };
 
 const DiscoveryStep0 = () => {
-    const { control } from useFormContext();
+    const { control } = useFormContext();
     return (
         <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?">
              <FormField control={control} name="relevanceCheck" render={({ field }) => (
@@ -470,7 +470,7 @@ const DiscoveryStep2 = () => {
     )
 };
 
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }1 { id: '20kg+', label: '20kg+' } ] as const;
+const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
 const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
@@ -553,5 +553,3 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
-
-    
