@@ -168,6 +168,12 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
 
 
 export default function LeadsMapClient() {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: ['places', 'drawing', 'geometry']
+  })
+
   const [mapData, setMapData] = useState<MapLead[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
@@ -248,12 +254,6 @@ export default function LeadsMapClient() {
     setLocalSavedRoutes(savedRoutes);
   }, [savedRoutes]);
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places', 'drawing', 'geometry']
-  })
-
   const handleShowMyLocation = useCallback(() => {
     setLocationError(null);
     if (navigator.geolocation) {
@@ -1517,7 +1517,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                                     <Briefcase className="mr-2 h-4 w-4" />
                                     View Profile
                                 </Button>
-                                {!selectedLead.isCompany && userProfile?.role === 'Field Sales' && (
+                                {(!selectedLead.isCompany || userProfile?.role === 'Field Sales') && (
                                     <Button size="sm" variant="secondary" onClick={() => handleCheckIn(selectedLead)} className="flex-1">
                                         <CheckSquare className="mr-2 h-4 w-4" />
                                         Check In
