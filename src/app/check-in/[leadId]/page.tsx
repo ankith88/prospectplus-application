@@ -231,7 +231,7 @@ export default function CheckInPage() {
                     <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
                     <div className="flex flex-col items-center">
                         <h1 className="text-lg font-bold">{lead.companyName}</h1>
-                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''} &bull; Territory auto-match</p>
+                        <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                     </div>
                     <div className="w-20 text-center">
                         <div className="border border-border rounded-full px-2 py-1 text-xs">
@@ -550,6 +550,8 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type
         </div>
     </StepWrapper>
 );
+
+    
 
     
 
