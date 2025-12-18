@@ -11,7 +11,7 @@ import type { Lead, DiscoveryData, Contact } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,8 +23,13 @@ import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { LogNoteDialog } from '@/components/log-note-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
+import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
+import { Badge } from '@/components/ui/badge';
+import { ScoreIndicator } from '@/components/score-indicator';
 
 const discoverySchema = z.object({
+  relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }).optional(),
   postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
   logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc'], { required_error: "This field is required." }),
   servicePayment: z.enum(['Yes', 'No']).optional(),
@@ -48,7 +53,7 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 export default function CheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -56,7 +61,6 @@ export default function CheckInPage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     
-    // State for final action dialogs
     const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
     const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
     const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
@@ -64,6 +68,8 @@ export default function CheckInPage() {
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
+    
+    const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
 
     const params = useParams();
     const router = useRouter();
@@ -112,18 +118,19 @@ export default function CheckInPage() {
 
     const handleNext = async () => {
         let isValid = true;
-        if (currentStep === 1) { // Validate company/contact details
-             // For now, we assume these are pre-filled correctly
-        }
-        if (currentStep === 2) {
-             // Step 2 is for adding contacts, which has its own form.
-        }
-        if (currentStep === 3) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
-        if (currentStep === 4) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
-        if (currentStep === 5) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
-        if (currentStep === 6) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
+        if (currentStep === 1) { /* Company Details */ }
+        if (currentStep === 2) { /* Contact Details */ }
+        if (currentStep === 3) isValid = await methods.trigger(['relevanceCheck']);
+        if (currentStep === 4) isValid = await methods.trigger(['postOfficeRelationship', 'logisticsSetup', 'servicePayment']);
+        if (currentStep === 5) isValid = await methods.trigger(['shippingVolume', 'expressVsStandard', 'packageType']);
+        if (currentStep === 6) isValid = await methods.trigger(['currentProvider', 'eCommerceTech']);
+        if (currentStep === 7) isValid = await methods.trigger(['sameDayCourier', 'decisionMaker', 'painPoints']);
 
         if (isValid) {
+            if(currentStep === TOTAL_STEPS - 1) {
+                const discoveryData = calculateScoreAndRouting(methods.getValues());
+                setFinalDiscoveryData(discoveryData);
+            }
             setCurrentStep(prev => prev + 1);
         } else {
             toast({ variant: "destructive", title: "Missing Information", description: "Please fill out all required fields before proceeding." });
@@ -149,14 +156,13 @@ export default function CheckInPage() {
     };
 
     const handleSaveDiscovery = async () => {
-        const isValid = await methods.trigger();
-        if (!isValid) {
-            toast({ variant: "destructive", title: "Missing Information", description: "Please ensure all required discovery questions are answered." });
+        if (!finalDiscoveryData) {
+            toast({ variant: "destructive", title: "Error", description: "Could not calculate discovery score. Please review your answers." });
             return;
         }
         setIsSaving(true);
         try {
-            await updateLeadDiscoveryData(lead!.id, methods.getValues());
+            await updateLeadDiscoveryData(lead!.id, finalDiscoveryData);
             toast({ title: "Success", description: "Check-in and discovery data saved." });
             router.push(`/leads/${lead!.id}`);
         } catch (error) {
@@ -171,11 +177,12 @@ export default function CheckInPage() {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} />;
             case 2: return <ContactStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} />;
-            case 3: return <DiscoveryStep1 />;
-            case 4: return <DiscoveryStep2 />;
-            case 5: return <DiscoveryStep3 />;
-            case 6: return <DiscoveryStep4 />;
-            case 7: return <FinalActionsStep onOpenDialog={(type) => {
+            case 3: return <DiscoveryStep0 />;
+            case 4: return <DiscoveryStep1 />;
+            case 5: return <DiscoveryStep2 />;
+            case 6: return <DiscoveryStep3 />;
+            case 7: return <DiscoveryStep4 />;
+            case 8: return <FinalActionsStep discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'log-outcome') setIsLogOutcomeOpen(true);
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
@@ -246,11 +253,12 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, description, children }: { title: string, description: string, children: React.ReactNode }) => (
+const StepWrapper = ({ title, description, script, children }: { title: string, description: string, script?: string, children: React.ReactNode }) => (
     <div className="space-y-6">
-        <div className="text-center">
+        <div className="text-left space-y-2">
             <h2 className="text-2xl font-bold">{title}</h2>
             <p className="text-muted-foreground">{description}</p>
+            {script && <p className="text-sm italic text-primary p-2 bg-primary/10 border-l-4 border-primary rounded-r-md">"{script}"</p>}
         </div>
         <div className="bg-card p-6 rounded-lg space-y-6">
             {children}
@@ -260,7 +268,7 @@ const StepWrapper = ({ title, description, children }: { title: string, descript
 
 
 const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
-    <StepWrapper title="Prospect Header" description="Minimal details first - you can fill the rest after you've confirmed relevance.">
+    <StepWrapper title="Company Details" description="Confirm you're at the right place. These details are read-only for confirmation.">
          <div className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="businessName">Business name</Label>
@@ -278,36 +286,12 @@ const CompanyDetailsStep = ({ lead }: { lead: Lead }) => (
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
-                    <Label htmlFor="contactName">Contact name</Label>
-                    <Input id="contactName" readOnly value={lead.contacts?.[0]?.name || 'Optional'} />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" readOnly value={lead.contacts?.[0]?.phone || lead.customerPhone || 'Optional'} />
-                </div>
-            </div>
-             <div className="space-y-2">
-                <Label htmlFor="decisionMaker">I'm speaking with</Label>
-                <Select>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="Owner">Owner</SelectItem>
-                        <SelectItem value="Influencer">Influencer</SelectItem>
-                        <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
-                    </SelectContent>
-                </Select>
-                 <p className="text-xs text-muted-foreground pt-2">Tip: if you're unsure who they are, continue anyway — authority is checked later.</p>
-            </div>
          </div>
     </StepWrapper>
 );
 
 const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean }) => (
-    <StepWrapper title="Contacts" description="Review existing contacts or add a new one.">
+    <StepWrapper title="Contacts" description="Confirm the decision maker or add a new contact." script="Hi there, I was hoping to speak to the person in charge of your postage and deliveries?">
         <div className="space-y-4">
             {contacts.length > 0 ? (
                 contacts.map(contact => (
@@ -347,13 +331,25 @@ const ContactStep = ({ contacts, onAddContact, form, isAddingContact }: { contac
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const packageTypes = [ { id: '500g', label: '&lt;500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
+
+
+const DiscoveryStep0 = () => {
+    const { control } = useFormContext();
+    return (
+        <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?">
+             <FormField control={control} name="relevanceCheck" render={({ field }) => (
+                <FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes, people do leave the office.</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No, they rarely/never leave.</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+            )}/>
+        </StepWrapper>
+    )
+};
 
 const DiscoveryStep1 = () => {
     const { control, watch } = useFormContext();
     const watchLogisticsSetup = watch('logisticsSetup');
     return (
-        <StepWrapper title="Discovery: Logistics" description="Understand their current process.">
+        <StepWrapper title="Discovery: Logistics" description="Understand their current postage process." script="How do you currently manage your post and parcels? Do you go to the post office, or does someone pick it up?">
              <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
                 <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col sm:flex-row gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
@@ -370,7 +366,7 @@ const DiscoveryStep1 = () => {
 const DiscoveryStep2 = () => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?">
+        <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?">
             <FormField control={control} name="shippingVolume" render={({ field }) => (
                 <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
@@ -387,7 +383,7 @@ const DiscoveryStep2 = () => {
 const DiscoveryStep3 = () => {
     const { control } = useFormContext();
     return (
-         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?">
+         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?">
             <FormField control={control} name="currentProvider" render={() => (
                 <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
@@ -401,7 +397,7 @@ const DiscoveryStep3 = () => {
 const DiscoveryStep4 = () => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead.">
+        <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?">
             <FormField control={control} name="sameDayCourier" render={({ field }) => (
                 <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
@@ -415,9 +411,31 @@ const DiscoveryStep4 = () => {
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void }) => (
-    <StepWrapper title="Next Steps" description="The discovery phase is complete. Choose the next action for this lead.">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+const FinalActionsStep = ({ onOpenDialog, discoveryData }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void, discoveryData: DiscoveryData | null }) => (
+    <StepWrapper title="Next Steps & Analysis" description="The discovery phase is complete. Review the analysis and choose the next action for this lead.">
+       {discoveryData ? (
+           <div className="space-y-4">
+                 <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                    <div className="flex flex-col items-center">
+                        <p className="text-sm text-muted-foreground">Score</p>
+                        <p className="text-3xl font-bold">{discoveryData.score}</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <p className="text-sm text-muted-foreground">Routing Tag</p>
+                        <Badge variant="outline" className="text-lg mt-1"><Route className="h-4 w-4 mr-2"/>{discoveryData.routingTag}</Badge>
+                    </div>
+                </div>
+                <DiscoveryRadarChart discoveryData={discoveryData} />
+                 {discoveryData.scoringReason && (
+                    <div className="text-xs text-muted-foreground p-2 border-t">
+                        <strong>Scoring Rationale:</strong> {discoveryData.scoringReason}
+                    </div>
+                )}
+           </div>
+       ) : (
+           <div className="text-center py-10 text-muted-foreground">Could not generate discovery analysis.</div>
+       )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
             <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
             <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => onOpenDialog('free-trial')}><Star className="mr-2"/> Free Trial</Button>
             <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => onOpenDialog('log-outcome')}><PhoneCall className="mr-2"/> Log Outcome</Button>
@@ -425,5 +443,3 @@ const FinalActionsStep = ({ onOpenDialog }: { onOpenDialog: (type: 'log-outcome'
         </div>
     </StepWrapper>
 );
-
-    

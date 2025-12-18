@@ -105,6 +105,7 @@ export interface Address {
 }
 
 export interface DiscoveryData {
+    relevanceCheck?: 'Yes' | 'No';
     postOfficeRelationship?: 'Yes-Driver' | 'Yes-Post Office walk up' | 'No';
     logisticsSetup?: 'Drop-off' | 'Routine collection' | 'Ad-hoc';
     servicePayment?: 'Yes' | 'No';
