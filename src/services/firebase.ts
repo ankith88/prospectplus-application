@@ -1615,9 +1615,16 @@ async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<str
                 latitude: l.latitude!, 
                 longitude: l.longitude!,
                 companyName: l.companyName,
-                address: l.address!
+                address: {
+                    street: l.address?.street || '',
+                    city: l.address?.city || '',
+                    state: l.address?.state || '',
+                    zip: l.address?.zip || '',
+                    country: l.address?.country || 'Australia',
+                    address1: l.address?.address1 || ''
+                }
             })),
-            scheduledDate: routeData.scheduledDate ? (routeData.scheduledDate as Date).toISOString() : undefined,
+            scheduledDate: routeData.scheduledDate instanceof Date ? routeData.scheduledDate.toISOString() : routeData.scheduledDate,
         };
 
         const docRef = await addDoc(routesRef, storableRoute);
@@ -1660,12 +1667,12 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
 
 async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string, userId: string }>> {
     try {
-        const users = await getAllUsers();
-        const relevantUsers = users.filter(u => u.role === 'Field Sales' || u.role === 'admin');
-        
-        let allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
+        const usersSnapshot = await getDocs(collection(firestore, 'users'));
+        const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
 
-        for (const user of relevantUsers) {
+        const allRoutes: Array<SavedRoute & { userName: string, userId: string }> = [];
+
+        for (const user of users) {
             if (!user.displayName) continue;
             const userRoutes = await getUserRoutes(user.uid);
             const routesWithUserName = userRoutes.map(route => ({
@@ -1673,7 +1680,7 @@ async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string
                 userName: user.displayName!,
                 userId: user.uid,
             }));
-            allRoutes = allRoutes.concat(routesWithUserName);
+            allRoutes.push(...routesWithUserName);
         }
         
         allRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

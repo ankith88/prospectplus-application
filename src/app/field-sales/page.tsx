@@ -210,7 +210,7 @@ export default function FieldSalesPage() {
         const [leads, activities, routes, users] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
-            userProfile?.role === 'admin' ? getAllUserRoutes() : Promise.resolve([]),
+            getAllUserRoutes(),
             getAllUsers(),
         ]);
 
@@ -635,7 +635,7 @@ export default function FieldSalesPage() {
                         <div>
                             <p className="font-semibold">{route.name}</p>
                             <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {route.userName}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
@@ -861,7 +861,7 @@ export default function FieldSalesPage() {
                 <DialogHeader>
                     <DialogTitle>Move Route</DialogTitle>
                     <DialogDescription>
-                        Move the route "{routeToMove?.name}" from {(routeToMove as RouteWithUser)?.userName} to another user.
+                        Move the route "{routeToMove?.name}" from {routeToMove?.userName} to another user.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-2">
