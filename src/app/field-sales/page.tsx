@@ -467,17 +467,36 @@ export default function FieldSalesPage() {
     }
   };
 
- const routesToShow = useMemo(() => {
-    if (userProfile?.role === 'admin') {
-      const adminRoutes = savedRoutes.map(r => ({ ...r, userName: userProfile.displayName!, userId: userProfile.uid! }));
-      const otherUserRoutes = allRoutes.filter(r => r.userId !== userProfile.uid);
-      const combined = [...adminRoutes, ...otherUserRoutes];
-      
-      const uniqueRoutes = Array.from(new Map(combined.map(r => [r.id, r])).values());
-      return uniqueRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const routesToShow = useMemo(() => {
+    if (userProfile?.role === 'admin' && userProfile?.uid) {
+        // Create a map of user IDs to display names for quick lookup
+        const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
+
+        // Combine routes from different sources, ensuring no duplicates and correct user names
+        const allSystemRoutes = new Map<string, RouteWithUser>();
+
+        // Add routes from the global fetch
+        allRoutes.forEach(route => {
+            const userName = usersMap.get(route.userId) || 'Unknown User';
+            allSystemRoutes.set(route.id, { ...route, userName });
+        });
+
+        // Add/overwrite with routes from the logged-in admin's auth context to ensure they are up-to-date
+        savedRoutes.forEach(route => {
+            allSystemRoutes.set(route.id, {
+                ...route,
+                userName: userProfile.displayName || 'Admin',
+                userId: userProfile.uid,
+            });
+        });
+
+        // Convert map back to an array and sort
+        return Array.from(allSystemRoutes.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
-    return savedRoutes;
-  }, [userProfile, savedRoutes, allRoutes]);
+    
+    // For non-admin Field Sales users, just show their own routes
+    return savedRoutes.map(r => ({ ...r, userName: userProfile?.displayName || '', userId: userProfile?.uid || '' }));
+  }, [userProfile, savedRoutes, allRoutes, allDialers]);
 
 
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
@@ -900,5 +919,7 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
 
     
