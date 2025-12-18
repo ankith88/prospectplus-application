@@ -10,8 +10,7 @@ import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateC
 import type { Lead, DiscoveryData, Contact } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,6 +27,7 @@ import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { Badge } from '@/components/ui/badge';
 import { ScoreIndicator } from '@/components/score-indicator';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -56,6 +56,58 @@ const newContactSchema = z.object({
 });
 
 const TOTAL_STEPS = 8;
+const stepLabels = [
+    "Company",
+    "Contact",
+    "Relevance",
+    "Reasons",
+    "Logistics",
+    "Shipping",
+    "Providers",
+    "Needs",
+    "Finish"
+];
+
+const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number, totalSteps: number, labels: string[] }) => {
+  return (
+    <div className="flex items-center w-full" aria-label={`Step ${currentStep} of ${totalSteps}`}>
+      {labels.map((label, index) => {
+        const step = index + 1;
+        const isCompleted = currentStep > step;
+        const isCurrent = currentStep === step;
+
+        return (
+          <React.Fragment key={step}>
+            <div className="flex flex-col items-center">
+              <div
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300",
+                  isCompleted ? "bg-primary text-primary-foreground" :
+                  isCurrent ? "border-2 border-primary text-primary" :
+                  "bg-muted text-muted-foreground"
+                )}
+              >
+                {isCompleted ? <Check className="w-4 h-4" /> : step}
+              </div>
+              <p className={cn(
+                "text-xs mt-1 text-center hidden md:block",
+                isCurrent ? "font-bold text-primary" : "text-muted-foreground"
+              )}>
+                {label}
+              </p>
+            </div>
+            {step < labels.length && (
+              <div className={cn(
+                "flex-1 h-0.5 transition-all duration-300",
+                currentStep > step ? "bg-primary" : "bg-muted"
+              )} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
 
 export default function CheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -122,7 +174,7 @@ export default function CheckInPage() {
     const handleNext = async () => {
         const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
             [], // Step 1 is company info
-            [], // Step 2 is contact info - no validation needed
+            [], // Step 2 is contact info
             ['relevanceCheck'], // Step 3
             ['reasonsToLeave'], // Step 4
             ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
@@ -247,7 +299,7 @@ export default function CheckInPage() {
                     </header>
 
                     <div className="my-4 flex-shrink-0">
-                    <Progress value={(Math.min(currentStep, TOTAL_STEPS + 1) / (TOTAL_STEPS + 1)) * 100} className="w-full" />
+                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS + 1} labels={stepLabels} />
                     </div>
                 </div>
                 
@@ -502,7 +554,7 @@ const DiscoveryStep4 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
                 <FormItem><div className="mb-4"><FormLabel className="text-base">Who do you use for shipping?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{currentProviders.map((item) => (<FormField key={item.id} control={control} name="currentProvider" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherProvider" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other Shipping Provider</FormLabel><FormControl><Input {...field} placeholder="Other provider..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
             <FormField control={control} name="eCommerceTech" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
             )}/>
         </StepWrapper>
     )
@@ -557,5 +609,7 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData, onBack }: { onOpenDialo
         </div>
     </StepWrapper>
 );
+
+    
 
     
