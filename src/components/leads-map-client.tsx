@@ -1224,7 +1224,7 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-        <div className="flex-grow min-h-[50vh] flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row-reverse h-full flex-grow gap-4">
             {selectedRouteLeads.length > 0 && (
                 <div className="w-full md:w-1/3 flex-shrink-0">
                     <Card className="h-full flex flex-col">
