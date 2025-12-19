@@ -232,50 +232,43 @@ export default function LeadsMapClient() {
   const geoSearchInputRef = useRef<HTMLInputElement>(null);
   const startPointInputRef = useRef<HTMLInputElement>(null);
   const endPointInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteInstances = useRef<{ [key: string]: google.maps.places.Autocomplete }>({});
 
-  useEffect(() => {
-    if (isLoaded && map) {
-      if (geoSearchInputRef.current) {
-        const geoAutocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        geoAutocomplete.addListener('place_changed', () => {
-          const place = geoAutocomplete.getPlace();
-          if (place.geometry?.viewport) {
-            map.fitBounds(place.geometry.viewport);
-          } else if (place.geometry?.location) {
-            map.panTo(place.geometry.location);
-            map.setZoom(15);
-          }
-        });
-      }
-      if (startPointInputRef.current) {
-        const startAutocomplete = new window.google.maps.places.Autocomplete(startPointInputRef.current, {
-            types: ['geocode'],
-            componentRestrictions: { country: 'au' },
-        });
-        startAutocomplete.addListener('place_changed', () => {
-            const place = startAutocomplete.getPlace();
-            if (place.formatted_address) {
-                setStartPoint(place.formatted_address);
-            }
-        });
-      }
-      if (endPointInputRef.current) {
-        const endAutocomplete = new window.google.maps.places.Autocomplete(endPointInputRef.current, {
-            types: ['geocode'],
-            componentRestrictions: { country: 'au' },
-        });
-        endAutocomplete.addListener('place_changed', () => {
-            const place = endAutocomplete.getPlace();
-            if (place.formatted_address) {
-                setEndPoint(place.formatted_address);
-            }
-        });
-      }
+  const setupAutocomplete = useCallback((ref: React.RefObject<HTMLInputElement>, key: string, onPlaceChanged: (place: google.maps.places.PlaceResult) => void) => {
+    if (ref.current && !autocompleteInstances.current[key] && isLoaded && map) {
+      const autocomplete = new window.google.maps.places.Autocomplete(ref.current, {
+        types: ['geocode'],
+        componentRestrictions: { country: 'au' },
+      });
+      autocomplete.setFields(['geometry', 'formatted_address']);
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        onPlaceChanged(place);
+      });
+      autocompleteInstances.current[key] = autocomplete;
     }
   }, [isLoaded, map]);
+
+  useEffect(() => {
+    setupAutocomplete(geoSearchInputRef, 'geoSearch', (place) => {
+      if (place.geometry?.viewport) {
+        map?.fitBounds(place.geometry.viewport);
+      } else if (place.geometry?.location) {
+        map?.panTo(place.geometry.location);
+        map?.setZoom(15);
+      }
+    });
+    setupAutocomplete(startPointInputRef, 'startPoint', (place) => {
+      if (place.formatted_address) {
+        setStartPoint(place.formatted_address);
+      }
+    });
+    setupAutocomplete(endPointInputRef, 'endPoint', (place) => {
+      if (place.formatted_address) {
+        setEndPoint(place.formatted_address);
+      }
+    });
+  }, [setupAutocomplete]);
 
 
   const router = useRouter()
