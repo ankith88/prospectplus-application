@@ -1,7 +1,9 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import {
   GoogleMap,
   useJsApiLoader,
@@ -551,7 +553,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     });
   }, [map]);
 
- const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
+ const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
     setProspects([]); 
 
@@ -559,13 +561,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
 
     const placesService = new window.google.maps.places.PlacesService(map);
-    const request: google.maps.places.PlaceSearchRequest = {
-      location,
-      radius: 2000,
-      keyword,
-    };
-
-    placesService.nearbySearch(request, async (results, status) => {
+    const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && results) {
         const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
@@ -612,7 +608,23 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
         setIsSearchingNearby(false);
       }
-    });
+    };
+    
+    if (useTextSearch) {
+        const request: google.maps.places.TextSearchRequest = {
+            query: keyword,
+            region: 'AU',
+        };
+        placesService.textSearch(request, handleResults);
+    } else {
+        const request: google.maps.places.PlaceSearchRequest = {
+            location,
+            radius: 2000,
+            keyword,
+        };
+        placesService.nearbySearch(request, handleResults);
+    }
+    
   }, [map, mapData, getPlaceDetails, toast]);
   
   const handleFindNearby = useCallback(async () => {
@@ -674,6 +686,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
     }
   }, [selectedLead, mapData, toast]);
+
+    const handleFindMultiSites = useCallback(() => {
+    if (!selectedLead) return;
+    findProspects({ lat: -25.2744, lng: 133.7751 }, selectedLead.companyName, true);
+  }, [selectedLead, findProspects]);
 
 
   const handleFindProspectsNearMe = () => {
@@ -955,7 +972,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }, [routeDate]);
 
     const handleSaveRoute = async () => {
-        const userIdToSave = (userProfile?.role === 'Field Sales Admin' && routeAssignee) ? routeAssignee : userProfile?.uid;
+        const userIdToSave = (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && routeAssignee ? routeAssignee : userProfile?.uid;
         if (!userIdToSave) {
             toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not identify user to save route.' });
             return;
@@ -1327,7 +1344,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         <CardFooter className="flex flex-col gap-2 flex-shrink-0 pt-4 px-6 pb-6">
                              {directions && (
                                 <div className="w-full space-y-4">
-                                     <div className="space-y-1">
+                                    <div className="space-y-1">
                                         <Label htmlFor="route-date">Schedule Date (Optional)</Label>
                                         <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
                                     </div>
@@ -1533,6 +1550,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     </Button>
                                     <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
                                         {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
+                                    </Button>
+                                    <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindMultiSites}>
+                                        <Building className="mr-2 h-4 w-4" />
+                                        Find Multi-sites
                                     </Button>
                                 </div>
                             )}
