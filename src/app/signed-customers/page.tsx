@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -63,7 +62,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing' | 'geometry'];
 
 export default function SignedCustomersPage() {
   const [allMapData, setAllMapData] = useState<MapLead[]>([]);
@@ -224,68 +223,78 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, [selectedCompany, allMapData, map, toast]);
 
-    const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string) => {
+    const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
     setProspects([]); 
 
     setIsSearchingNearby(true);
-    toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
+    toast({ title: 'Searching...', description: `Looking for prospects matching "${keyword}"...` });
 
     const placesService = new window.google.maps.places.PlacesService(map);
-    const request: google.maps.places.PlaceSearchRequest = {
-      location,
-      radius: 2000,
-      keyword,
-    };
+    
+    const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-    placesService.nearbySearch(request, async (results, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-        const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+            const detailedProspectsPromises = openProspects.map(async (place) => {
+            if (!place.place_id) return null;
+            
+            const detailedPlace = await getPlaceDetails(place.place_id);
+            if (!detailedPlace) return null;
+            
+            const existingLead = allMapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
 
-        const detailedProspectsPromises = openProspects.map(async (place) => {
-          if (!place.place_id) return null;
-          
-          const detailedPlace = await getPlaceDetails(place.place_id);
-          if (!detailedPlace) return null;
-          
-          const existingLead = allMapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
-
-          let description = 'No website to analyze.';
-          if (detailedPlace.website) {
-            try {
-              const prospectResult = await aiProspectWebsiteTool({
-                leadId: 'new-lead-prospecting',
-                websiteUrl: detailedPlace.website,
-              });
-              description = prospectResult.companyDescription || 'AI analysis of website failed.';
-            } catch (e) {
-              console.error('Error prospecting website for description', e);
-              description = 'AI analysis of website failed.';
+            let description = 'No website to analyze.';
+            if (detailedPlace.website) {
+                try {
+                const prospectResult = await aiProspectWebsiteTool({
+                    leadId: 'new-lead-prospecting',
+                    websiteUrl: detailedPlace.website,
+                });
+                description = prospectResult.companyDescription || 'AI analysis of website failed.';
+                } catch (e) {
+                console.error('Error prospecting website for description', e);
+                description = 'AI analysis of website failed.';
+                }
             }
-          }
 
-          const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-          const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-          
-          return { place: detailedPlace, existingLead, classification, description };
-        });
+            const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+            const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+            
+            return { place: detailedPlace, existingLead, classification, description };
+            });
 
-        const resolvedProspects = (await Promise.all(detailedProspectsPromises))
-            .filter((p): p is ProspectWithLeadInfo => p !== null);
+            const resolvedProspects = (await Promise.all(detailedProspectsPromises))
+                .filter((p): p is ProspectWithLeadInfo => p !== null);
 
-        setProspects(resolvedProspects);
-        setIsSearchingNearby(false);
+            setProspects(resolvedProspects);
+            setIsSearchingNearby(false);
 
-        if (resolvedProspects.length > 0) {
-            setIsProspectsDialogOpen(true);
+            if (resolvedProspects.length > 0) {
+                setIsProspectsDialogOpen(true);
+            } else {
+                toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
+            }
         } else {
-            toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
+            toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
+            setIsSearchingNearby(false);
         }
-      } else {
-        toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
-        setIsSearchingNearby(false);
-      }
-    });
+    };
+    
+    if (useTextSearch) {
+        const request: google.maps.places.TextSearchRequest = {
+            query: keyword,
+            region: 'AU',
+        };
+        placesService.textSearch(request, handleResults);
+    } else {
+        const request: google.maps.places.PlaceSearchRequest = {
+            location,
+            radius: 2000,
+            keyword,
+        };
+        placesService.nearbySearch(request, handleResults);
+    }
   }, [map, allMapData, getPlaceDetails, toast]);
 
   const handleFindSimilar = useCallback(async () => {
@@ -326,19 +335,9 @@ export default function SignedCustomersPage() {
 
   const handleFindMultiSites = useCallback(() => {
     if (!selectedCompany) return;
-    const companyNameBase = selectedCompany.companyName.split(' ')[0]; // Simple logic to get base name
-    const multiSites = allMapData
-      .filter(item => !item.isCompany && item.companyName.toLowerCase().includes(companyNameBase.toLowerCase()))
-      .map(lead => ({ place: { name: lead.companyName, vicinity: lead.address?.street, place_id: lead.id }, existingLead: lead, classification: 'B2B' as const }));
-    
-    setProspects(multiSites);
-    if (multiSites.length > 0) {
-      setIsProspectsDialogOpen(true);
-    } else {
-      toast({ title: 'No Multi-sites Found', description: 'No other leads with a similar name were found.' });
-    }
+    findProspects({ lat: -25.2744, lng: 133.7751 }, selectedCompany.companyName, true);
     setSelectedCompany(null);
-  }, [selectedCompany, allMapData, map, toast]);
+  }, [selectedCompany, findProspects]);
 
 
   const formatAddress = (address?: Address) => {
@@ -767,3 +766,5 @@ export default function SignedCustomersPage() {
     </>
   )
 }
+
+    
