@@ -419,17 +419,16 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
 
     return dataToFilter.filter(item => {
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        
-        let statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
-        if (filters.type === 'companies') {
-            statusMatch = true; // Ignore status filter if showing only companies
-        }
-
         const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
         
-        const typeMatch = filters.type === 'all' || 
-                          (filters.type === 'leads' && !item.isCompany) || 
-                          (filters.type === 'companies' && item.isCompany);
+        let statusMatch = true;
+        if (filters.type === 'leads' || filters.type === 'all') {
+            statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+        }
+
+        let typeMatch = true;
+        if (filters.type === 'leads') typeMatch = !item.isCompany;
+        else if (filters.type === 'companies') typeMatch = !!item.isCompany;
 
         return franchiseeMatch && statusMatch && stateMatch && typeMatch;
     });
@@ -1213,9 +1212,9 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-        <div className="flex flex-col h-full flex-grow gap-4">
+        <div className="flex flex-col md:flex-row h-full flex-grow gap-4">
             {selectedRouteLeads.length > 0 && (
-                <div className="w-full flex-shrink-0">
+                <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
                     <Card className="h-full flex flex-col">
                         <CardHeader className="pb-2 flex-shrink-0">
                             <CardTitle className="flex items-center justify-between">
