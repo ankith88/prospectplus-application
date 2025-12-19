@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -234,36 +233,50 @@ export default function LeadsMapClient() {
   const startPointInputRef = useRef<HTMLInputElement>(null);
   const endPointInputRef = useRef<HTMLInputElement>(null);
 
-  const setupPlaceAutocomplete = useCallback((inputRef: React.RefObject<HTMLInputElement>, onPlaceChanged: (place: google.maps.places.PlaceResult) => void) => {
-    if (!isLoaded || !map || !inputRef.current) return null;
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-        types: ['geocode'],
-        componentRestrictions: { country: 'au' },
-    });
-    autocomplete.setFields(['geometry', 'formatted_address']);
-    autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        onPlaceChanged(place);
-    });
-    return autocomplete;
+  useEffect(() => {
+    if (isLoaded && map) {
+      if (geoSearchInputRef.current) {
+        const autocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
+          types: ['geocode'],
+          componentRestrictions: { country: 'au' },
+        });
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (place.geometry?.viewport) {
+            map.fitBounds(place.geometry.viewport);
+          } else if (place.geometry?.location) {
+            map.panTo(place.geometry.location);
+            map.setZoom(15);
+          }
+        });
+      }
+      if (startPointInputRef.current) {
+        const startAutocomplete = new window.google.maps.places.Autocomplete(startPointInputRef.current, {
+          types: ['geocode'],
+          componentRestrictions: { country: 'au' },
+        });
+        startAutocomplete.addListener('place_changed', () => {
+          const place = startAutocomplete.getPlace();
+          if (place.formatted_address) {
+            setStartPoint(place.formatted_address);
+          }
+        });
+      }
+      if (endPointInputRef.current) {
+        const endAutocomplete = new window.google.maps.places.Autocomplete(endPointInputRef.current, {
+          types: ['geocode'],
+          componentRestrictions: { country: 'au' },
+        });
+        endAutocomplete.addListener('place_changed', () => {
+          const place = endAutocomplete.getPlace();
+          if (place.formatted_address) {
+            setEndPoint(place.formatted_address);
+          }
+        });
+      }
+    }
   }, [isLoaded, map]);
 
-  useEffect(() => {
-    setupPlaceAutocomplete(geoSearchInputRef, (place) => {
-        if (place.geometry?.viewport) {
-            map?.fitBounds(place.geometry.viewport);
-        } else if (place.geometry?.location) {
-            map?.panTo(place.geometry.location);
-            map?.setZoom(15);
-        }
-    });
-    setupPlaceAutocomplete(startPointInputRef, (place) => {
-        if(place.formatted_address) setStartPoint(place.formatted_address);
-    });
-    setupPlaceAutocomplete(endPointInputRef, (place) => {
-        if(place.formatted_address) setEndPoint(place.formatted_address);
-    });
-  }, [setupPlaceAutocomplete, map]);
 
   const router = useRouter()
   const { toast } = useToast()
@@ -1413,320 +1426,319 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </CardFooter>
             </Card>
         )}
-        <div className="flex-grow min-h-[50vh] relative rounded-lg overflow-hidden">
-            <GoogleMap
-            mapContainerStyle={containerStyle}
-            center={center}
-            zoom={4}
-            onLoad={mapInstance => {
-                setMap(mapInstance);
-            }}
-            onClick={onMapClick}
-            options={{
-                streetViewControl: false,
-                mapTypeControl: false,
-                clickableIcons: false,
-            }}
-            >
-            {isDrawing && window.google && (
-                <DrawingManagerF
-                onLoad={(dm) => (drawingManagerRef.current = dm)}
-                onCircleComplete={(c) => onDrawingComplete(c)}
-                onRectangleComplete={(r) => onDrawingComplete(r)}
-                onPolygonComplete={(p) => onDrawingComplete(p)}
-                drawingMode={drawingMode}
-                options={{
-                    drawingControl: false,
-                    circleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                    rectangleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                    polygonOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                }}
-                />
-            )}
-            <KmlLayer
-                url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
-                options={{ preserveViewport: true, suppressInfoWindows: true }}
-                onClick={onKmlLayerClick}
+      <div className="flex-grow min-h-[50vh] relative rounded-lg overflow-hidden">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={center}
+          zoom={4}
+          onLoad={mapInstance => {
+            setMap(mapInstance);
+          }}
+          onClick={onMapClick}
+          options={{
+            streetViewControl: false,
+            mapTypeControl: false,
+            clickableIcons: false,
+          }}
+        >
+          {isDrawing && window.google && (
+            <DrawingManagerF
+              onLoad={(dm) => (drawingManagerRef.current = dm)}
+              onCircleComplete={(c) => onDrawingComplete(c)}
+              onRectangleComplete={(r) => onDrawingComplete(r)}
+              onPolygonComplete={(p) => onDrawingComplete(p)}
+              drawingMode={drawingMode}
+              options={{
+                drawingControl: false,
+                circleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+                rectangleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+                polygonOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+              }}
             />
-            {filteredData.map((item) => (
-                <MarkerF
-                key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
-                position={{ lat: item.latitude!, lng: item.longitude! }}
-                onClick={() => onMarkerClick(item)}
-                icon={{ 
-                    url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
-                    scaledSize: new window.google.maps.Size(32, 32)
-                }}
-                visible={directions === null} // Hide original markers when route is active
-                />
-            ))}
-            
-            {directions && selectedRouteLeads.map(lead => (
-                <MarkerF
-                key={`route-${lead.id}`}
-                position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                onClick={() => onMarkerClick(lead)}
-                label={(waypointOrderMap.get(lead.id) || 0).toString()}
-                />
-            ))}
+          )}
+          <KmlLayer
+            url="https://www.google.com/maps/d/kml?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&force=true"
+            options={{ preserveViewport: true, suppressInfoWindows: true }}
+            onClick={onKmlLayerClick}
+          />
+          {filteredData.map((item) => (
+            <MarkerF
+              key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
+              position={{ lat: item.latitude!, lng: item.longitude! }}
+              onClick={() => onMarkerClick(item)}
+              icon={{ 
+                url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
+                scaledSize: new window.google.maps.Size(32, 32)
+              }}
+              visible={directions === null} // Hide original markers when route is active
+            />
+          ))}
+          
+          {directions && selectedRouteLeads.map(lead => (
+            <MarkerF
+              key={`route-${lead.id}`}
+              position={{ lat: lead.latitude!, lng: lead.longitude! }}
+              onClick={() => onMarkerClick(lead)}
+              label={(waypointOrderMap.get(lead.id) || 0).toString()}
+            />
+          ))}
 
-            {myLocation && (
-                <MarkerF
-                position={myLocation}
-                icon={{
-                    path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 8,
-                    fillColor: '#4285F4',
-                    fillOpacity: 1,
-                    strokeColor: 'white',
-                    strokeWeight: 2,
-                }}
-                />
-            )}
+          {myLocation && (
+            <MarkerF
+              position={myLocation}
+              icon={{
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                strokeColor: 'white',
+                strokeWeight: 2,
+              }}
+            />
+          )}
 
-            {directions && (
-                <DirectionsRenderer
-                directions={directions}
-                options={{
-                    suppressMarkers: true, // We use our custom markers
-                    polylineOptions: {
-                    strokeColor: '#095c7b',
-                    strokeWeight: 6,
-                    strokeOpacity: 0.8,
-                    },
-                }}
-                />
-            )}
+          {directions && (
+            <DirectionsRenderer
+              directions={directions}
+              options={{
+                suppressMarkers: true, // We use our custom markers
+                polylineOptions: {
+                  strokeColor: '#095c7b',
+                  strokeWeight: 6,
+                  strokeOpacity: 0.8,
+                },
+              }}
+            />
+          )}
 
-            {selectedLead && (
-                <InfoWindowF
-                position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
-                onCloseClick={onInfoWindowClose}
-                options={infoWindowOptions}
-                >
-                <div className="space-y-3 p-1 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
+          {selectedLead && (
+            <InfoWindowF
+              position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+              onCloseClick={onInfoWindowClose}
+              options={infoWindowOptions}
+            >
+              <div className="space-y-3 p-1 max-w-xs bg-card text-card-foreground rounded-lg shadow-lg">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                  <LeadStatusBadge status={selectedLead.status} />
+                </div>
+
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  {selectedLead.industryCategory && (
                     <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                        <LeadStatusBadge status={selectedLead.status} />
+                      <Briefcase className="h-4 w-4 shrink-0" />
+                      <span>{selectedLead.industryCategory}</span>
                     </div>
-
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                        {selectedLead.industryCategory && (
-                            <div className="flex items-center gap-2">
-                                <Briefcase className="h-4 w-4 shrink-0" />
-                                <span>{selectedLead.industryCategory}</span>
-                            </div>
-                        )}
-                        <div className="flex items-start gap-2">
-                            <Building className="h-4 w-4 shrink-0 mt-0.5" />
-                            <span>{formatAddress(selectedLead.address)}</span>
-                        </div>
-                        {selectedLead.websiteUrl && (
-                            <div className="flex items-center gap-2">
-                                <Globe className="h-4 w-4 shrink-0" />
-                                <a href={selectedLead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1">
-                                    <span>{selectedLead.websiteUrl.replace(/^(https?:\/\/)?(www\.)?/, '')}</span>
-                                    <LinkIcon className="h-3 w-3" />
-                                </a>
-                            </div>
-                        )}
-                        {selectedLead.customerPhone && (
-                            <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 shrink-0" />
-                                <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
-                                    <span>{selectedLead.customerPhone}</span>
-                                    <PhoneCall className="h-3 w-3" />
-                                </a>
-                            </div>
-                        )}
+                  )}
+                  <div className="flex items-start gap-2">
+                    <Building className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{formatAddress(selectedLead.address)}</span>
+                  </div>
+                  {selectedLead.websiteUrl && (
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 shrink-0" />
+                      <a href={selectedLead.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1">
+                        <span>{selectedLead.websiteUrl.replace(/^(https?:\/\/)?(www\.)?/, '')}</span>
+                        <LinkIcon className="h-3 w-3" />
+                      </a>
                     </div>
-                    
-                    <div className="flex flex-col gap-2">
-                        <div className="flex gap-2">
-                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')} className="flex-1">
-                                <Briefcase className="mr-2 h-4 w-4" />
-                                View Profile
-                            </Button>
-                            {(!selectedLead.isCompany || userProfile?.role === 'Field Sales') && (
-                                <Button size="sm" variant="secondary" onClick={() => handleCheckIn(selectedLead)} className="flex-1">
-                                    <CheckSquare className="mr-2 h-4 w-4" />
-                                    Check In
-                                </Button>
-                            )}
-                        </div>
-                        {!selectedLead.isCompany && (
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
-                                    <Building className="mr-2 h-4 w-4" />
-                                    Nearby Customers
-                                </Button>
-                                <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
-                                    {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
-                                </Button>
-                                <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindMultiSites}>
-                                    <Building className="mr-2 h-4 w-4" />
-                                    Find Multi-sites
-                                </Button>
-                            </div>
-                        )}
+                  )}
+                  {selectedLead.customerPhone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 shrink-0" />
+                      <a href={`tel:${selectedLead.customerPhone}`} className="text-primary hover:underline flex items-center gap-1">
+                        <span>{selectedLead.customerPhone}</span>
+                        <PhoneCall className="h-3 w-3" />
+                      </a>
                     </div>
+                  )}
                 </div>
-                </InfoWindowF>
-            )}
-
-            {clickedKmlFeature && (
-                <InfoWindowF
-                position={clickedKmlFeature.latLng}
-                onCloseClick={onInfoWindowClose}
-                >
-                <div className="p-2">
-                    <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
+                
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')} className="flex-1">
+                      <Briefcase className="mr-2 h-4 w-4" />
+                      View Profile
+                    </Button>
+                    {(!selectedLead.isCompany || userProfile?.role === 'Field Sales') && (
+                      <Button size="sm" variant="secondary" onClick={() => handleCheckIn(selectedLead)} className="flex-1">
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        Check In
+                      </Button>
+                    )}
+                  </div>
+                  {!selectedLead.isCompany && (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
+                        <Building className="mr-2 h-4 w-4" />
+                        Nearby Customers
+                      </Button>
+                      <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Nearby</span></>}
+                      </Button>
+                      <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindMultiSites}>
+                        <Building className="mr-2 h-4 w-4" />
+                        Find Multi-sites
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                </InfoWindowF>
-            )}
-            </GoogleMap>
-        </div>
-      
+              </div>
+            </InfoWindowF>
+          )}
+
+          {clickedKmlFeature && (
+            <InfoWindowF
+              position={clickedKmlFeature.latLng}
+              onCloseClick={onInfoWindowClose}
+            >
+              <div className="p-2">
+                <h3 className="font-bold">{clickedKmlFeature.featureData.name}</h3>
+              </div>
+            </InfoWindowF>
+          )}
+        </GoogleMap>
+      </div>
 
       <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
-                <DialogHeader>
-                    <DialogTitle>Nearby Prospects</DialogTitle>
-                    <DialogDescription>
-                        Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="max-h-[60vh] overflow-y-auto">
-                    {/* Mobile View: List of Cards */}
-                    <div className="md:hidden space-y-4">
-                        {prospects.map(prospectInfo => (
-                            <Card key={prospectInfo.place.place_id} className="p-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="font-medium pr-2">{prospectInfo.place.name}</div>
-                                    <Checkbox 
-                                        checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
-                                        onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
-                                    />
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                    {prospectInfo.place.vicinity}
-                                </div>
-                                {prospectInfo.description && (
-                                    <div>
-                                    <p className="text-sm my-2 text-muted-foreground line-clamp-2">
-                                        {prospectInfo.description}
-                                    </p>
-                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center mt-2">
-                                    <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
-                                        {prospectInfo.classification}
-                                    </Badge>
-                                    {prospectInfo.existingLead ? (
-                                        <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                            <Eye className="mr-2 h-4 w-4" /> View
-                                        </Button>
-                                    ) : (
-                                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                            {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                                            Add
-                                        </Button>
-                                    )}
-                                </div>
-                            </Card>
-                        ))}
+        <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+          <DialogHeader>
+            <DialogTitle>Nearby Prospects</DialogTitle>
+            <DialogDescription>
+              Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {/* Mobile View: List of Cards */}
+            <div className="md:hidden space-y-4">
+              {prospects.map(prospectInfo => (
+                <Card key={prospectInfo.place.place_id} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="font-medium pr-2">{prospectInfo.place.name}</div>
+                    <Checkbox 
+                      checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
+                      onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {prospectInfo.place.vicinity}
+                  </div>
+                  {prospectInfo.description && (
+                    <div>
+                      <p className="text-sm my-2 text-muted-foreground line-clamp-2">
+                        {prospectInfo.description}
+                      </p>
+                      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
                     </div>
+                  )}
+                  <div className="flex justify-between items-center mt-2">
+                    <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
+                      {prospectInfo.classification}
+                    </Badge>
+                    {prospectInfo.existingLead ? (
+                      <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                        <Eye className="mr-2 h-4 w-4" /> View
+                      </Button>
+                    ) : (
+                      <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                        {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                        Add
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
 
-                    {/* Desktop View: Table */}
-                    <div className="hidden md:block">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
-                                    <TableHead>Company</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>Address</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {prospects.map(prospectInfo => (
-                                    <TableRow key={prospectInfo.place.place_id}>
-                                        <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
-                                        <TableCell>
-                                            <div className="font-medium">{prospectInfo.place.name}</div>
-                                            <div className="flex gap-2 items-center">
-                                                {prospectInfo.place.website && (
-                                                    <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                                                        <Globe className="h-3 w-3" />
-                                                        <span>Website</span>
-                                                    </a>
-                                                )}
-                                                {prospectInfo.place.formatted_phone_number && (
-                                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                        <Phone className="h-3 w-3" />
-                                                        <span>{prospectInfo.place.formatted_phone_number}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                                <div className="flex flex-col items-start max-w-xs">
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                                        {prospectInfo.description}
-                                                    </p>
-                                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                                </div>
-                                        </TableCell>
-                                        <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                        <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
-                                        <TableCell className="text-right">
-                                            {prospectInfo.existingLead ? (
-                                                <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                                    <Eye className="mr-2 h-4 w-4" />
-                                                    View
-                                                </Button>
-                                            ) : (
-                                                <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                                    {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
-                                                    {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
-                                                </Button>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button disabled={selectedProspects.length === 0}>
-                                <Route className="mr-2 h-4 w-4" />
-                                Create Route from Selected ({selectedProspects.length})
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
-                                <Car className="mr-2 h-4 w-4" />
-                                Driving
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
-                                <Footprints className="mr-2 h-4 w-4" />
-                                Walking
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
-                                <Bike className="mr-2 h-4 w-4" />
-                                Bicycling
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+            {/* Desktop View: Table */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {prospects.map(prospectInfo => (
+                    <TableRow key={prospectInfo.place.place_id}>
+                      <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
+                      <TableCell>
+                        <div className="font-medium">{prospectInfo.place.name}</div>
+                        <div className="flex gap-2 items-center">
+                          {prospectInfo.place.website && (
+                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                              <Globe className="h-3 w-3" />
+                              <span>Website</span>
+                            </a>
+                          )}
+                          {prospectInfo.place.formatted_phone_number && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              <span>{prospectInfo.place.formatted_phone_number}</span>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col items-start max-w-xs">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {prospectInfo.description}
+                          </p>
+                          <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                      <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        {prospectInfo.existingLead ? (
+                          <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                            {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                            {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <DialogFooter>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={selectedProspects.length === 0}>
+                  <Route className="mr-2 h-4 w-4" />
+                  Create Route from Selected ({selectedProspects.length})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
+                  <Car className="mr-2 h-4 w-4" />
+                  Driving
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
+                  <Footprints className="mr-2 h-4 w-4" />
+                  Walking
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
+                  <Bike className="mr-2 h-4 w-4" />
+                  Bicycling
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     );
 }
