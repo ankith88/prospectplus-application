@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -62,7 +63,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing' | 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 export default function SignedCustomersPage() {
   const [allMapData, setAllMapData] = useState<MapLead[]>([]);
@@ -766,5 +767,3 @@ export default function SignedCustomersPage() {
     </>
   )
 }
-
-    
