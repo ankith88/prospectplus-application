@@ -408,31 +408,31 @@ const handleCreateRoute = useCallback((selectedTravelMode: google.maps.TravelMod
     }, [isLoaded, userProfile, toast]);
 
   
-  const filteredData = useMemo(() => {
-    let dataToFilter = mapData;
-
-    if (userProfile?.role === 'Field Sales') {
-        dataToFilter = mapData.filter(item => {
-            return item.isCompany || (item.dialerAssigned === userProfile.displayName);
+    const filteredData = useMemo(() => {
+        let dataToFilter = mapData.filter(item => {
+            const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+            const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+            const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+            
+            let typeMatch = true;
+            if (filters.type === 'leads') {
+                typeMatch = !item.isCompany;
+            } else if (filters.type === 'companies') {
+                typeMatch = !!item.isCompany;
+            }
+    
+            return franchiseeMatch && stateMatch && statusMatch && typeMatch;
         });
-    }
 
-    return dataToFilter.filter(item => {
-        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-        
-        let statusMatch = true;
-        if (filters.type === 'leads' || filters.type === 'all') {
-            statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+        if (userProfile?.role === 'Field Sales') {
+            const assignedLeadIds = new Set(dataToFilter.filter(item => item.dialerAssigned === userProfile.displayName).map(item => item.id));
+            const companies = dataToFilter.filter(item => item.isCompany);
+            
+            dataToFilter = dataToFilter.filter(item => assignedLeadIds.has(item.id) || companies.some(c => c.id === item.id));
         }
 
-        let typeMatch = true;
-        if (filters.type === 'leads') typeMatch = !item.isCompany;
-        else if (filters.type === 'companies') typeMatch = !!item.isCompany;
-
-        return franchiseeMatch && statusMatch && stateMatch && typeMatch;
-    });
-  }, [mapData, filters, userProfile]);
+        return dataToFilter;
+    }, [mapData, filters, userProfile]);
 
 
   const onMarkerClick = useCallback((item: MapLead) => {
