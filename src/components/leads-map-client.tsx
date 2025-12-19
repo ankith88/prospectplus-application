@@ -1280,19 +1280,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 </span>
                                 <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
                             </CardTitle>
-                            <div className="space-y-2 pt-2">
-                                <div className="space-y-1">
-                                    <Label htmlFor="start-point">Start Point</Label>
-                                    <div className="flex gap-2">
-                                        <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
-                                        <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="end-point">End Point (Optional)</Label>
-                                    <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
-                                </div>
-                            </div>
                         </CardHeader>
                         <ScrollArea className="flex-grow min-h-0 px-6">
                             <div className="space-y-2 pt-2">
@@ -1339,31 +1326,45 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </ScrollArea>
                         <CardFooter className="flex flex-col gap-2 flex-shrink-0 pt-4 px-6 pb-6">
                              {directions && (
-                                <>
-                                    <div className="w-full space-y-2">
-                                        {userProfile?.role === 'Field Sales Admin' && (
-                                             <div className="space-y-1">
-                                                <Label htmlFor="route-assignee">Assign Route To</Label>
-                                                <Select value={routeAssignee} onValueChange={setRouteAssignee}>
-                                                    <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
-                                        <div className="space-y-1">
-                                            <Label htmlFor="route-name">Route Name</Label>
-                                            <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label htmlFor="route-date">Schedule Date (Optional)</Label>
-                                            <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
-                                        </div>
+                                <div className="w-full space-y-4">
+                                     <div className="space-y-1">
+                                        <Label htmlFor="route-date">Schedule Date (Optional)</Label>
+                                        <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
                                     </div>
-                                    <Button onClick={handleSaveRoute} disabled={(!routeName && !routeDate) || (userProfile?.role === 'Field Sales Admin' && !routeAssignee)} className="w-full"><Save className="mr-2 h-4 w-4" /> Save Route</Button>
-                                </>
+                                    
+                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                        <div className="space-y-1">
+                                            <Label htmlFor="route-assignee">Assign Route To</Label>
+                                            <Select value={routeAssignee} onValueChange={setRouteAssignee}>
+                                                <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-1">
+                                        <Label htmlFor="route-name">Route Name</Label>
+                                        <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                                    </div>
+                                    
+                                    <Button onClick={handleSaveRoute} disabled={(!routeName && !routeDate) || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
+                                        <Save className="mr-2 h-4 w-4" /> Save Route
+                                    </Button>
+                                </div>
                             )}
+                            <div className="w-full space-y-1">
+                                <Label htmlFor="start-point">Start Point</Label>
+                                <div className="flex gap-2">
+                                    <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
+                                    <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
+                                </div>
+                            </div>
+                            <div className="w-full space-y-1">
+                                <Label htmlFor="end-point">End Point (Optional)</Label>
+                                <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
+                            </div>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
