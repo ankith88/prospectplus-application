@@ -60,11 +60,13 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
 
+  const hasAccess = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin';
+
   useEffect(() => {
-    if (!authLoading && userProfile?.role !== 'admin') {
+    if (!authLoading && !hasAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, authLoading, router]);
+  }, [userProfile, authLoading, router, hasAccess]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -225,10 +227,10 @@ export default function AdminDashboardPage() {
       }
     };
 
-    if (!authLoading && userProfile?.role === 'admin') {
+    if (!authLoading && hasAccess) {
       fetchData();
     }
-  }, [userProfile, authLoading]);
+  }, [userProfile, authLoading, hasAccess]);
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
@@ -265,7 +267,7 @@ export default function AdminDashboardPage() {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
   
-  if (!userProfile || userProfile.role !== 'admin') {
+  if (!userProfile || !hasAccess) {
     return null;
   }
 

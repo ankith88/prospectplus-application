@@ -13,7 +13,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!loading) {
       if (user) {
-        if (userProfile?.role === 'admin') {
+        if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             router.replace('/admin/dashboard');
         } else if (userProfile?.role === 'Field Sales') {
             router.replace('/field-sales');

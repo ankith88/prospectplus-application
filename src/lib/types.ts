@@ -192,7 +192,7 @@ export interface UserProfile {
     displayName?: string;
     phoneNumber: string;
     aircallUserId?: string;
-    role?: 'user' | 'admin' | 'Field Sales';
+    role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin';
     disabled?: boolean;
 }
 

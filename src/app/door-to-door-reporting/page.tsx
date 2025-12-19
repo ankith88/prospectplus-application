@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
@@ -37,11 +38,13 @@ export default function DoorToDoorReportingPage() {
     user: [] as string[],
   });
 
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+
   useEffect(() => {
-    if (!authLoading && (!userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role))) {
+    if (!authLoading && !hasAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, authLoading, router]);
+  }, [userProfile, authLoading, router, hasAccess]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,10 +72,10 @@ export default function DoorToDoorReportingPage() {
   };
 
   useEffect(() => {
-    if (userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role)) {
+    if (hasAccess) {
       fetchData();
     }
-  }, [userProfile]);
+  }, [hasAccess]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -174,6 +177,10 @@ export default function DoorToDoorReportingPage() {
 
   if (authLoading || loading) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  }
+  
+  if (!hasAccess) {
+    return null;
   }
 
   return (

@@ -138,7 +138,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-             {userProfile?.role === 'admin' && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Admin Dashboard">
                   <Link href="/admin/dashboard">
@@ -148,7 +148,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
+            {userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
@@ -186,7 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {userProfile?.role === 'admin' && (
+            {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <BarChart2 />

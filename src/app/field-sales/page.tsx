@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -197,11 +198,13 @@ export default function FieldSalesPage() {
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
   const { toast } = useToast();
 
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+
   useEffect(() => {
-    if (!authLoading && (!userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role))) {
+    if (!authLoading && !hasAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, authLoading, router]);
+  }, [userProfile, authLoading, router, hasAccess]);
   
  const fetchData = useCallback(async () => {
     setLoading(true);
@@ -210,16 +213,16 @@ export default function FieldSalesPage() {
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
             getAllUsers(),
-            userProfile?.role === 'admin' ? getAllUserRoutes() : Promise.resolve([]),
+            (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
         ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
-        if (userProfile?.role === 'admin') {
+        if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             setAllRoutes(routes);
         }
-        setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
+        setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
@@ -328,7 +331,7 @@ export default function FieldSalesPage() {
   }, [filteredMyLeads]);
   
   const groupedAllAssignedLeads = useMemo(() => {
-    if (userProfile?.role !== 'admin') return {};
+    if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') return {};
     
     let relevantLeads = allLeads.filter(lead => lead.fieldSales === true);
 
@@ -384,7 +387,7 @@ export default function FieldSalesPage() {
     const routeOwner = allDialers.find(d => d.displayName === route.userName);
     if (!routeOwner?.uid || !route.id) return;
     await deleteUserRoute(routeOwner.uid, route.id);
-    if(userProfile?.role === 'admin') {
+    if(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
       setAllRoutes(prev => prev.filter(r => r.id !== route.id));
     } else {
       setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
@@ -468,7 +471,7 @@ export default function FieldSalesPage() {
   };
 
   const routesToShow = useMemo(() => {
-    if (userProfile?.role === 'admin' && userProfile?.uid) {
+    if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' && userProfile?.uid) {
         // Create a map of user IDs to display names for quick lookup
         const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
 
@@ -659,7 +662,7 @@ export default function FieldSalesPage() {
             <div className="space-y-2">
               {routesToShow.map(route => (
                 <Card key={route.id} className="p-3">
-                  {userProfile.role === 'admin' ? (
+                  {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div>
                             <p className="font-semibold">{route.name}</p>
@@ -789,7 +792,7 @@ export default function FieldSalesPage() {
         </CardContent>
       </Card>
       
-       {userProfile?.role === 'admin' && (
+       {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
           <Card>
             <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
