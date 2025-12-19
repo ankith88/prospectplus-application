@@ -250,32 +250,35 @@ export default function LeadsMapClient() {
           }
         });
       }
-      if (startPointInputRef.current) {
-        const startAutocomplete = new window.google.maps.places.Autocomplete(startPointInputRef.current, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        startAutocomplete.addListener('place_changed', () => {
-          const place = startAutocomplete.getPlace();
-          if (place.formatted_address) {
-            setStartPoint(place.formatted_address);
-          }
-        });
-      }
-      if (endPointInputRef.current) {
-        const endAutocomplete = new window.google.maps.places.Autocomplete(endPointInputRef.current, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        endAutocomplete.addListener('place_changed', () => {
-          const place = endAutocomplete.getPlace();
-          if (place.formatted_address) {
-            setEndPoint(place.formatted_address);
-          }
-        });
-      }
     }
   }, [isLoaded, map]);
+
+  useEffect(() => {
+    if(isLoaded && map && startPointInputRef.current){
+        const startAutocomplete = new window.google.maps.places.Autocomplete(startPointInputRef.current, {
+            types: ['geocode'],
+            componentRestrictions: { country: 'au' },
+        });
+        startAutocomplete.addListener('place_changed', () => {
+            const place = startAutocomplete.getPlace();
+            if (place.formatted_address) {
+                setStartPoint(place.formatted_address);
+            }
+        });
+    }
+    if(isLoaded && map && endPointInputRef.current){
+        const endAutocomplete = new window.google.maps.places.Autocomplete(endPointInputRef.current, {
+            types: ['geocode'],
+            componentRestrictions: { country: 'au' },
+        });
+        endAutocomplete.addListener('place_changed', () => {
+            const place = endAutocomplete.getPlace();
+            if (place.formatted_address) {
+                setEndPoint(place.formatted_address);
+            }
+        });
+    }
+}, [isLoaded, map])
 
 
   const router = useRouter()
@@ -906,7 +909,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         const leadsInShape = filteredData.filter(lead => {
             if (lead.isCompany) return false;
             if (lead.latitude && lead.longitude) {
-                const leadLatLng = new google.maps.LatLng(lead.latitude, lead.longitude);
+                const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
                 if (overlay.get('radius')) { // It's a circle
                     return google.maps.geometry.spherical.computeDistanceBetween(
                         (overlay as google.maps.Circle).getCenter()!, 
@@ -1309,19 +1312,20 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-        
-        {selectedRouteLeads.length > 0 && (
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                            <Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})
-                            {isRouteActive && <Badge variant="destructive">Active</Badge>}
-                        </span>
-                        <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
-                    </CardTitle>
-                </CardHeader>
-                <ScrollArea className="max-h-60 px-6">
+
+      {selectedRouteLeads.length > 0 && (
+         <Card className="flex flex-col">
+            <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                        <Route className="h-5 w-5"/> Selected Stops ({selectedRouteLeads.length})
+                        {isRouteActive && <Badge variant="destructive">Active</Badge>}
+                    </span>
+                    <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
+                </CardTitle>
+            </CardHeader>
+             <div className="flex-grow overflow-hidden px-6">
+                <ScrollArea className="max-h-60 h-full">
                     <div className="space-y-2 pt-2">
                         {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
                         if (!item.lead) return null;
@@ -1364,68 +1368,70 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         })}
                     </div>
                 </ScrollArea>
-                <CardFooter className="flex flex-col gap-2 pt-4">
-                        <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="w-full space-y-1">
-                                <Label htmlFor="start-point">Start Point</Label>
-                                <div className="flex gap-2">
-                                    <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
-                                    <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
-                                </div>
-                            </div>
-                            <div className="w-full space-y-1">
-                                <Label htmlFor="end-point">End Point (Optional)</Label>
-                                <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
+             </div>
+            <CardFooter className="flex flex-col gap-2 pt-4">
+                    <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="w-full space-y-1">
+                            <Label htmlFor="start-point">Start Point</Label>
+                            <div className="flex gap-2">
+                                <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
+                                <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
                             </div>
                         </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
-                                {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
-                                {directions ? 'Re-calculate Route' : 'Create Route'}
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}><Car className="mr-2 h-4 w-4" />Driving</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}><Footprints className="mr-2 h-4 w-4" />Walking</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}><Bike className="mr-2 h-4 w-4" />Bicycling</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                        <div className="w-full space-y-1">
+                            <Label htmlFor="end-point">End Point (Optional)</Label>
+                            <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
+                        </div>
+                    </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                            {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
+                            {directions ? 'Re-calculate Route' : 'Create Route'}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}><Car className="mr-2 h-4 w-4" />Driving</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}><Footprints className="mr-2 h-4 w-4" />Walking</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}><Bike className="mr-2 h-4 w-4" />Bicycling</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
-                     {directions && (
-                        <div className="w-full space-y-4 pt-4 border-t">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <Label htmlFor="route-date">Schedule Date (Optional)</Label>
-                                    <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
-                                </div>
-                                {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
-                                    <div className="space-y-1">
-                                        <Label htmlFor="route-assignee">Assign Route To</Label>
-                                        <Select value={routeAssignee} onValueChange={setRouteAssignee}>
-                                            <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-                            </div>
+                 {directions && (
+                    <div className="w-full space-y-4 pt-4 border-t">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <Label htmlFor="route-name">Route Name</Label>
-                                <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                                <Label htmlFor="route-date">Schedule Date (Optional)</Label>
+                                <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
                             </div>
-                            
-                            <Button onClick={handleSaveRoute} disabled={(!routeName && !routeDate) || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
-                                <Save className="mr-2 h-4 w-4" /> Save Route
-                            </Button>
+                            {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                <div className="space-y-1">
+                                    <Label htmlFor="route-assignee">Assign Route To</Label>
+                                    <Select value={routeAssignee} onValueChange={setRouteAssignee}>
+                                        <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </div>
-                    )}
+                        <div className="space-y-1">
+                            <Label htmlFor="route-name">Route Name</Label>
+                            <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                        </div>
+                        
+                        <Button onClick={handleSaveRoute} disabled={(!routeName && !routeDate) || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
+                            <Save className="mr-2 h-4 w-4" /> Save Route
+                        </Button>
+                    </div>
+                )}
 
-                    <Button variant="secondary" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }} className="w-full">Clear Selection</Button>
-                </CardFooter>
-            </Card>
-        )}
+                <Button variant="secondary" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }} className="w-full">Clear Selection</Button>
+            </CardFooter>
+        </Card>
+      )}
+        
       <div className="flex-grow min-h-[50vh] relative rounded-lg overflow-hidden">
         <GoogleMap
           mapContainerStyle={containerStyle}
