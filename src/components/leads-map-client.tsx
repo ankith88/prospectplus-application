@@ -236,12 +236,12 @@ export default function LeadsMapClient() {
   useEffect(() => {
     if (isLoaded && map) {
       if (geoSearchInputRef.current) {
-        const autocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
+        const geoAutocomplete = new window.google.maps.places.Autocomplete(geoSearchInputRef.current, {
           types: ['geocode'],
           componentRestrictions: { country: 'au' },
         });
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
+        geoAutocomplete.addListener('place_changed', () => {
+          const place = geoAutocomplete.getPlace();
           if (place.geometry?.viewport) {
             map.fitBounds(place.geometry.viewport);
           } else if (place.geometry?.location) {
@@ -250,11 +250,7 @@ export default function LeadsMapClient() {
           }
         });
       }
-    }
-  }, [isLoaded, map]);
-
-  useEffect(() => {
-    if(isLoaded && map && startPointInputRef.current){
+      if (startPointInputRef.current) {
         const startAutocomplete = new window.google.maps.places.Autocomplete(startPointInputRef.current, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
@@ -265,8 +261,8 @@ export default function LeadsMapClient() {
                 setStartPoint(place.formatted_address);
             }
         });
-    }
-    if(isLoaded && map && endPointInputRef.current){
+      }
+      if (endPointInputRef.current) {
         const endAutocomplete = new window.google.maps.places.Autocomplete(endPointInputRef.current, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
@@ -277,8 +273,9 @@ export default function LeadsMapClient() {
                 setEndPoint(place.formatted_address);
             }
         });
+      }
     }
-}, [isLoaded, map])
+  }, [isLoaded, map]);
 
 
   const router = useRouter()
@@ -1238,11 +1235,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         id="geo-search-mobile"
                                         ref={geoSearchInputRef}
                                         placeholder="Suburb, state, postcode..."
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                          }
-                                        }}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -1312,7 +1304,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </CollapsibleContent>
             </Card>
         </Collapsible>
-
+      
       {selectedRouteLeads.length > 0 && (
          <Card className="flex flex-col">
             <CardHeader className="pb-2">
@@ -1324,7 +1316,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}><X className="h-4 w-4"/></Button>
                 </CardTitle>
             </CardHeader>
-             <div className="flex-grow overflow-hidden px-6">
+             <CardContent className="flex-grow overflow-hidden px-6">
                 <ScrollArea className="max-h-60 h-full">
                     <div className="space-y-2 pt-2">
                         {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({lead: l}))).map((item, index) => {
@@ -1368,21 +1360,21 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         })}
                     </div>
                 </ScrollArea>
-             </div>
+             </CardContent>
             <CardFooter className="flex flex-col gap-2 pt-4">
-                    <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="w-full space-y-1">
-                            <Label htmlFor="start-point">Start Point</Label>
-                            <div className="flex gap-2">
-                                <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
-                                <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
-                            </div>
-                        </div>
-                        <div className="w-full space-y-1">
-                            <Label htmlFor="end-point">End Point (Optional)</Label>
-                            <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
+                <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="w-full space-y-1">
+                        <Label htmlFor="start-point">Start Point</Label>
+                        <div className="flex gap-2">
+                            <Input id="start-point" ref={startPointInputRef} placeholder="Enter start address" value={startPoint} onChange={e => setStartPoint(e.target.value)} />
+                            <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
                         </div>
                     </div>
+                    <div className="w-full space-y-1">
+                        <Label htmlFor="end-point">End Point (Optional)</Label>
+                        <Input id="end-point" ref={endPointInputRef} placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} />
+                    </div>
+                </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
@@ -1400,7 +1392,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                  {directions && (
                     <div className="w-full space-y-4 pt-4 border-t">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1">
+                             <div className="space-y-1">
                                 <Label htmlFor="route-date">Schedule Date (Optional)</Label>
                                 <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal",!routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
                             </div>
@@ -1421,7 +1413,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
                         </div>
                         
-                        <Button onClick={handleSaveRoute} disabled={(!routeName && !routeDate) || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
+                        <Button onClick={handleSaveRoute} disabled={!routeName || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
                             <Save className="mr-2 h-4 w-4" /> Save Route
                         </Button>
                     </div>
