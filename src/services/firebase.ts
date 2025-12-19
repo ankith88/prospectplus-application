@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -1622,19 +1623,10 @@ async function bulkDeleteSubCollectionItems(leadId: string, subCollectionName: '
 }
 
 
-async function saveUserRoute(userId: string, routeData: SavedRoute): Promise<string> {
+async function saveUserRoute(userId: string, routeData: Omit<StorableRoute, 'id'>): Promise<string> {
     try {
         const routesRef = collection(firestore, 'users', userId, 'routes');
-        const storableRoute: StorableRoute = {
-            name: routeData.name,
-            createdAt: routeData.createdAt,
-            travelMode: routeData.travelMode,
-            directions: routeData.directions ? JSON.stringify(routeData.directions) : undefined,
-            leads: routeData.leads,
-            scheduledDate: routeData.scheduledDate ? new Date(routeData.scheduledDate).toISOString() : undefined,
-        };
-
-        const docRef = await addDoc(routesRef, storableRoute);
+        const docRef = await addDoc(routesRef, routeData);
         return docRef.id;
     } catch (error) {
         console.error(`Failed to save route for user ${userId}:`, error);

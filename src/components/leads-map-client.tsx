@@ -197,7 +197,11 @@ export default function LeadsMapClient() {
   const [routeDate, setRouteDate] = useState<Date>();
   const [routeAssignee, setRouteAssignee] = useState<string>('');
   const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
-
+  
+  // Autocomplete Refs
+  const geoSearchAutocompleteRef = useRef<google.maps.places.Autocomplete>();
+  const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete>();
+  const endPointAutocompleteRef = useRef<google.maps.places.Autocomplete>();
 
   // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -229,57 +233,58 @@ export default function LeadsMapClient() {
     type: 'all' as 'all' | 'leads' | 'companies'
   });
   
-  useEffect(() => {
-    if (isLoaded) {
-      const geoSearchInput = document.getElementById('geo-search') as HTMLInputElement;
-      if (geoSearchInput) {
-        const autocomplete = new window.google.maps.places.Autocomplete(geoSearchInput, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        autocomplete.setFields(['geometry']);
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          if (place.geometry?.viewport) {
-            map?.fitBounds(place.geometry.viewport);
-          } else if (place.geometry?.location) {
-            map?.panTo(place.geometry.location);
-            map?.setZoom(15);
-          }
-        });
-      }
-
-      const startPointInput = document.getElementById('start-point') as HTMLInputElement;
-      if (startPointInput) {
-        const autocomplete = new window.google.maps.places.Autocomplete(startPointInput, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        autocomplete.setFields(['formatted_address']);
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          if (place.formatted_address) {
-            setStartPoint(place.formatted_address);
-          }
-        });
-      }
-
-      const endPointInput = document.getElementById('end-point') as HTMLInputElement;
-      if (endPointInput) {
-        const autocomplete = new window.google.maps.places.Autocomplete(endPointInput, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'au' },
-        });
-        autocomplete.setFields(['formatted_address']);
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          if (place.formatted_address) {
-            setEndPoint(place.formatted_address);
-          }
-        });
-      }
+  const setupAutocomplete = useCallback((inputElement: HTMLInputElement | null, setPlace: (place: google.maps.places.PlaceResult) => void, autocompleteInstance: React.MutableRefObject<google.maps.places.Autocomplete | undefined>) => {
+    if (isLoaded && inputElement && !autocompleteInstance.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(inputElement, {
+        types: ['geocode'],
+        componentRestrictions: { country: 'au' },
+      });
+      autocomplete.setFields(['geometry', 'formatted_address']);
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place) {
+          setPlace(place);
+        }
+      });
+      autocompleteInstance.current = autocomplete;
     }
-  }, [isLoaded, map]);
+  }, [isLoaded]);
+
+  const geoSearchInputRef = useCallback(
+    (node: HTMLInputElement) => {
+      setupAutocomplete(node, (place) => {
+        if (place.geometry?.viewport) {
+          map?.fitBounds(place.geometry.viewport);
+        } else if (place.geometry?.location) {
+          map?.panTo(place.geometry.location);
+          map?.setZoom(15);
+        }
+      }, geoSearchAutocompleteRef);
+    },
+    [setupAutocomplete, map]
+  );
+
+  const startPointInputRef = useCallback(
+    (node: HTMLInputElement) => {
+      setupAutocomplete(node, (place) => {
+        if (place.formatted_address) {
+          setStartPoint(place.formatted_address);
+        }
+      }, startPointAutocompleteRef);
+    },
+    [setupAutocomplete]
+  );
+  
+  const endPointInputRef = useCallback(
+    (node: HTMLInputElement) => {
+      setupAutocomplete(node, (place) => {
+        if (place.formatted_address) {
+          setEndPoint(place.formatted_address);
+        }
+      }, endPointAutocompleteRef);
+    },
+    [setupAutocomplete]
+  );
 
 
   const router = useRouter()
@@ -1007,18 +1012,20 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             return;
         }
 
-        const newRoute: SavedRoute = {
+        const newRoute: Omit<StorableRoute, 'id'> = {
             name: routeName,
             createdAt: new Date().toISOString(),
             leads: selectedRouteLeads,
-            directions,
-            travelMode,
-            scheduledDate: routeDate,
+            travelMode: travelMode!,
+            directions: directions ? JSON.stringify(directions) : undefined,
+            scheduledDate: routeDate ? new Date(routeDate).toISOString() : undefined,
+            startPoint,
+            endPoint,
         };
 
         const savedRouteId = await saveUserRoute(userIdToSave, newRoute);
         if (userIdToSave === userProfile?.uid) {
-            setLocalSavedRoutes(prev => [...prev, {...newRoute, id: savedRouteId}]);
+            setLocalSavedRoutes(prev => [...prev, { ...newRoute, id: savedRouteId, directions: directions }]);
         }
         setRouteName('');
         setRouteDate(undefined);
@@ -1037,6 +1044,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         }
         setTravelMode(route.travelMode);
         setLoadedRoute(route);
+        setStartPoint(route.startPoint || 'My Location');
+        setEndPoint(route.endPoint || '');
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
     };
 
@@ -1138,7 +1147,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return <div>Error loading maps. Please check your API key and network connection.</div>
     }
     
-    if (!isLoaded || loadingData || authLoading) {
+    if (authLoading || loadingData) {
         return (
             <div className="flex h-full items-center justify-center">
             <Loader />
@@ -1239,6 +1248,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                               <Input
                                   id="geo-search"
                                   placeholder="Suburb, state, postcode..."
+                                  ref={geoSearchInputRef}
                               />
                           </div>
                           <div className="space-y-2">
@@ -1371,13 +1381,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                           <div className="w-full space-y-1">
                               <Label htmlFor="start-point">Start Point</Label>
                               <div className="flex gap-2">
-                                  <Input id="start-point" placeholder="Enter start address" defaultValue={startPoint} onChange={e => setStartPoint(e.target.value)} />
+                                  <Input id="start-point" placeholder="Enter start address" defaultValue={startPoint} onChange={e => setStartPoint(e.target.value)} ref={startPointInputRef}/>
                                   <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
                               </div>
                           </div>
                           <div className="w-full space-y-1">
                               <Label htmlFor="end-point">End Point (Optional)</Label>
-                              <Input id="end-point" placeholder="Defaults to start point" defaultValue={endPoint} onChange={e => setEndPoint(e.target.value)} />
+                              <Input id="end-point" placeholder="Defaults to start point" defaultValue={endPoint} onChange={e => setEndPoint(e.target.value)} ref={endPointInputRef} />
                           </div>
                       </div>
                       <DropdownMenu>

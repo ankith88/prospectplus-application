@@ -124,6 +124,7 @@ export interface DiscoveryData {
     routingTag?: string;
     scoringReason?: string;
     checkInCompleted?: boolean;
+    searchKeywords?: string[];
 }
 
 export interface Invoice {
@@ -204,6 +205,8 @@ export type StorableRoute = {
     createdAt: string;
     leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
     travelMode: google.maps.TravelMode;
+    startPoint?: string;
+    endPoint?: string;
     directions?: string;
     scheduledDate?: string;
 };
@@ -213,5 +216,3 @@ export type SavedRoute = Omit<StorableRoute, 'directions'> & {
     directions: google.maps.DirectionsResult | null;
     scheduledDate?: string | Date;
 };
-
-    
