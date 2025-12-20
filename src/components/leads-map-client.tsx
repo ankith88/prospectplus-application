@@ -74,6 +74,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { CalendarIcon } from 'lucide-react'
 import { Calendar } from './ui/calendar'
 import { format } from 'date-fns'
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 
 const containerStyle = {
@@ -235,34 +236,40 @@ export default function LeadsMapClient() {
   
   useEffect(() => {
     if (isLoaded) {
-      const initAutocomplete = (inputRef: React.RefObject<HTMLInputElement>) => {
-        if (inputRef.current) {
-          const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+      const initAutocomplete = (inputEl: HTMLInputElement | null, onPlaceChanged: (place: google.maps.places.PlaceResult) => void) => {
+        if (inputEl) {
+          const autocomplete = new window.google.maps.places.Autocomplete(inputEl, {
             types: ['geocode'],
             componentRestrictions: { country: 'au' },
           });
           autocomplete.setFields(['geometry', 'formatted_address']);
           autocomplete.addListener('place_changed', () => {
-             const place = autocomplete.getPlace();
-             if (inputRef === geoSearchInputRef) {
-                if (place.geometry?.viewport) {
-                  map?.fitBounds(place.geometry.viewport);
-                } else if (place.geometry?.location) {
-                  map?.panTo(place.geometry.location);
-                  map?.setZoom(15);
-                }
-             } else if (inputRef === startPointInputRef && place.formatted_address) {
-                setStartPoint(place.formatted_address);
-             } else if (inputRef === endPointInputRef && place.formatted_address) {
-                setEndPoint(place.formatted_address);
-             }
+            const place = autocomplete.getPlace();
+            if (place) {
+              onPlaceChanged(place);
+            }
           });
         }
       };
 
-      initAutocomplete(geoSearchInputRef);
-      initAutocomplete(startPointInputRef);
-      initAutocomplete(endPointInputRef);
+      initAutocomplete(geoSearchInputRef.current, (place) => {
+        if (place.geometry?.viewport) {
+          map?.fitBounds(place.geometry.viewport);
+        } else if (place.geometry?.location) {
+          map?.panTo(place.geometry.location);
+          map?.setZoom(15);
+        }
+      });
+      initAutocomplete(startPointInputRef.current, (place) => {
+        if (place.formatted_address) {
+          setStartPoint(place.formatted_address);
+        }
+      });
+      initAutocomplete(endPointInputRef.current, (place) => {
+        if (place.formatted_address) {
+          setEndPoint(place.formatted_address);
+        }
+      });
     }
   }, [isLoaded, map]);
 
@@ -1224,9 +1231,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                   <TabsContent value="actions">
                       <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                              <Label htmlFor="geo-search">Go to Location</Label>
+                              <Label htmlFor="geo-search-input">Go to Location</Label>
                               <Input
-                                  id="geo-search"
+                                  id="geo-search-input"
                                   placeholder="Suburb, state, postcode..."
                                   ref={geoSearchInputRef}
                               />
@@ -1299,9 +1306,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           </Card>
         </Collapsible>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-grow min-h-0">
+        <div className="flex-grow grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
           {selectedRouteLeads.length > 0 && (
-            <Card className="lg:col-span-1 flex flex-col max-h-full">
+            <Card className="lg:col-span-1 flex flex-col h-full max-h-[calc(100vh-22rem)]">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -1315,61 +1322,74 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
               </CardHeader>
               <CardContent className="flex-grow overflow-hidden">
                 <ScrollArea className="h-full">
-                  <div className="space-y-2 pt-2">
-                    {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({ lead: l }))).map((item, index) => {
-                      if (!item.lead) return null;
-                      const lead = item.lead;
-                      const leg = (item as any).leg;
-                      return (
-                        <Card key={lead.id} className="p-3 flex items-center gap-2">
-                          <GripVertical className="cursor-grab text-muted-foreground" />
-                          <div className="flex-grow">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="font-bold">
-                                  <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                    <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
-                                  </Button>
-                                </p>
-                                <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
-                              </div>
-                              <LeadStatusBadge status={lead.status} />
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              {leg && (
-                                <p className="text-xs text-muted-foreground">
-                                  {leg?.duration?.text} • {leg?.distance?.text}
-                                </p>
-                              )}
-                              <div className='flex gap-2'>
-                                <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                                  {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
-                                  {lead.isProspect ? 'Add New Lead' : 'Check In'}
-                                </Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      )
-                    })}
-                  </div>
+                  <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="droppable">
+                      {(provided) => (
+                        <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                          {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({ lead: l }))).map((item, index) => {
+                            if (!item.lead) return null;
+                            const lead = item.lead;
+                            const leg = (item as any).leg;
+                            return (
+                              <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
+                                    <Card className="p-3 flex items-center gap-2">
+                                      <GripVertical className="cursor-grab text-muted-foreground" />
+                                      <div className="flex-grow">
+                                        <div className="flex justify-between items-start">
+                                          <div>
+                                            <p className="font-bold">
+                                              <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
+                                              </Button>
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                          </div>
+                                          <LeadStatusBadge status={lead.status} />
+                                        </div>
+                                        <div className="flex items-center justify-between mt-2">
+                                          {leg && (
+                                            <p className="text-xs text-muted-foreground">
+                                              {leg?.duration?.text} • {leg?.distance?.text}
+                                            </p>
+                                          )}
+                                          <div className='flex gap-2'>
+                                            <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                                              {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                                              {lead.isProspect ? 'Add New Lead' : 'Check In'}
+                                            </Button>
+                                            <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </Card>
+                                  </div>
+                                )}
+                              </Draggable>
+                            )
+                          })}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 </ScrollArea>
               </CardContent>
-              <CardFooter className="flex flex-col gap-2 pt-4">
+              <CardFooter className="flex flex-col gap-2 pt-4 border-t">
                 <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="w-full space-y-1">
-                    <Label htmlFor="start-point">Start Point</Label>
+                    <Label htmlFor="start-point-input">Start Point</Label>
                     <div className="flex gap-2">
-                      <Input id="start-point" placeholder="Enter start address" defaultValue={startPoint} onChange={e => setStartPoint(e.target.value)} ref={startPointInputRef} />
+                      <Input id="start-point-input" placeholder="Enter start address" defaultValue={startPoint} onChange={e => setStartPoint(e.target.value)} ref={startPointInputRef} />
                       <Button variant="ghost" size="icon" onClick={() => setStartPoint('My Location')}><Locate className="h-4 w-4" /></Button>
                     </div>
                   </div>
                   <div className="w-full space-y-1">
-                    <Label htmlFor="end-point">End Point (Optional)</Label>
-                    <Input id="end-point" placeholder="Defaults to start point" defaultValue={endPoint} onChange={e => setEndPoint(e.target.value)} ref={endPointInputRef} />
+                    <Label htmlFor="end-point-input">End Point (Optional)</Label>
+                    <Input id="end-point-input" placeholder="Defaults to start point" defaultValue={endPoint} onChange={e => setEndPoint(e.target.value)} ref={endPointInputRef} />
                   </div>
                 </div>
                 <DropdownMenu>
@@ -1418,7 +1438,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             </Card>
           )}
 
-          <div className={cn("relative flex-grow rounded-lg overflow-hidden border", selectedRouteLeads.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
+          <div className={cn("relative rounded-lg overflow-hidden border", selectedRouteLeads.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
             <GoogleMap
               mapContainerStyle={containerStyle}
               center={center}
