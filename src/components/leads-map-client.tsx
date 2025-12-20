@@ -1121,12 +1121,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }, [directions, selectedRouteLeads]);
     
     const handleDragEnd = (result: DropResult) => {
-        if (!result.destination) return;
-        const items = Array.from(selectedRouteLeads);
-        const [reorderedItem] = items.splice(result.source.index, 1);
-        items.splice(result.destination.index, 0, reorderedItem);
-        setSelectedRouteLeads(items);
-        setDirections(null); // Force recalculation
+      if (!result.destination) return;
+      const items = Array.from(selectedRouteLeads);
+      const [reorderedItem] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, reorderedItem);
+      setSelectedRouteLeads(items);
+      setDirections(null); // Force recalculation
     };
 
     if (loadError) {
@@ -1305,9 +1305,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           </Card>
         </Collapsible>
         
-        <div className={cn("grid grid-cols-1 gap-4 flex-grow min-h-0", selectedRouteLeads.length > 0 && "lg:grid-cols-3")}>
-          {selectedRouteLeads.length > 0 && (
-            <Card className="lg:col-span-1 flex flex-col h-full max-h-[calc(100vh-22rem)]">
+        {selectedRouteLeads.length > 0 && (
+            <Card className="flex flex-col h-full max-h-[40vh]">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -1435,9 +1434,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 <Button variant="secondary" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }} className="w-full">Clear Selection</Button>
               </CardFooter>
             </Card>
-          )}
+        )}
 
-          <div className={cn("relative rounded-lg overflow-hidden border", selectedRouteLeads.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
+        <div className={cn("relative rounded-lg overflow-hidden border flex-grow min-h-[50vh]", selectedRouteLeads.length > 0 && "min-h-[60vh]")}>
             <GoogleMap
               mapContainerStyle={containerStyle}
               center={center}
@@ -1609,7 +1608,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </InfoWindowF>
               )}
             </GoogleMap>
-          </div>
         </div>
 
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
