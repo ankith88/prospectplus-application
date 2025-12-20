@@ -74,7 +74,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { CalendarIcon } from 'lucide-react'
 import { Calendar } from './ui/calendar'
 import { format } from 'date-fns'
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
 
 const containerStyle = {
@@ -199,7 +199,6 @@ export default function LeadsMapClient() {
   const [routeAssignee, setRouteAssignee] = useState<string>('');
   const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
   
-  // Autocomplete Refs
   const geoSearchInputRef = useRef<HTMLInputElement>(null);
   const startPointInputRef = useRef<HTMLInputElement>(null);
   const endPointInputRef = useRef<HTMLInputElement>(null);
@@ -1121,7 +1120,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return { waypointOrderMap, sortedRouteLegs };
     }, [directions, selectedRouteLeads]);
     
-    const handleDragEnd = (result: any) => {
+    const handleDragEnd = (result: DropResult) => {
         if (!result.destination) return;
         const items = Array.from(selectedRouteLeads);
         const [reorderedItem] = items.splice(result.source.index, 1);
@@ -1306,7 +1305,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           </Card>
         </Collapsible>
         
-        <div className="flex-grow grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
+        <div className={cn("grid grid-cols-1 gap-4 flex-grow min-h-0", selectedRouteLeads.length > 0 && "lg:grid-cols-3")}>
           {selectedRouteLeads.length > 0 && (
             <Card className="lg:col-span-1 flex flex-col h-full max-h-[calc(100vh-22rem)]">
               <CardHeader className="pb-2">
@@ -1323,10 +1322,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
               <CardContent className="flex-grow overflow-hidden">
                 <ScrollArea className="h-full">
                   <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="droppable">
+                    <Droppable droppableId="droppable-stops">
                       {(provided) => (
                         <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                          {(directions ? sortedRouteLegs : selectedRouteLeads.map(l => ({ lead: l }))).map((item, index) => {
+                          {(directions ? sortedRouteLegs : selectedRouteLeads.map((l, i) => ({lead: l, stopNumber: i+1}))).map((item, index) => {
                             if (!item.lead) return null;
                             const lead = item.lead;
                             const leg = (item as any).leg;
