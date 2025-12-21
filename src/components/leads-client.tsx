@@ -40,7 +40,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format } from 'date-fns'
-import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -724,7 +724,8 @@ export default function LeadsClientPage() {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
-
+  
+  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
   if (loading || authLoading) {
     return (
@@ -819,7 +820,7 @@ export default function LeadsClientPage() {
                 )}
                 {selectedLeads.length > 0 && (
                     <>
-                     {userProfile?.role === 'admin' && (
+                     {isAdminView && (
                         <Button onClick={() => confirmDelete(selectedLeads)} variant="destructive" size="sm">
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete ({selectedLeads.length})
@@ -839,7 +840,7 @@ export default function LeadsClientPage() {
                     <Download className="mr-2 h-4 w-4" />
                     Export My Leads
                 </Button>
-                 {userProfile?.role === 'admin' && (
+                 {isAdminView && (
                     <Button onClick={handleExportAll} variant="outline" size="sm">
                         <Download className="mr-2 h-4 w-4" />
                         Export All Leads
@@ -1012,7 +1013,7 @@ export default function LeadsClientPage() {
         </CardContent>
       </Card>
       
-      {userProfile?.role === 'admin' && (
+      {isAdminView && (
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
@@ -1217,7 +1218,7 @@ export default function LeadsClientPage() {
       </Card>
       )}
 
-      {userProfile?.role === 'admin' && (
+      {isAdminView && (
        <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">

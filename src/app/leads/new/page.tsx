@@ -11,13 +11,15 @@ export default function NewLeadPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role);
+
   useEffect(() => {
-    if (!loading && (!userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role))) {
+    if (!loading && !hasAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, loading, router]);
+  }, [userProfile, loading, router, hasAccess]);
 
-  if (loading || !userProfile?.role || !['admin', 'Field Sales'].includes(userProfile.role)) {
+  if (loading || !hasAccess) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />

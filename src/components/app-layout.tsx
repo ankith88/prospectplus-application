@@ -122,6 +122,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
+  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+
   return (
     <>
       <Sidebar collapsible="icon">
@@ -148,7 +152,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role) && (
+            {canViewD2D && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
@@ -158,7 +162,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && ['admin', 'Field Sales'].includes(userProfile.role) && (
+            {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
                   <Link href="/leads/new">
@@ -168,7 +172,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+            {(userProfile?.role && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
                   <Link href="/leads">
@@ -186,7 +190,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+            {canViewReporting && (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <BarChart2 />
@@ -212,7 +216,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {userProfile?.role === 'user' && (
+            {canViewReporting && userProfile?.role === 'user' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
                   <Link href="/reports">
@@ -222,7 +226,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {userProfile?.role === 'Field Sales' && (
+             {canViewReporting && userProfile?.role === 'Field Sales' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
                   <Link href="/door-to-door-reporting">
@@ -240,7 +244,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-             {userProfile?.role && ['admin', 'user'].includes(userProfile.role) && (
+             {canViewHistory && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <History />
@@ -274,6 +278,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
+            {!userProfile?.role?.includes('Lead Gen') && (
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">
@@ -282,6 +287,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            )}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-0">

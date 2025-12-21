@@ -62,6 +62,14 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
+  const hasAccess = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
+
   const fetchTranscripts = async () => {
     if (!user) return;
     try {
@@ -203,7 +211,7 @@ export default function TranscriptsPage() {
     document.body.removeChild(link);
   };
 
-  if (loading || authLoading) {
+  if (loading || authLoading || !hasAccess) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />

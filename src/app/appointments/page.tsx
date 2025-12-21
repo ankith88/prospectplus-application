@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -60,6 +61,15 @@ export default function AllAppointmentsPage() {
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+
+  const hasAccess = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
+
 
   const fetchAppointments = async () => {
     try {
@@ -269,7 +279,7 @@ export default function AllAppointmentsPage() {
   };
 
 
-  if (loading || authLoading) {
+  if (loading || authLoading || !hasAccess) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
