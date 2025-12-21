@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -136,19 +135,6 @@ export function NewLeadForm() {
       },
     },
   });
-  
-  useEffect(() => {
-    const campaignSchema = form.schema.extend({
-        campaign: userProfile?.role === 'user' || userProfile?.role === 'admin'
-            ? z.string().min(1, 'Campaign is required.')
-            : z.string().optional(),
-    });
-    
-    form.reset(form.getValues(), {
-      resolver: zodResolver(campaignSchema),
-    });
-
-  }, [userProfile, form]);
 
   const handleAiProspect = useCallback(async (websiteUrl?: string) => {
     const url = websiteUrl || form.getValues('websiteUrl');
@@ -281,7 +267,13 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
-    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+    if (userProfile?.role === 'user' || userProfile?.role === 'admin') {
+        if (!values.campaign) {
+            form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
+            setIsSubmitting(false);
+            return;
+        }
+    } else if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
         finalValues.campaign = 'Door-to-Door';
     }
 
