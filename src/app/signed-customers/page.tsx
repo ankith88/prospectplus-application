@@ -42,6 +42,8 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -72,7 +74,7 @@ export default function SignedCustomersPage() {
     franchisee: [] as string[],
   });
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [selectedCompany, setSelectedCompany] = useState<MapLead | null>(null);
 
@@ -84,6 +86,11 @@ export default function SignedCustomersPage() {
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [viewingDescription, setViewingDescription] = useState<string | null>(null);
+  
+  const [prospectToCreate, setProspectToCreate] = useState<google.maps.places.PlaceResult | null>(null);
+  const [isCreatingLead, setIsCreatingLead] = useState(false);
+  const [campaign, setCampaign] = useState('');
+  const [initialNotes, setInitialNotes] = useState('');
 
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -208,7 +215,7 @@ export default function SignedCustomersPage() {
     const nearby = allMapData
       .filter(item => {
         if (item.isCompany || !item.latitude || !item.longitude) return false;
-        const itemLatLng = new google.maps.LatLng(item.latitude, item.longitude);
+        const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
         const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, itemLatLng);
         return distance <= 500;
       })
@@ -228,7 +235,7 @@ export default function SignedCustomersPage() {
     setProspects([]); 
 
     setIsSearchingNearby(true);
-    toast({ title: 'Searching for Prospects...', description: `AI is looking for prospects related to "${keyword}"...` });
+    toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
 
     const placesService = new window.google.maps.places.PlacesService(map);
     
@@ -353,65 +360,73 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, []);
   
-  const handleCreateLeadFromProspect = async (prospect: google.maps.places.PlaceResult) => {
-        if (!prospect.name || !prospect.vicinity || !prospect.geometry?.location) {
+  const handleCreateLeadFromProspect = async () => {
+        if (!prospectToCreate) return;
+
+        const place = prospectToCreate;
+        if (!place.name || !place.vicinity || !place.geometry?.location) {
             toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
             return;
         }
 
-        const placeId = prospect.place_id;
+        const placeId = place.place_id;
         if (!placeId) {
             toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
             return;
         }
 
-        const duplicateId = await checkForDuplicateLead(prospect.name, prospect.formatted_phone_number || '');
+        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
         if (duplicateId) {
             setDuplicateLeadId(duplicateId);
+            setProspectToCreate(null);
             return;
         }
 
+        setIsCreatingLead(true);
         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
         
+        let leadCampaign = campaign;
+        if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+            leadCampaign = 'Door-to-Door';
+        }
+        if (!leadCampaign) {
+             toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
+             setIsCreatingLead(false);
+             return;
+        }
+
         let primaryContact: Omit<Contact, 'id'> | null = null;
-
-        if (prospect.website) {
+        if (place.website) {
             try {
-                const hunterResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting',
-                    websiteUrl: prospect.website,
-                });
-
+                const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
                     const firstContact = hunterResult.contacts[0];
                     primaryContact = {
                         name: firstContact.name || 'Info',
                         title: firstContact.title || 'Primary Contact',
                         email: firstContact.email || '',
-                        phone: firstContact.phone || prospect.formatted_phone_number || '',
+                        phone: firstContact.phone || place.formatted_phone_number || '',
                     };
                     toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
                 }
-            } catch (error) {
-                console.warn('Hunter.io prospecting failed, using default contact info.', error);
-            }
+            } catch (error) { console.warn('AI prospecting for contact failed.', error); }
         }
         
         if (!primaryContact) {
-            const websiteDomain = (prospect.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+            const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
             primaryContact = {
-                name: `Info ${prospect.name}`,
+                name: `Info ${place.name}`,
                 title: 'Primary Contact',
                 email: websiteDomain ? `info@${websiteDomain}` : '',
-                phone: prospect.formatted_phone_number || '',
+                phone: place.formatted_phone_number || '',
             };
         }
         const nameParts = primaryContact.name.split(' ');
         
-        const addressData = { street: prospect.vicinity, city: '', state: '', zip: '', country: 'Australia' };
-        if (prospect.address_components) {
+        const addressData = { street: place.vicinity, city: '', state: '', zip: '', country: 'Australia' };
+        if (place.address_components) {
             const get = (type: string, useShortName = false) => {
-                const comp = prospect.address_components?.find(c => c.types.includes(type));
+                const comp = place.address_components?.find(c => c.types.includes(type));
                 return useShortName ? comp?.short_name : comp?.long_name;
             };
             addressData.city = get('locality') || get('postal_town') || '';
@@ -420,16 +435,17 @@ export default function SignedCustomersPage() {
         }
 
         const newLeadData = {
-            companyName: prospect.name,
-            websiteUrl: prospect.website || '',
+            companyName: place.name,
+            websiteUrl: place.website || '',
+            campaign: leadCampaign,
             address: {
-                lat: prospect.geometry.location.lat(),
-                lng: prospect.geometry.location.lng(),
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng(),
                 ...addressData,
             },
             contact: {
                 firstName: nameParts[0] || 'Info',
-                lastName: nameParts.slice(1).join(' ') || prospect.name,
+                lastName: nameParts.slice(1).join(' ') || place.name,
                 title: primaryContact.title,
                 email: primaryContact.email,
                 phone: primaryContact.phone,
@@ -440,6 +456,11 @@ export default function SignedCustomersPage() {
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
+                
+                if (initialNotes) {
+                    await logActivity(result.leadId, { type: 'Update', notes: `Initial note from map prospecting: ${initialNotes}`});
+                }
+                
                 const newMapLead: MapLead = {
                   id: result.leadId!,
                   companyName: newLeadData.companyName,
@@ -462,6 +483,11 @@ export default function SignedCustomersPage() {
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+        } finally {
+            setIsCreatingLead(false);
+            setProspectToCreate(null);
+            setInitialNotes('');
+            setCampaign('');
         }
     };
 
@@ -579,7 +605,7 @@ export default function SignedCustomersPage() {
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
                                             {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
+                                            {isSearchingNearby ? 'Analyzing...' : 'AI Find Similar'}
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
                                             <Building className="mr-2 h-4 w-4" /> Find Multi-sites
@@ -703,7 +729,7 @@ export default function SignedCustomersPage() {
                                             <Eye className="mr-2 h-4 w-4" /> View
                                         </Button>
                                     ) : (
-                                        <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                        <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                             {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                             Add
                                         </Button>
@@ -746,7 +772,7 @@ export default function SignedCustomersPage() {
                                                     View
                                                 </Button>
                                             ) : (
-                                                <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                     {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
                                                     {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                                 </Button>
@@ -761,6 +787,40 @@ export default function SignedCustomersPage() {
                  <DialogFooter>
                     <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
                  </DialogFooter>
+            </DialogContent>
+        </Dialog>
+         <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add New Lead</DialogTitle>
+                    <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                        <div className="space-y-2">
+                            <Label htmlFor="campaign-select">Campaign *</Label>
+                            <Select value={campaign} onValueChange={setCampaign}>
+                                <SelectTrigger id="campaign-select">
+                                    <SelectValue placeholder="Select a campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Outbound">Outbound</SelectItem>
+                                    <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                     <div className="space-y-2">
+                        <Label htmlFor="initial-notes">Initial Notes (Optional)</Label>
+                        <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
+                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin') && !campaign)}>
+                        {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     </>
