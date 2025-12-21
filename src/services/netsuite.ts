@@ -571,6 +571,7 @@ interface NewLeadData {
   companyName: string;
   websiteUrl?: string;
   industryCategory?: string;
+  campaign?: string;
   address: Address;
   contact: {
     firstName: string;
@@ -582,7 +583,7 @@ interface NewLeadData {
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string }> {
-    const { companyName, websiteUrl, industryCategory, address, contact } = payload;
+    const { companyName, websiteUrl, industryCategory, campaign, address, contact } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -593,6 +594,7 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         companyname: companyName,
         website: websiteUrl || '',
         category: industryCategory || '',
+        custentity_leadsource: campaign || '',
         billaddr1: address.street,
         billcity: address.city,
         billstate: address.state,
@@ -660,5 +662,3 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
 export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
     return await aiProspectWebsiteTool(input);
 }
-
-    

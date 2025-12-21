@@ -43,6 +43,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
+import { useAuth } from '@/hooks/use-auth';
 
 const phoneRegex = new RegExp(
   /^(\+61|0061|0)?\s?4[0-9]{2}\s?[0-9]{3}\s?[0-9]{3}$|^(\+61|0061|0)?\s?[2378]\s?[0-9]{4}\s?[0-9]{4}$/
@@ -53,6 +54,7 @@ const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
+  campaign: z.string().optional(),
 
   // Address
   address: z.object({
@@ -103,6 +105,7 @@ export function NewLeadForm() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { userProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
@@ -115,6 +118,7 @@ export function NewLeadForm() {
       companyName: '',
       websiteUrl: '',
       industryCategory: '',
+      campaign: '',
       address: {
         address1: '',
         street: '',
@@ -132,6 +136,19 @@ export function NewLeadForm() {
       },
     },
   });
+  
+  useEffect(() => {
+    const campaignSchema = form.schema.extend({
+        campaign: userProfile?.role === 'user' || userProfile?.role === 'admin'
+            ? z.string().min(1, 'Campaign is required.')
+            : z.string().optional(),
+    });
+    
+    form.reset(form.getValues(), {
+      resolver: zodResolver(campaignSchema),
+    });
+
+  }, [userProfile, form]);
 
   const handleAiProspect = useCallback(async (websiteUrl?: string) => {
     const url = websiteUrl || form.getValues('websiteUrl');
@@ -262,8 +279,14 @@ export function NewLeadForm() {
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
+    let finalValues = { ...values };
+
+    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+        finalValues.campaign = 'Door-to-Door';
+    }
+
     try {
-      const result = await createNewLead(values);
+      const result = await createNewLead(finalValues);
 
       if (result.success && result.leadId) {
         toast({
@@ -377,6 +400,29 @@ export function NewLeadForm() {
                     </FormItem>
                   )}
                 />
+                 {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                    <FormField
+                    control={form.control}
+                    name="campaign"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Campaign*</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a campaign" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            <SelectItem value="Outbound">Outbound</SelectItem>
+                            <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                 )}
               </div>
             </div>
 
@@ -430,4 +476,3 @@ export function NewLeadForm() {
     </>
   );
 }
-
