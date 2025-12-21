@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
@@ -347,6 +347,75 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, [selectedCompany, findProspects]);
 
+    const escapeCsvCell = (cellData: any) => {
+        if (cellData === null || cellData === undefined) {
+            return '';
+        }
+        const stringData = String(cellData);
+        if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+            return `"${stringData.replace(/"/g, '""')}"`;
+        }
+        return stringData;
+    };
+    
+  const handleExportProspects = () => {
+    if (prospects.length === 0) {
+      toast({ variant: 'destructive', title: 'No Data', description: 'There are no prospects to export.' });
+      return;
+    }
+
+    const headers = ['Name', 'Address', 'Classification', 'Description', 'Website', 'Phone'];
+    const rows = prospects.map(p => {
+      return [
+        escapeCsvCell(p.place.name),
+        escapeCsvCell(p.place.vicinity),
+        escapeCsvCell(p.classification),
+        escapeCsvCell(p.description),
+        escapeCsvCell(p.place.website),
+        escapeCsvCell(p.place.formatted_phone_number),
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `nearby_prospects_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+    const handleExportCompanies = () => {
+    if (filteredCompanies.length === 0) {
+      toast({ variant: 'destructive', title: 'No Data', description: 'There are no signed customers to export.' });
+      return;
+    }
+
+    const headers = ['ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone'];
+    const rows = filteredCompanies.map(lead => {
+      return [
+        escapeCsvCell((lead as any).entityId || 'N/A'),
+        escapeCsvCell(lead.companyName),
+        escapeCsvCell(lead.franchisee || 'N/A'),
+        escapeCsvCell(formatAddress(lead.address)),
+        escapeCsvCell(lead.customerServiceEmail || 'N/A'),
+        escapeCsvCell(lead.customerPhone || 'N/A'),
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `signed_customers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   const formatAddress = (address?: Address) => {
     if (!address) return 'N/A';
@@ -603,7 +672,7 @@ export default function SignedCustomersPage() {
                                         <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
-                                        <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
+                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
                                             {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
                                             {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>
@@ -633,6 +702,10 @@ export default function SignedCustomersPage() {
                 </CardTitle>
                 <Badge variant="secondary">{filteredCompanies.length} customer(s)</Badge>
             </div>
+            <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={filteredCompanies.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+            </Button>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -803,6 +876,10 @@ export default function SignedCustomersPage() {
                     </div>
                 </ScrollArea>
                  <DialogFooter>
+                    <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export Prospects
+                    </Button>
                     <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
                  </DialogFooter>
             </DialogContent>

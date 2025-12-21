@@ -24,7 +24,7 @@ import { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -500,6 +500,60 @@ export default function FieldSalesPage() {
     // For non-admin Field Sales users, just show their own routes
     return savedRoutes.map(r => ({ ...r, userName: userProfile?.displayName || '', userId: userProfile?.uid || '' }));
   }, [userProfile, savedRoutes, allRoutes, allDialers]);
+  
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+  
+    const handleExportRoutes = () => {
+    if (routesToShow.length === 0) {
+        toast({ variant: 'destructive', title: 'No Routes', description: 'There are no routes to export.' });
+        return;
+    }
+
+    const headers = ['Route Name', 'Assigned User', 'Scheduled Date', 'Stop Number', 'Lead Name', 'Lead Address'];
+    const rows: string[][] = [];
+
+    routesToShow.forEach(route => {
+        if (route.leads.length === 0) {
+            rows.push([
+                escapeCsvCell(route.name),
+                escapeCsvCell(route.userName),
+                escapeCsvCell(route.scheduledDate ? new Date(route.scheduledDate).toLocaleDateString() : 'N/A'),
+                '', '', ''
+            ]);
+        } else {
+            route.leads.forEach((lead, index) => {
+                const address = lead.address ? `${lead.address.street}, ${lead.address.city}, ${lead.address.state} ${lead.address.zip}` : 'N/A';
+                rows.push([
+                    escapeCsvCell(route.name),
+                    escapeCsvCell(route.userName),
+                    escapeCsvCell(route.scheduledDate ? new Date(route.scheduledDate).toLocaleDateString() : 'N/A'),
+                    escapeCsvCell(index + 1),
+                    escapeCsvCell(lead.companyName),
+                    escapeCsvCell(address),
+                ]);
+            });
+        }
+    });
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `saved_routes_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
 
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
@@ -654,8 +708,12 @@ export default function FieldSalesPage() {
       </Collapsible>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2"><Route className="h-5 w-5"/> Saved Routes</CardTitle>
+          <Button onClick={handleExportRoutes} variant="outline" size="sm" disabled={routesToShow.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export All Routes
+          </Button>
         </CardHeader>
         <CardContent>
           {routesToShow.length > 0 ? (
@@ -926,3 +984,4 @@ export default function FieldSalesPage() {
     
 
     
+
