@@ -6,7 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar } from '@/services/firebase';
+import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import type { Lead, DiscoveryData, Contact } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,7 @@ export default function CheckInPage() {
     const [contacts, setContacts] = useState<Contact[]>([]);
     
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
+    const [isProspecting, setIsProspecting] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -254,9 +256,41 @@ export default function CheckInPage() {
         }
     };
     
+     const handleProspectWebsite = async () => {
+        if (!lead || !lead.websiteUrl) {
+            toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
+            return;
+        }
+        setIsProspecting(true);
+        try {
+            const result = await prospectWebsiteTool({ leadId: lead.id, websiteUrl: lead.websiteUrl });
+
+            if (result.logoUrl) {
+                await updateLeadAvatar(lead.id, result.logoUrl);
+                setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
+                toast({ title: "Logo Found!", description: "Company logo has been updated." });
+            }
+            if (result.companyDescription) {
+                setLead(prev => prev ? { ...prev, companyDescription: result.companyDescription! } : null);
+                toast({ title: "Description Generated", description: "Company description has been updated." });
+            }
+            if (result.contacts && result.contacts.length > 0) {
+                setContacts(prev => [...prev, ...result.contacts!]);
+                toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
+            } else {
+                toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
+            }
+        } catch (error) {
+            console.error("Failed to prospect website:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
+        } finally {
+            setIsProspecting(false);
+        }
+    };
+
     const renderStep = () => {
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} />;
             case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} onNext={handleNext} onBack={handleBack} />;
             case 3: return <DiscoveryStep0 onNext={handleNext} onBack={handleBack} />;
             case 4: return <DiscoveryStep1 onNext={handleNext} onBack={handleBack} />;
@@ -354,7 +388,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack }: {
 );
 
 
-const CompanyDetailsStep = ({ lead, onNext }: { lead: Lead, onNext: () => void }) => {
+const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; }) => {
     return (
         <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext}>
             <div className="space-y-4">
@@ -374,6 +408,9 @@ const CompanyDetailsStep = ({ lead, onNext }: { lead: Lead, onNext: () => void }
                         </div>
                     </div>
                 </div>
+                 <Button variant="outline" size="sm" onClick={onProspect} disabled={isProspecting || !lead.websiteUrl} className="w-full">
+                    {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
+                </Button>
             </div>
         </StepWrapper>
     );
