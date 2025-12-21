@@ -1136,18 +1136,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       setDirections(null);
     };
 
-    if (loadError) {
-        return <div>Error loading maps. Please check your API key and network connection.</div>
-    }
-    
-    if (authLoading || loadingData) {
-        return (
-            <div className="flex h-full items-center justify-center">
-            <Loader />
-            </div>
-        )
-    }
-  
     const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
         if (!address) return 'Address not available';
         if (typeof address === 'string') return address;
@@ -1184,6 +1172,18 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const infoWindowOptions = {
         pixelOffset: new window.google.maps.Size(0, -30),
     };
+
+    if (loadError) {
+        return <div>Error loading maps. Please check your API key and network connection.</div>
+    }
+    
+    if (authLoading || loadingData) {
+        return (
+            <div className="flex h-full items-center justify-center">
+            <Loader />
+            </div>
+        )
+    }
 
     return (
     <div className="flex flex-col h-full gap-4">
@@ -1856,3 +1856,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
+    
