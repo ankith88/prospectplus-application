@@ -604,7 +604,7 @@ export default function SignedCustomersPage() {
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
                                             {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                            {isSearchingNearby ? 'Analyzing...' : 'AI Find Similar'}
+                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
                                             <Building className="mr-2 h-4 w-4" /> Find Multi-sites
@@ -734,6 +734,14 @@ export default function SignedCustomersPage() {
                                         </Button>
                                     )}
                                 </div>
+                                 {prospectInfo.place.website && (
+                                    <Button asChild variant="outline" size="sm" className="mt-2 w-full">
+                                        <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer">
+                                            <Globe className="mr-2 h-4 w-4" />
+                                            Visit Website
+                                        </a>
+                                    </Button>
+                                )}
                             </Card>
                         ))}
                     </div>
@@ -753,6 +761,14 @@ export default function SignedCustomersPage() {
                                     <TableRow key={prospectInfo.place.place_id}>
                                         <TableCell>
                                             <div className="font-medium">{prospectInfo.place.name}</div>
+                                             {prospectInfo.place.website && (
+                                                <Button asChild variant="link" size="sm" className="p-0 h-auto">
+                                                    <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1">
+                                                        <Globe className="h-3 w-3" />
+                                                        Website
+                                                    </a>
+                                                </Button>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                                 <div className="flex flex-col items-start max-w-xs">
@@ -788,7 +804,33 @@ export default function SignedCustomersPage() {
                  </DialogFooter>
             </DialogContent>
         </Dialog>
-         <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+         <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Duplicate Lead Found</DialogTitle>
+                    <DialogDescription>
+                        A lead with this name or phone number already exists in the system.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setDuplicateLeadId(null)}>Cancel</Button>
+                    <Button onClick={() => { window.open(`/leads/${duplicateLeadId}`, '_blank'); setDuplicateLeadId(null); }}>
+                        View Existing Lead
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+         <Dialog open={!!viewingDescription} onOpenChange={() => setViewingDescription(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>AI Company Description</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] text-sm text-muted-foreground">
+                    {viewingDescription}
+                </ScrollArea>
+            </DialogContent>
+        </Dialog>
+        <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Add New Lead</DialogTitle>
