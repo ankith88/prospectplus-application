@@ -1,5 +1,4 @@
 
-
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -194,7 +193,7 @@ export interface UserProfile {
     displayName?: string;
     phoneNumber: string;
     aircallUserId?: string;
-    role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin';
+    role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin';
     disabled?: boolean;
 }
 

@@ -44,7 +44,7 @@ const formSchema = z.object({
   lastName: z.string().min(1, 'Last name is required.'),
   email: z.string().email('A valid email is required.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin']),
+  role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin']),
   phoneNumber: z.string().optional(),
   aircallUserId: z.string().optional(),
 });
@@ -125,6 +125,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                         <SelectItem value="admin">Admin (admin)</SelectItem>
                         <SelectItem value="Field Sales">Field Sales</SelectItem>
                         <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>
+                        <SelectItem value="Lead Gen">Lead Gen</SelectItem>
+                        <SelectItem value="Lead Gen Admin">Lead Gen Admin</SelectItem>
                     </SelectContent>
                 </Select>
                 <FormMessage /></FormItem>
