@@ -15,19 +15,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
-import { getAllUsers } from '@/services/firebase';
+import { getAllUsers, updateUserDisabledStatus } from '@/services/firebase';
 import type { UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
 import { Lock, Mail, UserX } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-
-// This would ideally be a server action calling Firebase Admin SDK
-async function toggleUserActivation(uid: string, disabled: boolean) {
-    console.log(`Simulating user activation toggle for UID ${uid} to ${disabled ? 'disabled' : 'enabled'}`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    throw new Error("Client-side user activation is not implemented for security reasons. This requires a backend function.");
-}
 
 
 export function UserManagementTable() {
@@ -59,13 +52,12 @@ export function UserManagementTable() {
     if (!userToToggle) return;
     setIsToggling(true);
     try {
-        // In a real application, this would call a server action.
-        await toggleUserActivation(userToToggle.uid, !userToToggle.disabled);
+        await updateUserDisabledStatus(userToToggle.uid, !userToToggle.disabled);
         
         setUsers(prev => prev.map(u => u.uid === userToToggle.uid ? { ...u, disabled: !u.disabled } : u));
         toast({ title: 'Success', description: `User has been ${userToToggle.disabled ? 'enabled' : 'disabled'}.` });
     } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Action Not Implemented', description: error.message, duration: 10000 });
+        toast({ variant: 'destructive', title: 'Update Failed', description: error.message, duration: 10000 });
     } finally {
         setIsToggling(false);
         setUserToToggle(null);

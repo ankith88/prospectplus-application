@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -1399,6 +1398,18 @@ async function getAllUsers(): Promise<UserProfile[]> {
     }
 }
 
+async function updateUserDisabledStatus(uid: string, disabled: boolean): Promise<void> {
+    try {
+        const userRef = doc(firestore, 'users', uid);
+        await updateDoc(userRef, { disabled: disabled });
+        console.log(`User ${uid} disabled status set to ${disabled} in Firestore.`);
+    } catch (error) {
+        console.error(`Failed to update user disabled status for ${uid}:`, error);
+        throw new Error('Failed to update user status in Firebase');
+    }
+}
+
+
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
     if (newDialerReps.length === 0) {
         throw new Error("No users selected for reassignment.");
@@ -1526,6 +1537,7 @@ interface NewLeadData {
     phone?: string;
   };
   initialNotes?: string;
+  dialerAssigned?: string;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
@@ -1818,6 +1830,7 @@ export {
     addScorecard,
     updateScorecardAnalysis,
     getAllUsers,
+    updateUserDisabledStatus,
     bulkUpdateLeadDialerRep,
     addCallReview,
     getLastNote,
