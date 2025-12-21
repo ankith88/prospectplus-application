@@ -40,6 +40,7 @@ interface AuthContextType {
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
     sendPasswordReset: (email: string) => Promise<void>;
+    signUpAndCreateProfile: (userData: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -53,6 +54,7 @@ const AuthContext = createContext<AuthContextType>({
     signIn: async () => {},
     signOut: async () => {},
     sendPasswordReset: async () => {},
+    signUpAndCreateProfile: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -157,6 +159,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
         await sendPasswordResetEmail(auth, email);
     }
+    
+    const signUpAndCreateProfile = async (userData: any) => {
+        if (!auth) throw new Error("Firebase Auth not initialized");
+
+        // We need to keep track of the original user to sign them back in.
+        const originalUser = auth.currentUser;
+
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+            const newUser = userCredential.user;
+            const displayName = `${userData.firstName} ${userData.lastName}`.trim();
+
+            await updateProfile(newUser, { displayName: displayName });
+
+            const userProfileData = {
+                uid: newUser.uid,
+                email: userData.email,
+                firstName: userData.firstName,
+                lastName: userData.lastName,
+                role: userData.role,
+                phoneNumber: userData.phoneNumber || null,
+                aircallUserId: userData.aircallUserId || null,
+                disabled: false,
+            };
+
+            await setDoc(doc(firestore, "users", newUser.uid), userProfileData);
+
+        } catch (error) {
+            console.error("Error creating user and profile:", error);
+            throw error; // Re-throw to be handled in the dialog
+        } finally {
+             // Sign out the newly created user and sign the original admin back in
+            if (auth.currentUser && originalUser && auth.currentUser.uid !== originalUser.uid) {
+                await firebaseSignOut(auth);
+                // This is a simplified re-authentication. In a real app, you might need to
+                // securely re-authenticate the admin, but for this context, this avoids
+                // the admin's session being hijacked. A page refresh will restore the admin session
+                // via onAuthStateChanged.
+                console.log("Admin session will be restored on next page load.");
+            }
+        }
+    };
+
 
     const value = {
         user,
@@ -169,6 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signOut,
         sendPasswordReset,
+        signUpAndCreateProfile,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

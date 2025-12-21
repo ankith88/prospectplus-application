@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
 import { Lock, Mail, UserX } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { CreateUserDialog } from './create-user-dialog';
 
 
 export function UserManagementTable() {
@@ -29,24 +31,26 @@ export function UserManagementTable() {
   const [userToToggle, setUserToToggle] = useState<UserProfile | null>(null);
   const [isToggling, setIsToggling] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState<string | null>(null);
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
 
   const { toast } = useToast();
   const { sendPasswordReset } = useAuth();
   
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      try {
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
         const fetchedUsers = await getAllUsers();
         setUsers(fetchedUsers);
-      } catch (error) {
+    } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.' });
-      } finally {
+    } finally {
         setLoading(false);
-      }
-    };
-    fetchUsers();
+    }
   }, [toast]);
+  
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
   
   const handleToggleActivation = async () => {
     if (!userToToggle) return;
@@ -83,6 +87,7 @@ export function UserManagementTable() {
 
   return (
     <>
+      <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={fetchUsers} />
       <div className="rounded-md border">
         <Table>
           <TableHeader>

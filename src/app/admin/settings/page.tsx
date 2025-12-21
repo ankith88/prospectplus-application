@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
@@ -24,13 +25,18 @@ export default function AdminSettingsPage() {
     }
   }, [userProfile, authLoading, router, isSuperAdmin]);
 
+  const handleUserCreated = useCallback(() => {
+    // This is a dummy function to trigger re-render in child component
+    // The actual fetching is handled inside UserManagementTable
+  }, []);
+
   if (authLoading || !isSuperAdmin) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
 
   return (
     <div className="flex flex-col gap-6">
-       <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={() => {}} />
+       <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={handleUserCreated} />
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
         <p className="text-muted-foreground">Manage users and system settings.</p>

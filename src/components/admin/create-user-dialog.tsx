@@ -26,17 +26,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
-
-// This would ideally be a server action calling Firebase Admin SDK
-async function createNewSystemUser(values: z.infer<typeof formSchema>) {
-    console.log("Simulating user creation with:", values);
-    // In a real app, this would be an API call to a secure backend function
-    // For now, we simulate a delay and success.
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    // Since we can't use Admin SDK client-side, we'll throw an error to indicate this is a mock.
-    throw new Error("Client-side user creation is not implemented for security reasons. This requires a backend function.");
-}
 
 
 const formSchema = z.object({
@@ -58,21 +49,25 @@ interface CreateUserDialogProps {
 export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: CreateUserDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { signUpAndCreateProfile } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
       role: 'user',
+      phoneNumber: '',
+      aircallUserId: '',
     },
   });
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      // In a real application, you would call a server action here
-      // that uses the Firebase Admin SDK to create the user and set their custom claims for roles.
-      // e.g., await createNewSystemUser(values);
-      await createNewSystemUser(values);
+      await signUpAndCreateProfile(values);
       toast({
         title: 'Success',
         description: `User ${values.email} has been created.`,
@@ -84,8 +79,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       console.error('Failed to create user:', error);
       toast({
         variant: 'destructive',
-        title: 'Action Not Implemented',
-        description: "This feature requires a secure backend function to create users, which is not implemented in this environment.",
+        title: 'Creation Failed',
+        description: error.message || "An unexpected error occurred. Please try again.",
         duration: 10000,
       });
     } finally {
