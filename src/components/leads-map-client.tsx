@@ -122,9 +122,6 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     address.state = get('administrative_area_level_1', true);
     address.zip = get('postal_code');
     
-    // This is a bit of a hack to get lat/lng, as it's not directly in address_components
-    // The correct way is to use place.geometry.location if available.
-    // This is a fallback.
     if ((components as any).geometry?.location) {
         address.lat = (components as any).geometry.location.lat();
         address.lng = (components as any).geometry.location.lng();
@@ -203,7 +200,6 @@ export default function LeadsMapClient() {
   const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const endPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  // Routing and Drawing state
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [travelMode, setTravelMode] = useState<google.maps.TravelMode | null>(null);
@@ -217,12 +213,11 @@ export default function LeadsMapClient() {
   const [startPoint, setStartPoint] = useState<string>('My Location');
   const [endPoint, setEndPoint] = useState<string>('');
   
-  // State for creating lead from prospect
-  const [prospectToCreate, setProspectToCreate] = useState<MapLead | null>(null);
+  const [prospectToCreate, setProspectToCreate] = useState<google.maps.places.PlaceResult | null>(null);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
+  const [campaign, setCampaign] = useState('');
   const [initialNotes, setInitialNotes] = useState('');
 
-  // State for AI territory analysis
   const [analyzingTerritory, setAnalyzingTerritory] = useState(false);
   const [drawnTerritory, setDrawnTerritory] = useState<{ center: google.maps.LatLng | null; radius: number } | null>(null);
 
@@ -328,7 +323,6 @@ export default function LeadsMapClient() {
     }
   }, [map, toast]);
 
-  // Automatically show location for Lead Gen users
   useEffect(() => {
     if (isLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
       handleShowMyLocation();
@@ -382,7 +376,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }
 
     let leadsToRoute = [...leadsForRoute];
-    if (leadsToRoute.length > 23) { // Max 23 waypoints + start/end
+    if (leadsToRoute.length > 23) {
         toast({
             title: 'Too many stops',
             description: `Google Maps API supports a maximum of 25 total locations. Using the first 23 stops.`,
@@ -459,7 +453,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             longitude: Number(company.longitude),
                             isCompany: true,
                             isProspect: false,
-                            status: 'Won' as LeadStatus, // Assign 'Won' status to all companies
+                            status: 'Won' as LeadStatus,
                         }));
                     allMapData = [...allMapData, ...companiesWithCoords];
                 }
@@ -503,7 +497,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 setIsRouteActive(true);
             }
         }
-    }, [localSavedRoutes, isLoaded]); // Depend on isLoaded to ensure map is ready
+    }, [localSavedRoutes, isLoaded]);
 
 
   
@@ -512,7 +506,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
     let dataToFilter = mapData;
 
-    // Primary Filters
     dataToFilter = dataToFilter.filter(item => {
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
         const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
@@ -528,7 +521,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return franchiseeMatch && stateMatch && statusMatch && typeMatch;
     });
 
-    // Role-based secondary filtering
     if (userProfile.role === 'Field Sales') {
         const assignedLeadIds = new Set(dataToFilter.filter(item => item.dialerAssigned === userProfile.displayName).map(item => item.id));
         return dataToFilter.filter(item => item.isCompany || assignedLeadIds.has(item.id));
@@ -538,7 +530,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
     }
     
-    // Admins and Field Sales Admins see everything that matches the primary filters.
     return dataToFilter;
     
   }, [mapData, filters, userProfile]);
@@ -767,74 +758,83 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     findProspects(myLocation, prospectSearchQuery);
   };
   
-    const handleCreateLeadFromProspect = async (prospect: google.maps.places.PlaceResult) => {
-        if (!prospect.name || !prospect.vicinity || !prospect.geometry?.location) {
+    const handleCreateLeadFromProspect = async () => {
+        if (!prospectToCreate) return;
+
+        const place = prospectToCreate;
+        if (!place.name || !place.vicinity || !place.geometry?.location) {
             toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
             return;
         }
 
-        const placeId = prospect.place_id;
+        const placeId = place.place_id;
         if (!placeId) {
             toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
             return;
         }
 
-        const duplicateId = await checkForDuplicateLead(prospect.name, prospect.formatted_phone_number || '');
+        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
         if (duplicateId) {
             setDuplicateLeadId(duplicateId);
+            setProspectToCreate(null);
             return;
         }
 
+        setIsCreatingLead(true);
         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
         
+        let leadCampaign = campaign;
+        if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+            leadCampaign = 'Door-to-Door';
+        }
+        if (!leadCampaign) {
+             toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
+             setIsCreatingLead(false);
+             return;
+        }
+
         let primaryContact: Omit<Contact, 'id'> | null = null;
-
-        if (prospect.website) {
+        if (place.website) {
             try {
-                const hunterResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting',
-                    websiteUrl: prospect.website,
-                });
-
+                const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
                 if (hunterResult.contacts && hunterResult.contacts.length > 0) {
                     const firstContact = hunterResult.contacts[0];
                     primaryContact = {
                         name: firstContact.name || 'Info',
                         title: firstContact.title || 'Primary Contact',
                         email: firstContact.email || '',
-                        phone: firstContact.phone || prospect.formatted_phone_number || '',
+                        phone: firstContact.phone || place.formatted_phone_number || '',
                     };
                     toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
                 }
-            } catch (error) {
-                console.warn('Hunter.io prospecting failed, using default contact info.', error);
-            }
+            } catch (error) { console.warn('AI prospecting for contact failed.', error); }
         }
         
         if (!primaryContact) {
-            const websiteDomain = (prospect.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+            const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
             primaryContact = {
-                name: `Info ${prospect.name}`,
+                name: `Info ${place.name}`,
                 title: 'Primary Contact',
                 email: websiteDomain ? `info@${websiteDomain}` : '',
-                phone: prospect.formatted_phone_number || '',
+                phone: place.formatted_phone_number || '',
             };
         }
         const nameParts = primaryContact.name.split(' ');
         
-        const addressData = parseAddressComponents(prospect.address_components || []);
-        addressData.lat = prospect.geometry.location.lat();
-        addressData.lng = prospect.geometry.location.lng();
+        const addressData = parseAddressComponents(place.address_components || []);
+        addressData.lat = place.geometry.location.lat();
+        addressData.lng = place.geometry.location.lng();
 
 
         const newLeadData = {
-            companyName: prospect.name,
-            websiteUrl: prospect.website || '',
+            companyName: place.name,
+            websiteUrl: place.website || '',
             industryCategory: selectedLead?.industryCategory || '',
+            campaign: leadCampaign,
             address: addressData,
             contact: {
                 firstName: nameParts[0] || 'Info',
-                lastName: nameParts.slice(1).join(' ') || prospect.name,
+                lastName: nameParts.slice(1).join(' ') || place.name,
                 title: primaryContact.title,
                 email: primaryContact.email,
                 phone: primaryContact.phone,
@@ -844,12 +844,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         try {
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
-                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                // No need to fetch all data again, just add the new lead to mapData
+                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created.` });
+                
+                if (initialNotes) {
+                    await logActivity(result.leadId, { type: 'Update', notes: `Initial note from map prospecting: ${initialNotes}`});
+                }
+                
                 const newMapLead: MapLead = {
                   id: result.leadId!,
                   companyName: newLeadData.companyName,
-                  status: 'New' as LeadStatus,
+                  status: 'New',
                   address: newLeadData.address as Address,
                   industryCategory: newLeadData.industryCategory,
                   latitude: newLeadData.address.lat,
@@ -869,6 +873,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+        } finally {
+            setIsCreatingLead(false);
+            setProspectToCreate(null);
+            setInitialNotes('');
+            setCampaign('');
         }
     };
     
@@ -946,14 +955,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             if (lead.isCompany) return false;
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-                if (overlay.get('radius')) { // It's a circle
+                if (overlay.get('radius')) {
                     return google.maps.geometry.spherical.computeDistanceBetween(
                         (overlay as google.maps.Circle).getCenter()!, 
                         leadLatLng
                     ) <= (overlay as google.maps.Circle).getRadius();
-                } else if (overlay.get('bounds')) { // It's a rectangle
+                } else if (overlay.get('bounds')) {
                     return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
-                } else { // It's a polygon
+                } else {
                     return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
                 }
             }
@@ -1008,7 +1017,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return {
             id: p.place_id || `prospect-${p.name}`,
             companyName: p.name || 'Unknown Prospect',
-            status: 'New' as LeadStatus,
+            status: 'New',
             latitude: p.geometry?.location?.lat()!,
             longitude: p.geometry?.location?.lng()!,
             address: address,
@@ -1079,18 +1088,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             localStorage.setItem('activeRouteId', loadedRoute.id!);
         }
     
-        const firstLeg = directions.routes[0].legs[0];
-        const lastLeg = directions.routes[0].legs[directions.routes[0].legs.length - 1];
-    
-        if (!firstLeg || !lastLeg) {
-            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'Invalid route data.' });
-            return;
-        }
-    
         const origin = startPoint === 'My Location' ? 'Current+Location' : startPoint;
         const destination = endPoint || origin;
         const waypoints = directions.routes[0].legs
-            .slice(0, -1) // All legs except the last one
+            .slice(0, -1)
             .map((leg: any) => leg.end_address)
             .join('|');
     
@@ -1126,37 +1127,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         });
     };
 
-    const { waypointOrderMap, sortedRouteLegs } = useMemo(() => {
-        const waypointOrderMap = new Map<string, number>();
-        if (directions) {
-        directions.routes[0].waypoint_order.forEach((originalIndex, optimizedIndex) => {
-            const lead = selectedRouteLeads[originalIndex];
-            if (lead) {
-            waypointOrderMap.set(lead.id, optimizedIndex + 1);
-            }
-        });
-        }
-
-        const sortedRouteLegs =
-        directions?.routes[0]?.legs
-            .map((leg, index) => {
-            if (index === 0) return { leg, lead: null, stopNumber: 0 }; // Origin
-            const orderIndex = directions.routes[0].waypoint_order[index - 1];
-            const lead = selectedRouteLeads[orderIndex];
-            return { leg, lead, stopNumber: index };
-            })
-            .filter((item) => item.leg && item.lead) ?? [];
-        
-        return { waypointOrderMap, sortedRouteLegs };
-    }, [directions, selectedRouteLeads]);
-    
     const handleDragEnd = (result: DropResult) => {
       if (!result.destination) return;
       const items = Array.from(selectedRouteLeads);
       const [reorderedItem] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, reorderedItem);
       setSelectedRouteLeads(items);
-      setDirections(null); // Force recalculation
+      setDirections(null);
     };
 
     if (loadError) {
@@ -1521,7 +1498,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
                                     scaledSize: new window.google.maps.Size(32, 32)
                                 }}
-                                visible={directions === null} // Hide original markers when route is active
+                                visible={directions === null}
                             />
                         ))}
                         
@@ -1552,7 +1529,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             <DirectionsRenderer
                                 directions={directions}
                                 options={{
-                                    suppressMarkers: true, // We use our custom markers
+                                    suppressMarkers: true,
                                     polylineOptions: {
                                         strokeColor: '#095c7b',
                                         strokeWeight: 6,
@@ -1661,7 +1638,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </DialogDescription>
                     </DialogHeader>
                     <div className="max-h-[60vh] overflow-y-auto">
-                        {/* Mobile View: List of Cards */}
                         <div className="md:hidden space-y-4">
                             {prospects.map(prospectInfo => (
                                 <Card key={prospectInfo.place.place_id} className="p-4">
@@ -1692,7 +1668,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                 <Eye className="mr-2 h-4 w-4" /> View
                                             </Button>
                                         ) : (
-                                            <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                            <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                 {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                                 Add
                                             </Button>
@@ -1702,7 +1678,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             ))}
                         </div>
 
-                        {/* Desktop View: Table */}
                         <div className="hidden md:block">
                             <Table>
                                 <TableHeader>
@@ -1753,7 +1728,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                         View
                                                     </Button>
                                                 ) : (
-                                                    <Button size="sm" onClick={() => handleCreateLeadFromProspect(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                    <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                         {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
                                                         {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                                     </Button>
@@ -1791,9 +1766,41 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+             <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Lead</DialogTitle>
+                        <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                            <div className="space-y-2">
+                                <Label htmlFor="campaign-select">Campaign *</Label>
+                                <Select value={campaign} onValueChange={setCampaign}>
+                                    <SelectTrigger id="campaign-select">
+                                        <SelectValue placeholder="Select a campaign" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Outbound">Outbound</SelectItem>
+                                        <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                         <div className="space-y-2">
+                            <Label htmlFor="initial-notes">Initial Notes (Optional)</Label>
+                            <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search for cafes." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
+                        <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin') && !campaign)}>
+                            {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
-
-    
-

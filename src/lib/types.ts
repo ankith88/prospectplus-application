@@ -152,7 +152,7 @@ export interface Lead {
   status: LeadStatus
   statusReason?: string;
   avatarUrl?: string
-  profile: string // This will be the text used for AI prompts
+  profile: string
   activity?: Activity[]
   notes?: Note[]
   contacts?: Contact[]

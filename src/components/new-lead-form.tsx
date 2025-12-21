@@ -49,13 +49,10 @@ const phoneRegex = new RegExp(
 );
 
 const formSchema = z.object({
-  // Company
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   campaign: z.string().optional(),
-
-  // Address
   address: z.object({
     address1: z.string().optional(),
     street: z.string().min(1, 'Street name is required.'),
@@ -66,8 +63,6 @@ const formSchema = z.object({
     lat: z.number().optional(),
     lng: z.number().optional(),
   }),
-
-  // Contact
   contact: z.object({
     firstName: z.string().min(1, 'First name is required'),
     lastName: z.string().min(1, 'Last name is required'),
@@ -158,7 +153,6 @@ export function NewLeadForm() {
         form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
         form.setValue('contact.title', primaryContact.title || '');
         form.setValue('contact.email', primaryContact.email || '');
-        // Only set phone if it's found, otherwise keep the Google one if it exists
         if (primaryContact.phone && primaryContact.phone !== 'N/A') {
           form.setValue('contact.phone', primaryContact.phone);
         }
@@ -334,7 +328,6 @@ export function NewLeadForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
-            {/* Section 1: Business Search */}
             <div className="space-y-4">
                <h3 className="text-lg font-medium flex items-center gap-2"><Search className="w-5 h-5" />Find a Business</h3>
                <FormField
@@ -358,7 +351,6 @@ export function NewLeadForm() {
 
             <hr/>
 
-            {/* Section 2: Company Details */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -420,7 +412,6 @@ export function NewLeadForm() {
 
             <hr/>
 
-             {/* Section 3: Address */}
              <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
                 <AddressAutocomplete />
@@ -428,7 +419,6 @@ export function NewLeadForm() {
 
             <hr/>
             
-            {/* Section 4: Primary Contact */}
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <h3 className="text-lg font-medium flex items-center gap-2"><User className="w-5 h-5" />Primary Contact*</h3>
