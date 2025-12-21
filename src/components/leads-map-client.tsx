@@ -760,7 +760,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   };
   
     const handleCreateLeadFromProspect = async () => {
-        if (!prospectToCreate) return;
+        if (!prospectToCreate || !userProfile?.displayName) return;
 
         const place = prospectToCreate;
         if (!place.name || !place.vicinity || !place.geometry?.location) {
@@ -788,7 +788,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
             leadCampaign = 'Door-to-Door';
         }
-        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin')) {
+        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin')) {
              toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
              setIsCreatingLead(false);
              setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
@@ -841,7 +841,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 email: primaryContact.email,
                 phone: primaryContact.phone,
             },
-            initialNotes: initialNotes
+            initialNotes: initialNotes,
+            dialerAssigned: userProfile.displayName,
         };
 
         try {
@@ -1793,7 +1794,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
-                    {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                    {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
                         <div className="space-y-2">
                             <Label htmlFor="campaign-select">Campaign *</Label>
                             <Select value={campaign} onValueChange={setCampaign}>
@@ -1814,13 +1815,44 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin') && !campaign)}>
+                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
                         {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
                     </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+         <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Nearby Signed Customers</DialogTitle>
+                    <DialogDescription>
+                        Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh]">
+                    {nearbyCompanies.length > 0 ? (
+                        <div className="space-y-2 p-1">
+                            {nearbyCompanies.map(company => (
+                                <Card key={company.id} className="p-3">
+                                    <div className="flex flex-col space-y-1">
+                                        <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
+                                        <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                        <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
+                                        {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                    )}
+                </ScrollArea>
+                <DialogFooter>
+                    <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     </div>
     );
 }
-
