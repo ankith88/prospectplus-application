@@ -229,64 +229,10 @@ export default function LeadsMapClient() {
     type: 'all' as 'all' | 'leads' | 'companies'
   });
   
-  const initAutocomplete = useCallback((
-    inputEl: HTMLInputElement | null,
-    autocompleteRef: React.MutableRefObject<google.maps.places.Autocomplete | null>,
-    onPlaceChanged: (place: google.maps.places.PlaceResult) => void
-  ) => {
-    if (inputEl && !autocompleteRef.current) {
-      const autocomplete = new window.google.maps.places.Autocomplete(inputEl, {
-        types: ['geocode'],
-        componentRestrictions: { country: 'au' },
-      });
-      autocomplete.setFields(['geometry', 'formatted_address']);
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place) {
-          onPlaceChanged(place);
-        }
-      });
-      autocompleteRef.current = autocomplete;
-    }
-  }, []);
-
-  const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
-    if (node !== null && isLoaded && map) {
-      initAutocomplete(node, geoSearchAutocompleteRef, (place) => {
-        if (place.geometry?.viewport) {
-          map?.fitBounds(place.geometry.viewport);
-        } else if (place.geometry?.location) {
-          map?.panTo(place.geometry.location);
-          map?.setZoom(15);
-        }
-      });
-    }
-  }, [isLoaded, map, initAutocomplete]);
-
-  const startPointInputRef = useCallback((node: HTMLInputElement) => {
-    if (node !== null && isLoaded) {
-      initAutocomplete(node, startPointAutocompleteRef, (place) => {
-        if (place.formatted_address) {
-          setStartPoint(place.formatted_address);
-        }
-      });
-    }
-  }, [isLoaded, initAutocomplete]);
-
-  const endPointInputRef = useCallback((node: HTMLInputElement) => {
-    if (node !== null && isLoaded) {
-      initAutocomplete(node, endPointAutocompleteRef, (place) => {
-        if (place.formatted_address) {
-          setEndPoint(place.formatted_address);
-        }
-      });
-    }
-  }, [isLoaded, initAutocomplete]);
-
   const router = useRouter()
   const { toast } = useToast()
   const { userProfile, loading: authLoading, savedRoutes } = useAuth();
-  
+
   useEffect(() => {
     if (isLoaded && window.google) {
       setTravelMode(null);
@@ -1173,6 +1119,60 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         pixelOffset: new window.google.maps.Size(0, -30),
     };
 
+    const initAutocomplete = useCallback((
+      inputEl: HTMLInputElement | null,
+      autocompleteRef: React.MutableRefObject<google.maps.places.Autocomplete | null>,
+      onPlaceChanged: (place: google.maps.places.PlaceResult) => void
+    ) => {
+      if (inputEl && isLoaded && !autocompleteRef.current) {
+        const autocomplete = new window.google.maps.places.Autocomplete(inputEl, {
+          types: ['geocode'],
+          componentRestrictions: { country: 'au' },
+        });
+        autocomplete.setFields(['geometry', 'formatted_address']);
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (place) {
+            onPlaceChanged(place);
+          }
+        });
+        autocompleteRef.current = autocomplete;
+      }
+    }, [isLoaded]);
+    
+    const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
+      if (node !== null && map) {
+        initAutocomplete(node, geoSearchAutocompleteRef, (place) => {
+          if (place.geometry?.viewport) {
+            map?.fitBounds(place.geometry.viewport);
+          } else if (place.geometry?.location) {
+            map?.panTo(place.geometry.location);
+            map?.setZoom(15);
+          }
+        });
+      }
+    }, [map, initAutocomplete]);
+  
+    const startPointInputRef = useCallback((node: HTMLInputElement) => {
+      if (node !== null) {
+        initAutocomplete(node, startPointAutocompleteRef, (place) => {
+          if (place.formatted_address) {
+            setStartPoint(place.formatted_address);
+          }
+        });
+      }
+    }, [initAutocomplete]);
+  
+    const endPointInputRef = useCallback((node: HTMLInputElement) => {
+      if (node !== null) {
+        initAutocomplete(node, endPointAutocompleteRef, (place) => {
+          if (place.formatted_address) {
+            setEndPoint(place.formatted_address);
+          }
+        });
+      }
+    }, [initAutocomplete]);
+
     if (loadError) {
         return <div>Error loading maps. Please check your API key and network connection.</div>
     }
@@ -1482,9 +1482,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     mapContainerStyle={containerStyle}
                     center={center}
                     zoom={4}
-                    onLoad={mapInstance => {
-                        setMap(mapInstance);
-                    }}
+                    onLoad={setMap}
                     onClick={onMapClick}
                     options={{
                         streetViewControl: false,
@@ -1856,5 +1854,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
-    
