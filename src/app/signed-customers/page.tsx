@@ -362,133 +362,134 @@ export default function SignedCustomersPage() {
   }, []);
   
   const handleCreateLeadFromProspect = async () => {
-        if (!prospectToCreate) return;
+    if (!prospectToCreate || !userProfile?.displayName) return;
 
-        const place = prospectToCreate;
-        if (!place.name || !place.vicinity || !place.geometry?.location) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
-            return;
-        }
+    const place = prospectToCreate;
+    if (!place.name || !place.vicinity || !place.geometry?.location) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
+        return;
+    }
 
-        const placeId = place.place_id;
-        if (!placeId) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
-            return;
-        }
+    const placeId = place.place_id;
+    if (!placeId) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
+        return;
+    }
 
-        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
-        if (duplicateId) {
-            setDuplicateLeadId(duplicateId);
-            setProspectToCreate(null);
-            return;
-        }
+    const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
+    if (duplicateId) {
+        setDuplicateLeadId(duplicateId);
+        setProspectToCreate(null);
+        return;
+    }
 
-        setIsCreatingLead(true);
-        setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
-        
-        let leadCampaign = campaign;
-        if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
-            leadCampaign = 'Door-to-Door';
-        }
-        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin')) {
-             toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
-             setIsCreatingLead(false);
-             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-             return;
-        }
+    setIsCreatingLead(true);
+    setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
+    
+    let leadCampaign = campaign;
+    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+        leadCampaign = 'Door-to-Door';
+    }
+    if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin')) {
+         toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
+         setIsCreatingLead(false);
+         setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+         return;
+    }
 
-        let primaryContact: Omit<Contact, 'id'> | null = null;
-        if (place.website) {
-            try {
-                const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
-                if (hunterResult.contacts && hunterResult.contacts.length > 0) {
-                    const firstContact = hunterResult.contacts[0];
-                    primaryContact = {
-                        name: firstContact.name || 'Info',
-                        title: firstContact.title || 'Primary Contact',
-                        email: firstContact.email || '',
-                        phone: firstContact.phone || place.formatted_phone_number || '',
-                    };
-                    toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
-                }
-            } catch (error) { console.warn('AI prospecting for contact failed.', error); }
-        }
-        
-        if (!primaryContact) {
-            const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-            primaryContact = {
-                name: `Info ${place.name}`,
-                title: 'Primary Contact',
-                email: websiteDomain ? `info@${websiteDomain}` : '',
-                phone: place.formatted_phone_number || '',
-            };
-        }
-        const nameParts = primaryContact.name.split(' ');
-        
-        const addressData = { street: place.vicinity, city: '', state: '', zip: '', country: 'Australia' };
-        if (place.address_components) {
-            const get = (type: string, useShortName = false) => {
-                const comp = place.address_components?.find(c => c.types.includes(type));
-                return useShortName ? comp?.short_name : comp?.long_name;
-            };
-            addressData.city = get('locality') || get('postal_town') || '';
-            addressData.state = get('administrative_area_level_1', true) || '';
-            addressData.zip = get('postal_code') || '';
-        }
-
-        const newLeadData = {
-            companyName: place.name,
-            websiteUrl: place.website || '',
-            campaign: leadCampaign,
-            address: {
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng(),
-                ...addressData,
-            },
-            contact: {
-                firstName: nameParts[0] || 'Info',
-                lastName: nameParts.slice(1).join(' ') || place.name,
-                title: primaryContact.title,
-                email: primaryContact.email,
-                phone: primaryContact.phone,
-            },
-            initialNotes: initialNotes
-        };
-
+    let primaryContact: Omit<Contact, 'id'> | null = null;
+    if (place.website) {
         try {
-            const result = await createNewLead(newLeadData);
-            if (result.success && result.leadId) {
-                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                
-                const newMapLead: MapLead = {
-                  id: result.leadId!,
-                  companyName: newLeadData.companyName,
-                  status: 'New',
-                  address: newLeadData.address as Address,
-                  latitude: newLeadData.address.lat,
-                  longitude: newLeadData.address.lng,
-                  dialerAssigned: undefined,
-                  customerPhone: newLeadData.contact.phone,
+            const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
+            if (hunterResult.contacts && hunterResult.contacts.length > 0) {
+                const firstContact = hunterResult.contacts[0];
+                primaryContact = {
+                    name: firstContact.name || 'Info',
+                    title: firstContact.title || 'Primary Contact',
+                    email: firstContact.email || '',
+                    phone: firstContact.phone || place.formatted_phone_number || '',
                 };
-                setAllMapData(prev => [...prev, newMapLead]);
-                setProspects(prev => prev.map(p => p.place.place_id === placeId
-                    ? { ...p, isAdding: false, existingLead: newMapLead }
-                    : p
-                ));
-            } else {
-                toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
-                setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+                toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
             }
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
-            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-        } finally {
-            setIsCreatingLead(false);
-            setProspectToCreate(null);
-            setInitialNotes('');
-            setCampaign('');
-        }
+        } catch (error) { console.warn('AI prospecting for contact failed.', error); }
+    }
+    
+    if (!primaryContact) {
+        const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+        primaryContact = {
+            name: `Info ${place.name}`,
+            title: 'Primary Contact',
+            email: websiteDomain ? `info@${websiteDomain}` : '',
+            phone: place.formatted_phone_number || '',
+        };
+    }
+    const nameParts = primaryContact.name.split(' ');
+    
+    const addressData = { street: place.vicinity, city: '', state: '', zip: '', country: 'Australia' };
+    if (place.address_components) {
+        const get = (type: string, useShortName = false) => {
+            const comp = place.address_components?.find(c => c.types.includes(type));
+            return useShortName ? comp?.short_name : comp?.long_name;
+        };
+        addressData.city = get('locality') || get('postal_town') || '';
+        addressData.state = get('administrative_area_level_1', true) || '';
+        addressData.zip = get('postal_code') || '';
+    }
+
+    const newLeadData = {
+        companyName: place.name,
+        websiteUrl: place.website || '',
+        campaign: leadCampaign,
+        address: {
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+            ...addressData,
+        },
+        contact: {
+            firstName: nameParts[0] || 'Info',
+            lastName: nameParts.slice(1).join(' ') || place.name,
+            title: primaryContact.title,
+            email: primaryContact.email,
+            phone: primaryContact.phone,
+        },
+        initialNotes: initialNotes,
+        dialerAssigned: userProfile.displayName,
     };
+
+    try {
+        const result = await createNewLead(newLeadData);
+        if (result.success && result.leadId) {
+            toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
+            
+            const newMapLead: MapLead = {
+              id: result.leadId!,
+              companyName: newLeadData.companyName,
+              status: 'New',
+              address: newLeadData.address as Address,
+              latitude: newLeadData.address.lat,
+              longitude: newLeadData.address.lng,
+              dialerAssigned: undefined,
+              customerPhone: newLeadData.contact.phone,
+            };
+            setAllMapData(prev => [...prev, newMapLead]);
+            setProspects(prev => prev.map(p => p.place.place_id === placeId
+                ? { ...p, isAdding: false, existingLead: newMapLead }
+                : p
+            ));
+        } else {
+            toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
+            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
+        setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+    } finally {
+        setIsCreatingLead(false);
+        setProspectToCreate(null);
+        setInitialNotes('');
+        setCampaign('');
+    }
+  };
 
   if (loading || authLoading) {
     return (
@@ -638,6 +639,7 @@ export default function SignedCustomersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Company Name</TableHead>
                   <TableHead>Franchisee</TableHead>
                   <TableHead>Address</TableHead>
@@ -648,11 +650,12 @@ export default function SignedCustomersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCompanies.length > 0 ? (
                   filteredCompanies.map((lead) => (
                     <TableRow key={lead.id}>
+                      <TableCell>{(lead as any).entityId || 'N/A'}</TableCell>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                             <Building className="h-4 w-4" />
@@ -684,7 +687,7 @@ export default function SignedCustomersPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>
@@ -837,7 +840,7 @@ export default function SignedCustomersPage() {
                     <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
-                    {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                    {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
                         <div className="space-y-2">
                             <Label htmlFor="campaign-select">Campaign *</Label>
                             <Select value={campaign} onValueChange={setCampaign}>
@@ -858,7 +861,7 @@ export default function SignedCustomersPage() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin') && !campaign)}>
+                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
                         {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
                     </Button>
                 </DialogFooter>
