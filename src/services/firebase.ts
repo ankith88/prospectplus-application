@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -1515,6 +1516,7 @@ interface NewLeadData {
   companyName: string;
   websiteUrl?: string;
   industryCategory?: string;
+  campaign?: string;
   address: Address;
   contact: {
     firstName: string;
@@ -1523,6 +1525,7 @@ interface NewLeadData {
     email: string;
     phone?: string;
   };
+  initialNotes?: string;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {

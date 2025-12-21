@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -389,9 +390,10 @@ export default function SignedCustomersPage() {
         if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
             leadCampaign = 'Door-to-Door';
         }
-        if (!leadCampaign) {
+        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin')) {
              toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
              setIsCreatingLead(false);
+             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
              return;
         }
 
@@ -449,17 +451,14 @@ export default function SignedCustomersPage() {
                 title: primaryContact.title,
                 email: primaryContact.email,
                 phone: primaryContact.phone,
-            }
+            },
+            initialNotes: initialNotes
         };
 
         try {
             const result = await createNewLead(newLeadData);
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                
-                if (initialNotes) {
-                    await logActivity(result.leadId, { type: 'Update', notes: `Initial note from map prospecting: ${initialNotes}`});
-                }
                 
                 const newMapLead: MapLead = {
                   id: result.leadId!,

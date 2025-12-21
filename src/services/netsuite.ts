@@ -580,10 +580,11 @@ interface NewLeadData {
     email: string;
     phone?: string;
   };
+  initialNotes?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string }> {
-    const { companyName, websiteUrl, industryCategory, campaign, address, contact } = payload;
+    const { companyName, websiteUrl, industryCategory, campaign, address, contact, initialNotes } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -614,6 +615,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (address.lng) {
         params.append('custentity_addr_long', String(address.lng));
+    }
+    if (initialNotes) {
+        params.append('custentity_initial_notes', initialNotes);
     }
 
     const url = `${baseUrl}?${params.toString()}`;

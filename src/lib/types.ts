@@ -183,6 +183,7 @@ export interface Lead {
   leadType?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
+  initialNotes?: string;
 }
 
 export interface UserProfile {
