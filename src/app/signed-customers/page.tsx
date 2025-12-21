@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -229,7 +228,7 @@ export default function SignedCustomersPage() {
     setProspects([]); 
 
     setIsSearchingNearby(true);
-    toast({ title: 'Searching...', description: `Looking for prospects matching "${keyword}"...` });
+    toast({ title: 'Searching for Prospects...', description: `AI is looking for prospects related to "${keyword}"...` });
 
     const placesService = new window.google.maps.places.PlacesService(map);
     
@@ -579,8 +578,8 @@ export default function SignedCustomersPage() {
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
-                                            {isSearchingNearby ? <Loader/> : <Sparkles className="mr-2 h-4 w-4"/>}
-                                            AI Find Similar
+                                            {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
                                             <Building className="mr-2 h-4 w-4" /> Find Multi-sites
