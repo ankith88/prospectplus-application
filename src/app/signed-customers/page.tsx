@@ -430,6 +430,62 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, []);
   
+  const handleAddLeadClick = async (place: google.maps.places.PlaceResult) => {
+    if (!place.website) {
+        openCreateLeadPage(place);
+        return;
+    }
+    
+    try {
+        const prospectResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
+        const hasEmail = prospectResult.contacts?.some(c => c.email);
+        const hasPhone = prospectResult.contacts?.some(c => c.phone && c.phone !== 'N/A') || place.formatted_phone_number;
+
+        if (hasEmail && hasPhone) {
+            setProspectToCreate(place);
+        } else {
+            openCreateLeadPage(place, prospectResult.contacts);
+        }
+
+    } catch (error) {
+        console.error('Error during prospecting, redirecting to manual entry:', error);
+        openCreateLeadPage(place);
+    }
+  };
+  
+    const openCreateLeadPage = (place: google.maps.places.PlaceResult, contacts?: Contact[]) => {
+        const params = new URLSearchParams();
+        if (place.name) params.set('companyName', place.name);
+        if (place.website) params.set('websiteUrl', place.website);
+        if (place.formatted_phone_number) params.set('phone', place.formatted_phone_number);
+        
+        if (place.address_components) {
+            const get = (type: string) => place.address_components?.find(c => c.types.includes(type))?.long_name || '';
+            const street_number = get('street_number');
+            const route = get('route');
+            params.set('street', `${street_number} ${route}`.trim());
+            params.set('city', get('locality') || get('postal_town'));
+            params.set('state', get('administrative_area_level_1'));
+            params.set('zip', get('postal_code'));
+        } else if (place.vicinity) {
+            params.set('street', place.vicinity);
+        }
+        
+        if (place.geometry?.location) {
+            params.set('lat', place.geometry.location.lat().toString());
+            params.set('lng', place.geometry.location.lng().toString());
+        }
+
+        const primaryContact = contacts?.[0];
+        if (primaryContact?.email) {
+            // Even if one is missing, we pass what we have. The form will require the rest.
+        }
+
+        window.open(`/leads/new?${params.toString()}`, '_blank');
+        toast({ title: "Complete Lead Details", description: "Please fill in the missing email or phone number." });
+    };
+
+
   const handleCreateLeadFromProspect = async () => {
     if (!prospectToCreate || !userProfile?.displayName) return;
 
@@ -804,7 +860,7 @@ export default function SignedCustomersPage() {
                                             <Eye className="mr-2 h-4 w-4" /> View
                                         </Button>
                                     ) : (
-                                        <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                        <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                             {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                             Add
                                         </Button>
@@ -863,7 +919,7 @@ export default function SignedCustomersPage() {
                                                     View
                                                 </Button>
                                             ) : (
-                                                <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                     {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
                                                     {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                                 </Button>

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -261,7 +262,7 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
-    if (userProfile?.role === 'user' || userProfile?.role === 'admin') {
+    if (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') {
         if (!values.campaign) {
             form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
             setIsSubmitting(false);
@@ -272,7 +273,7 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead(finalValues);
+      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName });
 
       if (result.success && result.leadId) {
         toast({
@@ -384,7 +385,7 @@ export function NewLeadForm() {
                     </FormItem>
                   )}
                 />
-                 {(userProfile?.role === 'user' || userProfile?.role === 'admin') && (
+                 {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
                     <FormField
                     control={form.control}
                     name="campaign"
