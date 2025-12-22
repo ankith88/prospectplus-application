@@ -255,10 +255,9 @@ export default function SignedCustomersPage() {
             const prospectPostcode = getComponent('postal_code');
             
             const isDuplicate = allMapData.some(existing => {
-                const similarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
-                const sameSuburb = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase();
-                const samePostcode = existing.address?.zip === prospectPostcode;
-                return similarName && sameSuburb && samePostcode;
+                const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
+                const isSameLocation = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase() && existing.address?.zip === prospectPostcode;
+                return isSimilarName && isSameLocation;
             });
 
             if (isDuplicate) {
@@ -781,12 +780,12 @@ export default function SignedCustomersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead className="hidden md:table-cell">ID</TableHead>
                   <TableHead>Company Name</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead className="hidden lg:table-cell">Franchisee</TableHead>
+                  <TableHead className="hidden sm:table-cell">Address</TableHead>
+                  <TableHead className="hidden lg:table-cell">Email</TableHead>
+                  <TableHead className="hidden md:table-cell">Phone</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -797,29 +796,29 @@ export default function SignedCustomersPage() {
                 ) : filteredCompanies.length > 0 ? (
                   filteredCompanies.map((lead) => (
                     <TableRow key={lead.id}>
-                      <TableCell>{(lead as any).entityId || 'N/A'}</TableCell>
+                      <TableCell className="hidden md:table-cell">{(lead as any).entityId || 'N/A'}</TableCell>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                             <Building className="h-4 w-4" />
                             {lead.companyName}
                         </Button>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {lead.franchisee || 'N/A'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
                             <span>{formatAddress(lead.address)}</span>
                         </div>
                       </TableCell>
-                       <TableCell>
+                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
                             <span>{lead.customerServiceEmail || 'N/A'}</span>
                         </div>
                        </TableCell>
-                       <TableCell>
+                       <TableCell className="hidden md:table-cell">
                         <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-muted-foreground" />
                             <span>{lead.customerPhone || 'N/A'}</span>
@@ -895,8 +894,8 @@ export default function SignedCustomersPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Company</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>Address</TableHead>
+                                    <TableHead className="hidden lg:table-cell">Description</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Address</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
@@ -915,7 +914,7 @@ export default function SignedCustomersPage() {
                                                 </Button>
                                             )}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden lg:table-cell">
                                                 <div className="flex flex-col items-start max-w-xs">
                                                     <p className="text-sm text-muted-foreground line-clamp-2">
                                                         {prospectInfo.description}
@@ -923,7 +922,7 @@ export default function SignedCustomersPage() {
                                                     <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
                                                 </div>
                                         </TableCell>
-                                        <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                                        <TableCell className="hidden sm:table-cell">{prospectInfo.place.vicinity}</TableCell>
                                         <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {prospectInfo.existingLead ? (
