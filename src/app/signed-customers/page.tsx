@@ -253,14 +253,12 @@ export default function SignedCustomersPage() {
             const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
             const prospectSuburb = getComponent('locality');
             const prospectPostcode = getComponent('postal_code');
-            const prospectStreet = getComponent('route');
             
             const isDuplicate = allMapData.some(existing => {
-                const sameName = existing.companyName.toLowerCase() === detailedPlace.name?.toLowerCase();
+                const similarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
                 const sameSuburb = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase();
                 const samePostcode = existing.address?.zip === prospectPostcode;
-                const sameStreet = existing.address?.street?.toLowerCase().includes(prospectStreet?.toLowerCase() || 'a-very-unlikely-street-name');
-                return sameName || (sameSuburb && samePostcode && sameStreet);
+                return similarName && sameSuburb && samePostcode;
             });
 
             if (isDuplicate) {
