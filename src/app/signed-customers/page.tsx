@@ -249,8 +249,23 @@ export default function SignedCustomersPage() {
             
             const detailedPlace = await getPlaceDetails(place.place_id);
             if (!detailedPlace) return null;
+
+            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+            const prospectSuburb = getComponent('locality');
+            const prospectPostcode = getComponent('postal_code');
+            const prospectStreet = getComponent('route');
             
-            const existingLead = allMapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
+            const isDuplicate = allMapData.some(existing => {
+                const sameName = existing.companyName.toLowerCase() === detailedPlace.name?.toLowerCase();
+                const sameSuburb = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase();
+                const samePostcode = existing.address?.zip === prospectPostcode;
+                const sameStreet = existing.address?.street?.toLowerCase().includes(prospectStreet?.toLowerCase() || 'a-very-unlikely-street-name');
+                return sameName || (sameSuburb && samePostcode && sameStreet);
+            });
+
+            if (isDuplicate) {
+                return null;
+            }
 
             let description = 'No website to analyze.';
             if (detailedPlace.website) {
@@ -269,7 +284,7 @@ export default function SignedCustomersPage() {
             const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
             const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
             
-            return { place: detailedPlace, existingLead, classification, description };
+            return { place: detailedPlace, existingLead: undefined, classification, description };
             });
 
             const resolvedProspects = (await Promise.all(detailedProspectsPromises))
