@@ -197,15 +197,17 @@ export default function CheckInPage() {
         const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
         
         if (isValid) {
-            if (currentStep === TOTAL_STEPS) {
+            if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
                 const allFieldsValid = await methods.trigger();
                 if (allFieldsValid) {
                     const discoveryData = calculateScoreAndRouting(methods.getValues());
                     setFinalDiscoveryData(discoveryData);
-                    setCurrentStep(prev => prev + 1);
+                    setCurrentStep(prev => prev + 1); // Go to final actions step
                 } else {
                      toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
                 }
+            } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
+                 setCurrentStep(prev => prev + 2); // Skip step 4
             } else {
                 setCurrentStep(prev => prev + 1);
             }
@@ -214,7 +216,13 @@ export default function CheckInPage() {
         }
     };
 
-    const handleBack = () => setCurrentStep(prev => prev - 1);
+    const handleBack = () => {
+         if (currentStep === 5 && methods.getValues('relevanceCheck') === 'No') {
+            setCurrentStep(prev => prev - 2); // Go back to step 3
+        } else {
+            setCurrentStep(prev => prev - 1);
+        }
+    };
     
     const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
         if (!lead) return;
@@ -558,109 +566,117 @@ const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
     const watchLogisticsSetup = watch('logisticsSetup');
     return (
         <StepWrapper title="Discovery: Logistics" description="Understand their current postage process." script="How do you currently manage your post and parcels? Do you go to the post office, or does someone pick it up?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
-             <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={control} name="logisticsSetup" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>How do you lodge items?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel className="font-normal">Drop-off</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Routine collection" /></FormControl><FormLabel className="font-normal">Routine collection</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            {watchLogisticsSetup === 'Routine collection' && <FormField control={control} name="servicePayment" render={({ field }) => (
-                <FormItem className="space-y-3 ml-6"><FormLabel>If using collection: Do you pay for this service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>}
+            <div className="space-y-8">
+                <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="logisticsSetup" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>How do you lodge items?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel className="font-normal">Drop-off</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Routine collection" /></FormControl><FormLabel className="font-normal">Routine collection</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                {watchLogisticsSetup === 'Routine collection' && <FormField control={control} name="servicePayment" render={({ field }) => (
+                    <FormItem className="space-y-3 ml-6"><FormLabel>If using collection: Do you pay for this service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>}
+            </div>
         </StepWrapper>
     )
 };
 
 const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
-            <FormField control={control} name="shippingVolume" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={control} name="expressVsStandard" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={control} name="packageType" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
-            )}/>
+            <div className="space-y-8">
+                <FormField control={control} name="shippingVolume" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="expressVsStandard" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="packageType" render={() => (
+                    <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
+                )}/>
+            </div>
         </StepWrapper>
     )
 };
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
-            <FormField
-                control={control}
-                name="currentProvider"
-                render={() => (
-                    <FormItem>
-                        <FormLabel className="text-base">Who do you use for shipping?</FormLabel>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
-                            {currentProviders.map((item) => (
-                                <FormField
-                                    key={item.id}
-                                    control={control}
-                                    name="currentProvider"
-                                    render={({ field }) => (
-                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                            <FormControl>
-                                                <Checkbox
-                                                    checked={field.value?.includes(item.label)}
-                                                    onCheckedChange={(checked) => {
-                                                        const newValue = checked
-                                                            ? [...(field.value || []), item.label]
-                                                            : field.value?.filter((value) => value !== item.label);
-                                                        field.onChange(newValue);
-                                                    }}
-                                                />
-                                            </FormControl>
-                                            <FormLabel className="font-normal">{item.label}</FormLabel>
-                                        </FormItem>
-                                    )}
-                                />
-                            ))}
-                        </div>
-                        <FormField control={control} name="otherProvider" render={({ field }) => (
-                            <FormItem className="mt-2">
-                                <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
-                                <FormControl><Input {...field} placeholder="Other provider..." /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}/>
-                        <FormMessage />
-                    </FormItem>
-            )}/>
-            <FormField control={control} name="eCommerceTech" render={() => (
-                <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
-            )}/>
+            <div className="space-y-8">
+                <FormField
+                    control={control}
+                    name="currentProvider"
+                    render={() => (
+                        <FormItem>
+                            <FormLabel className="text-base">Who do you use for shipping?</FormLabel>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
+                                {currentProviders.map((item) => (
+                                    <FormField
+                                        key={item.id}
+                                        control={control}
+                                        name="currentProvider"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(item.label)}
+                                                        onCheckedChange={(checked) => {
+                                                            const newValue = checked
+                                                                ? [...(field.value || []), item.label]
+                                                                : field.value?.filter((value) => value !== item.label);
+                                                            field.onChange(newValue);
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">{item.label}</FormLabel>
+                                            </FormItem>
+                                        )}
+                                    />
+                                ))}
+                            </div>
+                            <FormField control={control} name="otherProvider" render={({ field }) => (
+                                <FormItem className="mt-2">
+                                    <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
+                                    <FormControl><Input {...field} placeholder="Other provider..." /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormMessage />
+                        </FormItem>
+                )}/>
+                <FormField control={control} name="eCommerceTech" render={() => (
+                    <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
+                )}/>
+            </div>
         </StepWrapper>
     )
 };
 
-const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
-            <FormField control={control} name="sameDayCourier" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={control} name="decisionMaker" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>Who decides shipping?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (<FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={control} name="painPoints" render={({ field }) => (
-                <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
+            <div className="space-y-8">
+                <FormField control={control} name="sameDayCourier" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="decisionMaker" render={({ field }) => (
+                    <FormItem className="space-y-3"><FormLabel>Who decides shipping?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (<FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={control} name="painPoints" render={({ field }) => (
+                    <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+            </div>
         </StepWrapper>
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
   
     const handleRepSelection = (repName: string, repUrl: string) => {
         // This function would ideally also update the lead in the database
@@ -711,3 +727,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
+
+
+    
