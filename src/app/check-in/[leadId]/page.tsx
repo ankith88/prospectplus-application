@@ -518,7 +518,7 @@ const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
 };
 
 const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
-const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void; onBack: () void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
@@ -561,7 +561,7 @@ const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
 };
 
 
-const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control, watch } = useFormContext();
     const watchLogisticsSetup = watch('logisticsSetup');
     return (
@@ -582,7 +582,7 @@ const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
 };
 
 const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () => void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
@@ -603,7 +603,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
@@ -657,7 +657,7 @@ const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
     )
 };
 
-const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
+const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { onNext: () void, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { control } = useFormContext();
     return (
         <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
@@ -676,7 +676,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote }: { o
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () void, onOpenLogOutcome: () void; onOpenLogNote: () void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
   
     const handleRepSelection = (repName: string, repUrl: string) => {
         // This function would ideally also update the lead in the database
@@ -727,6 +727,5 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
-
 
     
