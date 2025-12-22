@@ -712,7 +712,18 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
             <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
-            <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => onOpenDialog('free-trial')}><Star className="mr-2"/> Free Trial</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">
+                  <Star className="mr-2"/> Free Trial
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
+                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
