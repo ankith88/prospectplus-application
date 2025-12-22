@@ -17,8 +17,10 @@ export default function HomePage() {
             router.replace('/admin/dashboard');
         } else if (userProfile?.role === 'Field Sales') {
             router.replace('/field-sales');
-        } else if (userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') {
+        } else if (userProfile?.role === 'Lead Gen Admin') {
             router.replace('/signed-customers');
+        } else if (userProfile?.role === 'Lead Gen') {
+            router.replace('/leads/new');
         } else {
             router.replace('/leads');
         }
