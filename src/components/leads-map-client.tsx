@@ -570,6 +570,21 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           
           const detailedPlace = await getPlaceDetails(place.place_id);
           if (!detailedPlace) return null;
+
+          const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+          const prospectSuburb = getComponent('locality');
+          const prospectPostcode = getComponent('postal_code');
+          
+          const isDuplicate = mapData.some(existing => {
+              const similarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
+              const sameSuburb = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase();
+              const samePostcode = existing.address?.zip === prospectPostcode;
+              return similarName && sameSuburb && samePostcode;
+          });
+
+          if (isDuplicate) {
+              return null;
+          }
           
           const existingLead = mapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
 
