@@ -30,6 +30,7 @@ import { ScoreIndicator } from '@/components/score-indicator';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import React from 'react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -68,6 +69,12 @@ const stepLabels = [
     "Providers",
     "Needs",
     "Finish"
+];
+
+const salesReps = [
+    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
+    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
+    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
 ];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number, totalSteps: number, labels: string[] }) => {
@@ -237,24 +244,6 @@ export default function CheckInPage() {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update contact title.' });
         }
     };
-
-    const handleSaveDiscovery = async () => {
-        if (!finalDiscoveryData) {
-            toast({ variant: "destructive", title: "Error", description: "Could not calculate discovery score. Please review your answers." });
-            return;
-        }
-        setIsSaving(true);
-        try {
-            await updateLeadDiscoveryData(lead!.id, finalDiscoveryData);
-            toast({ title: "Success", description: "Check-in and discovery data saved." });
-            router.push(`/leads/${lead!.id}`);
-        } catch (error) {
-            console.error(error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to save data." });
-        } finally {
-            setIsSaving(false);
-        }
-    };
     
      const handleProspectWebsite = async () => {
         if (!lead || !lead.websiteUrl) {
@@ -288,6 +277,12 @@ export default function CheckInPage() {
         }
     };
 
+    const handleNoteLogged = () => {
+      // Re-fetch or optimistically update lead data if necessary.
+      // For now, just closes the dialog.
+      setIsLogNoteOpen(false);
+    };
+
     const renderStep = () => {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} />;
@@ -298,11 +293,9 @@ export default function CheckInPage() {
             case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} />;
             case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} />;
             case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} />;
-            case 9: return <FinalActionsStep onBack={handleBack} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
-                if (type === 'log-outcome') setIsLogOutcomeOpen(true);
+            case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
-                if (type === 'log-note') setIsLogNoteOpen(true);
             }} />;
             default: return null;
         }
@@ -342,7 +335,16 @@ export default function CheckInPage() {
                     {renderStep()}
                 </main>
                  
-                {/* Dialogs for Final Actions */}
+                <footer className="flex-shrink-0 border-t p-4 flex justify-between items-center bg-background sticky bottom-0">
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={() => setIsLogOutcomeOpen(true)}><PhoneCall className="mr-2"/> Log Outcome</Button>
+                         <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
+                           <Button variant="secondary"><ClipboardEdit className="mr-2"/> Log Note</Button>
+                         </LogNoteDialog>
+                    </div>
+                </footer>
+
+                {/* Dialogs for Actions */}
                 <PostCallOutcomeDialog 
                     isOpen={isLogOutcomeOpen} 
                     onClose={() => setIsLogOutcomeOpen(false)}
@@ -355,12 +357,6 @@ export default function CheckInPage() {
                     leadId={lead.id}
                     mode={serviceSelectionMode}
                 />
-                <LogNoteDialog 
-                    lead={lead} 
-                    onNoteLogged={() => { setIsLogNoteOpen(false); }}
-                >
-                    <div data-trigger-log-note={isLogNoteOpen}></div>
-                </LogNoteDialog>
             </div>
         </FormProvider>
     );
@@ -653,7 +649,17 @@ const DiscoveryStep5 = ({ onNext, onBack }: { onNext: () => void, onBack: () => 
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, discoveryData, onBack }: { onOpenDialog: (type: 'log-outcome' | 'free-trial' | 'signup' | 'log-note') => void, discoveryData: DiscoveryData | null, onBack: () => void }) => (
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void }) => {
+  
+    const handleRepSelection = (repName: string, repUrl: string) => {
+        // This function would ideally also update the lead in the database
+        // and show a toast notification, similar to the lead profile page.
+        const calendlyUrl = new URL(repUrl);
+        if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
+        window.open(calendlyUrl.toString(), '_blank');
+    };
+
+  return (
     <StepWrapper title="Next Steps & Analysis" description="The discovery phase is complete. Review the analysis and choose the next action for this lead." onBack={onBack}>
        {discoveryData ? (
            <div className="space-y-4">
@@ -680,10 +686,17 @@ const FinalActionsStep = ({ onOpenDialog, discoveryData, onBack }: { onOpenDialo
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
             <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
             <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => onOpenDialog('free-trial')}><Star className="mr-2"/> Free Trial</Button>
-            <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => onOpenDialog('log-outcome')}><PhoneCall className="mr-2"/> Log Outcome</Button>
-            <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => onOpenDialog('log-note')}><ClipboardEdit className="mr-2"/> Log a Note</Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    {salesReps.map(rep => (
+                        <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     </StepWrapper>
-);
-
-    
+  )
+};
