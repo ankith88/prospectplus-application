@@ -78,45 +78,50 @@ const salesReps = [
     { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
 ];
 
-const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number, totalSteps: number, labels: string[] }) => {
-  return (
-    <div className="flex items-center w-full" aria-label={`Step ${currentStep} of ${totalSteps}`}>
-      {labels.map((label, index) => {
-        const step = index + 1;
-        const isCompleted = currentStep > step;
-        const isCurrent = currentStep === step;
+const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[], onStepClick: (step: number) => void; }) => {
+    const isCompleted = currentStep >= totalSteps;
 
-        return (
-          <React.Fragment key={step}>
-            <div className="flex flex-col items-center">
-              <div
-                className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300",
-                  isCompleted ? "bg-primary text-primary-foreground" :
-                  isCurrent ? "border-2 border-primary text-primary" :
-                  "bg-muted text-muted-foreground"
-                )}
-              >
-                {isCompleted ? <Check className="w-4 h-4" /> : step}
-              </div>
-              <p className={cn(
-                "text-xs mt-1 text-center hidden md:block",
-                isCurrent ? "font-bold text-primary" : "text-muted-foreground"
-              )}>
-                {label}
-              </p>
-            </div>
-            {step < labels.length && (
-              <div className={cn(
-                "flex-1 h-0.5 transition-all duration-300",
-                currentStep > step ? "bg-primary" : "bg-muted"
-              )} />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
+    return (
+        <div className="flex items-center w-full" aria-label={`Step ${currentStep} of ${totalSteps}`}>
+            {labels.map((label, index) => {
+                const step = index + 1;
+                const isStepCompleted = currentStep > step;
+                const isCurrent = currentStep === step;
+
+                return (
+                    <React.Fragment key={step}>
+                        <div className="flex flex-col items-center">
+                            <button
+                                onClick={() => isCompleted && onStepClick(step)}
+                                disabled={!isCompleted}
+                                className={cn(
+                                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
+                                    isStepCompleted ? "bg-primary text-primary-foreground" :
+                                    isCurrent ? "border-2 border-primary bg-primary/10 text-primary" :
+                                    "bg-muted text-muted-foreground",
+                                    isCompleted && "cursor-pointer hover:ring-2 hover:ring-primary"
+                                )}
+                            >
+                                {isStepCompleted ? <Check className="w-5 h-5" /> : step}
+                            </button>
+                            <p className={cn(
+                                "text-xs mt-1 text-center hidden md:block",
+                                isCurrent ? "font-bold text-primary" : "text-muted-foreground"
+                            )}>
+                                {label}
+                            </p>
+                        </div>
+                        {step < labels.length && (
+                            <div className={cn(
+                                "flex-1 h-0.5 transition-all duration-300",
+                                currentStep > step ? "bg-primary" : "bg-muted"
+                            )} />
+                        )}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+    );
 };
 
 export default function CheckInPage() {
@@ -135,6 +140,7 @@ export default function CheckInPage() {
     
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
+    const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -203,6 +209,7 @@ export default function CheckInPage() {
                 const currentData = methods.getValues();
                 if(lead?.id) {
                     await updateLeadDiscoveryData(lead.id, currentData);
+                    toast({ title: "Progress Saved", description: "Your answers have been saved." });
                 }
                 
                 if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
@@ -236,6 +243,12 @@ export default function CheckInPage() {
             setCurrentStep(prev => prev - 2); // Go back to step 3
         } else {
             setCurrentStep(prev => prev - 1);
+        }
+    };
+    
+    const handleStepClick = (step: number) => {
+        if (currentStep >= TOTAL_STEPS + 1) {
+            setCurrentStep(step);
         }
     };
     
@@ -350,7 +363,7 @@ export default function CheckInPage() {
                     </header>
 
                     <div className="my-4 flex-shrink-0">
-                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS + 1} labels={stepLabels} />
+                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS + 1} labels={stepLabels} onStepClick={handleStepClick} />
                     </div>
                 </div>
                 
@@ -380,7 +393,7 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void, onOpenLogOutcome: () => void, onOpenLogNote: () => void, isSaving?: boolean }) => {
+const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
@@ -691,41 +704,11 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
-    const { toast } = useToast();
-    const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
-    const router = useRouter();
-  
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, isLoadingLocalMile, handleLocalMileTrial }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isLoadingLocalMile: boolean; handleLocalMileTrial: () => void; }) => {
     const handleRepSelection = (repName: string, repUrl: string) => {
         const calendlyUrl = new URL(repUrl);
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
         window.open(calendlyUrl.toString(), '_blank');
-    };
-    
-    const handleLocalMileTrial = async () => {
-        setIsLoadingLocalMile(true);
-        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
-        try {
-            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
-            const response = await fetch(url);
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast({ title: 'Success', description: 'LocalMile free trial has been initiated.' });
-                router.push('/field-sales');
-            } else if (result.message === 'Lead Already Synced to LocalMile') {
-                toast({ variant: 'default', title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
-            } else {
-                 throw new Error(result.message || 'NetSuite API request failed.');
-            }
-        } catch (error: any) {
-            console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        } finally {
-            setIsLoadingLocalMile(false);
-        }
     };
 
   return (
@@ -782,3 +765,5 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
+
+
