@@ -447,7 +447,7 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
@@ -461,23 +461,8 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
                 </CardContent>
                 {(onNext || onBack) && (
                     <CardFooter className="flex justify-between items-center gap-2">
-                        <div>
-                            {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
-                        </div>
-                        
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="secondary" disabled={isSaving}>Actions</Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        <div>
-                            {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
-                        </div>
+                         {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
+                         {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
                     </CardFooter>
                 )}
             </Card>
@@ -766,56 +751,69 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     };
 
   return (
-    <StepWrapper title="Next Steps & Analysis" description="The discovery phase is complete. Review the analysis and choose the next action for this lead." onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote}>
-       {discoveryData ? (
-           <div className="space-y-4">
-                 <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                    <div className="flex flex-col items-center">
-                        <p className="text-sm text-muted-foreground">Score</p>
-                        <p className="text-3xl font-bold">{discoveryData.score}</p>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <p className="text-sm text-muted-foreground">Routing Tag</p>
-                        <Badge variant="outline" className="text-lg mt-1"><Route className="h-4 w-4 mr-2"/>{discoveryData.routingTag}</Badge>
-                    </div>
-                </div>
-                <DiscoveryRadarChart discoveryData={discoveryData} />
-                 {discoveryData.scoringReason && (
-                    <div className="text-xs text-muted-foreground p-2 border-t">
-                        <strong>Scoring Rationale:</strong> {discoveryData.scoringReason}
-                    </div>
-                )}
-           </div>
-       ) : (
-           <div className="text-center py-10 text-muted-foreground">Could not generate discovery analysis.</div>
-       )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-            <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">
-                  <Star className="mr-2"/> Free Trial
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
-                    {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    {salesReps.map(rep => (
-                        <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+    <div className="space-y-6">
+        <div className="text-left space-y-2">
+            <h2 className="text-2xl font-bold">Next Steps & Analysis</h2>
+            <p className="text-muted-foreground">The discovery phase is complete. Review the analysis and choose the next action for this lead.</p>
         </div>
-    </StepWrapper>
+        <Card>
+            <CardContent className="p-6">
+                 {discoveryData ? (
+                    <div className="space-y-4">
+                            <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Score</p>
+                                    <p className="text-3xl font-bold">{discoveryData.score}</p>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                    <Badge variant="outline" className="text-lg mt-1"><Route className="h-4 w-4 mr-2"/>{discoveryData.routingTag}</Badge>
+                                </div>
+                            </div>
+                            <DiscoveryRadarChart discoveryData={discoveryData} />
+                            {discoveryData.scoringReason && (
+                                <div className="text-xs text-muted-foreground p-2 border-t">
+                                    <strong>Scoring Rationale:</strong> {discoveryData.scoringReason}
+                                </div>
+                            )}
+                    </div>
+                ) : (
+                    <div className="text-center py-10 text-muted-foreground">Could not generate discovery analysis.</div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4">
+                    <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">
+                          <Star className="mr-2"/> Free Trial
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
+                        <DropdownMenuItem>MP Products</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
+                            {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            {salesReps.map(rep => (
+                                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
+                </div>
+            </CardContent>
+            <CardFooter className="flex justify-start">
+                 <Button variant="outline" onClick={onBack}>Back</Button>
+            </CardFooter>
+        </Card>
+    </div>
   )
 };
