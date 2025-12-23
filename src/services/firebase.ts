@@ -32,7 +32,7 @@ async function logActivity(
         return docRef.id;
     } catch (error) {
         console.error(`Failed to log activity for lead ${leadId}:`, error);
-        throw new Error(`Failed to log activity in Firebase: [${error}]`);
+        throw new Error(`Failed to log activity in Firebase: [${'error'}]`);
     }
 }
 
@@ -70,7 +70,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -1329,7 +1329,6 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
     // 1. Save to Firebase
     const leadRef = doc(firestore, 'leads', leadId);
     await updateDoc(leadRef, { discoveryData: data });
-    await logActivity(leadId, { type: 'Update', notes: 'Discovery questions form was updated.' });
     console.log(`[Firebase] Discovery data for lead ${leadId} updated.`);
     
     // 2. Send to NetSuite

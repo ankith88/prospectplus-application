@@ -211,7 +211,9 @@ export default function CheckInPage() {
                 const currentData = methods.getValues();
                 if(lead?.id) {
                     await updateLeadDiscoveryData(lead.id, currentData);
-                    toast({ title: "Progress Saved", description: "Your answers have been saved." });
+                    if (currentStep < TOTAL_STEPS + 1) {
+                      toast({ title: "Progress Saved", description: "Your answers have been saved." });
+                    }
                 }
                 
                 if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
@@ -220,6 +222,7 @@ export default function CheckInPage() {
                         const discoveryData = calculateScoreAndRouting(methods.getValues());
                         setFinalDiscoveryData(discoveryData);
                         await updateLeadDiscoveryData(lead!.id, discoveryData);
+                        await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
                         setCurrentStep(prev => prev + 1); // Go to final actions step
                     } else {
                          toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
