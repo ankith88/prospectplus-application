@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -292,6 +293,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+  const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
 
 
   const router = useRouter();
@@ -735,6 +737,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead, toast]);
 
+    const handleLocalMileTrial = async () => {
+        setIsLoadingLocalMile(true);
+        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        try {
+            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`NetSuite API request failed with status ${response.status}`);
+            }
+            toast({ title: 'Success', description: 'LocalMile free trial has been initiated in NetSuite.' });
+        } catch (error) {
+            console.error('LocalMile free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not initiate LocalMile free trial.' });
+        } finally {
+            setIsLoadingLocalMile(false);
+        }
+    };
+
 
   if (!lead || !user) {
     return (
@@ -801,7 +821,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleLocalMileTrial} disabled={isLoadingLocalMile}>
+                    {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
+                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

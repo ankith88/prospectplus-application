@@ -692,13 +692,31 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 };
 
 const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
+    const { toast } = useToast();
+    const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
   
     const handleRepSelection = (repName: string, repUrl: string) => {
-        // This function would ideally also update the lead in the database
-        // and show a toast notification, similar to the lead profile page.
         const calendlyUrl = new URL(repUrl);
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
         window.open(calendlyUrl.toString(), '_blank');
+    };
+    
+    const handleLocalMileTrial = async () => {
+        setIsLoadingLocalMile(true);
+        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        try {
+            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`NetSuite API request failed with status ${response.status}`);
+            }
+            toast({ title: 'Success', description: 'LocalMile free trial has been initiated in NetSuite.' });
+        } catch (error) {
+            console.error('LocalMile free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not initiate LocalMile free trial.' });
+        } finally {
+            setIsLoadingLocalMile(false);
+        }
     };
 
   return (
@@ -736,7 +754,9 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
               <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem>LocalMile</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleLocalMileTrial} disabled={isLoadingLocalMile}>
+                    {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -753,8 +773,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
-
-    
-
-    
-
