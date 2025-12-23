@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
+import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -211,7 +212,7 @@ export default function CheckInPage() {
                 const currentData = methods.getValues();
                 if(lead?.id) {
                     await updateLeadDiscoveryData(lead.id, currentData);
-                    if (currentStep < TOTAL_STEPS + 1) {
+                    if (currentStep < TOTAL_STEPS) {
                       toast({ title: "Progress Saved", description: "Your answers have been saved." });
                     }
                 }
@@ -329,14 +330,8 @@ export default function CheckInPage() {
         setIsLoadingLocalMile(true);
         toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
-            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
-            const response = await fetch(url);
-            const responseBody = await response.json();
+            const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
-            if (!response.ok) {
-                throw new Error(responseBody.message || `NetSuite API request failed with status ${response.status}`);
-            }
-            
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
                 toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
@@ -486,7 +481,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
 
 const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
     return (
-        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onBack={() => {}} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
             <div className="space-y-4">
                  <div className="space-y-2">
                     <Label htmlFor="businessName">Business name</Label>

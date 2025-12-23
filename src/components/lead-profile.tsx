@@ -133,6 +133,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import { Label } from './ui/label'
 import { LocalMileAccessDialog } from './localmile-access-dialog';
+import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 
 
 interface LeadProfileProps {
@@ -437,7 +438,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   
   const handleContactAdded = (newContactData: any) => {
     const newContact: Contact = {
-        id: 'temp-' + Date.now(), // Temporary ID for rendering
+        id: 'temp-' + Date.now(), // Temporary unique ID for rendering
         name: `${newContactData.firstName} ${newContactData.lastName}`,
         title: newContactData.title,
         email: newContactData.email,
@@ -740,16 +741,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead, toast]);
 
     const handleLocalMileTrial = async () => {
+        if (!lead) return;
         setIsLoadingLocalMile(true);
         toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
-            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
-            const response = await fetch(url);
-            const responseBody = await response.json();
-
-            if (!response.ok) {
-                throw new Error(responseBody.message || `NetSuite API request failed with status ${response.status}`);
-            }
+            const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
             
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
