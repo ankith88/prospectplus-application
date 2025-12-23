@@ -319,6 +319,37 @@ export default function CheckInPage() {
       setIsLogNoteOpen(false);
     };
 
+    const handleLocalMileTrial = async () => {
+        if (!lead) return;
+        setIsLoadingLocalMile(true);
+        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        try {
+            const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
+            const response = await fetch(url);
+            const responseBody = await response.json();
+
+            if (!response.ok) {
+                throw new Error(responseBody.message || `NetSuite API request failed with status ${response.status}`);
+            }
+            
+            if (responseBody.success === true) {
+                await updateLeadStatus(lead.id, 'LocalMile Pending');
+                toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                router.push('/field-sales');
+            } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
+                toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+            } else {
+                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+            }
+
+        } catch (error: any) {
+            console.error('LocalMile free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+        } finally {
+            setIsLoadingLocalMile(false);
+        }
+    };
+
     const renderStep = () => {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
@@ -332,7 +363,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} handleLocalMileTrial={handleLocalMileTrial} isLoadingLocalMile={isLoadingLocalMile} />;
             default: return null;
         }
     };
@@ -765,5 +796,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
+
 
 
