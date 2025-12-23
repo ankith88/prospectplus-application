@@ -462,7 +462,18 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
                 {(onNext || onBack) && (
                     <CardFooter className="flex justify-between items-center gap-2">
                          {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
-                         {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
+                         <div className="flex items-center gap-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline"><MoreVertical className="mr-2 h-4 w-4"/>Actions</Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
+                         </div>
                     </CardFooter>
                 )}
             </Card>
@@ -817,3 +828,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
+
+    
