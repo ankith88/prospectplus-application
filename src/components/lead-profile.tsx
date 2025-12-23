@@ -54,7 +54,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -132,6 +132,7 @@ import { ServiceSelectionDialog } from './service-selection-dialog';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import { Label } from './ui/label'
+import { LocalMileAccessDialog } from './localmile-access-dialog';
 
 
 interface LeadProfileProps {
@@ -294,6 +295,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
+  const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
 
 
   const router = useRouter();
@@ -401,7 +403,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         
         if (result.companyDescription) {
             // Optimistic update
-            // setLead(prev => ({ ...prev, companyDescription: result.companyDescription! }));
+            // setLead(prev => ({...prev, companyDescription: result.companyDescription! }));
             toast({ title: "Description Generated", description: "Company description has been updated." });
         }
         
@@ -743,16 +745,40 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         try {
             const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
             const response = await fetch(url);
+            const responseBody = await response.json();
+
             if (!response.ok) {
-                throw new Error(`NetSuite API request failed with status ${response.status}`);
+                throw new Error(responseBody.message || `NetSuite API request failed with status ${response.status}`);
             }
-            toast({ title: 'Success', description: 'LocalMile free trial has been initiated in NetSuite.' });
-        } catch (error) {
+            
+            if (responseBody.success === true) {
+                await updateLeadStatus(lead.id, 'LocalMile Pending');
+                toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                 // Optimistic update
+                // setLead(prev => ({...prev, status: 'LocalMile Pending'}));
+            } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
+                toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+            } else {
+                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+            }
+        } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not initiate LocalMile free trial.' });
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }
+    };
+    
+    const openLocalMileDialog = () => {
+        if (!lead.contacts || lead.contacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Found',
+                description: 'Please add at least one contact before initiating a LocalMile trial.',
+            });
+            return;
+        }
+        setIsLocalMileAccessOpen(true);
     };
 
 
@@ -821,7 +847,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleLocalMileTrial} disabled={isLoadingLocalMile}>
+                <DropdownMenuItem onSelect={openLocalMileDialog} disabled={isLoadingLocalMile}>
                     {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
                 </DropdownMenuItem>
             </DropdownMenuContent>
@@ -906,6 +932,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   return (
     <>
+    {isLocalMileAccessOpen && lead && (
+        <LocalMileAccessDialog
+            isOpen={isLocalMileAccessOpen}
+            onOpenChange={setIsLocalMileAccessOpen}
+            lead={lead}
+            onConfirm={handleLocalMileTrial}
+        />
+    )}
     <MoveLeadDialog
         lead={lead}
         isOpen={isMoveLeadDialogOpen}

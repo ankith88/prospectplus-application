@@ -91,6 +91,7 @@ export interface Contact {
   email: string
   phone: string
   syncedWithNetSuite?: boolean;
+  accessToLocalMile?: 'yes' | 'no';
 }
 
 export interface Address {

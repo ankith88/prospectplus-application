@@ -32,6 +32,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -134,6 +135,7 @@ export default function CheckInPage() {
     const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
     const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+    const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -350,6 +352,19 @@ export default function CheckInPage() {
         }
     };
 
+    const openLocalMileDialog = () => {
+        if (!lead?.contacts || lead.contacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Found',
+                description: 'Please add at least one contact before initiating a LocalMile trial.',
+            });
+            return;
+        }
+        setIsLocalMileAccessOpen(true);
+    };
+
+
     const renderStep = () => {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
@@ -363,7 +378,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} handleLocalMileTrial={handleLocalMileTrial} isLoadingLocalMile={isLoadingLocalMile} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} />;
             default: return null;
         }
     };
@@ -419,6 +434,14 @@ export default function CheckInPage() {
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
                  </LogNoteDialog>
+                  {isLocalMileAccessOpen && (
+                    <LocalMileAccessDialog
+                        isOpen={isLocalMileAccessOpen}
+                        onOpenChange={setIsLocalMileAccessOpen}
+                        lead={lead}
+                        onConfirm={handleLocalMileTrial}
+                    />
+                 )}
             </div>
         </FormProvider>
     );
@@ -490,7 +513,7 @@ const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLog
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void, onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void, onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
     const [editingTitle, setEditingTitle] = useState<{ [key: string]: string }>({});
 
     const handleTitleChange = (contactId: string, value: string) => {
@@ -735,7 +758,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, isLoadingLocalMile, handleLocalMileTrial }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isLoadingLocalMile: boolean; handleLocalMileTrial: () => void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, isLoadingLocalMile, handleOpenLocalMileDialog }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; }) => {
     const handleRepSelection = (repName: string, repUrl: string) => {
         const calendlyUrl = new URL(repUrl);
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
@@ -777,7 +800,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
               <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
                 <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleLocalMileTrial} disabled={isLoadingLocalMile}>
+                <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
                     {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -796,6 +819,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </StepWrapper>
   )
 };
-
-
-
