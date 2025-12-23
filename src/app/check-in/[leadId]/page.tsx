@@ -7,9 +7,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
-import type { Lead, DiscoveryData, Contact } from '@/lib/types';
+import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical } from 'lucide-react';
@@ -694,6 +694,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; }) => {
     const { toast } = useToast();
     const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
+    const router = useRouter();
   
     const handleRepSelection = (repName: string, repUrl: string) => {
         const calendlyUrl = new URL(repUrl);
@@ -707,13 +708,21 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
         try {
             const url = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2304&deploy=1&compid=1048144&ns-at=AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ&leadId=${lead.id}`;
             const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`NetSuite API request failed with status ${response.status}`);
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await updateLeadStatus(lead.id, 'LocalMile Pending');
+                toast({ title: 'Success', description: 'LocalMile free trial has been initiated.' });
+                router.push('/field-sales');
+            } else if (result.message === 'Lead Already Synced to LocalMile') {
+                toast({ variant: 'default', title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+            } else {
+                 throw new Error(result.message || 'NetSuite API request failed.');
             }
-            toast({ title: 'Success', description: 'LocalMile free trial has been initiated in NetSuite.' });
-        } catch (error) {
+        } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not initiate LocalMile free trial.' });
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }

@@ -14,6 +14,7 @@ export type LeadStatus =
   | 'Trialing ShipMate'
   | 'Reschedule'
   | 'Priority Lead'
+  | 'LocalMile Pending'
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 
