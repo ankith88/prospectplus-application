@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -12,7 +11,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,6 +33,7 @@ import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
+import { RevisitDialog } from '@/components/revisit-dialog';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -137,6 +137,7 @@ export default function CheckInPage() {
     const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
     const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
+    const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -211,7 +212,7 @@ export default function CheckInPage() {
             try {
                 const currentData = methods.getValues();
                 if(lead?.id) {
-                    await updateLeadDiscoveryData(lead.id, currentData);
+                    await updateLeadDiscoveryData(lead.id, currentData, false);
                     if (currentStep < TOTAL_STEPS) {
                       toast({ title: "Progress Saved", description: "Your answers have been saved." });
                     }
@@ -222,8 +223,7 @@ export default function CheckInPage() {
                     if (allFieldsValid) {
                         const discoveryData = calculateScoreAndRouting(methods.getValues());
                         setFinalDiscoveryData(discoveryData);
-                        await updateLeadDiscoveryData(lead!.id, discoveryData);
-                        await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
+                        await updateLeadDiscoveryData(lead!.id, discoveryData, true);
                         setCurrentStep(prev => prev + 1); // Go to final actions step
                     } else {
                          toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
@@ -362,6 +362,11 @@ export default function CheckInPage() {
         setIsLocalMileAccessOpen(true);
     };
 
+    const handleRevisitScheduled = () => {
+        setIsRevisitDialogOpen(false);
+        router.push('/field-sales');
+    };
+
 
     const renderStep = () => {
         switch (currentStep) {
@@ -376,7 +381,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} />;
             default: return null;
         }
     };
@@ -440,6 +445,14 @@ export default function CheckInPage() {
                         onConfirm={handleLocalMileTrial}
                     />
                  )}
+                 {isRevisitDialogOpen && (
+                    <RevisitDialog 
+                        isOpen={isRevisitDialogOpen}
+                        onOpenChange={setIsRevisitDialogOpen}
+                        lead={lead}
+                        onRevisitScheduled={handleRevisitScheduled}
+                    />
+                 )}
             </div>
         </FormProvider>
     );
@@ -461,7 +474,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
                     <CardFooter className="flex justify-between items-center gap-2">
                          {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
                          <div className="flex items-center gap-2">
-                            <DropdownMenu>
+                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline"><MoreVertical className="mr-2 h-4 w-4"/>Actions</Button>
                                 </DropdownMenuTrigger>
@@ -752,7 +765,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, isLoadingLocalMile, handleOpenLocalMileDialog }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; }) => {
     const handleRepSelection = (repName: string, repUrl: string) => {
         const calendlyUrl = new URL(repUrl);
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
@@ -815,6 +828,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
                 </div>
@@ -826,6 +840,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
-
-
-    

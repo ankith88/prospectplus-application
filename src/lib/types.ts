@@ -66,6 +66,7 @@ export interface Appointment {
   assignedTo: string;
   appointmentDate?: string;
   appointmentStatus?: AppointmentStatus;
+  revisit?: boolean;
 }
 
 export interface TranscriptAnalysis {
