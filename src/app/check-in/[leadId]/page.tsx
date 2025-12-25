@@ -212,7 +212,10 @@ export default function CheckInPage() {
             try {
                 const currentData = methods.getValues();
                 if(lead?.id) {
-                    await updateLeadDiscoveryData(lead.id, currentData, false);
+                    // Only save to Firebase, don't log activity here
+                    const leadRef = doc(firestore, 'leads', lead.id);
+                    await updateDoc(leadRef, { discoveryData: currentData });
+
                     if (currentStep < TOTAL_STEPS) {
                       toast({ title: "Progress Saved", description: "Your answers have been saved." });
                     }
@@ -223,7 +226,8 @@ export default function CheckInPage() {
                     if (allFieldsValid) {
                         const discoveryData = calculateScoreAndRouting(methods.getValues());
                         setFinalDiscoveryData(discoveryData);
-                        await updateLeadDiscoveryData(lead!.id, discoveryData, true);
+                        await updateLeadDiscoveryData(lead!.id, discoveryData);
+                        await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
                         setCurrentStep(prev => prev + 1); // Go to final actions step
                     } else {
                          toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
@@ -370,14 +374,14 @@ export default function CheckInPage() {
 
     const renderStep = () => {
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 3: return <DiscoveryStep0 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 4: return <DiscoveryStep1 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 5: return <DiscoveryStep2 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
-            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 3: return <DiscoveryStep0 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 4: return <DiscoveryStep1 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 5: return <DiscoveryStep2 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
                 if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
@@ -458,7 +462,7 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
@@ -481,6 +485,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
                                 <DropdownMenuContent>
                                     <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
                                     <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={onOpenRevisitDialog}><History className="mr-2 h-4 w-4"/>Schedule Revisit</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
@@ -492,9 +497,9 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
     );
 };
 
-const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     return (
-        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onBack={() => {}} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onBack={() => {}} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-4">
                  <div className="space-y-2">
                     <Label htmlFor="businessName">Business name</Label>
@@ -520,7 +525,7 @@ const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLog
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate, onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void, onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void, onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const [editingTitle, setEditingTitle] = useState<{ [key: string]: string }>({});
 
     const handleTitleChange = (contactId: string, value: string) => {
@@ -528,7 +533,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
     };
 
     return (
-        <StepWrapper title="Contact Details" description="Confirm you're speaking to the right person or add a new contact." script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Contact Details" description="Confirm you're speaking to the right person or add a new contact." script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-4">
                 <h4 className="font-semibold text-lg">Existing Contacts</h4>
                 <p className="text-sm text-muted-foreground">Select the title of the person you are speaking with.</p>
@@ -595,10 +600,10 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
     );
 };
 
-const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
              <FormField control={control} name="relevanceCheck" render={({ field }) => (
                 <FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes, people do leave the office.</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No, they rarely/never leave.</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
             )}/>
@@ -607,10 +612,10 @@ const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 };
 
 const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
-const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <FormField
                 control={control}
                 name="reasonsToLeave"
@@ -650,11 +655,11 @@ const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 };
 
 
-const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control, watch } = useFormContext();
     const watchLogisticsSetup = watch('logisticsSetup');
     return (
-        <StepWrapper title="Discovery: Logistics" description="Understand their current postage process." script="How do you currently manage your post and parcels? Do you go to the post office, or does someone pick it up?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Discovery: Logistics" description="Understand their current postage process." script="How do you currently manage your post and parcels? Do you go to the post office, or does someone pick it up?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-8">
                 <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
                     <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
@@ -671,10 +676,10 @@ const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 };
 
 const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-8">
                 <FormField control={control} name="shippingVolume" render={({ field }) => (
                     <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
@@ -692,10 +697,10 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
-         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-8">
                 <FormField
                     control={control}
@@ -746,10 +751,10 @@ const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSav
     )
 };
 
-const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; isSaving?: boolean }) => {
+const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
-        <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} isSaving={isSaving}>
+        <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-8">
                 <FormField control={control} name="sameDayCourier" render={({ field }) => (
                     <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
