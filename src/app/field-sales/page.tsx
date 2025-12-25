@@ -17,19 +17,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -58,7 +58,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { startOfWeek, endOfWeek } from 'date-fns'
+import { startOfWeek, endOfWeek, format } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -173,6 +173,7 @@ export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [routeToMove, setRouteToMove] = useState<RouteWithUser | null>(null);
@@ -185,6 +186,8 @@ export default function FieldSalesPage() {
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdatingRoute, setIsUpdatingRoute] = useState<string | null>(null);
+
 
   
   const [filters, setFilters] = useState({
@@ -209,16 +212,18 @@ export default function FieldSalesPage() {
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-        const [leads, activities, users, routes] = await Promise.all([
+        const [leads, activities, users, routes, appointments] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
             getAllUsers(),
             (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
+            getAllAppointments(),
         ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
+        setAllAppointments(appointments);
         if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             setAllRoutes(routes);
         }
@@ -358,6 +363,26 @@ export default function FieldSalesPage() {
         return acc;
     }, {} as Record<string, Record<string, Lead[]>>);
   }, [allLeads, userProfile, filters]);
+  
+  const scheduledRevisits = useMemo(() => {
+    const revisits = allAppointments.filter(appt => appt.revisit);
+    
+    let userRevisits = revisits;
+    // If not an admin, filter to only show revisits for leads assigned to the current user
+    if (userProfile?.role === 'Field Sales') {
+        userRevisits = revisits.filter(appt => {
+            const lead = allLeads.find(l => l.id === appt.leadId);
+            return lead?.dialerAssigned === userProfile.displayName;
+        });
+    }
+
+    return userRevisits
+        .map(appt => {
+            const lead = allLeads.find(l => l.id === appt.leadId);
+            return lead ? { ...appt, lead } : null;
+        })
+        .filter(Boolean) as (Appointment & { lead: Lead })[];
+  }, [allAppointments, allLeads, userProfile]);
 
   const handleLoadRoute = (route: SavedRoute) => {
     const leadIds = route.leads.map(l => l.id);
@@ -470,21 +495,70 @@ export default function FieldSalesPage() {
     }
   };
 
+  const handleAddLeadToRoute = async (leadToAdd: Lead, route: SavedRoute) => {
+    if (!route || !route.id || !userProfile?.uid) return;
+
+    setIsUpdatingRoute(route.id);
+    const updatedLeads = [...route.leads, { id: leadToAdd.id, companyName: leadToAdd.companyName, latitude: leadToAdd.latitude!, longitude: leadToAdd.longitude!, address: leadToAdd.address! }];
+
+    if (updatedLeads.length < 2) {
+      await updateUserRoute(userProfile.uid, route.id, { leads: updatedLeads });
+      setSavedRoutes(prev => prev.map(r => r.id === route.id ? {...r, leads: updatedLeads, directions: null} : r));
+      toast({ title: 'Lead Added', description: 'Route updated. Recalculate directions on map page.' });
+      setIsUpdatingRoute(null);
+      return;
+    }
+
+    const directionsService = new google.maps.DirectionsService();
+    const waypoints = updatedLeads.map(l => ({ location: { lat: l.latitude, lng: l.longitude }, stopover: true }));
+    const origin = route.startPoint ? (await geocodeAddress(route.startPoint)) || waypoints[0].location : waypoints[0].location;
+    const destination = route.endPoint ? (await geocodeAddress(route.endPoint)) || waypoints[waypoints.length-1].location : origin;
+    
+    directionsService.route(
+        {
+            origin,
+            destination,
+            waypoints: waypoints.slice(1,-1),
+            optimizeWaypoints: true,
+            travelMode: route.travelMode!,
+        },
+        async (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK) {
+                await updateUserRoute(userProfile.uid, route.id!, { leads: updatedLeads, directions: JSON.stringify(result) });
+                setSavedRoutes(prev => prev.map(r => r.id === route.id ? {...r, leads: updatedLeads, directions: result} : r));
+                toast({ title: 'Lead Added & Route Updated', description: `Directions for "${route.name}" have been recalculated.` });
+            } else {
+                toast({ variant: 'destructive', title: 'Route Update Failed', description: 'Could not recalculate directions. Lead was added but route needs manual update.' });
+                 await updateUserRoute(userProfile.uid, route.id!, { leads: updatedLeads });
+                 setSavedRoutes(prev => prev.map(r => r.id === route.id ? {...r, leads: updatedLeads, directions: null} : r));
+            }
+            setIsUpdatingRoute(null);
+        }
+    );
+  };
+  
+    const geocodeAddress = useCallback(async (address: string): Promise<google.maps.LatLng | null> => {
+        const geocoder = new window.google.maps.Geocoder();
+        return new Promise((resolve) => {
+            geocoder.geocode({ address, componentRestrictions: { country: 'AU' } }, (results, status) => {
+                if (status === 'OK' && results?.[0]?.geometry.location) {
+                    resolve(results[0].geometry.location);
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+    }, []);
+
+
   const routesToShow = useMemo(() => {
     if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' && userProfile?.uid) {
-        // Create a map of user IDs to display names for quick lookup
         const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
-
-        // Combine routes from different sources, ensuring no duplicates and correct user names
         const allSystemRoutes = new Map<string, RouteWithUser>();
-
-        // Add routes from the global fetch
         allRoutes.forEach(route => {
             const userName = usersMap.get(route.userId) || 'Unknown User';
             allSystemRoutes.set(route.id, { ...route, userName });
         });
-
-        // Add/overwrite with routes from the logged-in admin's auth context to ensure they are up-to-date
         savedRoutes.forEach(route => {
             allSystemRoutes.set(route.id, {
                 ...route,
@@ -492,12 +566,8 @@ export default function FieldSalesPage() {
                 userId: userProfile.uid,
             });
         });
-
-        // Convert map back to an array and sort
         return Array.from(allSystemRoutes.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
-    
-    // For non-admin Field Sales users, just show their own routes
     return savedRoutes.map(r => ({ ...r, userName: userProfile?.displayName || '', userId: userProfile?.uid || '' }));
   }, [userProfile, savedRoutes, allRoutes, allDialers]);
   
@@ -706,6 +776,67 @@ export default function FieldSalesPage() {
             </CollapsibleContent>
         </Card>
       </Collapsible>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Scheduled Revisits</CardTitle>
+                <CardDescription>Upcoming revisits for your leads.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {scheduledRevisits.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Date & Time</TableHead>
+                                <TableHead>Assigned To</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {scheduledRevisits.map(({ lead, ...appt }) => (
+                                <TableRow key={appt.id}>
+                                    <TableCell>
+                                        <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                                            {lead.companyName}
+                                        </Button>
+                                    </TableCell>
+                                    <TableCell>{format(new Date(appt.starttime), 'PPpp')}</TableCell>
+                                    <TableCell>{appt.assignedTo}</TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="outline" size="sm" disabled={isUpdatingRoute === route.id} >
+                                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                                    Add to Route
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent>
+                                                <DropdownMenuSub>
+                                                    <DropdownMenuSubTrigger>Existing Route</DropdownMenuSubTrigger>
+                                                    <DropdownMenuSubContent>
+                                                        {savedRoutes.map(route => (
+                                                            <DropdownMenuItem key={route.id} onSelect={() => handleAddLeadToRoute(lead, route)}>
+                                                                {isUpdatingRoute === route.id ? <Loader /> : route.name}
+                                                            </DropdownMenuItem>
+                                                        ))}
+                                                    </DropdownMenuSubContent>
+                                                </DropdownMenuSub>
+                                                <DropdownMenuItem onClick={() => router.push(`/leads/map?addLead=${lead.id}`)}>
+                                                    New Route
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-center text-muted-foreground py-10">No revisits scheduled.</div>
+                )}
+            </CardContent>
+        </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -984,4 +1115,5 @@ export default function FieldSalesPage() {
     
 
     
+
 
