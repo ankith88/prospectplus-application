@@ -806,7 +806,7 @@ export default function FieldSalesPage() {
                                     <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="outline" size="sm" disabled={isUpdatingRoute === route.id} >
+                                                <Button variant="outline" size="sm">
                                                     <PlusCircle className="mr-2 h-4 w-4" />
                                                     Add to Route
                                                 </Button>
@@ -1115,5 +1115,6 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
