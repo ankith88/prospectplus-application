@@ -35,7 +35,6 @@ import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 
 const services = [
-  { id: 'pickup', label: 'Pickup & Delivery from PO' },
   { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
   { id: 'banking', label: 'Express Banking' },
 ] as const;
