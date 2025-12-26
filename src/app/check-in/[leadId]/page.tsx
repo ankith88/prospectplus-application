@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -34,6 +35,9 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
+import { doc, updateDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
+import { Dialog } from '@/components/ui/dialog';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -431,12 +435,14 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
-                <ServiceSelectionDialog 
-                    isOpen={isServiceSelectionOpen} 
-                    onOpenChange={setIsServiceSelectionOpen}
-                    leadId={lead.id}
-                    mode={serviceSelectionMode}
-                />
+                <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+                  <ServiceSelectionDialog 
+                      isOpen={isServiceSelectionOpen} 
+                      onOpenChange={setIsServiceSelectionOpen}
+                      leadId={lead.id}
+                      mode={serviceSelectionMode}
+                  />
+                </Dialog>
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
@@ -499,7 +505,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
 
 const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     return (
-        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onBack={() => {}} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-4">
                  <div className="space-y-2">
                     <Label htmlFor="businessName">Business name</Label>
@@ -845,3 +851,4 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
