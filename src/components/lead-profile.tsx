@@ -816,20 +816,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const isNormalUser = !isAdmin && !isFieldSales;
 
     const signupButton = (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant={isFieldSales ? "default" : "outline"}>
-                <Briefcase className="mr-2 h-4 w-4" />
-                Signup
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                <DropdownMenuItem>MP Products</DropdownMenuItem>
-                <DropdownMenuItem>LocalMile</DropdownMenuItem>
-                <DropdownMenuItem>All 3</DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+      <Button variant={isFieldSales ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>
+        <Briefcase className="mr-2 h-4 w-4" />
+        Signup
+      </Button>
     );
 
     const freeTrialButton = (
@@ -942,12 +932,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOpenChange={setIsMoveLeadDialogOpen}
         onLeadMoved={() => router.refresh()} // Refresh page data after moving
     />
-    <ServiceSelectionDialog
-        isOpen={isServiceSelectionOpen}
-        onOpenChange={setIsServiceSelectionOpen}
-        leadId={lead.id}
-        mode={serviceSelectionMode}
-    />
+    <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+      <ServiceSelectionDialog
+          isOpen={isServiceSelectionOpen}
+          onOpenChange={setIsServiceSelectionOpen}
+          leadId={lead.id}
+          mode={serviceSelectionMode}
+      />
+    </Dialog>
+
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
       <DialogContent className="max-w-2xl">
           <DialogHeader>
