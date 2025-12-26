@@ -816,7 +816,7 @@ export default function FieldSalesPage() {
                                                     <DropdownMenuSubTrigger>Existing Route</DropdownMenuSubTrigger>
                                                     <DropdownMenuSubContent>
                                                         {savedRoutes.map(route => (
-                                                            <DropdownMenuItem key={route.id} onSelect={() => handleAddLeadToRoute(lead, route)}>
+                                                            <DropdownMenuItem key={route.id} onSelect={() => handleAddLeadToRoute(lead, route)} disabled={isUpdatingRoute === route.id}>
                                                                 {isUpdatingRoute === route.id ? <Loader /> : route.name}
                                                             </DropdownMenuItem>
                                                         ))}
@@ -1115,6 +1115,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
