@@ -227,10 +227,6 @@ export default function CheckInPage() {
                 if(lead?.id) {
                     const leadRef = doc(firestore, 'leads', lead.id);
                     await updateDoc(leadRef, { discoveryData: currentData });
-
-                    if (currentStep < TOTAL_STEPS) {
-                      toast({ title: "Progress Saved", description: "Your answers have been saved." });
-                    }
                 }
                 
                 if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
@@ -249,9 +245,9 @@ export default function CheckInPage() {
                 } else {
                     setCurrentStep(prev => prev + 1);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Failed to save discovery data:", error);
-                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error}` });
+                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
             } finally {
                 setIsSaving(false);
             }
@@ -711,7 +707,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () void; onOpenLogOutcome: () void; onOpenLogNote: () void; onOpenRevisitDialog: () void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -861,5 +857,9 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
 };
 
 
+
+    
+
+    
 
     
