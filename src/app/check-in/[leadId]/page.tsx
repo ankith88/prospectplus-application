@@ -37,7 +37,7 @@ import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -868,3 +868,5 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     
 
     
+
+  
