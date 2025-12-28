@@ -37,7 +37,7 @@ import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -215,8 +215,16 @@ export default function CheckInPage() {
             setIsSaving(true);
             try {
                 const currentData = methods.getValues();
+                
+                // Sanitize undefined values before saving to Firestore
+                if (currentData.otherProvider === undefined) {
+                    currentData.otherProvider = '';
+                }
+                if (currentData.otherECommerceTech === undefined) {
+                    currentData.otherECommerceTech = '';
+                }
+
                 if(lead?.id) {
-                    // Only save to Firebase, don't log activity here
                     const leadRef = doc(firestore, 'leads', lead.id);
                     await updateDoc(leadRef, { discoveryData: currentData });
 
@@ -243,7 +251,7 @@ export default function CheckInPage() {
                 }
             } catch (error) {
                 console.error("Failed to save discovery data:", error);
-                toast({ variant: "destructive", title: "Save Error", description: "Could not save progress. Please try again." });
+                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error}` });
             } finally {
                 setIsSaving(false);
             }
@@ -435,13 +443,13 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
-                <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-                  <ServiceSelectionDialog 
-                      isOpen={isServiceSelectionOpen} 
-                      onOpenChange={setIsServiceSelectionOpen}
-                      leadId={lead.id}
-                      mode={serviceSelectionMode}
-                  />
+                 <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+                    <ServiceSelectionDialog
+                        isOpen={isServiceSelectionOpen}
+                        onOpenChange={setIsServiceSelectionOpen}
+                        leadId={lead.id}
+                        mode={serviceSelectionMode}
+                    />
                 </Dialog>
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
@@ -703,7 +711,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () void; onOpenLogOutcome: () void; onOpenLogNote: () void; onOpenRevisitDialog: () void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -852,3 +860,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
   )
 };
 
+
+
+    
