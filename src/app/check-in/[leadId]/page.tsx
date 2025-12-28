@@ -223,6 +223,9 @@ export default function CheckInPage() {
                 if (currentData.otherECommerceTech === undefined) {
                     currentData.otherECommerceTech = '';
                 }
+                 if (currentData.painPoints === undefined) {
+                    currentData.painPoints = '';
+                }
 
                 if(lead?.id) {
                     const leadRef = doc(firestore, 'leads', lead.id);
@@ -472,7 +475,7 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void, onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
@@ -857,6 +860,8 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
 };
 
 
+
+    
 
     
 
