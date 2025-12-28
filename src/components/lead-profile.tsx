@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -932,14 +933,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onLeadMoved={() => router.refresh()} // Refresh page data after moving
     />
      <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-        <DialogContent>
-             <ServiceSelectionDialog
-                isOpen={isServiceSelectionOpen}
-                onOpenChange={setIsServiceSelectionOpen}
-                leadId={lead.id}
-                mode={serviceSelectionMode}
-            />
-        </DialogContent>
+        <ServiceSelectionDialog
+            isOpen={isServiceSelectionOpen}
+            onOpenChange={setIsServiceSelectionOpen}
+            leadId={lead.id}
+            mode={serviceSelectionMode}
+        />
     </Dialog>
 
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>

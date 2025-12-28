@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -43,9 +44,13 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
         const response = await fetch(url, { method: 'GET' });
 
         if (!response.ok) {
+            if (response.status === 500) {
+                 console.error(`[LocalMile Proxy Error] Status: 500, URL: ${url}`);
+                 return { success: false, message: "Did not Sync with NetSuite" };
+            }
             const errorBody = await response.text();
             console.error(`[LocalMile Proxy Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
-            return { success: false, message: `NetSuite API request failed with status ${response.status}. Message: ${errorBody}` };
+            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
         }
 
         const responseBody = await response.json();
