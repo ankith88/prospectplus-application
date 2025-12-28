@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -746,7 +745,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
-            
+
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
                 toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
@@ -932,13 +931,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOpenChange={setIsMoveLeadDialogOpen}
         onLeadMoved={() => router.refresh()} // Refresh page data after moving
     />
-    <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-      <ServiceSelectionDialog
-          isOpen={isServiceSelectionOpen}
-          onOpenChange={setIsServiceSelectionOpen}
-          leadId={lead.id}
-          mode={serviceSelectionMode}
-      />
+     <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+        <DialogContent>
+             <ServiceSelectionDialog
+                isOpen={isServiceSelectionOpen}
+                onOpenChange={setIsServiceSelectionOpen}
+                leadId={lead.id}
+                mode={serviceSelectionMode}
+            />
+        </DialogContent>
     </Dialog>
 
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
