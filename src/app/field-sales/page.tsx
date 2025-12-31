@@ -306,7 +306,7 @@ export default function FieldSalesPage() {
     
     let leads = allLeads.filter(lead => 
       lead.dialerAssigned === userProfile.displayName &&
-      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won'].includes(lead.status) &&
+      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending'].includes(lead.status) &&
       lead.fieldSales === true
     );
 
@@ -1115,6 +1115,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
