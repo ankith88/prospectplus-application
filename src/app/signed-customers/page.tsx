@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
@@ -884,7 +884,7 @@ export default function SignedCustomersPage() {
         <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="space-y-1">
-                <CardTitle>Customer Map</CardTitle>
+                <CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Customer Map</CardTitle>
                 <CardDescription>Visual representation of your signed customers.</CardDescription>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
