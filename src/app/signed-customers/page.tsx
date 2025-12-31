@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
@@ -30,7 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api'
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, DrawingManagerF } from '@react-google-maps/api'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import {
   Dialog,
@@ -44,7 +44,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CalendarIcon } from 'lucide-react'
+import { Calendar } from '@/components/ui/calendar'
+import { format, startOfDay, endOfDay } from 'date-fns'
+import type { DateRange } from 'react-day-picker'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -73,6 +79,8 @@ export default function SignedCustomersPage() {
   const [filters, setFilters] = useState({
     companyName: '',
     franchisee: [] as string[],
+    prospectedStatus: 'all' as 'all' | 'prospected' | 'not-prospected',
+    prospectedDate: undefined as DateRange | undefined,
   });
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -96,6 +104,10 @@ export default function SignedCustomersPage() {
   const [tableSelectedCompanyIds, setTableSelectedCompanyIds] = useState<string[]>([]);
   const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
+  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
 
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -166,7 +178,12 @@ export default function SignedCustomersPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ companyName: '', franchisee: [] });
+    setFilters({ 
+        companyName: '', 
+        franchisee: [], 
+        prospectedStatus: 'all',
+        prospectedDate: undefined,
+    });
     if (geoSearchInputNodeRef.current) {
         geoSearchInputNodeRef.current.value = '';
     }
@@ -180,9 +197,25 @@ export default function SignedCustomersPage() {
   const filteredCompanies = useMemo(() => {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
+        
         const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        return companyMatch && franchiseeMatch;
+        
+        const prospectedStatusMatch = filters.prospectedStatus === 'all' || 
+                                     (filters.prospectedStatus === 'prospected' && !!item.lastProspected) || 
+                                     (filters.prospectedStatus === 'not-prospected' && !item.lastProspected);
+
+        let prospectedDateMatch = true;
+        if (filters.prospectedDate?.from && item.lastProspected) {
+            const prospectedDate = new Date(item.lastProspected);
+            const fromDate = startOfDay(filters.prospectedDate.from);
+            const toDate = filters.prospectedDate.to ? endOfDay(filters.prospectedDate.to) : endOfDay(filters.prospectedDate.from);
+            prospectedDateMatch = prospectedDate >= fromDate && prospectedDate <= toDate;
+        } else if (filters.prospectedDate?.from) {
+            prospectedDateMatch = false;
+        }
+
+        return companyMatch && franchiseeMatch && prospectedStatusMatch && prospectedDateMatch;
     });
   }, [allMapData, filters]);
 
@@ -701,6 +734,54 @@ export default function SignedCustomersPage() {
            date.getMonth() === today.getMonth() &&
            date.getFullYear() === today.getFullYear();
   };
+  
+    const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
+        const companiesInShape = filteredCompanies.filter(company => {
+            if (company.latitude && company.longitude) {
+                const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+                if (overlay.get('radius')) { // Circle
+                    return google.maps.geometry.spherical.computeDistanceBetween(
+                        (overlay as google.maps.Circle).getCenter()!, 
+                        companyLatLng
+                    ) <= (overlay as google.maps.Circle).getRadius();
+                } else if (overlay.get('bounds')) { // Rectangle
+                    return (overlay as google.maps.Rectangle).getBounds()!.contains(companyLatLng);
+                } else { // Polygon
+                    return google.maps.geometry.poly.containsLocation(companyLatLng, overlay as google.maps.Polygon);
+                }
+            }
+            return false;
+        });
+
+        setMapSelectedCompanyIds(prev => [...new Set([...prev, ...companiesInShape.map(c => c.id)])]);
+        
+        toast({
+          title: `${companiesInShape.length} Companies Added to Selection`,
+          description: "You can continue to select more areas or individual pins.",
+        });
+        
+        (overlay as any).setMap(null);
+        setDrawingMode(null);
+        setIsDrawing(false);
+    };
+
+    const startDrawing = (mode: google.maps.drawing.OverlayType) => {
+        setIsDrawing(true);
+        setDrawingMode(mode);
+        toast({
+            title: "Drawing Mode Activated",
+            description: `Draw a ${mode.toLowerCase()} on the map to select companies. Press Esc or click Cancel to exit.`,
+        });
+    };
+
+    const cancelDrawing = () => {
+        setIsDrawing(false);
+        setDrawingMode(null);
+        if (drawingManagerRef.current) {
+            drawingManagerRef.current.setDrawingMode(null);
+        }
+        toast({ title: "Drawing Mode Canceled" });
+    };
 
   if (loading || authLoading) {
     return (
@@ -710,7 +791,7 @@ export default function SignedCustomersPage() {
     )
   }
   
-  const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || (geoSearchInputNodeRef.current && geoSearchInputNodeRef.current.value !== '');
+  const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || filters.prospectedStatus !== 'all' || !!filters.prospectedDate || (geoSearchInputNodeRef.current && geoSearchInputNodeRef.current.value !== '');
 
   return (
     <>
@@ -749,6 +830,31 @@ export default function SignedCustomersPage() {
                             placeholder="Select franchisees..."
                         />
                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="prospected-status">Prospected Status</Label>
+                        <Select value={filters.prospectedStatus} onValueChange={(value) => handleFilterChange('prospectedStatus', value)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="prospected">Prospected</SelectItem>
+                                <SelectItem value="not-prospected">Not Prospected</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="prospected-date">Prospected Date</Label>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                              <Button id="prospected-date" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {filters.prospectedDate?.from ? (filters.prospectedDate.to ? <>{format(filters.prospectedDate.from, "LLL dd, y")} - {format(filters.prospectedDate.to, "LLL dd, y")}</> : format(filters.prospectedDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar mode="range" selected={filters.prospectedDate} onSelect={(range) => handleFilterChange('prospectedDate', range)} />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="geo-search">Go to Location</Label>
                       <Input
@@ -786,6 +892,20 @@ export default function SignedCustomersPage() {
                     <MousePointerClick className="mr-2 h-4 w-4" />
                     {isMultiSelectMode ? 'Exit Select Mode' : 'Select on Map'}
                  </Button>
+                 <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={isDrawing}>
+                            <PenSquare className="mr-2 h-4 w-4" />
+                            Draw to Select
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
+                    </DropdownMenuContent>
+                 </DropdownMenu>
+                 {isDrawing && (<Button onClick={cancelDrawing} variant="destructive" size="sm"><X className="mr-2 h-4 w-4" />Cancel Draw</Button>)}
                  {mapSelectedCompanyIds.length > 0 && (
                      <Button size="sm" onClick={() => handleBulkFindSimilar(mapSelectedCompanyIds)} disabled={isSearchingNearby}>
                         {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({mapSelectedCompanyIds.length})</span></>}
@@ -803,6 +923,21 @@ export default function SignedCustomersPage() {
                         zoom={4}
                         onLoad={setMap}
                     >
+                        {isDrawing && (
+                            <DrawingManagerF
+                                onLoad={(dm) => (drawingManagerRef.current = dm)}
+                                onCircleComplete={(c) => onDrawingComplete(c)}
+                                onRectangleComplete={(r) => onDrawingComplete(r)}
+                                onPolygonComplete={(p) => onDrawingComplete(p)}
+                                drawingMode={drawingMode}
+                                options={{
+                                    drawingControl: false,
+                                    circleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+                                    rectangleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+                                    polygonOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
+                                }}
+                            />
+                        )}
                         {mapCompanies.map(company => (
                             <MarkerF
                                 key={company.id}
@@ -871,7 +1006,7 @@ export default function SignedCustomersPage() {
                  {tableSelectedCompanyIds.length > 0 && (
                     <Button size="sm" onClick={() => handleBulkFindSimilar(tableSelectedCompanyIds)} disabled={isSearchingNearby}>
                         {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({tableSelectedCompanyIds.length})</span></>}
-                    </Button>
+                     </Button>
                 )}
                 <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={filteredCompanies.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
@@ -1140,5 +1275,7 @@ export default function SignedCustomersPage() {
     </>
   )
 }
+
+    
 
     
