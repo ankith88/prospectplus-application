@@ -232,8 +232,20 @@ export default function SignedCustomersPage() {
     let sortableItems = [...filteredCompanies];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key] || '';
-        const bValue = b[sortConfig.key] || '';
+        let aValue: string | number | undefined;
+        let bValue: string | number | undefined;
+
+        if (sortConfig.key === 'lastProspected') {
+            aValue = a.lastProspected ? new Date(a.lastProspected).getTime() : 0;
+            bValue = b.lastProspected ? new Date(b.lastProspected).getTime() : 0;
+        } else {
+            aValue = a[sortConfig.key as keyof MapLead] as string | number | undefined;
+            bValue = b[sortConfig.key as keyof MapLead] as string | number | undefined;
+        }
+
+        if (aValue === undefined || aValue === '') aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        if (bValue === undefined || bValue === '') bValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
+        
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
@@ -1074,7 +1086,7 @@ export default function SignedCustomersPage() {
                       />
                   </TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">ID{getSortIndicator('entityId')}</Button></TableHead>
-                  <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company Name{getSortIndicator('companyName')}</Button></TableHead>
+                  <TableHead className="max-w-xs"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company Name{getSortIndicator('companyName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('lastProspected')} className="group -ml-4">Last Prospected{getSortIndicator('lastProspected')}</Button></TableHead>
@@ -1097,10 +1109,10 @@ export default function SignedCustomersPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{(lead as any).entityId || 'N/A'}</TableCell>
-                      <TableCell>
-                         <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
-                            <Building className="h-4 w-4" />
-                            {lead.companyName}
+                      <TableCell className="max-w-xs">
+                         <Button variant="link" className="p-0 h-auto flex items-start gap-2 text-left whitespace-normal" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
+                            <Building className="h-4 w-4 mt-1 shrink-0" />
+                            <span>{lead.companyName}</span>
                         </Button>
                       </TableCell>
                       <TableCell>
