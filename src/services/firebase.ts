@@ -180,7 +180,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerSource,
+          campaign: data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
@@ -281,7 +281,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerSource,
+          campaign: data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
@@ -391,7 +391,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerSource,
+          campaign: data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           contactCount: data.contactCount || 0,
@@ -560,7 +560,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
-                campaign: data.customerSource,
+                campaign: data.customerCampaign,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
@@ -1613,7 +1613,7 @@ async function deleteCompany(companyIds: string | string[]): Promise<void> {
 
 async function deleteLeadsByCampaign(campaign: string): Promise<void> {
     try {
-        const q = query(collection(firestore, 'leads'), where('customerSource', '==', campaign));
+        const q = query(collection(firestore, 'leads'), where('customerCampaign', '==', campaign));
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
             console.log(`No leads found for campaign "${campaign}" to delete.`);
@@ -1899,4 +1899,5 @@ export {
     
 
     
+
 
