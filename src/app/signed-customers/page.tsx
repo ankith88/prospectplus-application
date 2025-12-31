@@ -855,19 +855,6 @@ export default function SignedCustomersPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="geo-search">Go to Location</Label>
-                      <Input
-                          id="geo-search"
-                          ref={geoSearchInputRef}
-                          placeholder="Suburb, state, postcode..."
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                            }
-                          }}
-                      />
-                    </div>
                      {hasActiveFilters && (
                         <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
@@ -888,6 +875,18 @@ export default function SignedCustomersPage() {
                 <CardDescription>Visual representation of your signed customers.</CardDescription>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                 <div className="flex-1 min-w-[200px] max-w-xs">
+                     <Input
+                        id="geo-search"
+                        ref={geoSearchInputRef}
+                        placeholder="Go to location..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                          }
+                        }}
+                     />
+                 </div>
                  <Button onClick={() => setIsMultiSelectMode(!isMultiSelectMode)} variant={isMultiSelectMode ? 'secondary' : 'outline'} size="sm">
                     <MousePointerClick className="mr-2 h-4 w-4" />
                     {isMultiSelectMode ? 'Exit Select Mode' : 'Select on Map'}
