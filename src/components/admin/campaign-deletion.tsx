@@ -1,15 +1,8 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,54 +17,51 @@ import { Loader } from '../ui/loader';
 import { getLeadsFromFirebase, deleteLeadsByCampaign } from '@/services/firebase';
 import type { Lead } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2 } from 'lucide-react';
-import { Label } from '../ui/label';
+import { Trash2, Search } from 'lucide-react';
+import { Input } from '../ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import Link from 'next/link';
 
 export function CampaignDeletion() {
-  const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCampaign, setSelectedCampaign] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchedCampaign, setSearchedCampaign] = useState('');
+  const [leadsInCampaign, setLeadsInCampaign] = useState<Lead[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchCampaigns = async () => {
-      setLoading(true);
-      try {
-        const leads = await getLeadsFromFirebase({ summary: true });
-        setAllLeads(leads);
-      } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch lead data.' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCampaigns();
-  }, [toast]);
-  
-  const uniqueCampaigns = useMemo(() => {
-    const campaigns = new Set(allLeads.map(lead => lead.campaign).filter(Boolean));
-    return Array.from(campaigns as string[]);
-  }, [allLeads]);
-  
-  const leadsInSelectedCampaign = useMemo(() => {
-    if (!selectedCampaign) return [];
-    return allLeads.filter(lead => lead.campaign === selectedCampaign);
-  }, [allLeads, selectedCampaign]);
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchTerm) {
+      setLeadsInCampaign([]);
+      setSearchedCampaign('');
+      return;
+    }
+    setLoading(true);
+    try {
+      const allLeads = await getLeadsFromFirebase({ summary: true });
+      const filteredLeads = allLeads.filter(lead => lead.campaign?.toLowerCase() === searchTerm.toLowerCase());
+      setLeadsInCampaign(filteredLeads);
+      setSearchedCampaign(searchTerm);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch lead data.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDelete = async () => {
-    if (!selectedCampaign) return;
+    if (!searchedCampaign) return;
     setIsDeleting(true);
     
     try {
-        await deleteLeadsByCampaign(selectedCampaign);
-        toast({ title: 'Success', description: `All leads from the "${selectedCampaign}" campaign have been deleted.` });
-        // Refetch leads to update counts
-        const leads = await getLeadsFromFirebase({ summary: true });
-        setAllLeads(leads);
-        setSelectedCampaign('');
+        await deleteLeadsByCampaign(searchedCampaign);
+        toast({ title: 'Success', description: `All leads from the "${searchedCampaign}" campaign have been deleted.` });
+        setLeadsInCampaign([]);
+        setSearchedCampaign('');
+        setSearchTerm('');
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not delete leads.' });
     } finally {
@@ -82,38 +72,68 @@ export function CampaignDeletion() {
 
   return (
     <div className="space-y-4">
-        <div className="flex items-end gap-4">
-            <div className="space-y-2 flex-grow max-w-sm">
-                <Label htmlFor="campaign-select">Campaign</Label>
-                <Select
-                    value={selectedCampaign}
-                    onValueChange={setSelectedCampaign}
-                    disabled={loading}
-                >
-                    <SelectTrigger id="campaign-select">
-                        <SelectValue placeholder={loading ? "Loading campaigns..." : "Select a campaign to delete"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {uniqueCampaigns.map(campaign => (
-                            <SelectItem key={campaign} value={campaign}>
-                                {campaign}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+        <form onSubmit={handleSearch} className="flex items-end gap-4">
+            <div className="flex-grow max-w-sm space-y-2">
+                <label htmlFor="campaign-search" className="text-sm font-medium">Campaign Name</label>
+                <Input
+                    id="campaign-search"
+                    placeholder="Enter campaign name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
             </div>
-             <Button
-                variant="destructive"
-                onClick={() => setShowConfirm(true)}
-                disabled={!selectedCampaign || leadsInSelectedCampaign.length === 0}
-            >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete ({leadsInSelectedCampaign.length}) Leads
+            <Button type="submit" disabled={loading}>
+                {loading ? <Loader /> : <><Search className="mr-2 h-4 w-4" /> Search</>}
             </Button>
-        </div>
-        
-        {selectedCampaign && leadsInSelectedCampaign.length === 0 && (
-            <p className="text-sm text-muted-foreground">No leads found in the "{selectedCampaign}" campaign.</p>
+        </form>
+
+        {searchedCampaign && (
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <h3 className="font-semibold">
+                        Found {leadsInCampaign.length} lead(s) in campaign "{searchedCampaign}"
+                    </h3>
+                    {leadsInCampaign.length > 0 && (
+                        <Button
+                            variant="destructive"
+                            onClick={() => setShowConfirm(true)}
+                            disabled={isDeleting}
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete All ({leadsInCampaign.length})
+                        </Button>
+                    )}
+                </div>
+
+                {leadsInCampaign.length > 0 ? (
+                    <div className="rounded-md border max-h-[50vh] overflow-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company Name</TableHead>
+                                    <TableHead>Lead ID</TableHead>
+                                    <TableHead>Status</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {leadsInCampaign.map(lead => (
+                                    <TableRow key={lead.id}>
+                                        <TableCell>
+                                            <Button variant="link" asChild className="p-0 h-auto">
+                                                <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>{lead.id}</TableCell>
+                                        <TableCell>{lead.status}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No leads found matching this campaign name.</p>
+                )}
+            </div>
         )}
 
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
@@ -122,7 +142,7 @@ export function CampaignDeletion() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete{' '}
-              <span className="font-bold">{leadsInSelectedCampaign.length}</span> lead(s) from the campaign "{selectedCampaign}". 
+              <span className="font-bold">{leadsInCampaign.length}</span> lead(s) from the campaign "{searchedCampaign}". 
               This action cannot be undone and will delete all associated sub-collections.
             </AlertDialogDescription>
           </AlertDialogHeader>

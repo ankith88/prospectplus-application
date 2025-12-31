@@ -37,7 +37,7 @@ export default function AdminDataPage() {
        <Card>
         <CardHeader>
           <CardTitle>Bulk Delete by Campaign</CardTitle>
-          <CardDescription>Select a campaign to permanently delete all associated leads. This action is irreversible.</CardDescription>
+          <CardDescription>Enter a campaign name to find and permanently delete all associated leads. This action is irreversible.</CardDescription>
         </CardHeader>
         <CardContent>
           <CampaignDeletion />
