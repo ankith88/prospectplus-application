@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from '@/components/ui/card'
 import {
   Table,
@@ -109,6 +110,9 @@ export default function SignedCustomersPage() {
   const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [companiesPerPage, setCompaniesPerPage] = useState(500);
+
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -175,6 +179,7 @@ export default function SignedCustomersPage() {
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+    setCurrentPage(1);
   };
   
   const clearFilters = () => {
@@ -187,6 +192,7 @@ export default function SignedCustomersPage() {
     if (geoSearchInputNodeRef.current) {
         geoSearchInputNodeRef.current.value = '';
     }
+    setCurrentPage(1);
   };
   
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -219,15 +225,22 @@ export default function SignedCustomersPage() {
     });
   }, [allMapData, filters]);
 
+  const paginatedCompanies = useMemo(() => {
+    const startIndex = (currentPage - 1) * companiesPerPage;
+    return filteredCompanies.slice(startIndex, startIndex + companiesPerPage);
+  }, [filteredCompanies, currentPage, companiesPerPage]);
+
+  const totalPages = Math.ceil(filteredCompanies.length / companiesPerPage);
+
   const mapCompanies = useMemo(() => {
-    return filteredCompanies.filter(
+    return paginatedCompanies.filter(
       (company) =>
         company.latitude != null &&
         company.longitude != null &&
         !isNaN(Number(company.latitude)) &&
         !isNaN(Number(company.longitude))
     );
-  }, [filteredCompanies]);
+  }, [paginatedCompanies]);
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
@@ -718,7 +731,7 @@ export default function SignedCustomersPage() {
   };
   
   const handleSelectAllTable = (checked: boolean) => {
-    setTableSelectedCompanyIds(checked ? filteredCompanies.map(c => c.id) : []);
+    setTableSelectedCompanyIds(checked ? paginatedCompanies.map(c => c.id) : []);
   };
   
   const handleSelectTableCompany = (companyId: string, checked: boolean) => {
@@ -1020,7 +1033,7 @@ export default function SignedCustomersPage() {
                 <TableRow>
                    <TableHead>
                      <Checkbox
-                        checked={tableSelectedCompanyIds.length > 0 && tableSelectedCompanyIds.length === filteredCompanies.length}
+                        checked={paginatedCompanies.length > 0 && tableSelectedCompanyIds.length === paginatedCompanies.length}
                         onCheckedChange={handleSelectAllTable}
                       />
                   </TableHead>
@@ -1038,8 +1051,8 @@ export default function SignedCustomersPage() {
                   <TableRow>
                     <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
-                ) : filteredCompanies.length > 0 ? (
-                  filteredCompanies.map((lead) => (
+                ) : paginatedCompanies.length > 0 ? (
+                  paginatedCompanies.map((lead) => (
                     <TableRow key={lead.id} data-state={tableSelectedCompanyIds.includes(lead.id) && "selected"}>
                       <TableCell>
                         <Checkbox
@@ -1096,10 +1109,55 @@ export default function SignedCustomersPage() {
             </Table>
           </div>
         </CardContent>
+         <CardFooter className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {tableSelectedCompanyIds.length} of {filteredCompanies.length} row(s) selected.
+            </div>
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <p className="text-sm">Rows per page</p>
+                     <Select
+                        value={`${companiesPerPage}`}
+                        onValueChange={(value) => {
+                            setCompaniesPerPage(Number(value));
+                            setCurrentPage(1);
+                        }}
+                    >
+                        <SelectTrigger className="h-8 w-[70px]">
+                            <SelectValue placeholder={companiesPerPage} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {[100, 250, 500].map(size => (
+                                <SelectItem key={size} value={`${size}`}>{size}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="text-sm font-medium">Page {currentPage} of {totalPages}</div>
+                 <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        disabled={currentPage === 1}
+                    >
+                        Previous
+                    </Button>
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        disabled={currentPage === totalPages}
+                    >
+                        Next
+                    </Button>
+                 </div>
+            </div>
+        </CardFooter>
       </Card>
     </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+            <DialogContent className="w-[95vw] md:w-full max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
