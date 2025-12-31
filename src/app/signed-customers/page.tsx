@@ -1100,7 +1100,7 @@ export default function SignedCustomersPage() {
       </Card>
     </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-full">
+            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
@@ -1154,8 +1154,8 @@ export default function SignedCustomersPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Company</TableHead>
-                                    <TableHead className="hidden lg:table-cell">Description</TableHead>
-                                    <TableHead className="hidden sm:table-cell">Address</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Address</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
@@ -1174,7 +1174,7 @@ export default function SignedCustomersPage() {
                                                 </Button>
                                             )}
                                         </TableCell>
-                                        <TableCell className="hidden lg:table-cell">
+                                        <TableCell>
                                                 <div className="flex flex-col items-start max-w-xs">
                                                     <p className="text-sm text-muted-foreground line-clamp-2">
                                                         {prospectInfo.description}
@@ -1182,7 +1182,7 @@ export default function SignedCustomersPage() {
                                                     <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
                                                 </div>
                                         </TableCell>
-                                        <TableCell className="hidden sm:table-cell">{prospectInfo.place.vicinity}</TableCell>
+                                        <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                         <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {prospectInfo.existingLead ? (
@@ -1261,7 +1261,7 @@ export default function SignedCustomersPage() {
                     )}
                      <div className="space-y-2">
                         <Label htmlFor="initial-notes">Initial Notes (Optional)</Label>
-                        <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
+                        <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search for cafes." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
                     </div>
                 </div>
                 <DialogFooter>
