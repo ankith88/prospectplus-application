@@ -1019,7 +1019,7 @@ export default function SignedCustomersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                   <TableHead className="w-12">
+                   <TableHead>
                      <Checkbox
                         checked={tableSelectedCompanyIds.length > 0 && tableSelectedCompanyIds.length === filteredCompanies.length}
                         onCheckedChange={handleSelectAllTable}
@@ -1100,7 +1100,7 @@ export default function SignedCustomersPage() {
       </Card>
     </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+            <DialogContent className="max-w-4xl w-full">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
@@ -1275,7 +1275,3 @@ export default function SignedCustomersPage() {
     </>
   )
 }
-
-    
-
-    
