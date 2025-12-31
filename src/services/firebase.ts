@@ -491,7 +491,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending'];
         
         const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
@@ -1612,6 +1612,25 @@ async function deleteCompany(companyIds: string | string[]): Promise<void> {
     return deleteCollectionItem('companies', companyIds);
 }
 
+async function deleteLeadsByCampaign(campaign: string): Promise<void> {
+    try {
+        const q = query(collection(firestore, 'leads'), where('customerSource', '==', campaign));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            console.log(`No leads found for campaign "${campaign}" to delete.`);
+            return;
+        }
+
+        const leadIds = snapshot.docs.map(doc => doc.id);
+        await deleteCollectionItem('leads', leadIds);
+        
+        console.log(`Successfully deleted ${leadIds.length} leads from campaign "${campaign}".`);
+    } catch (error) {
+        console.error(`Failed to delete leads by campaign "${campaign}":`, error);
+        throw new Error(`Failed to delete leads by campaign in Firebase`);
+    }
+}
+
 async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemIds: string | string[]): Promise<void> {
     const idsToDelete = Array.isArray(itemIds) ? itemIds : [itemIds];
     if (idsToDelete.length === 0) {
@@ -1875,6 +1894,7 @@ export {
     updateUserRoute,
     moveLeadToBucket,
     bulkMoveLeadsToBucket,
+    deleteLeadsByCampaign,
 };
 
     
