@@ -1039,7 +1039,7 @@ export default function SignedCustomersPage() {
                   </TableHead>
                   <TableHead className="hidden md:table-cell">ID</TableHead>
                   <TableHead>Company Name</TableHead>
-                  <TableHead className="hidden lg:table-cell">Franchisee</TableHead>
+                  <TableHead>Franchisee</TableHead>
                   <TableHead className="hidden sm:table-cell">Address</TableHead>
                   <TableHead>Last Prospected</TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
@@ -1067,7 +1067,7 @@ export default function SignedCustomersPage() {
                             {lead.companyName}
                         </Button>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell">
+                      <TableCell>
                         {lead.franchisee || 'N/A'}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
@@ -1332,3 +1332,5 @@ export default function SignedCustomersPage() {
     </>
   )
 }
+
+    
