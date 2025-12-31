@@ -89,7 +89,7 @@ export default function AdminDashboardPage() {
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
 
         // Calculate KPIs
-        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified'].includes(l.status));
+        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified', 'Qualified', 'Pre Qualified', 'LPO Review', 'Trialing ShipMate', 'LocalMile Pending'].includes(l.status));
         const totalLeads = activeLeads.length;
         const activeFieldSalesLeads = activeLeads.filter(l => l.fieldSales === true).length;
         const activeOutboundLeads = activeLeads.filter(l => l.fieldSales !== true).length;
