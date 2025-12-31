@@ -1,6 +1,5 @@
 
-
-"use client"
+'use client'
 
 import {
   Card,
@@ -23,9 +22,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead } from '@/services/firebase'
+import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,6 +44,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -92,6 +92,10 @@ export default function SignedCustomersPage() {
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [campaign, setCampaign] = useState('');
   const [initialNotes, setInitialNotes] = useState('');
+
+  const [tableSelectedCompanyIds, setTableSelectedCompanyIds] = useState<string[]>([]);
+  const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -317,41 +321,84 @@ export default function SignedCustomersPage() {
     }
   }, [map, allMapData, getPlaceDetails, toast]);
 
-  const handleFindSimilar = useCallback(async () => {
-    if (!selectedCompany || !map) return;
-  
-    setIsSearchingNearby(true);
-    toast({ title: "Analyzing Company...", description: "AI is identifying key attributes to find similar prospects." });
-    
-    let searchKeywords: string[] = [];
-  
-    if (selectedCompany.websiteUrl) {
-      try {
-        const prospectResult = await aiProspectWebsiteTool({ 
-          leadId: selectedCompany.id, 
-          websiteUrl: selectedCompany.websiteUrl 
-        });
-        if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
-          searchKeywords = prospectResult.searchKeywords;
+    const handleBulkFindSimilar = useCallback(async (companyIds: string[]) => {
+        if (companyIds.length === 0 || !map) return;
+
+        setIsSearchingNearby(true);
+        toast({ title: "Bulk Analysis Started...", description: `AI is analyzing ${companyIds.length} companies to find prospects.` });
+        
+        let allFoundProspects = new Map<string, ProspectWithLeadInfo>();
+        let updatedCompanyIds: string[] = [];
+
+        for (const companyId of companyIds) {
+            const company = allMapData.find(c => c.id === companyId);
+            if (!company) continue;
+
+            let searchKeywords: string[] = [];
+            if (company.websiteUrl) {
+                try {
+                    const prospectResult = await aiProspectWebsiteTool({ leadId: company.id, websiteUrl: company.websiteUrl });
+                    if (prospectResult.searchKeywords && prospectResult.searchKeywords.length > 0) {
+                        searchKeywords = prospectResult.searchKeywords;
+                    }
+                } catch (e) {
+                    console.warn(`AI keyword extraction failed for ${company.companyName}.`);
+                }
+            }
+
+            if (searchKeywords.length === 0 && company.industryCategory) {
+                searchKeywords = [company.industryCategory];
+            }
+
+            if (searchKeywords.length > 0 && company.latitude && company.longitude) {
+                // Mocking the result of findProspects for bulk operation
+                 await new Promise<void>(resolve => {
+                    const placesService = new window.google.maps.places.PlacesService(map);
+                    const request: google.maps.places.PlaceSearchRequest = {
+                        location: { lat: company.latitude!, lng: company.longitude! },
+                        radius: 2000,
+                        keyword: searchKeywords.join(' '),
+                    };
+                    placesService.nearbySearch(request, async (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                             const prospectPromises = results.map(async (place) => {
+                                if (!place.place_id || allFoundProspects.has(place.place_id)) return null;
+                                const isDuplicate = allMapData.some(existing => existing.companyName.toLowerCase() === place.name?.toLowerCase());
+                                if (isDuplicate) return null;
+                                const detailedPlace = await getPlaceDetails(place.place_id);
+                                return { place: detailedPlace, existingLead: undefined, classification: 'B2B', description: 'Bulk search result' } as ProspectWithLeadInfo;
+                            });
+                            const newProspects = (await Promise.all(prospectPromises)).filter(p => p);
+                            newProspects.forEach(p => p && allFoundProspects.set(p.place.place_id!, p));
+                        }
+                        resolve();
+                    });
+                });
+            }
+             await updateLeadDetails(company.id, company, { lastProspected: new Date().toISOString() });
+             updatedCompanyIds.push(company.id);
         }
-      } catch (e) {
-        console.error('AI prospecting for keywords failed, falling back.', e);
-      }
-    }
+        
+        setAllMapData(prev => prev.map(c => updatedCompanyIds.includes(c.id) ? { ...c, lastProspected: new Date().toISOString() } : c));
+        
+        const finalProspects = Array.from(allFoundProspects.values());
+        setProspects(finalProspects);
+        setIsSearchingNearby(false);
+
+        if (finalProspects.length > 0) {
+            setIsProspectsDialogOpen(true);
+        } else {
+            toast({ variant: "destructive", title: "Bulk Search Complete", description: "No new unique prospects found." });
+        }
+        setTableSelectedCompanyIds([]);
+        setMapSelectedCompanyIds([]);
+    }, [map, allMapData, getPlaceDetails, toast]);
   
-    if (searchKeywords.length === 0 && selectedCompany.industryCategory) {
-      searchKeywords = [selectedCompany.industryCategory];
-    }
-  
-    if (searchKeywords.length === 0) {
-      toast({ variant: "destructive", title: "Cannot Search", description: "No industry or keywords available for this company." });
-      setIsSearchingNearby(false);
-      return;
-    }
-    
-    findProspects({ lat: selectedCompany.latitude!, lng: selectedCompany.longitude! }, searchKeywords.join(' '));
+  const handleFindSimilar = useCallback(async () => {
+    if (!selectedCompany) return;
+    await handleBulkFindSimilar([selectedCompany.id]);
     setSelectedCompany(null);
-  }, [selectedCompany, map, toast, findProspects]);
+  }, [selectedCompany, handleBulkFindSimilar]);
 
   const handleFindMultiSites = useCallback(() => {
     if (!selectedCompany) return;
@@ -405,7 +452,7 @@ export default function SignedCustomersPage() {
       return;
     }
 
-    const headers = ['ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone'];
+    const headers = ['ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone', 'Last Prospected'];
     const rows = filteredCompanies.map(lead => {
       return [
         escapeCsvCell((lead as any).entityId || 'N/A'),
@@ -414,6 +461,7 @@ export default function SignedCustomersPage() {
         escapeCsvCell(formatAddress(lead.address)),
         escapeCsvCell(lead.customerServiceEmail || 'N/A'),
         escapeCsvCell(lead.customerPhone || 'N/A'),
+        escapeCsvCell(lead.lastProspected ? new Date(lead.lastProspected).toLocaleDateString() : 'N/A'),
       ];
     });
 
@@ -435,8 +483,16 @@ export default function SignedCustomersPage() {
   }
   
   const onMarkerClick = useCallback((company: MapLead) => {
-    setSelectedCompany(company);
-  }, []);
+      if (isMultiSelectMode) {
+        setMapSelectedCompanyIds(prev =>
+            prev.includes(company.id)
+                ? prev.filter(id => id !== company.id)
+                : [...prev, company.id]
+        );
+      } else {
+        setSelectedCompany(company);
+      }
+  }, [isMultiSelectMode]);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedCompany(null);
@@ -627,6 +683,24 @@ export default function SignedCustomersPage() {
         setCampaign('');
     }
   };
+  
+  const handleSelectAllTable = (checked: boolean) => {
+    setTableSelectedCompanyIds(checked ? filteredCompanies.map(c => c.id) : []);
+  };
+  
+  const handleSelectTableCompany = (companyId: string, checked: boolean) => {
+    setTableSelectedCompanyIds(prev => 
+      checked ? [...prev, companyId] : prev.filter(id => id !== companyId)
+    );
+  };
+  
+  const isToday = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
 
   if (loading || authLoading) {
     return (
@@ -702,8 +776,23 @@ export default function SignedCustomersPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Customer Map</CardTitle>
-            <CardDescription>Visual representation of your signed customers.</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="space-y-1">
+                <CardTitle>Customer Map</CardTitle>
+                <CardDescription>Visual representation of your signed customers.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                 <Button onClick={() => setIsMultiSelectMode(!isMultiSelectMode)} variant={isMultiSelectMode ? 'secondary' : 'outline'} size="sm">
+                    <MousePointerClick className="mr-2 h-4 w-4" />
+                    {isMultiSelectMode ? 'Exit Select Mode' : 'Select on Map'}
+                 </Button>
+                 {mapSelectedCompanyIds.length > 0 && (
+                     <Button size="sm" onClick={() => handleBulkFindSimilar(mapSelectedCompanyIds)} disabled={isSearchingNearby}>
+                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({mapSelectedCompanyIds.length})</span></>}
+                     </Button>
+                 )}
+              </div>
+            </div>
         </CardHeader>
         <CardContent>
             <div style={{ height: '500px', width: '100%' }}>
@@ -720,7 +809,9 @@ export default function SignedCustomersPage() {
                                 position={{ lat: Number(company.latitude!), lng: Number(company.longitude!) }}
                                 onClick={() => onMarkerClick(company)}
                                 icon={{
-                                    url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                                    url: isMultiSelectMode && mapSelectedCompanyIds.includes(company.id)
+                                        ? 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png'
+                                        : 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
                                 }}
                             />
                         ))}
@@ -732,6 +823,12 @@ export default function SignedCustomersPage() {
                             >
                                 <div className="p-2 max-w-xs space-y-2">
                                     <h3 className="font-bold text-lg">{selectedCompany.companyName}</h3>
+                                    {selectedCompany.lastProspected && (
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-secondary rounded-md">
+                                            <Sparkles className="h-4 w-4 text-amber-500" />
+                                            <span>Last prospected: {new Date(selectedCompany.lastProspected).toLocaleDateString()}</span>
+                                        </div>
+                                    )}
                                     <p className="text-sm text-muted-foreground">{formatAddress(selectedCompany.address)}</p>
                                     <div className="flex flex-col gap-2">
                                         <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
@@ -740,7 +837,7 @@ export default function SignedCustomersPage() {
                                         <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
-                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
+                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || (selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
                                             {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
                                             {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>
@@ -762,7 +859,7 @@ export default function SignedCustomersPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
                 <CardTitle className="flex items-center gap-2">
                   <Star className="h-5 w-5" />
@@ -770,20 +867,34 @@ export default function SignedCustomersPage() {
                 </CardTitle>
                 <Badge variant="secondary">{filteredCompanies.length} customer(s)</Badge>
             </div>
-            <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={filteredCompanies.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
-                Export
-            </Button>
+            <div className="flex items-center gap-2">
+                 {tableSelectedCompanyIds.length > 0 && (
+                    <Button size="sm" onClick={() => handleBulkFindSimilar(tableSelectedCompanyIds)} disabled={isSearchingNearby}>
+                        {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({tableSelectedCompanyIds.length})</span></>}
+                    </Button>
+                )}
+                <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={filteredCompanies.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                   <TableHead className="w-12">
+                     <Checkbox
+                        checked={tableSelectedCompanyIds.length > 0 && tableSelectedCompanyIds.length === filteredCompanies.length}
+                        onCheckedChange={handleSelectAllTable}
+                      />
+                  </TableHead>
                   <TableHead className="hidden md:table-cell">ID</TableHead>
                   <TableHead>Company Name</TableHead>
                   <TableHead className="hidden lg:table-cell">Franchisee</TableHead>
                   <TableHead className="hidden sm:table-cell">Address</TableHead>
+                  <TableHead>Last Prospected</TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
                   <TableHead className="hidden md:table-cell">Phone</TableHead>
                 </TableRow>
@@ -791,11 +902,17 @@ export default function SignedCustomersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : filteredCompanies.length > 0 ? (
                   filteredCompanies.map((lead) => (
-                    <TableRow key={lead.id}>
+                    <TableRow key={lead.id} data-state={tableSelectedCompanyIds.includes(lead.id) && "selected"}>
+                      <TableCell>
+                        <Checkbox
+                          checked={tableSelectedCompanyIds.includes(lead.id)}
+                          onCheckedChange={(checked) => handleSelectTableCompany(lead.id, !!checked)}
+                        />
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">{(lead as any).entityId || 'N/A'}</TableCell>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
@@ -812,6 +929,14 @@ export default function SignedCustomersPage() {
                             <span>{formatAddress(lead.address)}</span>
                         </div>
                       </TableCell>
+                       <TableCell>
+                         {lead.lastProspected ? (
+                           <div className="flex items-center gap-2 text-sm">
+                             <Sparkles className="h-4 w-4 text-amber-500" />
+                             {new Date(lead.lastProspected).toLocaleDateString()}
+                           </div>
+                         ) : 'N/A'}
+                       </TableCell>
                        <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
@@ -828,7 +953,7 @@ export default function SignedCustomersPage() {
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>
@@ -1015,3 +1140,5 @@ export default function SignedCustomersPage() {
     </>
   )
 }
+
+    

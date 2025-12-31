@@ -1089,7 +1089,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 async function updateLeadDetails(
   leadId: string,
   oldLead: Lead,
-  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address'>>
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected'>>
 ): Promise<void> {
     try {
         const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
@@ -1125,7 +1125,7 @@ async function updateLeadDetails(
                     };
                 }
                 
-                if (collectionName === 'leads' && newLeadData.lastProspected) {
+                if (newLeadData.lastProspected) {
                     updatePayload.lastProspected = newLeadData.lastProspected;
                 }
 
@@ -1876,5 +1876,7 @@ export {
     moveLeadToBucket,
     bulkMoveLeadsToBucket,
 };
+
+    
 
     
