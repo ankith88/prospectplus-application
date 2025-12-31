@@ -140,13 +140,19 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
              </>
         )}
       </div>
+      
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-muted-foreground">
+            Showing {Math.min(50, filteredItems.length)} of {filteredItems.length} records.
+        </div>
+        {selectedItems.length > 0 && (
+          <Button variant="destructive" onClick={() => setShowConfirm(true)}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Selected ({selectedItems.length})
+          </Button>
+        )}
+      </div>
 
-       {selectedItems.length > 0 && (
-        <Button variant="destructive" onClick={() => setShowConfirm(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected ({selectedItems.length})
-        </Button>
-      )}
 
       <div className="rounded-md border">
         <Table>

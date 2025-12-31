@@ -30,6 +30,7 @@ export function ActivitySearchDeletion() {
   const [activities, setActivities] = useState<ActivityWithLeadId[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -39,6 +40,7 @@ export function ActivitySearchDeletion() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasSearched(true);
     if (!debouncedSearchTerm) {
       setActivities([]);
       return;
@@ -115,12 +117,19 @@ export function ActivitySearchDeletion() {
         </Button>
       </form>
       
-      {selectedActivities.length > 0 && (
-        <Button variant="destructive" onClick={() => setShowConfirm(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected ({selectedActivities.length})
-        </Button>
-      )}
+      <div className="flex justify-between items-center">
+        {hasSearched && (
+            <div className="text-sm text-muted-foreground">
+                Found {activities.length} matching activities.
+            </div>
+        )}
+        {selectedActivities.length > 0 && (
+            <Button variant="destructive" onClick={() => setShowConfirm(true)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Selected ({selectedActivities.length})
+            </Button>
+        )}
+      </div>
 
       <div className="rounded-md border">
         <Table>
@@ -139,7 +148,7 @@ export function ActivitySearchDeletion() {
               <TableRow>
                 <TableCell colSpan={4} className="text-center"><Loader /></TableCell>
               </TableRow>
-            ) : activities.length > 0 ? (
+            ) : hasSearched && activities.length > 0 ? (
               activities.map((activity) => (
                 <TableRow key={activity.id} data-state={selectedActivities.includes(`${activity.leadId}|${activity.id}`) && "selected"}>
                   <TableCell>
@@ -160,7 +169,7 @@ export function ActivitySearchDeletion() {
             ) : (
               <TableRow>
                 <TableCell colSpan={4} className="h-24 text-center">
-                  No results found.
+                  {hasSearched ? "No results found." : "Enter a search term to begin."}
                 </TableCell>
               </TableRow>
             )}
