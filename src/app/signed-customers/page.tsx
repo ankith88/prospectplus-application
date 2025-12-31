@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
@@ -61,6 +61,8 @@ type ProspectWithLeadInfo = {
     description?: string;
 };
 
+type SortableCompanyKeys = 'entityId' | 'companyName' | 'franchisee' | 'lastProspected';
+
 const containerStyle = {
   width: '100%',
   height: '500px',
@@ -83,6 +85,7 @@ export default function SignedCustomersPage() {
     prospectedStatus: 'all' as 'all' | 'prospected' | 'not-prospected',
     prospectedDate: undefined as DateRange | undefined,
   });
+  const [sortConfig, setSortConfig] = useState<{ key: SortableCompanyKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -224,13 +227,46 @@ export default function SignedCustomersPage() {
         return companyMatch && franchiseeMatch && prospectedStatusMatch && prospectedDateMatch;
     });
   }, [allMapData, filters]);
+  
+  const sortedCompanies = useMemo(() => {
+    let sortableItems = [...filteredCompanies];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = a[sortConfig.key] || '';
+        const bValue = b[sortConfig.key] || '';
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredCompanies, sortConfig]);
+
+  const requestSort = (key: SortableCompanyKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (key: SortableCompanyKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
 
   const paginatedCompanies = useMemo(() => {
     const startIndex = (currentPage - 1) * companiesPerPage;
-    return filteredCompanies.slice(startIndex, startIndex + companiesPerPage);
-  }, [filteredCompanies, currentPage, companiesPerPage]);
+    return sortedCompanies.slice(startIndex, startIndex + companiesPerPage);
+  }, [sortedCompanies, currentPage, companiesPerPage]);
 
-  const totalPages = Math.ceil(filteredCompanies.length / companiesPerPage);
+  const totalPages = Math.ceil(sortedCompanies.length / companiesPerPage);
 
   const mapCompanies = useMemo(() => {
     return paginatedCompanies.filter(
@@ -493,13 +529,13 @@ export default function SignedCustomersPage() {
   };
   
     const handleExportCompanies = () => {
-    if (filteredCompanies.length === 0) {
+    if (sortedCompanies.length === 0) {
       toast({ variant: 'destructive', title: 'No Data', description: 'There are no signed customers to export.' });
       return;
     }
 
     const headers = ['ID', 'Company Name', 'Franchisee', 'Address', 'Email', 'Phone', 'Last Prospected'];
-    const rows = filteredCompanies.map(lead => {
+    const rows = sortedCompanies.map(lead => {
       return [
         escapeCsvCell((lead as any).entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
@@ -1012,7 +1048,7 @@ export default function SignedCustomersPage() {
                   <Star className="h-5 w-5" />
                   <span>All Signed Customers</span>
                 </CardTitle>
-                <Badge variant="secondary">{filteredCompanies.length} customer(s)</Badge>
+                <Badge variant="secondary">{sortedCompanies.length} customer(s)</Badge>
             </div>
             <div className="flex items-center gap-2">
                  {tableSelectedCompanyIds.length > 0 && (
@@ -1020,7 +1056,7 @@ export default function SignedCustomersPage() {
                         {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({tableSelectedCompanyIds.length})</span></>}
                      </Button>
                 )}
-                <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={filteredCompanies.length === 0}>
+                <Button onClick={handleExportCompanies} variant="outline" size="sm" disabled={sortedCompanies.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export
                 </Button>
@@ -1037,11 +1073,11 @@ export default function SignedCustomersPage() {
                         onCheckedChange={handleSelectAllTable}
                       />
                   </TableHead>
-                  <TableHead className="hidden md:table-cell">ID</TableHead>
-                  <TableHead>Company Name</TableHead>
-                  <TableHead>Franchisee</TableHead>
-                  <TableHead className="hidden sm:table-cell">Address</TableHead>
-                  <TableHead>Last Prospected</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">ID{getSortIndicator('entityId')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company Name{getSortIndicator('companyName')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('lastProspected')} className="group -ml-4">Last Prospected{getSortIndicator('lastProspected')}</Button></TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
                   <TableHead className="hidden md:table-cell">Phone</TableHead>
                 </TableRow>
@@ -1060,7 +1096,7 @@ export default function SignedCustomersPage() {
                           onCheckedChange={(checked) => handleSelectTableCompany(lead.id, !!checked)}
                         />
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">{(lead as any).entityId || 'N/A'}</TableCell>
+                      <TableCell className="font-medium">{(lead as any).entityId || 'N/A'}</TableCell>
                       <TableCell>
                          <Button variant="link" className="p-0 h-auto flex items-center gap-2 text-left" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
                             <Building className="h-4 w-4" />
@@ -1070,7 +1106,7 @@ export default function SignedCustomersPage() {
                       <TableCell>
                         {lead.franchisee || 'N/A'}
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell">
+                      <TableCell>
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
                             <span>{formatAddress(lead.address)}</span>
@@ -1111,7 +1147,7 @@ export default function SignedCustomersPage() {
         </CardContent>
          <CardFooter className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              {tableSelectedCompanyIds.length} of {filteredCompanies.length} row(s) selected.
+              {tableSelectedCompanyIds.length} of {sortedCompanies.length} row(s) selected.
             </div>
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -1332,5 +1368,3 @@ export default function SignedCustomersPage() {
     </>
   )
 }
-
-    
