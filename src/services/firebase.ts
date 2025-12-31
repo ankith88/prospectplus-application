@@ -193,6 +193,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           fieldSales: data.fieldSales,
           invoices: [],
           services: data.services || [],
+          lastProspected: data.lastProspected,
         };
 
         if (includeSubCollections) {
@@ -292,6 +293,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
           services: data.services || [],
+          lastProspected: data.lastProspected,
         };
         
         if (includeSubCollections) {
@@ -402,6 +404,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
           services: data.services || [],
+          lastProspected: data.lastProspected,
         };
 
         return transformedLead;
@@ -468,6 +471,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     customerPhone: data.customerPhone,
                     fieldSales: data.fieldSales,
                     services: data.services || [],
+                    lastProspected: data.lastProspected,
                 };
 
                 return transformedCompany;
@@ -516,6 +520,7 @@ async function getArchivedLeads(): Promise<Lead[]> {
                     discoveryData: data.discoveryData,
                     fieldSales: data.fieldSales,
                     services: data.services || [],
+                    lastProspected: data.lastProspected,
                 };
                 
                 const lastActivity = await getLastActivity(doc.id);
@@ -561,7 +566,8 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
                 fieldSales: data.fieldSales,
-                activity: []
+                activity: [],
+                lastProspected: data.lastProspected,
             } as Lead;
         });
 
@@ -1080,44 +1086,62 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
   }
 }
 
-async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address'>>): Promise<void> {
+async function updateLeadDetails(
+  leadId: string,
+  oldLead: Lead,
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address'>>
+): Promise<void> {
     try {
-        const leadRef = doc(firestore, 'leads', leadId);
-        
-        const updatePayload: { [key: string]: any } = {};
-        if (newLeadData.companyName !== undefined) updatePayload.companyName = newLeadData.companyName;
-        if (newLeadData.customerServiceEmail !== undefined) updatePayload.customerServiceEmail = newLeadData.customerServiceEmail;
-        if (newLeadData.address) {
-            updatePayload.address = {
-                address1: newLeadData.address.address1 || '',
-                street: newLeadData.address.street || '',
-                city: newLeadData.address.city || '',
-                state: newLeadData.address.state || '',
-                zip: newLeadData.address.zip || '',
-                country: newLeadData.address.country || '',
-            };
-        }
+        const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
 
-        if (Object.keys(updatePayload).length > 0) {
-            await updateDoc(leadRef, updatePayload);
-        }
+        const batch = writeBatch(firestore);
 
         const changes: string[] = [];
-        if (newLeadData.companyName && newLeadData.companyName !== oldLead.companyName) {
-            changes.push(`Company name changed from "${oldLead.companyName}" to "${newLeadData.companyName}".`);
+        if (newLeadData.companyName !== undefined && newLeadData.companyName !== oldLead.companyName) {
+            changes.push(`Company name changed to "${newLeadData.companyName}".`);
         }
-        if (newLeadData.customerServiceEmail && newLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
-            changes.push(`Email changed from "${oldLead.customerServiceEmail || 'N/A'}" to "${newLeadData.customerServiceEmail}".`);
+        if (newLeadData.customerServiceEmail !== undefined && newLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
+            changes.push(`Email changed to "${newLeadData.customerServiceEmail}".`);
         }
         if (newLeadData.address) {
             changes.push('Address updated.');
         }
 
+        for (const collectionName of collectionsToUpdate) {
+            const leadRef = doc(firestore, collectionName, leadId);
+            const leadDoc = await getDoc(leadRef);
+            if(leadDoc.exists()) {
+                const updatePayload: { [key: string]: any } = {};
+                if (newLeadData.companyName !== undefined) updatePayload.companyName = newLeadData.companyName;
+                if (newLeadData.customerServiceEmail !== undefined) updatePayload.customerServiceEmail = newLeadData.customerServiceEmail;
+                if (newLeadData.address) {
+                    updatePayload.address = {
+                        address1: newLeadData.address.address1 || '',
+                        street: newLeadData.address.street || '',
+                        city: newLeadData.address.city || '',
+                        state: newLeadData.address.state || '',
+                        zip: newLeadData.address.zip || '',
+                        country: newLeadData.address.country || '',
+                    };
+                }
+                
+                if (collectionName === 'leads' && newLeadData.lastProspected) {
+                    updatePayload.lastProspected = newLeadData.lastProspected;
+                }
+
+                if (Object.keys(updatePayload).length > 0) {
+                    batch.update(leadRef, updatePayload);
+                }
+            }
+        }
+        
         if (changes.length > 0) {
             await logActivity(leadId, { type: 'Update', notes: changes.join(' ') });
         }
+
+        await batch.commit();
         
-        console.log(`Lead ${leadId} details updated.`);
+        console.log(`Lead ${leadId} details updated across relevant collections.`);
     } catch (error) {
         console.error(`Failed to update lead details for ${leadId}:`, error);
         throw new Error('Failed to update lead details in Firebase');

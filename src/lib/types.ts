@@ -140,7 +140,7 @@ export interface Invoice {
 }
 
 export interface ServiceSelection {
-    name: 'Pickup & Delivery from PO' | 'Outgoing Mail Lodgement' | 'Express Banking';
+    name: 'Outgoing Mail Lodgement' | 'Express Banking';
     frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
     trialStartDate?: string;
     trialEndDate?: string;
@@ -186,6 +186,7 @@ export interface Lead {
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
   initialNotes?: string;
+  lastProspected?: string;
 }
 
 export interface UserProfile {
@@ -200,7 +201,7 @@ export interface UserProfile {
     disabled?: boolean;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales'> & { isProspect?: boolean, isCompany?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales' | 'lastProspected'> & { isProspect?: boolean, isCompany?: boolean };
 
 export type StorableRoute = {
     id?: string;
