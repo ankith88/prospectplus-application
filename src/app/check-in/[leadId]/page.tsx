@@ -386,7 +386,8 @@ export default function CheckInPage() {
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
-                toast({ title: 'Success!', description: 'MP Products free trial has been initiated.' });
+                await updateLeadStatus(lead.id, 'Trialing ShipMate');
+                toast({ title: 'Success!', description: 'MP Products free trial has been initiated and lead status updated.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
@@ -893,3 +894,4 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     
 
   
+
