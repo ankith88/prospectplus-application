@@ -1,5 +1,3 @@
-
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -134,6 +132,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Label } from './ui/label'
 import { LocalMileAccessDialog } from './localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
+import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
 
 
 interface LeadProfileProps {
@@ -296,7 +295,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
-  const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
+  const [isLoadingMPProducts, setIsLoadingMPProducts] = useState(false);
 
 
   const router = useRouter();
@@ -777,6 +776,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsLocalMileAccessOpen(true);
     };
 
+    const handleMPProductsTrial = async () => {
+        if (!lead) return;
+        setIsLoadingMPProducts(true);
+        toast({ title: 'Processing...', description: 'Initiating MP Products free trial.' });
+        try {
+            const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
+            if (responseBody.success) {
+                toast({ title: 'Success!', description: 'MP Products free trial has been initiated.' });
+            } else {
+                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+            }
+        } catch (error: any) {
+            console.error('MP Products free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate MP Products free trial.' });
+        } finally {
+            setIsLoadingMPProducts(false);
+        }
+    };
+
 
   if (!lead || !user) {
     return (
@@ -832,7 +850,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                <DropdownMenuItem>MP Products</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleMPProductsTrial} disabled={isLoadingMPProducts}>
+                  {isLoadingMPProducts ? <Loader /> : 'MP Products'}
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={openLocalMileDialog} disabled={isLoadingLocalMile}>
                     {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
                 </DropdownMenuItem>

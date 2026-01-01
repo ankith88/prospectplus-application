@@ -34,6 +34,7 @@ import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
+import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -149,6 +150,7 @@ export default function CheckInPage() {
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
     const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
+    const [isLoadingMPProducts, setIsLoadingMPProducts] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -377,6 +379,25 @@ export default function CheckInPage() {
         setIsLocalMileAccessOpen(true);
     };
 
+    const handleMPProductsTrial = async () => {
+        if (!lead) return;
+        setIsLoadingMPProducts(true);
+        toast({ title: 'Processing...', description: 'Initiating MP Products free trial.' });
+        try {
+            const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
+            if (responseBody.success) {
+                toast({ title: 'Success!', description: 'MP Products free trial has been initiated.' });
+            } else {
+                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+            }
+        } catch (error: any) {
+            console.error('MP Products free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate MP Products free trial.' });
+        } finally {
+            setIsLoadingMPProducts(false);
+        }
+    };
+
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
         router.push('/field-sales');
@@ -394,9 +415,9 @@ export default function CheckInPage() {
             case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
-                if (type === 'free-trial') { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }
-                if (type === 'signup') { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} />;
+                setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
+                setIsServiceSelectionOpen(true);
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} handleMPProductsTrial={handleMPProductsTrial} isLoadingMPProducts={isLoadingMPProducts} />;
             default: return null;
         }
     };
@@ -712,7 +733,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void, onBack: () => void, onOpenLogOutcome: () => void, onOpenLogNote: () => void, onOpenRevisitDialog: () => void, isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -785,7 +806,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog, isLoadingMPProducts, handleMPProductsTrial }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; isLoadingMPProducts: boolean; handleMPProductsTrial: () => void; }) => {
     const handleRepSelection = (repName: string, repUrl: string) => {
         const calendlyUrl = new URL(repUrl);
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
@@ -832,7 +853,9 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem>MP Products</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleMPProductsTrial} disabled={isLoadingMPProducts}>
+                            {isLoadingMPProducts ? <Loader /> : 'MP Products'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
                             {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
                         </DropdownMenuItem>
