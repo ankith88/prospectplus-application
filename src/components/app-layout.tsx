@@ -368,7 +368,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
         </div>
         <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
-          2025 MailPlus Pty. Ltd. All rights reserved.
+          {new Date().getFullYear()} MailPlus Pty. Ltd. All rights reserved.
         </footer>
       </SidebarInset>
     </>
