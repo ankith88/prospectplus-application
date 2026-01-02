@@ -252,7 +252,7 @@ export default function CheckInPage() {
                 }
             } catch (error: any) {
                 console.error("Failed to save discovery data:", error);
-                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
+                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${''error.message}` });
             } finally {
                 setIsSaving(false);
             }
@@ -324,7 +324,7 @@ export default function CheckInPage() {
             }
             if (result.contacts && result.contacts.length > 0) {
                 setContacts(prev => [...prev, ...result.contacts!]);
-                toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
+                toast({ title: "Success", description: `${''result.contacts.length} new contact(s) found and saved.` });
             } else {
                 toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
             }
@@ -382,18 +382,18 @@ export default function CheckInPage() {
     const handleMPProductsTrial = async () => {
         if (!lead) return;
         setIsLoadingMPProducts(true);
-        toast({ title: 'Processing...', description: 'Initiating MP Products free trial.' });
+        toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast({ title: 'Success!', description: 'MP Products free trial has been initiated and lead status updated.' });
+                toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
-            console.error('MP Products free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate MP Products free trial.' });
+            console.error('ShipMate free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
         } finally {
             setIsLoadingMPProducts(false);
         }
@@ -855,7 +855,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
                         <DropdownMenuItem onSelect={handleMPProductsTrial} disabled={isLoadingMPProducts}>
-                            {isLoadingMPProducts ? <Loader /> : 'MP Products'}
+                            {isLoadingMPProducts ? <Loader /> : 'ShipMate'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
                             {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
@@ -894,4 +894,5 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     
 
   
+
 

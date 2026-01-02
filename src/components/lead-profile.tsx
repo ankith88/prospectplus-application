@@ -1,3 +1,5 @@
+
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -283,7 +285,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
   const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
-
+  const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
@@ -779,20 +781,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const handleMPProductsTrial = async () => {
         if (!lead) return;
         setIsLoadingMPProducts(true);
-        toast({ title: 'Processing...', description: 'Initiating MP Products free trial.' });
+        toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast({ title: 'Success!', description: 'MP Products free trial has been initiated and lead status updated.' });
+                toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
                  // Optimistic update
                 // setLead(prev => ({...prev, status: 'Trialing ShipMate'}));
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
-            console.error('MP Products free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate MP Products free trial.' });
+            console.error('ShipMate free trial failed:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
         } finally {
             setIsLoadingMPProducts(false);
         }
@@ -854,7 +856,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
                 <DropdownMenuItem onSelect={handleMPProductsTrial} disabled={isLoadingMPProducts}>
-                  {isLoadingMPProducts ? <Loader /> : 'MP Products'}
+                  {isLoadingMPProducts ? <Loader /> : 'ShipMate'}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={openLocalMileDialog} disabled={isLoadingLocalMile}>
                     {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
