@@ -345,23 +345,23 @@ export default function CheckInPage() {
     const handleLocalMileTrial = async () => {
         if (!lead) return;
         setIsLoadingLocalMile(true);
-        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
-                router.push('/field-sales');
+                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                router.push('/leads/map');
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
 
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }
@@ -382,18 +382,19 @@ export default function CheckInPage() {
     const handleMPProductsTrial = async () => {
         if (!lead) return;
         setIsLoadingMPProducts(true);
-        toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                router.push('/leads/map');
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
         } finally {
             setIsLoadingMPProducts(false);
         }
@@ -894,6 +895,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     
 
   
+
 
 
 

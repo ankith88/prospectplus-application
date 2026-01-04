@@ -744,23 +744,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const handleLocalMileTrial = async () => {
         if (!lead) return;
         setIsLoadingLocalMile(true);
-        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
                  // Optimistic update
                 // setLead(prev => ({...prev, status: 'LocalMile Pending'}));
+                router.push('/field-sales');
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }
@@ -781,20 +782,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const handleMPProductsTrial = async () => {
         if (!lead) return;
         setIsLoadingMPProducts(true);
-        toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
                  // Optimistic update
                 // setLead(prev => ({...prev, status: 'Trialing ShipMate'}));
+                router.push('/field-sales');
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
         } finally {
             setIsLoadingMPProducts(false);
         }
@@ -1222,225 +1224,225 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardContent>
            </Card>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                        <Users className="w-5 h-5 text-muted-foreground" />
-                        Contacts
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                {contacts.length > 0 ? (
-                  <div className="space-y-4">
-                  {contacts.map((contact, index) => {
-                     const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
-                     return (
-                      <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
-                          <Card className="relative group/contact">
-                              <CardHeader className="flex-row items-start justify-between pb-2">
-                                  <div>
-                                      <p className="font-semibold">{contact.name}</p>
-                                      <p className="text-sm text-muted-foreground">{contact.title}</p>
-                                  </div>
-                                  <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6">
-                                              <MoreVertical className="h-4 w-4" />
-                                          </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent>
-                                          <DialogTrigger asChild>
-                                              <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
-                                                  <Edit className="mr-2 h-4 w-4" /> Edit
-                                              </DropdownMenuItem>
-                                          </DialogTrigger>
-                                          <AlertDialog>
-                                              <AlertDialogTrigger asChild>
-                                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
-                                                      <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                                  </DropdownMenuItem>
-                                              </AlertDialogTrigger>
-                                              <AlertDialogContent>
-                                                  <AlertDialogHeader>
-                                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                      <AlertDialogDescription>
-                                                          This will permanently delete the contact {contact.name}. This action cannot be undone.
-                                                      </AlertDialogDescription>
-                                                  </AlertDialogHeader>
-                                                  <AlertDialogFooter>
-                                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                      <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                                          Delete
-                                                      </AlertDialogAction>
-                                                  </AlertDialogFooter>
-                                              </AlertDialogContent>
-                                          </AlertDialog>
-                                      </DropdownMenuContent>
-                                  </DropdownMenu>
-                              </CardHeader>
-                              <CardContent className="space-y-3 text-sm">
-                                  <div className="flex items-center gap-3">
-                                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                                          {contact.email}
-                                      </a>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                      <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                                      <div className="flex items-center gap-1">
-                                          <span className="break-all">{contact.phone}</span>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
-                                              <PhoneCall className="w-3 h-3" />
-                                          </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="w-5 h-5 text-muted-foreground" />
+                            Contacts
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                    {contacts.length > 0 ? (
+                      <div className="space-y-4">
+                      {contacts.map((contact, index) => {
+                         const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
+                         return (
+                          <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
+                              <Card className="relative group/contact">
+                                  <CardHeader className="flex-row items-start justify-between pb-2">
+                                      <div>
+                                          <p className="font-semibold">{contact.name}</p>
+                                          <p className="text-sm text-muted-foreground">{contact.title}</p>
                                       </div>
-                                  </div>
-                              </CardContent>
-                              <CardFooter>
-                                  <div className="flex w-full items-center gap-0.5">
-                                      {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
-                                          <Button
-                                              variant="outline"
-                                              size="sm"
-                                              asChild
-                                              className={cn("flex-grow rounded-r-none")}
-                                          >
-                                              <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                                                  <Calendar className="mr-2 h-4 w-4" />
-                                                  Schedule with {lead.salesRepAssigned}
-                                              </a>
-                                          </Button>
-                                      ) : (
+                                      <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                  <MoreVertical className="h-4 w-4" />
+                                              </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent>
+                                              <DialogTrigger asChild>
+                                                  <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
+                                                      <Edit className="mr-2 h-4 w-4" /> Edit
+                                                  </DropdownMenuItem>
+                                              </DialogTrigger>
+                                              <AlertDialog>
+                                                  <AlertDialogTrigger asChild>
+                                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                      </DropdownMenuItem>
+                                                  </AlertDialogTrigger>
+                                                  <AlertDialogContent>
+                                                      <AlertDialogHeader>
+                                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                          <AlertDialogDescription>
+                                                              This will permanently delete the contact {contact.name}. This action cannot be undone.
+                                                          </AlertDialogDescription>
+                                                      </AlertDialogHeader>
+                                                      <AlertDialogFooter>
+                                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                          <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
+                                                              Delete
+                                                          </AlertDialogAction>
+                                                      </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                              </AlertDialog>
+                                          </DropdownMenuContent>
+                                      </DropdownMenu>
+                                  </CardHeader>
+                                  <CardContent className="space-y-3 text-sm">
+                                      <div className="flex items-center gap-3">
+                                          <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                                          <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
+                                              {contact.email}
+                                          </a>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                          <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                                          <div className="flex items-center gap-1">
+                                              <span className="break-all">{contact.phone}</span>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                                  <PhoneCall className="w-3 h-3" />
+                                              </Button>
+                                          </div>
+                                      </div>
+                                  </CardContent>
+                                  <CardFooter>
+                                      <div className="flex w-full items-center gap-0.5">
+                                          {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
+                                              <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  asChild
+                                                  className={cn("flex-grow rounded-r-none")}
+                                              >
+                                                  <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
+                                                      <Calendar className="mr-2 h-4 w-4" />
+                                                      Schedule with {lead.salesRepAssigned}
+                                                  </a>
+                                              </Button>
+                                          ) : (
+                                              <DropdownMenu>
+                                                  <DropdownMenuTrigger asChild>
+                                                      <Button variant="outline" size="sm" className="flex-grow">
+                                                          <Calendar className="mr-2 h-4 w-4" />
+                                                          Schedule Appointment
+                                                      </Button>
+                                                  </DropdownMenuTrigger>
+                                                  <DropdownMenuContent>
+                                                      {salesReps.map(rep => (
+                                                          <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
+                                                              {rep.name}
+                                                          </DropdownMenuItem>
+                                                      ))}
+                                                  </DropdownMenuContent>
+                                              </DropdownMenu>
+                                          )}
                                           <DropdownMenu>
                                               <DropdownMenuTrigger asChild>
-                                                  <Button variant="outline" size="sm" className="flex-grow">
-                                                      <Calendar className="mr-2 h-4 w-4" />
-                                                      Schedule Appointment
+                                                  <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
+                                                      <ChevronDown className="h-4 w-4" />
                                                   </Button>
                                               </DropdownMenuTrigger>
-                                              <DropdownMenuContent>
-                                                  {salesReps.map(rep => (
+                                              <DropdownMenuContent align="end">
+                                                  {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
                                                       <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                          {rep.name}
+                                                          Schedule with {rep.name}
                                                       </DropdownMenuItem>
                                                   ))}
                                               </DropdownMenuContent>
                                           </DropdownMenu>
-                                      )}
-                                      <DropdownMenu>
-                                          <DropdownMenuTrigger asChild>
-                                              <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
-                                                  <ChevronDown className="h-4 w-4" />
-                                              </Button>
-                                          </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end">
-                                              {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
-                                                  <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                      Schedule with {rep.name}
-                                                  </DropdownMenuItem>
-                                              ))}
-                                          </DropdownMenuContent>
-                                      </DropdownMenu>
-                                  </div>
-                              </CardFooter>
-                          </Card>
-                          <DialogContent>
-                              <DialogHeader>
-                                  <DialogTitle>Edit Contact</DialogTitle>
-                              </DialogHeader>
-                              {selectedContact && (
-                                  <EditContactForm
-                                      leadId={lead.id}
-                                      contact={selectedContact}
-                                      onContactUpdated={handleContactUpdated}
-                                      onClose={() => setSelectedContact(null)}
-                                  />
-                              )}
-                          </DialogContent>
-                      </Dialog>
-                     )
-                  })}
-                  </div>
-                ) : (
-                  <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
-                )}
-                 <Dialog>
-                  <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full mt-4">
-                          <PlusCircle className="mr-2 h-4 w-4" />
-                          Add Contact
-                      </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                      <DialogHeader>
-                      <DialogTitle>Add New Contact</DialogTitle>
-                      <DialogDescription>
-                          Enter the details for the new contact.
-                      </DialogDescription>
-                      </DialogHeader>
-                      <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
-                  </DialogContent>
-                </Dialog>
-                </CardContent>
-             </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
-                        Address
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex items-start gap-3">
-                            <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                            <div className="flex-1">
-                                <p className="text-muted-foreground break-words">{fullAddress}</p>
-                                <div className="flex items-center gap-1 mt-1">
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
-                                        <Search className="w-3 h-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
-                                        <Clipboard className="w-3 h-3" />
-                                    </Button>
+                                      </div>
+                                  </CardFooter>
+                              </Card>
+                              <DialogContent>
+                                  <DialogHeader>
+                                      <DialogTitle>Edit Contact</DialogTitle>
+                                  </DialogHeader>
+                                  {selectedContact && (
+                                      <EditContactForm
+                                          leadId={lead.id}
+                                          contact={selectedContact}
+                                          onContactUpdated={handleContactUpdated}
+                                          onClose={() => setSelectedContact(null)}
+                                      />
+                                  )}
+                              </DialogContent>
+                          </Dialog>
+                         )
+                      })}
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
+                    )}
+                     <Dialog>
+                      <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="w-full mt-4">
+                              <PlusCircle className="mr-2 h-4 w-4" />
+                              Add Contact
+                          </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                          <DialogHeader>
+                          <DialogTitle>Add New Contact</DialogTitle>
+                          <DialogDescription>
+                              Enter the details for the new contact.
+                          </DialogDescription>
+                          </DialogHeader>
+                          <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
+                      </DialogContent>
+                    </Dialog>
+                    </CardContent>
+                 </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-muted-foreground" />
+                            Address
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex items-start gap-3">
+                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1">
+                                    <p className="text-muted-foreground break-words">{fullAddress}</p>
+                                    <div className="flex items-center gap-1 mt-1">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
+                                            <Search className="w-3 h-3" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
+                                            <Clipboard className="w-3 h-3" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
+                            {fullAddress !== 'No address available' && (
+                                <div className="h-48 w-full rounded-md overflow-hidden border">
+                                    <iframe
+                                        width="100%"
+                                        height="100%"
+                                        frameBorder="0"
+                                        style={{ border: 0 }}
+                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                                            fullAddress
+                                        )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                                        allowFullScreen
+                                        aria-hidden="false"
+                                        tabIndex={0}
+                                    ></iframe>
+                                </div>
+                            )}
+                                <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="w-full">
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit Address
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Edit Address</DialogTitle>
+                                    </DialogHeader>
+                                    <AddressAutocomplete
+                                    />
+                                </DialogContent>
+                            </Dialog>
                         </div>
-                        {fullAddress !== 'No address available' && (
-                            <div className="h-48 w-full rounded-md overflow-hidden border">
-                                <iframe
-                                    width="100%"
-                                    height="100%"
-                                    frameBorder="0"
-                                    style={{ border: 0 }}
-                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                        fullAddress
-                                    )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                                    allowFullScreen
-                                    aria-hidden="false"
-                                    tabIndex={0}
-                                ></iframe>
-                            </div>
-                        )}
-                            <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" className="w-full">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit Address
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Edit Address</DialogTitle>
-                                </DialogHeader>
-                                <AddressAutocomplete
-                                />
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </CardContent>
-            </Card>
-          </div>
+                    </CardContent>
+                </Card>
+            </div>
           
           <Card>
             <CardHeader>
