@@ -386,8 +386,8 @@ export default function FieldSalesPage() {
   }, [allAppointments, allLeads, userProfile]);
 
   const handleLoadRoute = (route: SavedRoute) => {
-    const leadIds = route.leads.map(l => l.id);
-    localStorage.setItem('dialingSessionLeads', JSON.stringify(leadIds));
+    if (!route.id) return;
+    localStorage.setItem('activeRouteId', route.id);
     router.push(`/leads/map`);
     toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active on the map.` });
   };
@@ -1124,6 +1124,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
