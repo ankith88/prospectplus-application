@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -136,8 +137,8 @@ export function ServiceSelectionDialog({
             if (!nsResponse.success) {
                 throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
             }
-            // Update lead status on successful trial initiation
-            await updateLeadStatus(leadId, 'Trialing ShipMate');
+            
+            await updateLeadStatus(leadId, 'Free Trial');
         }
         
       await updateLeadServices(leadId, serviceSelections);
