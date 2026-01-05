@@ -58,11 +58,12 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { startOfWeek, endOfWeek, format } from 'date-fns'
+import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
@@ -794,8 +795,17 @@ export default function FieldSalesPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {scheduledRevisits.map(({ lead, ...appt }) => (
-                                <TableRow key={appt.id}>
+                            {scheduledRevisits.map(({ lead, ...appt }) => {
+                                const revisitDate = new Date(appt.starttime);
+                                const isRevisitToday = isToday(revisitDate);
+                                const isRevisitThisWeek = isThisWeek(revisitDate, { weekStartsOn: 1 });
+                                const isRevisitOverdue = isPast(revisitDate) && !isRevisitToday;
+                                return (
+                                <TableRow key={appt.id} className={cn(
+                                    isRevisitOverdue && 'bg-red-100/50 dark:bg-red-900/20',
+                                    isRevisitToday && 'bg-green-100/50 dark:bg-green-900/20',
+                                    isRevisitThisWeek && !isRevisitToday && 'bg-yellow-100/50 dark:bg-yellow-900/20',
+                                )}>
                                     <TableCell>
                                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
                                             {lead.companyName}
@@ -829,7 +839,7 @@ export default function FieldSalesPage() {
                                         </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                            )})}
                         </TableBody>
                     </Table>
                 ) : (
@@ -1115,6 +1125,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
