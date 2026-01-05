@@ -25,7 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus } from '@/services/firebase';
 import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon } from 'lucide-react';
@@ -136,6 +136,8 @@ export function ServiceSelectionDialog({
             if (!nsResponse.success) {
                 throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
             }
+            // Update lead status on successful trial initiation
+            await updateLeadStatus(leadId, 'Trialing ShipMate');
         }
         
       await updateLeadServices(leadId, serviceSelections);
