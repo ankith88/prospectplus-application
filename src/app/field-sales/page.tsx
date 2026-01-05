@@ -861,32 +861,31 @@ export default function FieldSalesPage() {
             <div className="space-y-2">
               {routesToShow.map(route => (
                 <Card key={route.id} className="p-3">
-                  {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
-                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div>
                             <p className="font-semibold">{route.name}</p>
                             <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
+                            {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
+                            )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
-                            <Move className="mr-2 h-4 w-4" /> Move
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                     </div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <p className="font-semibold">{route.name}</p>
                       <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
                         <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
+                        {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
+                            <>
+                                <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
+                                    <Move className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </>
+                        ) : (
+                             <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
+                        )}
                       </div>
                     </div>
-                  )}
                 </Card>
               ))}
             </div>
@@ -1125,6 +1124,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
