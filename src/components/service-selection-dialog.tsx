@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -28,10 +26,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import { updateLeadServices } from '@/services/firebase';
+import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon } from 'lucide-react';
 import { Calendar } from './ui/calendar';
-import { format, differenceInDays, isWeekend } from 'date-fns';
+import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 
@@ -103,7 +102,13 @@ export function ServiceSelectionDialog({
         form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
         return;
     }
+
     setIsSubmitting(true);
+    const { id: toastId } = toast({
+      title: 'Processing...',
+      description: 'Configuring services and syncing with NetSuite...',
+    });
+
     try {
         const serviceSelections = values.selectedServices.map(serviceName => ({
             name: serviceName as any,
@@ -113,19 +118,41 @@ export function ServiceSelectionDialog({
             startDate: mode === 'Signup' ? values.startDate?.toISOString() : undefined,
         }));
         
+        if (mode === 'Free Trial') {
+            const trialDates = eachDayOfInterval({
+                start: values.trialDateRange!.from!,
+                end: values.trialDateRange!.to || values.trialDateRange!.from!,
+            }).map(date => format(date, 'dd/MM/yyyy'));
+            
+            const nsResponse = await initiateServicesTrial({
+                leadId: leadId,
+                services: serviceSelections.map(s => ({
+                    service: s.name,
+                    frequency: s.frequency,
+                })),
+                trialPeriod: trialDates,
+            });
+
+            if (!nsResponse.success) {
+                throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
+            }
+        }
+        
       await updateLeadServices(leadId, serviceSelections);
 
       toast({
+        id: toastId,
         title: 'Success!',
         description: `The ${mode.toLowerCase()} has been configured for the selected services.`,
       });
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save service selection:', error);
       toast({
+        id: toastId,
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to save service selection. Please try again.',
+        description: error.message || 'Failed to save service selection. Please try again.',
       });
     } finally {
       setIsSubmitting(false);
