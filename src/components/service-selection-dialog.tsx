@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -119,8 +118,9 @@ export function ServiceSelectionDialog({
     onChange(range);
   };
 
-  const handleContactAdded = (newContactData: Omit<Contact, 'id'>) => {
-    const tempContact: Contact = { ...newContactData, id: `temp-${Date.now()}` };
+  const handleContactAdded = async (newContactData: Omit<Contact, 'id'>) => {
+    const newContactId = await addContactToLead(lead.id, newContactData);
+    const tempContact: Contact = { ...newContactData, id: newContactId };
     setContacts((prev) => [...prev, tempContact]);
     form.setValue('selectedContactId', tempContact.id);
     setIsAddingContact(false);
@@ -472,5 +472,3 @@ export function ServiceSelectionDialog({
     </>
   );
 }
-
-    

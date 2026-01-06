@@ -338,7 +338,7 @@ export default function CheckInPage() {
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
                 update({ id: toastId, title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
-                setTimeout(() => router.push('/field-sales'), 100);
+                setTimeout(() => router.push('/leads/map'), 100);
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
                 update({ id: toastId, variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
             } else {
@@ -371,7 +371,7 @@ export default function CheckInPage() {
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
                 update({ id: toastId, title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-                setTimeout(() => router.push('/field-sales'), 100);
+                setTimeout(() => router.push('/leads/map'), 100);
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
@@ -650,7 +650,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
 };
 
 const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control, trigger } = useFormContext();
+    const { control } = useFormContext();
     return (
         <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
              <FormField control={control} name="relevanceCheck" render={({ field }) => (
