@@ -39,6 +39,8 @@ import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
+import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
+
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -143,6 +145,8 @@ export default function CheckInPage() {
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
     const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
+    const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
+
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -402,7 +406,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} handleMPProductsTrial={handleMPProductsTrial} isLoadingMPProducts={isLoadingMPProducts} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} handleMPProductsTrial={handleMPProductsTrial} isLoadingMPProducts={isLoadingMPProducts} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
             default: return null;
         }
     };
@@ -476,6 +480,13 @@ export default function CheckInPage() {
                         onOpenChange={setIsRevisitDialogOpen}
                         lead={lead}
                         onRevisitScheduled={handleRevisitScheduled}
+                    />
+                 )}
+                 {isScheduleAppointmentOpen && (
+                    <ScheduleAppointmentDialog
+                        isOpen={isScheduleAppointmentOpen}
+                        onOpenChange={setIsScheduleAppointmentOpen}
+                        lead={lead}
                     />
                  )}
             </div>
@@ -791,12 +802,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog, isLoadingMPProducts, handleMPProductsTrial }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; isLoadingMPProducts: boolean; handleMPProductsTrial: () => void; }) => {
-    const handleRepSelection = (repName: string, repUrl: string) => {
-        const calendlyUrl = new URL(repUrl);
-        if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
-        window.open(calendlyUrl.toString(), '_blank');
-    };
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog, isLoadingMPProducts, handleMPProductsTrial, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; isLoadingMPProducts: boolean; handleMPProductsTrial: () => void; onOpenScheduleAppointment: () => void; }) => {
     const router = useRouter();
 
   return (
@@ -847,16 +853,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            {salesReps.map(rep => (
-                                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
@@ -869,5 +866,8 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
+    
+
 
     
