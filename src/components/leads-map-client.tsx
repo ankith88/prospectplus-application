@@ -23,7 +23,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -214,6 +214,8 @@ export default function LeadsMapClient() {
   const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
   const [startPoint, setStartPoint] = useState<string>('My Location');
   const [endPoint, setEndPoint] = useState<string>('');
+  const [totalDistance, setTotalDistance] = useState<string | null>(null);
+  const [totalDuration, setTotalDuration] = useState<string | null>(null);
   
   const [prospectToCreate, setProspectToCreate] = useState<google.maps.places.PlaceResult | null>(null);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
@@ -355,6 +357,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     setTravelMode(selectedTravelMode);
     setIsCalculatingRoute(true);
     setDirections(null);
+    setTotalDistance(null);
+    setTotalDuration(null);
     const directionsService = new window.google.maps.DirectionsService();
 
     const waypoints = leadsToRoute.map(lead => ({
@@ -372,9 +376,23 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         },
         (result, status) => {
             setIsCalculatingRoute(false);
-            if (status === window.google.maps.DirectionsStatus.OK) {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
                 setDirections(result);
                 setSelectedRouteLeads(leadsToRoute);
+
+                let totalDist = 0;
+                let totalDur = 0;
+                result.routes[0].legs.forEach(leg => {
+                    totalDist += leg.distance?.value || 0;
+                    totalDur += leg.duration?.value || 0;
+                });
+                
+                setTotalDistance((totalDist / 1000).toFixed(1) + ' km');
+
+                const hours = Math.floor(totalDur / 3600);
+                const minutes = Math.floor((totalDur % 3600) / 60);
+                setTotalDuration(`${hours > 0 ? `${hours} hr ` : ''}${minutes} min`);
+
             } else {
                 console.error(`error fetching directions ${result}`);
                 toast({ variant: "destructive", title: "Route Error", description: `Failed to calculate directions: ${status}` });
@@ -459,6 +477,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setLoadedRoute(route);
         setStartPoint(route.startPoint || 'My Location');
         setEndPoint(route.endPoint || '');
+        setTotalDistance(route.totalDistance || null);
+        setTotalDuration(route.totalDuration || null);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
     };
 
@@ -889,6 +909,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setLoadedRoute(null);
         setRouteDate(undefined);
         localStorage.removeItem('activeRouteId');
+        setTotalDistance(null);
+        setTotalDuration(null);
     };
 
     const handleCheckIn = (lead: MapLead) => {
@@ -1059,6 +1081,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             scheduledDate: routeDate ? new Date(routeDate).toISOString() : undefined,
             startPoint,
             endPoint,
+            totalDistance: totalDistance,
+            totalDuration: totalDuration,
         };
 
         const savedRouteId = await saveUserRoute(userIdToSave, newRoute);
@@ -1134,6 +1158,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       items.splice(result.destination.index, 0, reorderedItem);
       setSelectedRouteLeads(items);
       setDirections(null);
+      setTotalDistance(null);
+      setTotalDuration(null);
     };
 
     const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
@@ -1368,7 +1394,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                     <div className="flex items-center justify-between">
                                                         <div>
                                                             <p className="font-semibold">{route.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2">
+                                                                <span>{route.leads.length} stops</span>
+                                                                {route.totalDistance && <span>&bull; {route.totalDistance}</span>}
+                                                                {route.totalDuration && <span>&bull; {route.totalDuration}</span>}
+                                                            </div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
@@ -1473,6 +1503,24 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                           <Label htmlFor="end-point-input">End Point (Optional)</Label>
                           <Input id="end-point-input" placeholder="Defaults to start point" value={endPoint} onChange={e => setEndPoint(e.target.value)} ref={endPointInputRef} />
                       </div>
+                        {totalDistance && totalDuration && (
+                            <div className="flex justify-around w-full text-center text-sm p-2 bg-muted rounded-md">
+                                <div className="flex items-center gap-2">
+                                    <Milestone className="h-4 w-4 text-muted-foreground"/>
+                                    <div>
+                                        <p className="font-semibold">{totalDistance}</p>
+                                        <p className="text-xs text-muted-foreground">Total Distance</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-muted-foreground"/>
+                                    <div>
+                                        <p className="font-semibold">{totalDuration}</p>
+                                        <p className="text-xs text-muted-foreground">Total Time</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">

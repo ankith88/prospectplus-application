@@ -216,6 +216,8 @@ export type StorableRoute = {
     endPoint?: string;
     directions?: string;
     scheduledDate?: string;
+    totalDistance?: string | null;
+    totalDuration?: string | null;
 };
 
 
