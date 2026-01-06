@@ -147,7 +147,7 @@ function SelectServicesContent() {
 
       if (mode === 'service-trial') {
         const serviceSelections = values.selectedServices!.map(serviceName => ({
-            name: serviceName as any,
+            service: serviceName as any,
             frequency: values.frequencies[serviceName],
         }));
         const trialDates = eachDayOfInterval({
