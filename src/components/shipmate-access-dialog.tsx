@@ -39,7 +39,6 @@ export function ShipMateAccessDialog({
   useEffect(() => {
      if (!isOpen) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -66,11 +65,6 @@ export function ShipMateAccessDialog({
           updateContactSendEmail(lead.id, contactId)
         )
       );
-
-      toast({
-        title: 'Access Granted & Trial Initiating',
-        description: `${selectedContacts.length} contact(s) have been granted access to ShipMate. Initiating trial...`,
-      });
       
       await onConfirm();
     } catch (error: any) {
@@ -119,5 +113,3 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
-
-    

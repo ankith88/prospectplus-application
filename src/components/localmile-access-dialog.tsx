@@ -39,7 +39,6 @@ export function LocalMileAccessDialog({
   useEffect(() => {
     if (!isOpen) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -67,11 +66,6 @@ export function LocalMileAccessDialog({
         )
       );
 
-      toast({
-        title: 'Access Granted & Trial Initiating',
-        description: `${selectedContacts.length} contact(s) have been granted access. Initiating trial...`,
-      });
-      
       await onConfirm();
       
     } catch (error: any) {
@@ -120,5 +114,3 @@ export function LocalMileAccessDialog({
     </Dialog>
   );
 }
-
-    

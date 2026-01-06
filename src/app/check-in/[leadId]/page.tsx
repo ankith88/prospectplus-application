@@ -19,25 +19,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { PostCallOutcomeDialog } from '@/components/post-call-outcome-dialog';
-import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { LogNoteDialog } from '@/components/log-note-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { Badge } from '@/components/ui/badge';
-import { ScoreIndicator } from '@/components/score-indicator';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
-import { ShipMateAccessDialog } from '@/components/shipmate-access-dialog';
 
 
 const discoverySchema = z.object({
@@ -77,12 +72,6 @@ const stepLabels = [
     "Providers",
     "Needs",
     "Finish"
-];
-
-const salesReps = [
-    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
-    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
-    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
 ];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[], onStepClick: (step: number) => void; }) => {
@@ -138,11 +127,7 @@ export default function CheckInPage() {
     const [isSaving, setIsSaving] = useState(false);
     
     const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
-    const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-    const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
-    const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
-    const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
     const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
 
@@ -321,8 +306,6 @@ export default function CheckInPage() {
     };
 
     const handleNoteLogged = () => {
-      // Re-fetch or optimistically update lead data if necessary.
-      // For now, just closes the dialog.
       setIsLogNoteOpen(false);
     };
 
@@ -330,32 +313,6 @@ export default function CheckInPage() {
         setIsRevisitDialogOpen(false);
         router.push('/field-sales');
     };
-
-    const handleLocalMileTrial = useCallback(async () => {
-        if (!lead) return;
-        
-        try {
-            await updateLeadStatus(lead.id, 'LocalMile Pending');
-            toast({ title: 'Success!', description: 'LocalMile free trial initiated and lead status updated.' });
-            router.push('/field-sales');
-        } catch (error: any) {
-            console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        }
-    }, [lead, router, toast]);
-
-    const handleMPProductsTrial = useCallback(async () => {
-        if (!lead) return;
-        
-        try {
-            await updateLeadStatus(lead.id, 'Trialing ShipMate');
-            toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-            router.push('/field-sales');
-        } catch (error: any) {
-            console.error('ShipMate free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
-        }
-    }, [lead, router, toast]);
     
     const renderStep = () => {
         switch (currentStep) {
@@ -367,10 +324,7 @@ export default function CheckInPage() {
             case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
-                setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
-                setIsServiceSelectionOpen(true);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onOpenLocalMileDialog={() => setIsLocalMileDialogOpen(true)} onOpenShipMateDialog={() => setIsShipMateDialogOpen(true)} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
+            case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
             default: return null;
         }
     };
@@ -417,32 +371,9 @@ export default function CheckInPage() {
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
                 
-                <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-                    <ServiceSelectionDialog
-                        onOpenChange={setIsServiceSelectionOpen}
-                        lead={lead}
-                        mode={serviceSelectionMode}
-                    />
-                </Dialog>
-                
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
-                    {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
                  </LogNoteDialog>
-
-                <LocalMileAccessDialog
-                    isOpen={isLocalMileDialogOpen}
-                    onOpenChange={setIsLocalMileDialogOpen}
-                    lead={lead}
-                    onConfirm={handleLocalMileTrial}
-                 />
-
-                 <ShipMateAccessDialog
-                    isOpen={isShipMateDialogOpen}
-                    onOpenChange={setIsShipMateDialogOpen}
-                    lead={lead}
-                    onConfirm={handleMPProductsTrial}
-                 />
 
                  {isRevisitDialogOpen && (
                     <RevisitDialog 
@@ -772,7 +703,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onOpenLocalMileDialog, onOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onOpenLocalMileDialog: () => void; onOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
+const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onOpenScheduleAppointment }: { lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
     const router = useRouter();
 
   return (
@@ -806,7 +737,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                     <div className="text-center py-10 text-muted-foreground">Could not generate discovery analysis.</div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4">
-                    <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
+                    <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">
@@ -814,9 +745,9 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                        <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onOpenShipMateDialog}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onOpenLocalMileDialog}>LocalMile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}>Service</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=shipmate-trial`)}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=localmile-trial`)}>LocalMile</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
@@ -832,5 +763,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
-
-    

@@ -25,7 +25,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, initiateServicesTrial } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead } from '@/services/firebase';
+import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon, UserPlus } from 'lucide-react';
 import { Calendar } from './ui/calendar';
@@ -84,7 +85,6 @@ export function ServiceSelectionDialog({
   }, [lead]);
 
   useEffect(() => {
-    if (!onOpenChange) return;
     form.reset({
         selectedServices: [],
         frequencies: {},
@@ -471,5 +471,3 @@ export function ServiceSelectionDialog({
       </DialogContent>
   );
 }
-
-    
