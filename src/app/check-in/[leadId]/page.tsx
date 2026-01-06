@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -86,11 +87,10 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center">
                             <button
-                                onClick={() => isStepCompleted && onStepClick(step)}
-                                disabled={!isStepCompleted}
+                                onClick={() => onStepClick(step)}
                                 className={cn(
-                                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
-                                    isStepCompleted ? "bg-primary text-primary-foreground cursor-pointer hover:ring-2 hover:ring-primary" :
+                                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 cursor-pointer hover:ring-2 hover:ring-primary",
+                                    isStepCompleted ? "bg-primary text-primary-foreground" :
                                     isCurrent ? "border-2 border-primary bg-primary/10 text-primary" :
                                     "bg-muted text-muted-foreground",
                                 )}
@@ -240,9 +240,7 @@ export default function CheckInPage() {
     };
     
     const handleStepClick = (step: number) => {
-        if (currentStep > step) {
-            setCurrentStep(step);
-        }
+        setCurrentStep(step);
     };
     
     const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
@@ -764,4 +762,5 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
