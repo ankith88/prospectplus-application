@@ -255,7 +255,7 @@ function SelectServicesContent() {
                                       render={({ field }) => (
                                         <FormItem>
                                           <FormLabel>Send Commencement Form To*</FormLabel>
-                                          <ScrollArea className="max-h-32 w-full rounded-md border">
+                                          <ScrollArea className="h-40 w-full rounded-md border">
                                             <RadioGroup onValueChange={field.onChange} value={field.value} className="p-4">
                                               {contacts.map((contact) => (
                                                 <FormItem key={contact.id} className="flex items-center space-x-3">
@@ -432,3 +432,5 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
+
+    
