@@ -43,7 +43,7 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
 const formSchema = z.object({
   selectedServices: z.array(z.string()).optional(),
-  frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
+  frequencies: z.record(z.union([z.array(z.string()).min(1, "Frequency is required."), z.literal('Adhoc')])),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
@@ -326,7 +326,7 @@ function SelectServicesContent() {
                                               name={`frequencies.${serviceName}`}
                                               render={({ field }) => (
                                                 <FormItem>
-                                                  <RadioGroup onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : [])} defaultValue={'Daily'} className="mb-2">
+                                                  <RadioGroup onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} defaultValue={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} className="mb-2">
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
                                                   </RadioGroup>
@@ -338,9 +338,13 @@ function SelectServicesContent() {
                                                             <FormControl>
                                                               <Checkbox
                                                                 checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
-                                                                onCheckedChange={(checked) => dayField.onChange(
-                                                                  checked ? [...(Array.isArray(dayField.value) ? dayField.value : []), day] : (dayField.value as string[])?.filter((d) => d !== day)
-                                                                )}
+                                                                onCheckedChange={(checked) => {
+                                                                    const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
+                                                                    const newDays = checked
+                                                                        ? [...currentDays, day]
+                                                                        : currentDays.filter((d) => d !== day);
+                                                                    dayField.onChange(newDays);
+                                                                }}
                                                               />
                                                             </FormControl>
                                                             <FormLabel className="font-normal">{day}</FormLabel>
@@ -432,5 +436,3 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
-
-    
