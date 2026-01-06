@@ -13,7 +13,7 @@ import {
   DrawingManagerF,
   CircleF,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers, getAllUserRoutes } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute } from '@/lib/types'
 import { Loader } from './ui/loader'
@@ -191,6 +191,8 @@ export default function LeadsMapClient() {
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [localSavedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>([]);
+  const [allSystemRoutes, setAllSystemRoutes] = useState<SavedRoute[]>([]);
+  const [leadToRouteMap, setLeadToRouteMap] = useState<Map<string, string>>(new Map());
   const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
   const [routeDate, setRouteDate] = useState<Date>();
   const [routeAssignee, setRouteAssignee] = useState<string>('');
@@ -241,6 +243,25 @@ export default function LeadsMapClient() {
   useEffect(() => {
     setLocalSavedRoutes(savedRoutes);
   }, [savedRoutes]);
+
+  useEffect(() => {
+    if (!userProfile) return;
+
+    const fetchAllRoutes = async () => {
+      const allRoutes = await getAllUserRoutes();
+      setAllSystemRoutes(allRoutes);
+
+      const leadMap = new Map<string, string>();
+      for (const route of allRoutes) {
+        for (const lead of route.leads) {
+          leadMap.set(lead.id, route.name);
+        }
+      }
+      setLeadToRouteMap(leadMap);
+    };
+
+    fetchAllRoutes();
+  }, [userProfile]);
   
   const handleShowMyLocation = useCallback(() => {
     setLocationError(null);
@@ -421,7 +442,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const handleLoadRoute = (route: SavedRoute) => {
         if (!isLoaded) return;
         
-        // Filter out archived leads before loading the route
         const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'Free Trial', 'LocalMile Pending'];
         const activeLeadsInRoute = route.leads.filter(leadInRoute => {
             const fullLead = mapData.find(l => l.id === leadInRoute.id);
@@ -453,13 +473,24 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         }
     }, [localSavedRoutes, isLoaded]);
 
-
   
     const filteredData = useMemo(() => {
         if (!userProfile) return [];
 
         let dataToFilter = mapData;
 
+        // Filter out leads with "Won" or "Lost" status from being selectable
+        const nonSelectableStatuses: LeadStatus[] = ['Won', 'Lost'];
+        dataToFilter = dataToFilter.filter(item => !nonSelectableStatuses.includes(item.status));
+
+        // Role-based filtering
+        if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
+            dataToFilter = dataToFilter.filter(item => item.fieldSales === true || item.isCompany);
+        } else if (userProfile.role === 'user') {
+            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
+        }
+
+        // Apply UI filters
         dataToFilter = dataToFilter.filter(item => {
             const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
             const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
@@ -474,15 +505,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
             return franchiseeMatch && stateMatch && statusMatch && typeMatch;
         });
-
-        if (userProfile.role === 'Field Sales') {
-            const assignedLeadIds = new Set(dataToFilter.filter(item => item.dialerAssigned === userProfile.displayName).map(item => item.id));
-            return dataToFilter.filter(item => item.isCompany || assignedLeadIds.has(item.id));
-        }
-
-        if (userProfile.role === 'user') {
-            return dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
-        }
         
         return dataToFilter;
     
@@ -490,6 +512,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   const onMarkerClick = useCallback((item: MapLead) => {
     if (selectionMode === 'select') {
+        const isAssigned = leadToRouteMap.has(item.id);
+        if (isAssigned) {
+            toast({
+                variant: 'destructive',
+                title: 'Already Assigned',
+                description: `${item.companyName} is already in the route "${leadToRouteMap.get(item.id)}".`
+            });
+            return;
+        }
+
         setSelectedRouteLeads(prev => {
             if (prev.some(l => l.id === item.id)) {
                 return prev.filter(l => l.id !== item.id);
@@ -500,7 +532,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     } else {
         setSelectedLead(item);
     }
-  }, [selectionMode]);
+  }, [selectionMode, leadToRouteMap, toast]);
 
   const onInfoWindowClose = useCallback(() => {
     setSelectedLead(null);
@@ -920,6 +952,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
         const leadsInShape = filteredData.filter(lead => {
             if (lead.isCompany) return false;
+            if (leadToRouteMap.has(lead.id)) return false;
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
                 if (overlay.get('radius')) {
@@ -1482,7 +1515,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <Select value={routeAssignee} onValueChange={setRouteAssignee}>
                                                 <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
                                                 <SelectContent>
-                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1592,6 +1625,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
                                     <LeadStatusBadge status={selectedLead.status} />
                                 </div>
+
+                                {leadToRouteMap.has(selectedLead.id) && (
+                                    <Badge variant="secondary" className="w-full justify-center">
+                                        <Route className="mr-2 h-4 w-4" />
+                                        Already in route: {leadToRouteMap.get(selectedLead.id)}
+                                    </Badge>
+                                )}
 
                                 <div className="space-y-2 text-sm text-muted-foreground">
                                     {selectedLead.industryCategory && (
