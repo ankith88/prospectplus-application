@@ -45,6 +45,7 @@ import {
   PlusCircle,
   MoreVertical,
   ClipboardEdit,
+  Trash2,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
