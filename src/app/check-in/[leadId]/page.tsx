@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -32,8 +33,6 @@ import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
-import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
-import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
@@ -328,47 +327,6 @@ export default function CheckInPage() {
       setIsLogNoteOpen(false);
     };
 
-    const handleLocalMileTrial = async () => {
-        if (!lead) return;
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
-        try {
-            const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
-
-            if (responseBody.success === true) {
-                await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
-                setTimeout(() => router.push('/field-sales'), 100);
-            } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
-            } else {
-                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-            }
-
-        } catch (error: any) {
-            console.error('LocalMile free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        }
-    };
-
-    const handleMPProductsTrial = async () => {
-        if (!lead) return;
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
-        try {
-            const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
-            if (responseBody.success) {
-                await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-                setTimeout(() => router.push('/field-sales'), 100);
-            } else {
-                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-            }
-        } catch (error: any) {
-            console.error('ShipMate free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
-        }
-    };
-
-
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
         router.push('/field-sales');
@@ -433,18 +391,14 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
-                 {lead && (
                  <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-                    <DialogContent>
-                      <ServiceSelectionDialog
-                          isOpen={isServiceSelectionOpen}
-                          onOpenChange={setIsServiceSelectionOpen}
-                          lead={lead}
-                          mode={serviceSelectionMode}
-                      />
-                    </DialogContent>
+                    <ServiceSelectionDialog
+                        isOpen={isServiceSelectionOpen}
+                        onOpenChange={setIsServiceSelectionOpen}
+                        lead={lead}
+                        mode={serviceSelectionMode}
+                    />
                 </Dialog>
-                 )}
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
@@ -453,13 +407,11 @@ export default function CheckInPage() {
                     isOpen={isLocalMileDialogOpen}
                     onOpenChange={setIsLocalMileDialogOpen}
                     lead={lead}
-                    onConfirm={handleLocalMileTrial}
                  />
                  <ShipMateAccessDialog
                     isOpen={isShipMateDialogOpen}
                     onOpenChange={setIsShipMateDialogOpen}
                     lead={lead}
-                    onConfirm={handleMPProductsTrial}
                  />
                  {isRevisitDialogOpen && (
                     <RevisitDialog 
@@ -849,3 +801,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
+
+    

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -25,8 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead } from '@/services/firebase';
-import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, initiateServicesTrial } from '@/services/firebase';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon, UserPlus } from 'lucide-react';
 import { Calendar } from './ui/calendar';
@@ -93,7 +93,6 @@ export function ServiceSelectionDialog({
         frequencies: {},
       });
       setIsAddingContact(false);
-      setIsSubmitting(false);
     }
   }, [isOpen, form]);
 
@@ -209,7 +208,7 @@ export function ServiceSelectionDialog({
   }
 
   return (
-    <>
+    <DialogContent>
       <DialogHeader>
         <DialogTitle>{mode} for Services</DialogTitle>
         <DialogDescription>
@@ -466,6 +465,8 @@ export function ServiceSelectionDialog({
             </form>
         </Form>
       )}
-    </>
+    </DialogContent>
   );
 }
+
+    

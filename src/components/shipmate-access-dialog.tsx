@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,29 +18,28 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactInLead } from '@/services/firebase';
+import { updateContactInLead, initiateMPProductsTrial, updateLeadStatus } from '@/services/firebase';
+import { useRouter } from 'next/navigation';
 
 interface ShipMateAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  onConfirm: () => Promise<void>;
 }
 
 export function ShipMateAccessDialog({
   isOpen,
   onOpenChange,
   lead,
-  onConfirm,
 }: ShipMateAccessDialogProps) {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
      if (!isOpen) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -72,11 +72,19 @@ export function ShipMateAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access to ShipMate. Initiating trial...`,
       });
       
-      await onConfirm();
-
-    } catch (error) {
-      // The onConfirm function will show its own toast on failure
-      console.error('Failed to grant ShipMate access:', error);
+      const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
+      if (responseBody.success) {
+          await updateLeadStatus(lead.id, 'Trialing ShipMate');
+          toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+          setTimeout(() => {
+            onOpenChange(false);
+            router.push('/field-sales');
+          }, 100);
+      } else {
+          throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
     } finally {
       setIsSubmitting(false);
       onOpenChange(false);
@@ -121,3 +129,5 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
+
+    

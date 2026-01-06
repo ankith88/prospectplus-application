@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useState, useContext, ReactNode, useCallback } from 'react';
 import { FullScreenLoader } from '@/components/ui/loader';
 
 interface LoadingContextType {
@@ -16,10 +16,10 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
 
-  const setLoading = (loading: boolean, message = 'Loading...') => {
+  const setLoading = useCallback((loading: boolean, message = 'Loading...') => {
     setIsLoading(loading);
     setLoadingMessage(message);
-  };
+  }, []);
 
   return (
     <LoadingContext.Provider value={{ isLoading, loadingMessage, setLoading }}>
@@ -45,3 +45,5 @@ export function GlobalLoader() {
 
     return <FullScreenLoader message={loadingMessage} />;
 }
+
+    

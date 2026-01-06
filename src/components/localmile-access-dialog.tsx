@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,29 +18,28 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactInLead } from '@/services/firebase';
+import { updateContactInLead, initiateLocalMileTrial, updateLeadStatus } from '@/services/firebase';
+import { useRouter } from 'next/navigation';
 
 interface LocalMileAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  onConfirm: () => Promise<void>;
 }
 
 export function LocalMileAccessDialog({
   isOpen,
   onOpenChange,
   lead,
-  onConfirm,
 }: LocalMileAccessDialogProps) {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -69,14 +69,25 @@ export function LocalMileAccessDialog({
 
       toast({
         title: 'Access Granted',
-        description: `${selectedContacts.length} contact(s) have been granted access to LocalMile. Initiating trial...`,
+        description: `${selectedContacts.length} contact(s) have been granted access. Initiating trial...`,
       });
       
-      await onConfirm();
-      
-    } catch (error) {
-      // The onConfirm function in the parent will show its own toast on failure
-      console.error('Failed to grant LocalMile access:', error);
+      const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
+
+      if (responseBody.success === true) {
+          await updateLeadStatus(lead.id, 'LocalMile Pending');
+          toast({ title: 'Success!', description: 'LocalMile free trial initiated and lead status updated.' });
+          setTimeout(() => {
+            onOpenChange(false);
+            router.push('/field-sales');
+          }, 100);
+      } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
+          toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+      } else {
+          throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
     } finally {
       setIsSubmitting(false);
       onOpenChange(false);
@@ -121,3 +132,5 @@ export function LocalMileAccessDialog({
     </Dialog>
   );
 }
+
+    
