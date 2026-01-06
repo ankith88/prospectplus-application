@@ -284,8 +284,8 @@ function SelectServicesContent() {
             <div className="w-10"></div>
         </header>
         <main className="flex-grow mt-6">
-            <Card>
-                <CardContent className="p-6">
+            <Card className="h-full flex flex-col">
+                <CardContent className="p-6 flex-grow flex flex-col">
                     {isAddingContact ? (
                         <div className="py-4">
                             <h3 className="font-semibold mb-4">Add New Contact</h3>
@@ -297,7 +297,7 @@ function SelectServicesContent() {
                     ) : (
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col h-full gap-6">
-                                <ScrollArea className="flex-grow">
+                                <ScrollArea className="flex-grow pr-4 -mr-4">
                                     <div className="space-y-6">
                                     {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
                                         <FormField
@@ -366,7 +366,7 @@ function SelectServicesContent() {
                                                 <FormField control={form.control} name="addServices" render={({ field }) => (
                                                     <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                                                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                                        <FormLabel className="font-normal text-base">Add MailPlus Services</FormLabel>
+                                                        <FormLabel>Add MailPlus Services</FormLabel>
                                                     </FormItem>
                                                 )}/>
                                                 {addServices && (
@@ -455,14 +455,12 @@ function SelectServicesContent() {
                                                     <FormLabel>Frequency*</FormLabel>
                                                     <RadioGroup
                                                         onValueChange={(value) => {
-                                                          const newFrequency = value === 'Daily' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : 'Adhoc';
-                                                          field.onChange(newFrequency);
+                                                            const newFrequency = value === 'Daily' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : value === 'Adhoc' ? 'Adhoc' : field.value === 'Adhoc' ? [] : field.value;
+                                                            field.onChange(newFrequency);
                                                         }}
                                                         value={
-                                                            Array.isArray(field.value) && field.value.length === 5
-                                                            ? 'Daily'
-                                                            : field.value === 'Adhoc'
-                                                            ? 'Adhoc'
+                                                            Array.isArray(field.value) && field.value.length === 5 ? 'Daily'
+                                                            : field.value === 'Adhoc' ? 'Adhoc'
                                                             : 'Custom'
                                                         }
                                                         className="mb-2"
@@ -471,7 +469,7 @@ function SelectServicesContent() {
                                                         <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
                                                         <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Custom" /></FormControl><FormLabel className="font-normal">Custom</FormLabel></FormItem>
                                                     </RadioGroup>
-                                                    {form.getValues(`frequencies.${serviceName}`) !== 'Adhoc' && (
+                                                    {field.value !== 'Adhoc' && (
                                                         <div className="flex flex-wrap gap-4 pt-2">
                                                         {days.map((day) => (
                                                             <FormField key={day} control={form.control} name={`frequencies.${serviceName}`} render={({ field: dayField }) => (
