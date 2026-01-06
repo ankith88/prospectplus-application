@@ -156,8 +156,8 @@ export default function CheckInPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    const methods = useForm<z.infer<typeof discoverySchema>>({
-        resolver: zodResolver(discoverySchema),
+    const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
+        resolver: zodResolver(discoverySchema.partial()),
         defaultValues: {
             checkInCompleted: true
         }
@@ -201,27 +201,31 @@ export default function CheckInPage() {
     const handleNext = async () => {
         setIsSaving(true);
         try {
-            const currentData = methods.getValues();
+            let isValid = true;
+            if (currentStep === 3) {
+                 isValid = await methods.trigger(['relevanceCheck']);
+                 if (!isValid) {
+                    toast({ variant: "destructive", title: "Missing Information", description: "Please answer the relevance question before proceeding." });
+                    setIsSaving(false);
+                    return;
+                 }
+            }
+            
+            const currentData = { ...methods.getValues() };
             
             // Sanitize undefined values before saving to Firestore
-            if (currentData.otherProvider === undefined) {
-                currentData.otherProvider = '';
-            }
-            if (currentData.otherECommerceTech === undefined) {
-                currentData.otherECommerceTech = '';
-            }
-                if (currentData.painPoints === undefined) {
-                currentData.painPoints = '';
+            for (const key in currentData) {
+                if (currentData[key as keyof typeof currentData] === undefined) {
+                    delete currentData[key as keyof typeof currentData];
+                }
             }
 
-            if(lead?.id) {
+            if(lead?.id && Object.keys(currentData).length > 0) {
                 const leadRef = doc(firestore, 'leads', lead.id);
                 await updateDoc(leadRef, { discoveryData: currentData });
             }
             
             if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
-                // The form is no longer strictly validated on each step,
-                // but we can still calculate the score on the final step.
                 const discoveryData = calculateScoreAndRouting(methods.getValues());
                 setFinalDiscoveryData(discoveryData);
                 await updateLeadDiscoveryData(lead!.id, discoveryData);
