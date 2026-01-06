@@ -296,8 +296,8 @@ function SelectServicesContent() {
                         </div>
                     ) : (
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                            <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col h-full gap-6">
+                                <ScrollArea className="flex-grow">
                                     <div className="space-y-6">
                                     {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
                                         <FormField
@@ -455,11 +455,8 @@ function SelectServicesContent() {
                                                     <FormLabel>Frequency*</FormLabel>
                                                     <RadioGroup
                                                         onValueChange={(value) => {
-                                                            if (value === 'Daily') {
-                                                                field.onChange(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-                                                            } else {
-                                                                field.onChange(value);
-                                                            }
+                                                          const newFrequency = value === 'Daily' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : 'Adhoc';
+                                                          field.onChange(newFrequency);
                                                         }}
                                                         value={
                                                             Array.isArray(field.value) && field.value.length === 5
@@ -559,7 +556,7 @@ function SelectServicesContent() {
                                     )}
                                     </div>
                                 </ScrollArea>
-                                <div className="flex justify-end pt-4 border-t">
+                                <div className="flex justify-end pt-4 border-t flex-shrink-0">
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? <Loader /> : 'Submit'}
                                     </Button>
@@ -581,3 +578,5 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
+
+    
