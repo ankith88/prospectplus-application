@@ -21,27 +21,24 @@ import { useRef } from "react"
 import type { Contact } from "@/lib/types"
 
 const formSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
+  name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z.string().optional(),
   title: z.string().min(1, "Title is required"),
 })
 
 interface AddContactFormProps {
   leadId: string
-  onContactAdded: (contact: z.infer<typeof formSchema>) => void
+  onContactAdded: (contact: Omit<Contact, 'id'>) => void
 }
 
 export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) {
   const { toast } = useToast()
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
+      name: "",
       email: "",
       phone: "",
       title: "",
@@ -51,19 +48,18 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const contactData: Omit<Contact, 'id'> = {
-        name: `${values.firstName} ${values.lastName}`,
+        name: values.name,
         title: values.title,
         email: values.email,
-        phone: values.phone,
+        phone: values.phone || '',
       }
-      await addContactToLead(leadId, contactData)
+      const newContactId = await addContactToLead(leadId, contactData)
       toast({
         title: "Success",
         description: "Contact added successfully.",
       })
-      onContactAdded(values)
+      onContactAdded({ ...contactData, id: newContactId });
       form.reset()
-      closeButtonRef.current?.click();
 
     } catch (error) {
       console.error("Failed to add contact:", error)
@@ -77,35 +73,20 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="firstName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>First Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="John" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="lastName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Last Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="Doe" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Full Name</FormLabel>
+              <FormControl>
+                <Input placeholder="John Doe" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="title"
@@ -113,7 +94,7 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
             <FormItem>
               <FormLabel>Title</FormLabel>
               <FormControl>
-                <Input placeholder="CEO" {...field} />
+                <Input placeholder="Manager" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -137,22 +118,15 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone Number</FormLabel>
+              <FormLabel>Phone Number (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="(123) 456-7890" {...field} />
+                <Input placeholder="0412 345 678" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <DialogClose asChild>
-              {/* This is a hidden button to programmatically close the dialog */}
-              <button ref={closeButtonRef} style={{ display: 'none' }} />
-            </DialogClose>
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Adding..." : "Add Contact"}
             </Button>
