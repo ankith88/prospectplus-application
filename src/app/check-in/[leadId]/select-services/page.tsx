@@ -101,7 +101,7 @@ function SelectServicesContent() {
     }
   }, [params.leadId, router, toast]);
   
-  const selectedServices = form.watch('selectedServices');
+  const selectedServices = form.watch('selectedServices') || [];
   const addServices = form.watch('addServices');
   const shipmateAccess = form.watch('shipmateAccess');
   const localmileAccess = form.watch('localmileAccess');
@@ -222,7 +222,7 @@ function SelectServicesContent() {
       }
       
       if (values.selectedServices && values.selectedServices.length > 0) {
-        const serviceSelections = values.selectedServices.map(serviceName => ({
+        const serviceSelectionsForDb = values.selectedServices.map(serviceName => ({
           name: serviceName as any,
           frequency: values.frequencies[serviceName],
           rate: parseFloat(values.rates[serviceName]),
@@ -230,7 +230,7 @@ function SelectServicesContent() {
           trialEndDate: mode === 'service-trial' ? values.trialDateRange?.to?.toISOString() : undefined,
           startDate: (mode === 'signup' && addServices) ? values.startDate?.toISOString() : undefined,
         }));
-        await updateLeadServices(lead.id, serviceSelections);
+        await updateLeadServices(lead.id, serviceSelectionsForDb);
       }
       
       await updateLeadStatus(lead.id, newStatus);
@@ -429,7 +429,7 @@ function SelectServicesContent() {
                                             )}
                                             />
 
-                                            {selectedServices && selectedServices.length > 0 && <hr />}
+                                            {selectedServices.length > 0 && <hr />}
 
                                             {selectedServices?.map((serviceName) => (
                                             <div key={serviceName} className="space-y-4 rounded-md border p-4">
@@ -453,9 +453,21 @@ function SelectServicesContent() {
                                                 render={({ field }) => (
                                                     <FormItem>
                                                     <FormLabel>Frequency*</FormLabel>
-                                                    <RadioGroup 
-                                                        onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
-                                                        value={Array.isArray(field.value) && field.value.length === 5 ? 'Daily' : (field.value === 'Adhoc' ? 'Adhoc' : 'Custom')}
+                                                    <RadioGroup
+                                                        onValueChange={(value) => {
+                                                            if (value === 'Daily') {
+                                                                field.onChange(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                                            } else {
+                                                                field.onChange(value);
+                                                            }
+                                                        }}
+                                                        value={
+                                                            Array.isArray(field.value) && field.value.length === 5
+                                                            ? 'Daily'
+                                                            : field.value === 'Adhoc'
+                                                            ? 'Adhoc'
+                                                            : 'Custom'
+                                                        }
                                                         className="mb-2"
                                                     >
                                                         <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
