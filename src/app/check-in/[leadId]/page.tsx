@@ -332,7 +332,6 @@ export default function CheckInPage() {
 
     const handleLocalMileTrial = async () => {
         if (!lead) return;
-        setGlobalLoading(true, 'Initiating LocalMile Trial...');
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
@@ -349,14 +348,11 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        } finally {
-            setGlobalLoading(false);
         }
     };
 
     const handleMPProductsTrial = async () => {
         if (!lead) return;
-        setGlobalLoading(true, 'Initiating ShipMate Trial...');
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
@@ -369,8 +365,6 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
-        } finally {
-            setGlobalLoading(false);
         }
     };
 
@@ -799,6 +793,23 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onOpenLocalMileDialog, onOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onOpenLocalMileDialog: () => void; onOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
     const router = useRouter();
 
+    const openLocalMile = () => {
+        if (!lead.contacts || lead.contacts.length === 0) {
+            alert('Please add at least one contact before initiating a LocalMile trial.');
+            return;
+        }
+        onOpenLocalMileDialog();
+    }
+    
+    const openShipMate = () => {
+        if (!lead.contacts || lead.contacts.length === 0) {
+            alert('Please add at least one contact before initiating a ShipMate trial.');
+            return;
+        }
+        onOpenShipMateDialog();
+    }
+
+
   return (
     <div className="space-y-6">
         <div className="text-left space-y-2">
@@ -839,10 +850,10 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onOpenShipMateDialog}>
+                        <DropdownMenuItem onSelect={openShipMate}>
                             ShipMate
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onOpenLocalMileDialog}>
+                        <DropdownMenuItem onSelect={openLocalMile}>
                             LocalMile
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -860,3 +871,4 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+

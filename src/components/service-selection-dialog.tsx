@@ -36,7 +36,6 @@ import type { DateRange } from 'react-day-picker';
 import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
-import { useLoading } from '@/hooks/use-loading';
 
 const services = [
   { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
@@ -68,10 +67,10 @@ export function ServiceSelectionDialog({
   lead,
   mode,
 }: ServiceSelectionDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const { toast } = useToast();
-  const { isLoading, setLoading } = useLoading();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -94,6 +93,7 @@ export function ServiceSelectionDialog({
         frequencies: {},
       });
       setIsAddingContact(false);
+      setIsSubmitting(false);
     }
   }, [isOpen, form]);
 
@@ -143,7 +143,7 @@ export function ServiceSelectionDialog({
       return;
     }
 
-    setLoading(true, `Configuring ${mode.toLowerCase()}...`);
+    setIsSubmitting(true);
 
     try {
       const serviceSelections = values.selectedServices.map(serviceName => ({
@@ -195,7 +195,7 @@ export function ServiceSelectionDialog({
         description: error.message || 'Failed to save service selection. Please try again.',
       });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -456,11 +456,11 @@ export function ServiceSelectionDialog({
             )}
 
             <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
-                {isLoading ? <Loader /> : 'Submit'}
+                <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <Loader /> : 'Submit'}
                 </Button>
             </DialogFooter>
             </form>
