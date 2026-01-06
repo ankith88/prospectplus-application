@@ -75,8 +75,6 @@ const stepLabels = [
 ];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[], onStepClick: (step: number) => void; }) => {
-    const isCompleted = currentStep >= totalSteps;
-
     return (
         <div className="flex items-center w-full" aria-label={`Step ${currentStep} of ${totalSteps}`}>
             {labels.map((label, index) => {
@@ -88,17 +86,16 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center">
                             <button
-                                onClick={() => isCompleted && onStepClick(step)}
-                                disabled={!isCompleted}
+                                onClick={() => isStepCompleted && onStepClick(step)}
+                                disabled={!isStepCompleted}
                                 className={cn(
                                     "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
-                                    isStepCompleted ? "bg-primary text-primary-foreground" :
+                                    isStepCompleted ? "bg-primary text-primary-foreground cursor-pointer hover:ring-2 hover:ring-primary" :
                                     isCurrent ? "border-2 border-primary bg-primary/10 text-primary" :
                                     "bg-muted text-muted-foreground",
-                                    isCompleted && "cursor-pointer hover:ring-2 hover:ring-primary"
                                 )}
                             >
-                                {isStepCompleted ? <Check className="w-5 h-5" /> : step}
+                                {isStepCompleted && currentStep <= totalSteps ? <Check className="w-5 h-5" /> : step}
                             </button>
                             <p className={cn(
                                 "text-xs mt-1 text-center hidden md:block",
@@ -168,6 +165,10 @@ export default function CheckInPage() {
                     setContacts(leadData.contacts || []);
                     if (leadData.discoveryData) {
                         methods.reset(leadData.discoveryData);
+                         if (leadData.discoveryData.checkInCompleted) {
+                            setCurrentStep(TOTAL_STEPS + 1);
+                            setFinalDiscoveryData(leadData.discoveryData);
+                        }
                     }
                     await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
                 } else {
@@ -239,7 +240,7 @@ export default function CheckInPage() {
     };
     
     const handleStepClick = (step: number) => {
-        if (currentStep >= TOTAL_STEPS + 1) {
+        if (currentStep > step) {
             setCurrentStep(step);
         }
     };
@@ -763,3 +764,4 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
