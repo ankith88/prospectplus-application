@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -35,6 +35,13 @@ export function ShipMateAccessDialog({
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedContacts([]);
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>

@@ -69,7 +69,7 @@ export function ServiceSelectionDialog({
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
-  const [contacts, setContacts] = useState<Contact[]>(lead?.contacts || []);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const { toast } = useToast();
 
   const form = useForm<FormValues>({
@@ -81,11 +81,22 @@ export function ServiceSelectionDialog({
   });
 
   useEffect(() => {
-    setContacts(lead?.contacts || []);
-    if (isAddingContact) {
-        setIsAddingContact(false); // Reset if lead changes
+    if (lead) {
+      setContacts(lead.contacts || []);
     }
   }, [lead]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset form and state when dialog is closed
+      form.reset({
+        selectedServices: [],
+        frequencies: {},
+      });
+      setIsSubmitting(false);
+      setIsAddingContact(false);
+    }
+  }, [isOpen, form]);
 
 
   const selectedServices = form.watch('selectedServices');
@@ -190,12 +201,6 @@ export function ServiceSelectionDialog({
       setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    if (!isOpen) {
-      form.reset();
-    }
-  }, [isOpen, form]);
 
   if (!lead) {
     return (
