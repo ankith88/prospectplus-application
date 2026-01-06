@@ -54,14 +54,12 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface ServiceSelectionDialogProps {
-  isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
   mode: 'Free Trial' | 'Signup';
 }
 
 export function ServiceSelectionDialog({
-  isOpen,
   onOpenChange,
   lead,
   mode,
@@ -86,14 +84,14 @@ export function ServiceSelectionDialog({
   }, [lead]);
 
   useEffect(() => {
-    if (!isOpen) {
-      form.reset({
-        selectedServices: [],
-        frequencies: {},
-      });
-      setIsAddingContact(false);
+    if (onOpenChange) {
+        form.reset({
+            selectedServices: [],
+            frequencies: {},
+        });
+        setIsAddingContact(false);
     }
-  }, [isOpen, form]);
+  }, [onOpenChange, form]);
 
 
   const selectedServices = form.watch('selectedServices');
@@ -474,9 +472,3 @@ export function ServiceSelectionDialog({
       </DialogContent>
   );
 }
-
-    
-
-    
-
-    

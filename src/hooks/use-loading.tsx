@@ -7,7 +7,7 @@ import { FullScreenLoader } from '@/components/ui/loader';
 interface LoadingContextType {
   isLoading: boolean;
   loadingMessage: string;
-  setLoading: (loading: boolean, message?: string) => void;
+  setGlobalLoading: (loading: boolean, message?: string) => void;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -16,13 +16,13 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Loading...');
 
-  const setLoading = useCallback((loading: boolean, message = 'Loading...') => {
+  const setGlobalLoading = useCallback((loading: boolean, message = 'Loading...') => {
     setIsLoading(loading);
     setLoadingMessage(message);
   }, []);
 
   return (
-    <LoadingContext.Provider value={{ isLoading, loadingMessage, setLoading }}>
+    <LoadingContext.Provider value={{ isLoading, loadingMessage, setGlobalLoading }}>
       {children}
     </LoadingContext.Provider>
   );
@@ -45,5 +45,3 @@ export function GlobalLoader() {
 
     return <FullScreenLoader message={loadingMessage} />;
 }
-
-    

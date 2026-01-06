@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -40,6 +39,7 @@ export function ShipMateAccessDialog({
   useEffect(() => {
      if (!isOpen) {
       setSelectedContacts([]);
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -119,7 +119,3 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
-
-    
-
-    

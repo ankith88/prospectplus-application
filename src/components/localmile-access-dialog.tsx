@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -40,6 +39,7 @@ export function LocalMileAccessDialog({
   useEffect(() => {
     if (!isOpen) {
       setSelectedContacts([]);
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -75,7 +75,7 @@ export function LocalMileAccessDialog({
       await onConfirm();
       
     } catch (error: any) {
-      // The onConfirm function will handle its own error toasts
+      // The onConfirm function is expected to handle its own error toasts
     } finally {
       setIsSubmitting(false);
       onOpenChange(false);
@@ -120,5 +120,3 @@ export function LocalMileAccessDialog({
     </Dialog>
   );
 }
-
-    
