@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,7 +24,7 @@ interface ShipMateAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
 }
 
 export function ShipMateAccessDialog({
@@ -72,16 +73,12 @@ export function ShipMateAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access to ShipMate.`,
       });
       
-      onConfirm(); // Trigger the NetSuite API call
+      await onConfirm(); // Trigger the NetSuite API call
       onOpenChange(false);
 
     } catch (error) {
       console.error('Failed to grant ShipMate access:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to update contact access. Please try again.',
-      });
+      // The onConfirm function will show its own toast on failure
     } finally {
       setIsSubmitting(false);
     }
@@ -125,3 +122,5 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
+
+    

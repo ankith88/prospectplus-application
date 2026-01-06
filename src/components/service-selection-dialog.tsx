@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -141,12 +142,13 @@ export function ServiceSelectionDialog({
     }
 
     setIsSubmitting(true);
-    const { id: toastId } = toast({
-      title: 'Processing...',
-      description: 'Configuring services and syncing with NetSuite...',
-    });
 
     try {
+       const { id: toastId } = toast({
+        title: 'Processing...',
+        description: 'Configuring services and syncing with NetSuite...',
+      });
+
       const serviceSelections = values.selectedServices.map(serviceName => ({
         name: serviceName as any,
         frequency: values.frequencies[serviceName],
@@ -183,8 +185,7 @@ export function ServiceSelectionDialog({
 
       await updateLeadServices(lead.id, serviceSelections);
 
-      toast({
-        id: toastId,
+      toast.update(toastId, {
         title: 'Success!',
         description: `The ${mode.toLowerCase()} has been configured for the selected services.`,
       });
@@ -192,7 +193,6 @@ export function ServiceSelectionDialog({
     } catch (error: any) {
       console.error('Failed to save service selection:', error);
       toast({
-        id: toastId,
         variant: 'destructive',
         title: 'Error',
         description: error.message || 'Failed to save service selection. Please try again.',
@@ -472,3 +472,5 @@ export function ServiceSelectionDialog({
     </>
   );
 }
+
+    
