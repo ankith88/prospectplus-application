@@ -94,6 +94,7 @@ export interface Contact {
   phone: string
   syncedWithNetSuite?: boolean;
   accessToLocalMile?: 'yes' | 'no';
+  accessToShipMate?: 'yes' | 'no';
 }
 
 export interface Address {
@@ -221,5 +222,3 @@ export type SavedRoute = Omit<StorableRoute, 'directions'> & {
     directions: google.maps.DirectionsResult | null;
     scheduledDate?: string | Date;
 };
-
-    
