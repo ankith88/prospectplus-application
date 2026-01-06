@@ -43,7 +43,8 @@ import {
   Phone,
   User,
   PlusCircle,
-  MoreVertical
+  MoreVertical,
+  ClipboardEdit,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
@@ -1525,5 +1526,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
