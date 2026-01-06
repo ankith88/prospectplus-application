@@ -144,10 +144,12 @@ export default function CheckInPage() {
     const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
     const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
-    const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
-    const [isShipMateAccessOpen, setIsShipMateAccessOpen] = useState(false);
+    const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
+    const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
     const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
+    const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
+    const [isLoadingMPProducts, setIsLoadingMPProducts] = useState(false);
 
 
     const [isAddingContact, setIsAddingContact] = useState(false);
@@ -331,6 +333,7 @@ export default function CheckInPage() {
 
     const handleLocalMileTrial = async () => {
         if (!lead) return;
+        setIsLoadingLocalMile(true);
         const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
@@ -348,10 +351,12 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
             toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+        } finally {
+             setIsLoadingLocalMile(false);
         }
     };
 
-    const openLocalMileDialog = () => {
+    const handleOpenLocalMileDialog = () => {
         if (!lead?.contacts || lead.contacts.length === 0) {
             toast({
                 variant: 'destructive',
@@ -360,11 +365,12 @@ export default function CheckInPage() {
             });
             return;
         }
-        setIsLocalMileAccessOpen(true);
+        setIsLocalMileDialogOpen(true);
     };
 
     const handleMPProductsTrial = async () => {
         if (!lead) return;
+        setIsLoadingMPProducts(true);
         const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
@@ -378,10 +384,12 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
             toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+        } finally {
+            setIsLoadingMPProducts(false);
         }
     };
 
-    const openShipMateDialog = () => {
+    const handleOpenShipMateDialog = () => {
         if (!lead?.contacts || lead.contacts.length === 0) {
             toast({
                 variant: 'destructive',
@@ -390,7 +398,7 @@ export default function CheckInPage() {
             });
             return;
         }
-        setIsShipMateAccessOpen(true);
+        setIsShipMateDialogOpen(true);
     };
 
 
@@ -413,7 +421,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} handleOpenShipMateDialog={openShipMateDialog} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={handleOpenLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} handleOpenShipMateDialog={handleOpenShipMateDialog} isLoadingMPProducts={isLoadingMPProducts} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
             default: return null;
         }
     };
@@ -459,40 +467,42 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
+                 {lead && (
                  <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
                     <DialogContent>
-                      {lead && (
-                        <ServiceSelectionDialog
-                            isOpen={isServiceSelectionOpen}
-                            onOpenChange={setIsServiceSelectionOpen}
-                            lead={lead}
-                            mode={serviceSelectionMode}
-                        />
-                      )}
+                      <ServiceSelectionDialog
+                          isOpen={isServiceSelectionOpen}
+                          onOpenChange={setIsServiceSelectionOpen}
+                          lead={lead}
+                          mode={serviceSelectionMode}
+                      />
                     </DialogContent>
                 </Dialog>
+                 )}
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
                  </LogNoteDialog>
                  <LocalMileAccessDialog
-                    isOpen={isLocalMileAccessOpen}
-                    onOpenChange={setIsLocalMileAccessOpen}
+                    isOpen={isLocalMileDialogOpen}
+                    onOpenChange={setIsLocalMileDialogOpen}
                     lead={lead}
                     onConfirm={handleLocalMileTrial}
                  />
                  <ShipMateAccessDialog
-                    isOpen={isShipMateAccessOpen}
-                    onOpenChange={setIsShipMateAccessOpen}
+                    isOpen={isShipMateDialogOpen}
+                    onOpenChange={setIsShipMateDialogOpen}
                     lead={lead}
                     onConfirm={handleMPProductsTrial}
                  />
-                 <RevisitDialog 
-                    isOpen={isRevisitDialogOpen}
-                    onOpenChange={setIsRevisitDialogOpen}
-                    lead={lead}
-                    onRevisitScheduled={handleRevisitScheduled}
-                 />
+                 {isRevisitDialogOpen && (
+                    <RevisitDialog 
+                        isOpen={isRevisitDialogOpen}
+                        onOpenChange={setIsRevisitDialogOpen}
+                        lead={lead}
+                        onRevisitScheduled={handleRevisitScheduled}
+                    />
+                 )}
                  {isScheduleAppointmentOpen && (
                     <ScheduleAppointmentDialog
                         isOpen={isScheduleAppointmentOpen}
@@ -813,7 +823,7 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, handleOpenLocalMileDialog, handleOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; handleOpenLocalMileDialog: () => void; handleOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog, isLoadingMPProducts, handleOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; isLoadingMPProducts: boolean; handleOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
     const router = useRouter();
 
   return (
@@ -856,8 +866,12 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={handleOpenShipMateDialog}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={handleOpenLocalMileDialog}>LocalMile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleOpenShipMateDialog} disabled={isLoadingMPProducts}>
+                            {isLoadingMPProducts ? <Loader /> : 'ShipMate'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
+                            {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
@@ -874,11 +888,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
   )
 };
 
-
-
-
-
-    
-
-
-    

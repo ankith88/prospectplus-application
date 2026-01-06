@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import type { Lead, Contact } from '@/lib/types';
+import type { Lead } from '@/lib/types';
 import { updateContactInLead } from '@/services/firebase';
 
 interface ShipMateAccessDialogProps {
@@ -124,3 +124,4 @@ export function ShipMateAccessDialog({
 }
 
     
+

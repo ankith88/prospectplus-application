@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -240,7 +241,7 @@ export function ServiceSelectionDialog({
                         value={field.value}
                         className="p-4"
                         >
-                        {contacts.map((contact) => (
+                        {(contacts || []).map((contact) => (
                             <FormItem key={contact.id} className="flex items-center space-x-3">
                             <FormControl>
                                 <RadioGroupItem value={contact.id} />
