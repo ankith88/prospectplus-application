@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactInLead, initiateLocalMileTrial, updateLeadStatus } from '@/services/firebase';
+import { initiateLocalMileTrial, updateLeadStatus, updateContactSendEmail } from '@/services/firebase';
 import { useRouter } from 'next/navigation';
 
 interface LocalMileAccessDialogProps {
@@ -63,12 +63,12 @@ export function LocalMileAccessDialog({
     try {
       await Promise.all(
         selectedContacts.map((contactId) =>
-          updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+          updateContactSendEmail(lead.id, contactId)
         )
       );
 
       toast({
-        title: 'Access Granted',
+        title: 'Access Granted & Trial Initiating',
         description: `${selectedContacts.length} contact(s) have been granted access. Initiating trial...`,
       });
       
@@ -77,10 +77,8 @@ export function LocalMileAccessDialog({
       if (responseBody.success === true) {
           await updateLeadStatus(lead.id, 'LocalMile Pending');
           toast({ title: 'Success!', description: 'LocalMile free trial initiated and lead status updated.' });
-          setTimeout(() => {
-            onOpenChange(false);
-            router.push('/field-sales');
-          }, 100);
+          onOpenChange(false);
+          router.push('/field-sales');
       } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
           toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
       } else {

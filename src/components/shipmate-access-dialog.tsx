@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactInLead, initiateMPProductsTrial, updateLeadStatus } from '@/services/firebase';
+import { initiateMPProductsTrial, updateLeadStatus, updateContactSendEmail } from '@/services/firebase';
 import { useRouter } from 'next/navigation';
 
 interface ShipMateAccessDialogProps {
@@ -63,12 +63,12 @@ export function ShipMateAccessDialog({
     try {
       await Promise.all(
         selectedContacts.map((contactId) =>
-          updateContactInLead(lead.id, contactId, { accessToShipMate: 'yes' })
+          updateContactSendEmail(lead.id, contactId)
         )
       );
 
       toast({
-        title: 'Access Granted',
+        title: 'Access Granted & Trial Initiating',
         description: `${selectedContacts.length} contact(s) have been granted access to ShipMate. Initiating trial...`,
       });
       
@@ -76,10 +76,8 @@ export function ShipMateAccessDialog({
       if (responseBody.success) {
           await updateLeadStatus(lead.id, 'Trialing ShipMate');
           toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-          setTimeout(() => {
-            onOpenChange(false);
-            router.push('/field-sales');
-          }, 100);
+          onOpenChange(false);
+          router.push('/field-sales');
       } else {
           throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
       }
