@@ -38,11 +38,11 @@ export function LocalMileAccessDialog({
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!isOpen) {
+    // Reset state when the dialog is closed, but not while submitting
+    if (!isOpen && !isSubmitting) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
-  }, [isOpen]);
+  }, [isOpen, isSubmitting]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
@@ -78,9 +78,10 @@ export function LocalMileAccessDialog({
 
     } catch (error) {
       console.error('Failed to grant LocalMile access:', error);
-      // The onConfirm function will show its own toast on failure
+      // The onConfirm function in the parent will show its own toast on failure
     } finally {
       setIsSubmitting(false);
+      // We don't close here, onConfirm will redirect or the user closes manually
     }
   };
 
@@ -111,7 +112,7 @@ export function LocalMileAccessDialog({
           </div>
         </ScrollArea>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || selectedContacts.length === 0}>
@@ -122,6 +123,3 @@ export function LocalMileAccessDialog({
     </Dialog>
   );
 }
-
-    
-

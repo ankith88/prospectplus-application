@@ -58,7 +58,7 @@ type FormValues = z.infer<typeof formSchema>;
 interface ServiceSelectionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: Lead;
+  lead: Lead | null;
   mode: 'Free Trial' | 'Signup';
 }
 
@@ -120,6 +120,7 @@ export function ServiceSelectionDialog({
   };
 
   const handleContactAdded = async (newContactData: Omit<Contact, 'id'>) => {
+    if (!lead) return;
     const newContactId = await addContactToLead(lead.id, newContactData);
     const tempContact: Contact = { ...newContactData, id: newContactId };
     setContacts((prev) => [...prev, tempContact]);
@@ -129,6 +130,8 @@ export function ServiceSelectionDialog({
 
 
   const handleSubmit = async (values: FormValues) => {
+    if (!lead) return;
+    
     if (mode === 'Free Trial' && !values.trialDateRange?.from) {
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
       return;
@@ -460,7 +463,7 @@ export function ServiceSelectionDialog({
             )}
 
             <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
@@ -473,5 +476,3 @@ export function ServiceSelectionDialog({
     </>
   );
 }
-
-    

@@ -38,11 +38,10 @@ export function ShipMateAccessDialog({
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!isOpen) {
+     if (!isOpen && !isSubmitting) {
       setSelectedContacts([]);
-      setIsSubmitting(false);
     }
-  }, [isOpen]);
+  }, [isOpen, isSubmitting]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
@@ -111,7 +110,7 @@ export function ShipMateAccessDialog({
           </div>
         </ScrollArea>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || selectedContacts.length === 0}>
@@ -122,6 +121,3 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
-
-    
-
