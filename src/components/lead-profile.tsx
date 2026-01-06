@@ -915,12 +915,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onLeadMoved={() => router.refresh()} // Refresh page data after moving
     />
      <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-        <ServiceSelectionDialog
-            isOpen={isServiceSelectionOpen}
-            onOpenChange={setIsServiceSelectionOpen}
-            leadId={lead.id}
-            mode={serviceSelectionMode}
-        />
+        <DialogContent>
+            <ServiceSelectionDialog
+                isOpen={isServiceSelectionOpen}
+                onOpenChange={setIsServiceSelectionOpen}
+                lead={lead}
+                mode={serviceSelectionMode}
+            />
+        </DialogContent>
     </Dialog>
      {isScheduleAppointmentOpen && (
         <ScheduleAppointmentDialog
@@ -1220,7 +1222,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                          return (
                           <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
                               <Card className="relative group/contact">
-                                  <CardHeader className="flex-row items-start justify-between pb-2">
+                                  <CardHeader className="flex-row items-start justify-between pb-2 p-0">
                                       <div>
                                           <p className="font-semibold">{contact.name}</p>
                                           <p className="text-sm text-muted-foreground">{contact.title}</p>
@@ -1261,7 +1263,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                           </DropdownMenuContent>
                                       </DropdownMenu>
                                   </CardHeader>
-                                  <CardContent className="space-y-3 text-sm">
+                                  <CardContent className="space-y-3 text-sm p-0 pt-2">
                                       <div className="flex items-center gap-3">
                                           <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
                                           <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -1058,11 +1059,22 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
       syncedWithNetSuite: false, // Always set to false on edit
     };
     await updateDoc(contactRef, updatePayload);
-    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name} updated.` });
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name || 'details'} updated.` });
     console.log(`Contact ${contactId} updated for lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
     throw new Error('Failed to update contact in Firebase');
+  }
+}
+
+async function updateContactSendEmail(leadId: string, contactId: string): Promise<void> {
+  try {
+    const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
+    await updateDoc(contactRef, { sendEmail: 'yes' });
+    console.log(`Contact ${contactId} for lead ${leadId} marked for email.`);
+  } catch (error) {
+    console.error(`Failed to update contact ${contactId} for email on lead ${leadId}:`, error);
+    throw new Error('Failed to update contact for email in Firebase');
   }
 }
 
@@ -1894,10 +1906,12 @@ export {
     moveLeadToBucket,
     bulkMoveLeadsToBucket,
     deleteLeadsByCampaign,
+    updateContactSendEmail,
 };
 
     
 
     
+
 
 

@@ -7,7 +7,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -26,7 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail } from '@/services/firebase';
 import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon } from 'lucide-react';
@@ -34,6 +33,8 @@ import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
+import type { Lead } from '@/lib/types';
+import { ScrollArea } from './ui/scroll-area';
 
 const services = [
   { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
@@ -47,6 +48,7 @@ const formSchema = z.object({
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
+  selectedContactId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -54,14 +56,14 @@ type FormValues = z.infer<typeof formSchema>;
 interface ServiceSelectionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  leadId: string;
+  lead: Lead;
   mode: 'Free Trial' | 'Signup';
 }
 
 export function ServiceSelectionDialog({
   isOpen,
   onOpenChange,
-  leadId,
+  lead,
   mode,
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,12 +98,16 @@ export function ServiceSelectionDialog({
 
   const handleSubmit = async (values: FormValues) => {
     if (mode === 'Free Trial' && !values.trialDateRange?.from) {
-        form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
-        return;
+      form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
+      return;
+    }
+    if (mode === 'Free Trial' && !values.selectedContactId) {
+      form.setError('selectedContactId', { type: 'manual', message: 'Please select a contact.' });
+      return;
     }
     if (mode === 'Signup' && !values.startDate) {
-        form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
-        return;
+      form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
+      return;
     }
 
     setIsSubmitting(true);
@@ -111,37 +117,41 @@ export function ServiceSelectionDialog({
     });
 
     try {
-        const serviceSelections = values.selectedServices.map(serviceName => ({
-            name: serviceName as any,
-            frequency: values.frequencies[serviceName],
-            trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
-            trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
-            startDate: mode === 'Signup' ? values.startDate?.toISOString() : undefined,
-        }));
-        
-        if (mode === 'Free Trial') {
-            const trialDates = eachDayOfInterval({
-                start: values.trialDateRange!.from!,
-                end: values.trialDateRange!.to || values.trialDateRange!.from!,
-            }).map(date => format(date, 'dd/MM/yyyy'));
-            
-            const nsResponse = await initiateServicesTrial({
-                leadId: leadId,
-                services: serviceSelections.map(s => ({
-                    service: s.name,
-                    frequency: s.frequency,
-                })),
-                trialPeriod: trialDates,
-            });
+      const serviceSelections = values.selectedServices.map(serviceName => ({
+        name: serviceName as any,
+        frequency: values.frequencies[serviceName],
+        trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
+        trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
+        startDate: mode === 'Signup' ? values.startDate?.toISOString() : undefined,
+      }));
 
-            if (!nsResponse.success) {
-                throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
-            }
-            
-            await updateLeadStatus(leadId, 'Free Trial');
+      if (mode === 'Free Trial') {
+        if (values.selectedContactId) {
+            await updateContactSendEmail(lead.id, values.selectedContactId);
+        }
+
+        const trialDates = eachDayOfInterval({
+          start: values.trialDateRange!.from!,
+          end: values.trialDateRange!.to || values.trialDateRange!.from!,
+        }).map(date => format(date, 'dd/MM/yyyy'));
+
+        const nsResponse = await initiateServicesTrial({
+          leadId: lead.id,
+          services: serviceSelections.map(s => ({
+            service: s.name,
+            frequency: s.frequency,
+          })),
+          trialPeriod: trialDates,
+        });
+
+        if (!nsResponse.success) {
+          throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
         }
         
-      await updateLeadServices(leadId, serviceSelections);
+        await updateLeadStatus(lead.id, 'Free Trial');
+      }
+
+      await updateLeadServices(lead.id, serviceSelections);
 
       toast({
         id: toastId,
@@ -169,7 +179,7 @@ export function ServiceSelectionDialog({
   }, [isOpen, form]);
 
   return (
-    <DialogContent className="max-w-2xl">
+    <>
       <DialogHeader>
         <DialogTitle>{mode} for Services</DialogTitle>
         <DialogDescription>
@@ -178,6 +188,38 @@ export function ServiceSelectionDialog({
       </DialogHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+          {mode === 'Free Trial' && (
+            <FormField
+              control={form.control}
+              name="selectedContactId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Send Commencement Form To</FormLabel>
+                  <ScrollArea className="max-h-40 w-full rounded-md border">
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="p-4"
+                    >
+                      {lead.contacts?.map((contact) => (
+                        <FormItem key={contact.id} className="flex items-center space-x-3">
+                          <FormControl>
+                            <RadioGroupItem value={contact.id} />
+                          </FormControl>
+                          <FormLabel className="font-normal flex flex-col">
+                            <span>{contact.name}</span>
+                            <span className="text-xs text-muted-foreground">{contact.email}</span>
+                          </FormLabel>
+                        </FormItem>
+                      ))}
+                    </RadioGroup>
+                  </ScrollArea>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
           <FormField
             control={form.control}
             name="selectedServices"
@@ -227,6 +269,7 @@ export function ServiceSelectionDialog({
                   <FormItem>
                     <RadioGroup
                       onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : [])}
+                      defaultValue={field.value === 'Adhoc' ? 'Adhoc' : 'Daily'}
                       className="mb-2"
                     >
                       <FormItem className="flex items-center space-x-2">
@@ -383,6 +426,6 @@ export function ServiceSelectionDialog({
           </DialogFooter>
         </form>
       </Form>
-    </DialogContent>
+    </>
   );
 }

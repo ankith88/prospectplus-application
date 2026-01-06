@@ -34,10 +34,14 @@ import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
+import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
+import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
+import { ShipMateAccessDialog } from '@/components/shipmate-access-dialog';
+
 
 const discoverySchema = z.object({
   relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
@@ -141,7 +145,10 @@ export default function CheckInPage() {
     const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
     const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
+    const [isShipMateAccessOpen, setIsShipMateAccessOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
+    const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
+
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -149,13 +156,14 @@ export default function CheckInPage() {
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
     const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
+    const [isLoadingMPProducts, setIsLoadingMPProducts] = useState(false);
 
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
 
-    const methods = useForm<z.infer<typeof discoverySchema>>({
-        resolver: zodResolver(discoverySchema),
+    const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
+        resolver: zodResolver(discoverySchema.partial()),
         defaultValues: {
             checkInCompleted: true
         }
@@ -197,65 +205,48 @@ export default function CheckInPage() {
     }, [params.leadId, router, toast, methods]);
 
     const handleNext = async () => {
-        const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
-            [], // Step 1 is company info
-            [], // Step 2 is contact info
-            ['relevanceCheck'], // Step 3
-            ['reasonsToLeave'], // Step 4
-            ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
-            ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 6
-            ['currentProvider', 'eCommerceTech'], // Step 7
-            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
-        ];
-
-        const fieldsToValidate = stepFields[currentStep -1];
-        const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
-        
-        if (isValid) {
-            setIsSaving(true);
-            try {
-                const currentData = methods.getValues();
-                
-                // Sanitize undefined values before saving to Firestore
-                if (currentData.otherProvider === undefined) {
-                    currentData.otherProvider = '';
-                }
-                if (currentData.otherECommerceTech === undefined) {
-                    currentData.otherECommerceTech = '';
-                }
-                 if (currentData.painPoints === undefined) {
-                    currentData.painPoints = '';
-                }
-
-                if(lead?.id) {
-                    const leadRef = doc(firestore, 'leads', lead.id);
-                    await updateDoc(leadRef, { discoveryData: currentData });
-                }
-                
-                if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
-                    const allFieldsValid = await methods.trigger();
-                    if (allFieldsValid) {
-                        const discoveryData = calculateScoreAndRouting(methods.getValues());
-                        setFinalDiscoveryData(discoveryData);
-                        await updateLeadDiscoveryData(lead!.id, discoveryData);
-                        await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
-                        setCurrentStep(prev => prev + 1); // Go to final actions step
-                    } else {
-                         toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
-                    }
-                } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
-                     setCurrentStep(prev => prev + 2); // Skip step 4
-                } else {
-                    setCurrentStep(prev => prev + 1);
-                }
-            } catch (error: any) {
-                console.error("Failed to save discovery data:", error);
-                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
-            } finally {
-                setIsSaving(false);
+        setIsSaving(true);
+        try {
+            let isValid = true;
+            if (currentStep === 3) {
+                 isValid = await methods.trigger(['relevanceCheck']);
+                 if (!isValid) {
+                    toast({ variant: "destructive", title: "Missing Information", description: "Please answer the relevance question before proceeding." });
+                    setIsSaving(false);
+                    return;
+                 }
             }
-        } else {
-            toast({ variant: "destructive", title: "Missing Information", description: "Please fill out all required fields before proceeding." });
+            
+            const currentData = { ...methods.getValues() };
+            
+            // Sanitize undefined values before saving to Firestore
+            for (const key in currentData) {
+                if (currentData[key as keyof typeof currentData] === undefined) {
+                    delete currentData[key as keyof typeof currentData];
+                }
+            }
+
+            if(lead?.id && Object.keys(currentData).length > 0) {
+                const leadRef = doc(firestore, 'leads', lead.id);
+                await updateDoc(leadRef, { discoveryData: currentData });
+            }
+            
+            if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
+                const discoveryData = calculateScoreAndRouting(methods.getValues());
+                setFinalDiscoveryData(discoveryData);
+                await updateLeadDiscoveryData(lead!.id, discoveryData);
+                await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
+                setCurrentStep(prev => prev + 1); // Go to final actions step
+            } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
+                    setCurrentStep(prev => prev + 2); // Skip step 4
+            } else {
+                setCurrentStep(prev => prev + 1);
+            }
+        } catch (error: any) {
+            console.error("Failed to save discovery data:", error);
+            toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -343,23 +334,23 @@ export default function CheckInPage() {
     const handleLocalMileTrial = async () => {
         if (!lead) return;
         setIsLoadingLocalMile(true);
-        toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast({ title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
-                router.push('/field-sales');
+                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                router.push('/leads/map');
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
 
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }
@@ -376,6 +367,40 @@ export default function CheckInPage() {
         }
         setIsLocalMileAccessOpen(true);
     };
+
+    const handleMPProductsTrial = async () => {
+        if (!lead) return;
+        setIsLoadingMPProducts(true);
+        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
+        try {
+            const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
+            if (responseBody.success) {
+                await updateLeadStatus(lead.id, 'Trialing ShipMate');
+                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                router.push('/leads/map');
+            } else {
+                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
+            }
+        } catch (error: any) {
+            console.error('ShipMate free trial failed:', error);
+            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+        } finally {
+            setIsLoadingMPProducts(false);
+        }
+    };
+
+    const openShipMateDialog = () => {
+        if (!lead?.contacts || lead.contacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Found',
+                description: 'Please add at least one contact before initiating a ShipMate trial.',
+            });
+            return;
+        }
+        setIsShipMateAccessOpen(true);
+    };
+
 
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
@@ -396,7 +421,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} handleOpenLocalMileDialog={openLocalMileDialog} isLoadingLocalMile={isLoadingLocalMile} handleOpenShipMateDialog={openShipMateDialog} isLoadingMPProducts={isLoadingMPProducts} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
             default: return null;
         }
     };
@@ -447,7 +472,7 @@ export default function CheckInPage() {
                         <ServiceSelectionDialog
                             isOpen={isServiceSelectionOpen}
                             onOpenChange={setIsServiceSelectionOpen}
-                            leadId={lead.id}
+                            lead={lead}
                             mode={serviceSelectionMode}
                         />
                     </DialogContent>
@@ -464,12 +489,27 @@ export default function CheckInPage() {
                         onConfirm={handleLocalMileTrial}
                     />
                  )}
+                 {isShipMateAccessOpen && (
+                    <ShipMateAccessDialog
+                        isOpen={isShipMateAccessOpen}
+                        onOpenChange={setIsShipMateAccessOpen}
+                        lead={lead}
+                        onConfirm={handleMPProductsTrial}
+                    />
+                 )}
                  {isRevisitDialogOpen && (
                     <RevisitDialog 
                         isOpen={isRevisitDialogOpen}
                         onOpenChange={setIsRevisitDialogOpen}
                         lead={lead}
                         onRevisitScheduled={handleRevisitScheduled}
+                    />
+                 )}
+                 {isScheduleAppointmentOpen && (
+                    <ScheduleAppointmentDialog
+                        isOpen={isScheduleAppointmentOpen}
+                        onOpenChange={setIsScheduleAppointmentOpen}
+                        lead={lead}
                     />
                  )}
             </div>
@@ -785,12 +825,8 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
     )
 };
 
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; }) => {
-    const handleRepSelection = (repName: string, repUrl: string) => {
-        const calendlyUrl = new URL(repUrl);
-        if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
-        window.open(calendlyUrl.toString(), '_blank');
-    };
+const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isLoadingLocalMile, handleOpenLocalMileDialog, isLoadingMPProducts, handleOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isLoadingLocalMile: boolean; handleOpenLocalMileDialog: () => void; isLoadingMPProducts: boolean; handleOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
+    const router = useRouter();
 
   return (
     <div className="space-y-6">
@@ -832,25 +868,18 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem>MP Products</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={handleOpenShipMateDialog} disabled={isLoadingMPProducts}>
+                            {isLoadingMPProducts ? <Loader /> : 'ShipMate'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={handleOpenLocalMileDialog} disabled={isLoadingLocalMile}>
                             {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button size="lg" className="h-auto py-4" variant="secondary"><Calendar className="mr-2"/> Schedule Appointment</Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            {salesReps.map(rep => (
-                                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -860,13 +889,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
-
-
-
-    
-
-    
-
-    
-
-  
