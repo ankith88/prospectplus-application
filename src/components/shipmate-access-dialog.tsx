@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,10 +37,11 @@ export function ShipMateAccessDialog({
   const { toast } = useToast();
 
   useEffect(() => {
-     if (!isOpen && !isSubmitting) {
+     if (!isOpen) {
       setSelectedContacts([]);
+      setIsSubmitting(false);
     }
-  }, [isOpen, isSubmitting]);
+  }, [isOpen]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
@@ -72,12 +72,12 @@ export function ShipMateAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access to ShipMate.`,
       });
       
-      await onConfirm(); // Trigger the NetSuite API call
+      await onConfirm();
       onOpenChange(false);
 
     } catch (error) {
-      console.error('Failed to grant ShipMate access:', error);
       // The onConfirm function will show its own toast on failure
+      console.error('Failed to grant ShipMate access:', error);
     } finally {
       setIsSubmitting(false);
     }

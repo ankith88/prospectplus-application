@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -89,7 +88,6 @@ export function ServiceSelectionDialog({
 
   useEffect(() => {
     if (!isOpen) {
-      // Reset form and state when dialog is closed
       form.reset({
         selectedServices: [],
         frequencies: {},

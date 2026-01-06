@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { AuthProvider } from '@/hooks/use-auth'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading';
 
 export const metadata: Metadata = {
   title: 'ProspectPlus',
@@ -55,11 +56,14 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <SidebarProvider>
-            <TooltipProvider>
-              <AppLayout>{children}</AppLayout>
-            </TooltipProvider>
-          </SidebarProvider>
+          <LoadingProvider>
+            <SidebarProvider>
+              <TooltipProvider>
+                <AppLayout>{children}</AppLayout>
+                <GlobalLoader />
+              </TooltipProvider>
+            </SidebarProvider>
+          </LoadingProvider>
           <Toaster />
         </AuthProvider>
       </body>

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,11 +37,11 @@ export function LocalMileAccessDialog({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Reset state when the dialog is closed, but not while submitting
-    if (!isOpen && !isSubmitting) {
+    if (!isOpen) {
       setSelectedContacts([]);
+      setIsSubmitting(false);
     }
-  }, [isOpen, isSubmitting]);
+  }, [isOpen]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
@@ -77,11 +76,10 @@ export function LocalMileAccessDialog({
       onOpenChange(false);
 
     } catch (error) {
-      console.error('Failed to grant LocalMile access:', error);
       // The onConfirm function in the parent will show its own toast on failure
+      console.error('Failed to grant LocalMile access:', error);
     } finally {
       setIsSubmitting(false);
-      // We don't close here, onConfirm will redirect or the user closes manually
     }
   };
 
