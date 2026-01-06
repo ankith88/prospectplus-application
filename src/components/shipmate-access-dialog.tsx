@@ -69,7 +69,7 @@ export function ShipMateAccessDialog({
 
       toast({
         title: 'Access Granted',
-        description: `${selectedContacts.length} contact(s) have been granted access to ShipMate.`,
+        description: `${selectedContacts.length} contact(s) have been granted access to ShipMate. Initiating trial...`,
       });
       
       await onConfirm();

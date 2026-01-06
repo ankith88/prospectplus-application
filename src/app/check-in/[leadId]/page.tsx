@@ -40,7 +40,6 @@ import { firestore } from '@/lib/firebase';
 import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
 import { ShipMateAccessDialog } from '@/components/shipmate-access-dialog';
-import { useLoading } from '@/hooks/use-loading';
 
 
 const discoverySchema = z.object({
@@ -159,7 +158,6 @@ export default function CheckInPage() {
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
-    const { setLoading: setGlobalLoading } = useLoading();
 
     const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
         resolver: zodResolver(discoverySchema.partial()),
@@ -373,6 +371,30 @@ export default function CheckInPage() {
         setIsRevisitDialogOpen(false);
         router.push('/field-sales');
     };
+    
+    const openLocalMileDialog = () => {
+        if (!lead?.contacts || lead.contacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Found',
+                description: 'Please add at least one contact before initiating a LocalMile trial.',
+            });
+            return;
+        }
+        setIsLocalMileDialogOpen(true);
+    };
+
+    const openShipMateDialog = () => {
+        if (!lead?.contacts || lead.contacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Found',
+                description: 'Please add at least one contact before initiating a ShipMate trial.',
+            });
+            return;
+        }
+        setIsShipMateDialogOpen(true);
+    };
 
 
     const renderStep = () => {
@@ -388,7 +410,7 @@ export default function CheckInPage() {
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onOpenLocalMileDialog={() => setIsLocalMileDialogOpen(true)} onOpenShipMateDialog={() => setIsShipMateDialogOpen(true)} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
+            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onOpenLocalMileDialog={openLocalMileDialog} onOpenShipMateDialog={openShipMateDialog} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
             default: return null;
         }
     };
@@ -793,23 +815,6 @@ const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onOpenLocalMileDialog, onOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'free-trial' | 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onOpenLocalMileDialog: () => void; onOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
     const router = useRouter();
 
-    const openLocalMile = () => {
-        if (!lead.contacts || lead.contacts.length === 0) {
-            alert('Please add at least one contact before initiating a LocalMile trial.');
-            return;
-        }
-        onOpenLocalMileDialog();
-    }
-    
-    const openShipMate = () => {
-        if (!lead.contacts || lead.contacts.length === 0) {
-            alert('Please add at least one contact before initiating a ShipMate trial.');
-            return;
-        }
-        onOpenShipMateDialog();
-    }
-
-
   return (
     <div className="space-y-6">
         <div className="text-left space-y-2">
@@ -850,18 +855,14 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => onOpenDialog('free-trial')}>Service</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={openShipMate}>
-                            ShipMate
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={openLocalMile}>
-                            LocalMile
-                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={onOpenShipMateDialog}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={onOpenLocalMileDialog}>LocalMile</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/field-sales')}><Route className="mr-2"/> Back to Route</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -871,4 +872,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
-

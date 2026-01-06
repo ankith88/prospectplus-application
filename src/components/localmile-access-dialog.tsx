@@ -69,7 +69,7 @@ export function LocalMileAccessDialog({
 
       toast({
         title: 'Access Granted',
-        description: `${selectedContacts.length} contact(s) have been granted access to LocalMile.`,
+        description: `${selectedContacts.length} contact(s) have been granted access to LocalMile. Initiating trial...`,
       });
       
       await onConfirm(); // Trigger the NetSuite API call
