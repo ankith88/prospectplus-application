@@ -117,7 +117,7 @@ function SelectServicesContent() {
     if (!lead || !mode) return;
     
     // Validations based on mode
-    if ((mode === 'service-trial' || mode === 'signup') && values.selectedServices?.length === 0) {
+    if ((mode === 'service-trial' || mode === 'signup') && (!values.selectedServices || values.selectedServices.length === 0)) {
       form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service.' });
       return;
     }
@@ -228,7 +228,7 @@ function SelectServicesContent() {
         <header className="flex-shrink-0 flex items-center justify-between">
             <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
             <div className="flex flex-col items-center">
-                <h1 className="text-lg font-bold">{getTitle()}</h1>
+                <h1 className="text-lg font-bold text-center">{getTitle()}</h1>
                 <p className="text-sm text-muted-foreground">{lead.companyName}</p>
             </div>
             <div className="w-10"></div>
@@ -240,6 +240,9 @@ function SelectServicesContent() {
                         <div className="py-4">
                             <h3 className="font-semibold mb-4">Add New Contact</h3>
                             <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
+                             <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => setIsAddingContact(false)}>
+                                Cancel
+                            </Button>
                         </div>
                     ) : (
                         <Form {...form}>
@@ -365,7 +368,7 @@ function SelectServicesContent() {
                                           <Popover>
                                             <PopoverTrigger asChild>
                                               <FormControl>
-                                                <Button variant={"outline"} className={cn("w-[300px] justify-start text-left font-normal", !field.value?.from && "text-muted-foreground")}>
+                                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal sm:w-[300px]", !field.value?.from && "text-muted-foreground")}>
                                                   <CalendarIcon className="mr-2 h-4 w-4" />
                                                   {field.value?.from ? field.value.to ? `${format(field.value.from, "LLL dd, y")} - ${format(field.value.to, "LLL dd, y")}` : format(field.value.from, "LLL dd, y") : <span>Pick a date range</span>}
                                                 </Button>
@@ -391,7 +394,7 @@ function SelectServicesContent() {
                                           <Popover>
                                             <PopoverTrigger asChild>
                                               <FormControl>
-                                                <Button variant={"outline"} className={cn("w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                <Button variant={"outline"} className={cn("w-full sm:w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
                                                   {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                                 </Button>
