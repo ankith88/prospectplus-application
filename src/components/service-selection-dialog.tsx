@@ -84,13 +84,12 @@ export function ServiceSelectionDialog({
   }, [lead]);
 
   useEffect(() => {
-    if (onOpenChange) {
-        form.reset({
-            selectedServices: [],
-            frequencies: {},
-        });
-        setIsAddingContact(false);
-    }
+    if (!onOpenChange) return;
+    form.reset({
+        selectedServices: [],
+        frequencies: {},
+    });
+    setIsAddingContact(false);
   }, [onOpenChange, form]);
 
 
@@ -472,3 +471,5 @@ export function ServiceSelectionDialog({
       </DialogContent>
   );
 }
+
+    
