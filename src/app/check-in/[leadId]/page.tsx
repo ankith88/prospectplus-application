@@ -341,9 +341,11 @@ export default function CheckInPage() {
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
                 update({ id: toastId, title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                setIsLoadingLocalMile(false);
                 router.push('/leads/map');
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
                 update({ id: toastId, variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+                setIsLoadingLocalMile(false);
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
@@ -351,7 +353,6 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
             update({ id: toastId, variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        } finally {
             setIsLoadingLocalMile(false);
         }
     };
@@ -377,6 +378,7 @@ export default function CheckInPage() {
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
                 update({ id: toastId, title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                setIsLoadingMPProducts(false);
                 router.push('/field-sales');
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
@@ -384,7 +386,6 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
             update({ id: toastId, variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
-        } finally {
             setIsLoadingMPProducts(false);
         }
     };
@@ -754,7 +755,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: ()=> void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -891,4 +892,5 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
 
