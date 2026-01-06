@@ -73,13 +73,13 @@ export function ShipMateAccessDialog({
       });
       
       await onConfirm();
-      onOpenChange(false);
 
     } catch (error) {
       // The onConfirm function will show its own toast on failure
       console.error('Failed to grant ShipMate access:', error);
     } finally {
       setIsSubmitting(false);
+      onOpenChange(false);
     }
   };
 

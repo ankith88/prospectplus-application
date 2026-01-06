@@ -72,14 +72,14 @@ export function LocalMileAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access to LocalMile. Initiating trial...`,
       });
       
-      await onConfirm(); // Trigger the NetSuite API call
-      onOpenChange(false);
-
+      await onConfirm();
+      
     } catch (error) {
       // The onConfirm function in the parent will show its own toast on failure
       console.error('Failed to grant LocalMile access:', error);
     } finally {
       setIsSubmitting(false);
+      onOpenChange(false);
     }
   };
 
