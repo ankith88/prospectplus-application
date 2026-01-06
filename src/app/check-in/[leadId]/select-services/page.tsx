@@ -34,6 +34,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddContactForm } from '@/components/add-contact-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { MultiSelectCombobox, type Option as MultiSelectOption } from '@/components/ui/multi-select-combobox';
+
 
 const services = [
   { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
@@ -51,7 +53,9 @@ const formSchema = z.object({
   rates: z.record(z.string().min(1, "Rate is required.")),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
-  selectedContactId: z.string().optional(),
+  serviceCommencementContactId: z.string().optional(),
+  shipmateContactIds: z.array(z.string()).optional(),
+  localmileContactIds: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -77,6 +81,8 @@ function SelectServicesContent() {
       selectedServices: [],
       frequencies: {},
       rates: {},
+      shipmateContactIds: [],
+      localmileContactIds: [],
     },
   });
 
@@ -94,18 +100,25 @@ function SelectServicesContent() {
       });
     }
   }, [params.leadId, router, toast]);
+  
+  const selectedServices = form.watch('selectedServices');
+  const addServices = form.watch('addServices');
+  const shipmateAccess = form.watch('shipmateAccess');
+  const localmileAccess = form.watch('localmileAccess');
 
   useEffect(() => {
     form.reset({
+      shipmateAccess: false,
+      localmileAccess: false,
+      addServices: false,
       selectedServices: [],
       frequencies: {},
       rates: {},
+      shipmateContactIds: [],
+      localmileContactIds: [],
     });
     setIsAddingContact(false);
-  }, [form]);
-
-  const selectedServices = form.watch('selectedServices');
-  const addServices = form.watch('addServices');
+  }, [form, mode]);
 
   const handleDateSelect = (range: DateRange | undefined, onChange: (...event: any[]) => void) => {
     if (range?.from && range?.to && differenceInDays(range.to, range.from) > 4) {
@@ -120,7 +133,6 @@ function SelectServicesContent() {
     const newContactId = await addContactToLead(lead.id, newContactData);
     const tempContact: Contact = { ...newContactData, id: newContactId };
     setContacts((prev) => [...prev, tempContact]);
-    form.setValue('selectedContactId', tempContact.id);
     setIsAddingContact(false);
   };
 
@@ -129,24 +141,30 @@ function SelectServicesContent() {
     
     // Validations based on mode
     if (mode === 'service-trial' && (!values.selectedServices || values.selectedServices.length === 0)) {
-      form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service.' });
-      return;
+      form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service.' }); return;
     }
-     if (mode === 'signup' && values.addServices && (!values.selectedServices || values.selectedServices.length === 0)) {
-        form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service if "Add MailPlus Services" is checked.' });
-        return;
+    if (mode === 'signup' && values.addServices) {
+        if (!values.selectedServices || values.selectedServices.length === 0) {
+            form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service.' }); return;
+        }
+        if (!values.serviceCommencementContactId) {
+            form.setError('serviceCommencementContactId', { type: 'manual', message: 'Please select a contact for the commencement form.' }); return;
+        }
     }
-    if ((mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && !values.selectedContactId) {
-        form.setError('selectedContactId', { type: 'manual', message: 'Please select a contact.' });
-        return;
+    if (mode === 'signup' && values.shipmateAccess && (!values.shipmateContactIds || values.shipmateContactIds.length === 0)) {
+        form.setError('shipmateContactIds', { type: 'manual', message: 'Please select at least one contact for ShipMate access.' }); return;
+    }
+    if (mode === 'signup' && values.localmileAccess && (!values.localmileContactIds || values.localmileContactIds.length === 0)) {
+        form.setError('localmileContactIds', { type: 'manual', message: 'Please select at least one contact for LocalMile access.' }); return;
+    }
+    if ((mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && !values.serviceCommencementContactId) {
+        form.setError('serviceCommencementContactId', { type: 'manual', message: 'Please select a contact.' }); return;
     }
     if (mode === 'service-trial' && !values.trialDateRange?.from) {
-      form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
-      return;
+      form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' }); return;
     }
     if (mode === 'signup' && !values.startDate) {
-      form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
-      return;
+      form.setError('startDate', { type: 'manual', message: 'Please select a start date.' }); return;
     }
     
     setIsSubmitting(true);
@@ -155,9 +173,18 @@ function SelectServicesContent() {
       let nsResponse: { success: boolean; message: string };
       let newStatus: Lead['status'];
       let successDescription: string;
+      
+      const allContactIdsToUpdate = new Set<string>();
+      if (mode === 'signup') {
+        if (values.addServices && values.serviceCommencementContactId) allContactIdsToUpdate.add(values.serviceCommencementContactId);
+        if (values.shipmateAccess) values.shipmateContactIds?.forEach(id => allContactIdsToUpdate.add(id));
+        if (values.localmileAccess) values.localmileContactIds?.forEach(id => allContactIdsToUpdate.add(id));
+      } else {
+         if (values.serviceCommencementContactId) allContactIdsToUpdate.add(values.serviceCommencementContactId);
+      }
 
-      if (values.selectedContactId) {
-        await updateContactSendEmail(lead.id, values.selectedContactId);
+      for (const contactId of Array.from(allContactIdsToUpdate)) {
+        await updateContactSendEmail(lead.id, contactId);
       }
 
       if (mode === 'service-trial') {
@@ -183,11 +210,9 @@ function SelectServicesContent() {
         newStatus = 'LocalMile Pending';
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
-        // For signup, we might have a different NetSuite call in the future.
-        // For now, we'll just update status and services.
-        nsResponse = { success: true, message: 'Signup processed locally.' }; // Placeholder
+        nsResponse = { success: true, message: 'Signup processed locally.' }; 
         newStatus = 'Won';
-        successDescription = 'The new services have been signed up.';
+        successDescription = 'The new customer has been signed up.';
       } else {
         throw new Error('Invalid mode');
       }
@@ -237,6 +262,8 @@ function SelectServicesContent() {
     }
   }
 
+  const contactOptions: MultiSelectOption[] = contacts.map(c => ({ value: c.id, label: `${c.name} (${c.email})` }));
+
   if (!lead) {
     return <FullScreenLoader message="Loading Lead Details..." />;
   }
@@ -275,7 +302,7 @@ function SelectServicesContent() {
                                     {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
                                         <FormField
                                         control={form.control}
-                                        name="selectedContactId"
+                                        name="serviceCommencementContactId"
                                         render={({ field }) => (
                                             <FormItem>
                                             <FormLabel>Send Commencement Form To*</FormLabel>
@@ -304,29 +331,59 @@ function SelectServicesContent() {
                                     )}
 
                                     {mode === 'signup' && (
-                                        <div className="space-y-4">
-                                            <h3 className="font-medium">Customer Access</h3>
-                                            <div className="space-y-2">
+                                        <div className="space-y-6">
+                                            <div className="space-y-4 rounded-md border p-4">
                                                 <FormField control={form.control} name="shipmateAccess" render={({ field }) => (
-                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                                                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                                                         <div className="space-y-1 leading-none"><FormLabel>Grant ShipMate Access</FormLabel></div>
                                                     </FormItem>
                                                 )}/>
+                                                {shipmateAccess && (
+                                                     <FormField control={form.control} name="shipmateContactIds" render={({ field }) => (
+                                                        <FormItem><FormLabel>ShipMate Contacts*</FormLabel>
+                                                            <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
+                                                        <FormMessage /></FormItem>
+                                                    )}/>
+                                                )}
+                                            </div>
+                                             <div className="space-y-4 rounded-md border p-4">
                                                  <FormField control={form.control} name="localmileAccess" render={({ field }) => (
-                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                                                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                                                         <div className="space-y-1 leading-none"><FormLabel>Grant LocalMile Access</FormLabel></div>
                                                     </FormItem>
                                                 )}/>
+                                                 {localmileAccess && (
+                                                     <FormField control={form.control} name="localmileContactIds" render={({ field }) => (
+                                                        <FormItem><FormLabel>LocalMile Contacts*</FormLabel>
+                                                            <MultiSelectCombobox options={contactOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select contacts..." />
+                                                        <FormMessage /></FormItem>
+                                                    )}/>
+                                                 )}
                                             </div>
-                                            <hr/>
-                                            <FormField control={form.control} name="addServices" render={({ field }) => (
-                                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                                    <FormLabel className="font-normal text-base">Add MailPlus Services</FormLabel>
-                                                </FormItem>
-                                            )}/>
+                                            <div className="space-y-4 rounded-md border p-4">
+                                                <FormField control={form.control} name="addServices" render={({ field }) => (
+                                                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                        <FormLabel className="font-normal text-base">Add MailPlus Services</FormLabel>
+                                                    </FormItem>
+                                                )}/>
+                                                {addServices && (
+                                                    <FormField control={form.control} name="serviceCommencementContactId" render={({ field }) => (
+                                                        <FormItem className="pt-4"><FormLabel>Send Commencement Form To*</FormLabel>
+                                                            <RadioGroup onValueChange={field.onChange} value={field.value} className="p-4 border rounded-md">
+                                                                {contacts.map((contact) => (
+                                                                    <FormItem key={contact.id} className="flex items-center space-x-3"><FormControl><RadioGroupItem value={contact.id} /></FormControl>
+                                                                    <FormLabel className="font-normal flex flex-col"><span>{contact.name}</span><span className="text-xs text-muted-foreground">{contact.email}</span></FormLabel>
+                                                                    </FormItem>
+                                                                ))}
+                                                            </RadioGroup>
+                                                            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}><UserPlus className="mr-2 h-4 w-4" />Add New Contact</Button>
+                                                        <FormMessage /></FormItem>
+                                                    )}/>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
@@ -382,7 +439,7 @@ function SelectServicesContent() {
                                                     name={`rates.${serviceName}`}
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel>Rate ($)</FormLabel>
+                                                            <FormLabel>Rate ($)*</FormLabel>
                                                             <FormControl>
                                                                 <Input type="number" placeholder="e.g. 15.50" {...field} />
                                                             </FormControl>
@@ -395,7 +452,7 @@ function SelectServicesContent() {
                                                 name={`frequencies.${serviceName}`}
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                    <FormLabel>Frequency</FormLabel>
+                                                    <FormLabel>Frequency*</FormLabel>
                                                     <RadioGroup 
                                                         onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
                                                         value={Array.isArray(field.value) && field.value.length === 5 ? 'Daily' : (field.value === 'Adhoc' ? 'Adhoc' : 'Custom')}
@@ -512,5 +569,3 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
-
-    
