@@ -163,7 +163,7 @@ function SelectServicesContent() {
     if (mode === 'service-trial' && !values.trialDateRange?.from) {
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' }); return;
     }
-    if (mode === 'signup' && !values.startDate) {
+    if (mode === 'signup' && values.addServices && !values.startDate) {
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' }); return;
     }
     
@@ -228,7 +228,7 @@ function SelectServicesContent() {
           rate: parseFloat(values.rates[serviceName]),
           trialStartDate: mode === 'service-trial' ? values.trialDateRange?.from?.toISOString() : undefined,
           trialEndDate: mode === 'service-trial' ? values.trialDateRange?.to?.toISOString() : undefined,
-          startDate: mode === 'signup' ? values.startDate?.toISOString() : undefined,
+          startDate: (mode === 'signup' && addServices) ? values.startDate?.toISOString() : undefined,
         }));
         await updateLeadServices(lead.id, serviceSelections);
       }
@@ -520,7 +520,7 @@ function SelectServicesContent() {
                                         />
                                     )}
                                     
-                                    {mode === 'signup' && (
+                                    {(mode === 'signup' && addServices) && (
                                         <FormField
                                         control={form.control}
                                         name="startDate"
