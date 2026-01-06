@@ -135,6 +135,7 @@ import { Label } from './ui/label'
 import { LocalMileAccessDialog } from './localmile-access-dialog';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
+import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 
 
 interface LeadProfileProps {
@@ -259,7 +260,7 @@ function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDia
     );
 }
 
-const salesReps = [
+export const salesReps = [
     { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
     { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
     { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
@@ -278,6 +279,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
   const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
+  const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
@@ -653,29 +655,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const destination = isCompanyProfile ? '/signed-customers' : '/leads';
     router.push(destination);
   };
-
-  const getCalendlyLink = (url: string) => {
-    if (!lead || !user?.displayName) return '#';
-    
-    const calendlyUrl = new URL(url);
-    if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
-    if(lead.entityId) calendlyUrl.searchParams.append('a2', lead.entityId);
-    if(user.displayName) calendlyUrl.searchParams.append('a3', user.displayName);
-
-    return calendlyUrl.toString();
-  };
   
-  const handleRepSelection = (repName: string, repUrl: string, contact?: Contact) => {
+  const handleRepSelection = (repName: string, repUrl: string) => {
     if (!lead) return;
-
-    let finalUrl: string;
-    if (contact) {
-        finalUrl = getContactCalendlyLink(contact, repUrl) || '#';
-    } else {
-        finalUrl = getCalendlyLink(repUrl);
-    }
-    
-    window.open(finalUrl, '_blank');
     
     // setLead(prev => ({ ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
     toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
@@ -689,24 +671,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
         });
   };
-
-  const getContactCalendlyLink = (contact: Contact, baseUrl: string) => {
-    if (!baseUrl || !contact.name) return null;
-    const nameParts = contact.name.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
-
-    const calendlyUrl = new URL(baseUrl);
-    const params = calendlyUrl.searchParams;
-
-    params.set('name', `${firstName} ${lastName}`);
-    params.set('email', contact.email);
-    if (lead) params.set('a1', lead.id);
-    if (lead?.entityId) params.set('a2', lead.entityId);
-    if (user?.displayName) params.set('a3', user.displayName);
-
-    return calendlyUrl.toString();
-  }
 
   const handleFindNearbyCompanies = useCallback(async () => {
     if (!lead.latitude || !lead.longitude || !window.google?.maps?.geometry) {
@@ -868,19 +832,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
     const scheduleAppointmentButton = (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant={isNormalUser || isAdmin ? "default" : "outline"}>
-                <Calendar className="mr-2 h-4 w-4" />
-                Schedule Appointment
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-            {salesReps.map(rep => (
-                <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>{rep.name}</DropdownMenuItem>
-            ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <Button variant={isNormalUser || isAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}>
+            <Calendar className="mr-2 h-4 w-4" />
+            Schedule Appointment
+        </Button>
     );
     
     const logOutcomeButton = (
@@ -967,6 +922,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             mode={serviceSelectionMode}
         />
     </Dialog>
+     {isScheduleAppointmentOpen && (
+        <ScheduleAppointmentDialog
+            isOpen={isScheduleAppointmentOpen}
+            onOpenChange={setIsScheduleAppointmentOpen}
+            lead={lead}
+        />
+    )}
 
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
       <DialogContent className="max-w-2xl">
@@ -1200,16 +1162,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div>
                       <p className="text-muted-foreground">Sales Rep Assigned</p>
                       {lead.salesRepAssigned ? (
-                        lead.salesRepAssignedCalendlyLink ? (
-                          <a href={lead.salesRepAssignedCalendlyLink} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
-                            <span>{lead.salesRepAssigned}</span>
-                            <LinkIcon className="w-3 h-3 shrink-0" />
-                          </a>
-                        ) : (
-                          <p className="font-medium">{lead.salesRepAssigned}</p>
-                        )
+                        <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                            <Button variant="link" className="p-0 h-auto font-medium">
+                                {lead.salesRepAssigned} <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent>
+                                {salesReps.map(rep => (
+                                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
+                                        Assign to {rep.name}
+                                    </DropdownMenuItem>
+                                ))}
+                           </DropdownMenuContent>
+                        </DropdownMenu>
                       ) : (
-                        <p className="font-medium">N/A</p>
+                        <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="link" className="p-0 h-auto font-medium">
+                                Assign a Sales Rep <ChevronDown className="ml-2 h-4 w-4" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent>
+                                {salesReps.map(rep => (
+                                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
+                                        {rep.name}
+                                    </DropdownMenuItem>
+                                ))}
+                           </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </div>
@@ -1236,7 +1217,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {contacts.length > 0 ? (
                       <div className="space-y-4">
                       {contacts.map((contact, index) => {
-                         const contactCalendlyLink = getContactCalendlyLink(contact, lead.salesRepAssignedCalendlyLink || '');
                          return (
                           <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
                               <Card className="relative group/contact">
@@ -1299,51 +1279,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                       </div>
                                   </CardContent>
                                   <CardFooter>
-                                      <div className="flex w-full items-center gap-0.5">
-                                          {lead.salesRepAssigned && lead.salesRepAssignedCalendlyLink ? (
-                                              <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  asChild
-                                                  className={cn("flex-grow rounded-r-none")}
-                                              >
-                                                  <a href={contactCalendlyLink || '#'} target="_blank" rel="noopener noreferrer">
-                                                      <Calendar className="mr-2 h-4 w-4" />
-                                                      Schedule with {lead.salesRepAssigned}
-                                                  </a>
-                                              </Button>
-                                          ) : (
-                                              <DropdownMenu>
-                                                  <DropdownMenuTrigger asChild>
-                                                      <Button variant="outline" size="sm" className="flex-grow">
-                                                          <Calendar className="mr-2 h-4 w-4" />
-                                                          Schedule Appointment
-                                                      </Button>
-                                                  </DropdownMenuTrigger>
-                                                  <DropdownMenuContent>
-                                                      {salesReps.map(rep => (
-                                                          <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                              {rep.name}
-                                                          </DropdownMenuItem>
-                                                      ))}
-                                                  </DropdownMenuContent>
-                                              </DropdownMenu>
-                                          )}
-                                          <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                  <Button variant="outline" size="sm" className="px-2 rounded-l-none border-l-0">
-                                                      <ChevronDown className="h-4 w-4" />
-                                                  </Button>
-                                              </DropdownMenuTrigger>
-                                              <DropdownMenuContent align="end">
-                                                  {salesReps.filter(rep => rep.name !== lead.salesRepAssigned).map(rep => (
-                                                      <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url, contact)}>
-                                                          Schedule with {rep.name}
-                                                      </DropdownMenuItem>
-                                                  ))}
-                                              </DropdownMenuContent>
-                                          </DropdownMenu>
-                                      </div>
+                                       <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() => setIsScheduleAppointmentOpen(true)}
+                                        >
+                                            <Calendar className="mr-2 h-4 w-4" />
+                                            Schedule Appointment
+                                        </Button>
                                   </CardFooter>
                               </Card>
                               <DialogContent>
