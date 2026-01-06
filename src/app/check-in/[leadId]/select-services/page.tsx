@@ -44,7 +44,7 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
 const formSchema = z.object({
   selectedServices: z.array(z.string()).optional(),
-  frequencies: z.record(z.union([z.array(z.string()).min(1, "Frequency is required."), z.literal('Adhoc')])),
+  frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
   rates: z.record(z.string().min(1, "Rate is required.")),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
@@ -200,7 +200,13 @@ function SelectServicesContent() {
       await updateLeadStatus(lead.id, newStatus);
 
       toast({ title: 'Success!', description: successDescription });
-      router.push('/field-sales');
+      
+      const activeRouteId = localStorage.getItem('activeRouteId');
+      if (activeRouteId) {
+        router.push('/leads/map');
+      } else {
+        router.push('/field-sales');
+      }
 
     } catch (error: any) {
       console.error('Failed to submit:', error);
@@ -466,3 +472,5 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
+
+    
