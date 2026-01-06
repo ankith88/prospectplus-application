@@ -33,6 +33,7 @@ import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddContactForm } from '@/components/add-contact-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 const services = [
   { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
@@ -44,6 +45,7 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 const formSchema = z.object({
   selectedServices: z.array(z.string()).optional(),
   frequencies: z.record(z.union([z.array(z.string()).min(1, "Frequency is required."), z.literal('Adhoc')])),
+  rates: z.record(z.string().min(1, "Rate is required.")),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
@@ -68,6 +70,7 @@ function SelectServicesContent() {
     defaultValues: {
       selectedServices: [],
       frequencies: {},
+      rates: {},
     },
   });
 
@@ -90,6 +93,7 @@ function SelectServicesContent() {
     form.reset({
       selectedServices: [],
       frequencies: {},
+      rates: {},
     });
     setIsAddingContact(false);
   }, [form]);
@@ -149,6 +153,7 @@ function SelectServicesContent() {
         const serviceSelections = values.selectedServices!.map(serviceName => ({
             service: serviceName as any,
             frequency: values.frequencies[serviceName],
+            rate: parseFloat(values.rates[serviceName]),
         }));
         const trialDates = eachDayOfInterval({
           start: values.trialDateRange!.from!,
@@ -184,6 +189,7 @@ function SelectServicesContent() {
         const serviceSelections = values.selectedServices.map(serviceName => ({
           name: serviceName as any,
           frequency: values.frequencies[serviceName],
+          rate: parseFloat(values.rates[serviceName]),
           trialStartDate: mode === 'service-trial' ? values.trialDateRange?.from?.toISOString() : undefined,
           trialEndDate: mode === 'service-trial' ? values.trialDateRange?.to?.toISOString() : undefined,
           startDate: mode === 'signup' ? values.startDate?.toISOString() : undefined,
@@ -305,7 +311,6 @@ function SelectServicesContent() {
                                                                 field.onChange(newSelected);
 
                                                                 if (checked) {
-                                                                    // Default to Daily when a service is selected
                                                                     form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
                                                                 }
                                                             }}
@@ -326,19 +331,34 @@ function SelectServicesContent() {
 
                                         {selectedServices?.map((serviceName) => (
                                           <div key={serviceName} className="space-y-4 rounded-md border p-4">
-                                            <h3 className="font-medium">{serviceName} - Frequency</h3>
+                                            <h3 className="font-medium">{serviceName}</h3>
+                                            <FormField
+                                                control={form.control}
+                                                name={`rates.${serviceName}`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Rate ($)</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" placeholder="e.g. 15.50" {...field} />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                                />
                                             <FormField
                                               control={form.control}
                                               name={`frequencies.${serviceName}`}
                                               render={({ field }) => (
                                                 <FormItem>
+                                                  <FormLabel>Frequency</FormLabel>
                                                   <RadioGroup 
                                                       onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
-                                                      value={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} 
+                                                      value={Array.isArray(field.value) && field.value.length === 5 ? 'Daily' : (field.value === 'Adhoc' ? 'Adhoc' : 'Custom')}
                                                       className="mb-2"
                                                   >
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
+                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Custom" /></FormControl><FormLabel className="font-normal">Custom</FormLabel></FormItem>
                                                   </RadioGroup>
                                                   {form.getValues(`frequencies.${serviceName}`) !== 'Adhoc' && (
                                                     <div className="flex flex-wrap gap-4 pt-2">
@@ -446,5 +466,3 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
-
-    

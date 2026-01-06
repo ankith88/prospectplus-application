@@ -10,6 +10,7 @@ interface ServiceTrialPayload {
   services: {
     service: 'Outgoing Mail Lodgement' | 'Express Banking';
     frequency: string[] | 'Adhoc';
+    rate: number;
   }[];
   trialPeriod: string[]; // Array of 'DD/MM/YYYY' strings
 }
@@ -40,6 +41,7 @@ export async function initiateServicesTrial(payload: ServiceTrialPayload): Promi
     services.forEach((s, index) => {
         params.append(`service_${index + 1}`, s.service);
         params.append(`frequency_${index + 1}`, Array.isArray(s.frequency) ? s.frequency.join(',') : s.frequency);
+        params.append(`rate_${index + 1}`, s.rate.toString());
     });
 
     params.append('trialPeriod', JSON.stringify(trialPeriod));

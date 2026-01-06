@@ -145,6 +145,7 @@ export interface Invoice {
 export interface ServiceSelection {
     name: 'Outgoing Mail Lodgement' | 'Express Banking';
     frequency: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] | 'Adhoc';
+    rate?: number;
     trialStartDate?: string;
     trialEndDate?: string;
     startDate?: string;
