@@ -342,7 +342,7 @@ export default function CheckInPage() {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
                 update({ id: toastId, title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
                 setIsLoadingLocalMile(false);
-                router.push('/leads/map');
+                setTimeout(() => router.push('/field-sales'), 100);
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
                 update({ id: toastId, variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
                 setIsLoadingLocalMile(false);
@@ -379,7 +379,7 @@ export default function CheckInPage() {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
                 update({ id: toastId, title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
                 setIsLoadingMPProducts(false);
-                router.push('/field-sales');
+                setTimeout(() => router.push('/field-sales'), 100);
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
@@ -659,7 +659,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onT
 };
 
 const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
+    const { control, trigger } = useFormContext();
     return (
         <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
              <FormField control={control} name="relevanceCheck" render={({ field }) => (
@@ -882,7 +882,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/field-sales')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -892,5 +892,6 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
 
 
