@@ -18,24 +18,24 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { initiateLocalMileTrial, updateLeadStatus, updateContactSendEmail } from '@/services/firebase';
-import { useRouter } from 'next/navigation';
+import { updateContactSendEmail } from '@/services/firebase';
 
 interface LocalMileAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
+  onConfirm: () => Promise<void>;
 }
 
 export function LocalMileAccessDialog({
   isOpen,
   onOpenChange,
   lead,
+  onConfirm,
 }: LocalMileAccessDialogProps) {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
 
   useEffect(() => {
     if (!isOpen) {
@@ -72,20 +72,10 @@ export function LocalMileAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access. Initiating trial...`,
       });
       
-      const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
-
-      if (responseBody.success === true) {
-          await updateLeadStatus(lead.id, 'LocalMile Pending');
-          toast({ title: 'Success!', description: 'LocalMile free trial initiated and lead status updated.' });
-          onOpenChange(false);
-          router.push('/field-sales');
-      } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-          toast({ variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
-      } else {
-          throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-      }
+      await onConfirm();
+      
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+      // The onConfirm function will handle its own error toasts
     } finally {
       setIsSubmitting(false);
       onOpenChange(false);

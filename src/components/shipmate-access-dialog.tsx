@@ -18,24 +18,24 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { initiateMPProductsTrial, updateLeadStatus, updateContactSendEmail } from '@/services/firebase';
-import { useRouter } from 'next/navigation';
+import { updateContactSendEmail } from '@/services/firebase';
 
 interface ShipMateAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
+  onConfirm: () => Promise<void>;
 }
 
 export function ShipMateAccessDialog({
   isOpen,
   onOpenChange,
   lead,
+  onConfirm,
 }: ShipMateAccessDialogProps) {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
 
   useEffect(() => {
      if (!isOpen) {
@@ -72,17 +72,9 @@ export function ShipMateAccessDialog({
         description: `${selectedContacts.length} contact(s) have been granted access to ShipMate. Initiating trial...`,
       });
       
-      const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
-      if (responseBody.success) {
-          await updateLeadStatus(lead.id, 'Trialing ShipMate');
-          toast({ title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-          onOpenChange(false);
-          router.push('/field-sales');
-      } else {
-          throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-      }
+      await onConfirm();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+        // Error toast is handled by the onConfirm promise
     } finally {
       setIsSubmitting(false);
       onOpenChange(false);
@@ -127,5 +119,7 @@ export function ShipMateAccessDialog({
     </Dialog>
   );
 }
+
+    
 
     
