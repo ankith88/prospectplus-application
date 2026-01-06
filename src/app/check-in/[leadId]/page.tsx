@@ -467,16 +467,18 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
-                 <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-                    <DialogContent>
-                        <ServiceSelectionDialog
-                            isOpen={isServiceSelectionOpen}
-                            onOpenChange={setIsServiceSelectionOpen}
-                            leadId={lead.id}
-                            mode={serviceSelectionMode}
-                        />
-                    </DialogContent>
-                </Dialog>
+                 {isServiceSelectionOpen && (
+                    <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+                        <DialogContent>
+                            <ServiceSelectionDialog
+                                isOpen={isServiceSelectionOpen}
+                                onOpenChange={setIsServiceSelectionOpen}
+                                lead={lead}
+                                mode={serviceSelectionMode}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                 )}
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>

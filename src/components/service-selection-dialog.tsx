@@ -178,12 +178,21 @@ export function ServiceSelectionDialog({
     }
   }, [isOpen, form]);
 
+  if (!lead) {
+    return (
+        <DialogHeader>
+            <DialogTitle>Loading...</DialogTitle>
+            <div className="py-8"><Loader /></div>
+        </DialogHeader>
+    );
+  }
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>{mode} for Services</DialogTitle>
         <DialogDescription>
-          Configure the required services, their frequency, and other details.
+          Configure the required services, their frequency, and other details for {lead.companyName}.
         </DialogDescription>
       </DialogHeader>
       <Form {...form}>
@@ -239,7 +248,7 @@ export function ServiceSelectionDialog({
                               checked={field.value?.includes(service.label)}
                               onCheckedChange={(checked) => {
                                 return checked
-                                  ? field.onChange([...field.value, service.label])
+                                  ? field.onChange([...(field.value || []), service.label])
                                   : field.onChange(
                                       field.value?.filter((value) => value !== service.label)
                                     );
