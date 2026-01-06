@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -19,15 +18,6 @@ import {
   Link as LinkIcon,
   MessageSquare,
   Mail,
-  MoreVertical,
-  Phone,
-  PlusCircle,
-  Sparkles,
-  Tag,
-  Trash2,
-  User,
-  Users,
-  ClipboardEdit,
   Briefcase,
   MapPin,
   Info,
@@ -47,6 +37,13 @@ import {
   XCircle,
   FileDigit,
   Move,
+  Sparkles,
+  Tag,
+  Users,
+  Phone,
+  User,
+  PlusCircle,
+  MoreVertical
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
@@ -128,13 +125,9 @@ import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ColdCallScorecardDialog } from './cold-call-scorecard';
 import { ScrollArea } from './ui/scroll-area'
-import { ServiceSelectionDialog } from './service-selection-dialog';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import { Label } from './ui/label'
-import { LocalMileAccessDialog } from './localmile-access-dialog';
-import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
-import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 
 
@@ -287,7 +280,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
   const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
-  const [isLocalMileAccessOpen, setIsLocalMileAccessOpen] = useState(false);
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
@@ -295,11 +287,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
-  const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
-  const [isLoadingLocalMile, setIsLoadingLocalMile] = useState(false);
-  const [isLoadingMPProducts, setIsLoadingMPProducts] = useState(false);
 
 
   const router = useRouter();
@@ -705,67 +693,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead, toast]);
 
-    const handleLocalMileTrial = async () => {
-        if (!lead) return;
-        setIsLoadingLocalMile(true);
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
-        try {
-            const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
-
-            if (responseBody.success === true) {
-                await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
-                 // Optimistic update
-                // setLead(prev => ({...prev, status: 'LocalMile Pending'}));
-                router.push('/field-sales');
-            } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
-            } else {
-                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-            }
-        } catch (error: any) {
-            console.error('LocalMile free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
-        } finally {
-            setIsLoadingLocalMile(false);
-        }
-    };
-    
-    const openLocalMileDialog = () => {
-        if (!lead.contacts || lead.contacts.length === 0) {
-            toast({
-                variant: 'destructive',
-                title: 'No Contacts Found',
-                description: 'Please add at least one contact before initiating a LocalMile trial.',
-            });
-            return;
-        }
-        setIsLocalMileAccessOpen(true);
-    };
-
-    const handleMPProductsTrial = async () => {
-        if (!lead) return;
-        setIsLoadingMPProducts(true);
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
-        try {
-            const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
-            if (responseBody.success) {
-                await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-                 // Optimistic update
-                // setLead(prev => ({...prev, status: 'Trialing ShipMate'}));
-                router.push('/field-sales');
-            } else {
-                throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
-            }
-        } catch (error: any) {
-            console.error('ShipMate free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
-        } finally {
-            setIsLoadingMPProducts(false);
-        }
-    };
-
 
   if (!lead || !user) {
     return (
@@ -805,7 +732,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const isNormalUser = !isAdmin && !isFieldSales;
 
     const signupButton = (
-      <Button variant={isFieldSales ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>
+      <Button variant={isFieldSales ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
         <Briefcase className="mr-2 h-4 w-4" />
         Signup
       </Button>
@@ -820,13 +747,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleMPProductsTrial} disabled={isLoadingMPProducts}>
-                  {isLoadingMPProducts ? <Loader /> : 'ShipMate'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={openLocalMileDialog} disabled={isLoadingLocalMile}>
-                    {isLoadingLocalMile ? <Loader /> : 'LocalMile'}
-                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}>Service</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=shipmate-trial`)}>ShipMate</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=localmile-trial`)}>LocalMile</DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );
@@ -900,30 +823,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   return (
     <>
-    {isLocalMileAccessOpen && lead && (
-        <LocalMileAccessDialog
-            isOpen={isLocalMileAccessOpen}
-            onOpenChange={setIsLocalMileAccessOpen}
-            lead={lead}
-            onConfirm={handleLocalMileTrial}
-        />
-    )}
     <MoveLeadDialog
         lead={lead}
         isOpen={isMoveLeadDialogOpen}
         onOpenChange={setIsMoveLeadDialogOpen}
         onLeadMoved={() => router.refresh()} // Refresh page data after moving
     />
-     <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
-        <DialogContent>
-            <ServiceSelectionDialog
-                isOpen={isServiceSelectionOpen}
-                onOpenChange={setIsServiceSelectionOpen}
-                lead={lead}
-                mode={serviceSelectionMode}
-            />
-        </DialogContent>
-    </Dialog>
      {isScheduleAppointmentOpen && (
         <ScheduleAppointmentDialog
             isOpen={isScheduleAppointmentOpen}
@@ -1620,3 +1525,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
