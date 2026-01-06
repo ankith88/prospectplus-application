@@ -43,6 +43,9 @@ const services = [
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
 const formSchema = z.object({
+  shipmateAccess: z.boolean().optional(),
+  localmileAccess: z.boolean().optional(),
+  addServices: z.boolean().optional(),
   selectedServices: z.array(z.string()).optional(),
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
   rates: z.record(z.string().min(1, "Rate is required.")),
@@ -68,6 +71,9 @@ function SelectServicesContent() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      shipmateAccess: false,
+      localmileAccess: false,
+      addServices: false,
       selectedServices: [],
       frequencies: {},
       rates: {},
@@ -99,6 +105,7 @@ function SelectServicesContent() {
   }, [form]);
 
   const selectedServices = form.watch('selectedServices');
+  const addServices = form.watch('addServices');
 
   const handleDateSelect = (range: DateRange | undefined, onChange: (...event: any[]) => void) => {
     if (range?.from && range?.to && differenceInDays(range.to, range.from) > 4) {
@@ -121,9 +128,13 @@ function SelectServicesContent() {
     if (!lead || !mode) return;
     
     // Validations based on mode
-    if ((mode === 'service-trial' || mode === 'signup') && (!values.selectedServices || values.selectedServices.length === 0)) {
+    if (mode === 'service-trial' && (!values.selectedServices || values.selectedServices.length === 0)) {
       form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service.' });
       return;
+    }
+     if (mode === 'signup' && values.addServices && (!values.selectedServices || values.selectedServices.length === 0)) {
+        form.setError('selectedServices', { type: 'manual', message: 'Please select at least one service if "Add MailPlus Services" is checked.' });
+        return;
     }
     if ((mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && !values.selectedContactId) {
         form.setError('selectedContactId', { type: 'manual', message: 'Please select a contact.' });
@@ -259,197 +270,226 @@ function SelectServicesContent() {
                     ) : (
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                                <div className="space-y-6">
-                                  {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
-                                    <FormField
-                                      control={form.control}
-                                      name="selectedContactId"
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>Send Commencement Form To*</FormLabel>
-                                          <ScrollArea className="h-40 w-full rounded-md border">
-                                            <RadioGroup onValueChange={field.onChange} value={field.value} className="p-4">
-                                              {contacts.map((contact) => (
-                                                <FormItem key={contact.id} className="flex items-center space-x-3">
-                                                  <FormControl>
-                                                    <RadioGroupItem value={contact.id} />
-                                                  </FormControl>
-                                                  <FormLabel className="font-normal flex flex-col">
-                                                    <span>{contact.name}</span>
-                                                    <span className="text-xs text-muted-foreground">{contact.email}</span>
-                                                  </FormLabel>
-                                                </FormItem>
-                                              ))}
-                                            </RadioGroup>
-                                          </ScrollArea>
-                                          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
-                                            <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
-                                          </Button>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-
-                                  {(mode === 'signup' || mode === 'service-trial') && (
-                                    <>
+                                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                                    <div className="space-y-6">
+                                    {(mode === 'service-trial' || mode === 'localmile-trial' || mode === 'shipmate-trial') && (
                                         <FormField
-                                          control={form.control}
-                                          name="selectedServices"
-                                          render={() => (
+                                        control={form.control}
+                                        name="selectedContactId"
+                                        render={({ field }) => (
                                             <FormItem>
-                                              <FormLabel>Services*</FormLabel>
-                                              <div className="space-y-2">
-                                                {services.map((service) => (
-                                                  <FormField
-                                                    key={service.id}
-                                                    control={form.control}
-                                                    name="selectedServices"
-                                                    render={({ field }) => (
-                                                      <FormItem className="flex items-center space-x-3">
-                                                        <FormControl>
-                                                          <Checkbox
-                                                            checked={field.value?.includes(service.label)}
-                                                            onCheckedChange={(checked) => {
-                                                                const newSelected = checked
-                                                                    ? [...(field.value || []), service.label]
-                                                                    : field.value?.filter((value) => value !== service.label);
-                                                                field.onChange(newSelected);
-
-                                                                if (checked) {
-                                                                    form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-                                                                }
-                                                            }}
-                                                          />
-                                                        </FormControl>
-                                                        <FormLabel className="font-normal">{service.label}</FormLabel>
-                                                      </FormItem>
-                                                    )}
-                                                  />
+                                            <FormLabel>Send Commencement Form To*</FormLabel>
+                                            <ScrollArea className="h-40 w-full rounded-md border">
+                                                <RadioGroup onValueChange={field.onChange} value={field.value} className="p-4">
+                                                {contacts.map((contact) => (
+                                                    <FormItem key={contact.id} className="flex items-center space-x-3">
+                                                    <FormControl>
+                                                        <RadioGroupItem value={contact.id} />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal flex flex-col">
+                                                        <span>{contact.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                                    </FormLabel>
+                                                    </FormItem>
                                                 ))}
-                                              </div>
-                                              <FormMessage />
+                                                </RadioGroup>
+                                            </ScrollArea>
+                                            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
+                                                <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
+                                            </Button>
+                                            <FormMessage />
                                             </FormItem>
-                                          )}
+                                        )}
                                         />
+                                    )}
 
-                                        {selectedServices && selectedServices.length > 0 && <hr />}
+                                    {mode === 'signup' && (
+                                        <div className="space-y-4">
+                                            <h3 className="font-medium">Customer Access</h3>
+                                            <div className="space-y-2">
+                                                <FormField control={form.control} name="shipmateAccess" render={({ field }) => (
+                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                        <div className="space-y-1 leading-none"><FormLabel>Grant ShipMate Access</FormLabel></div>
+                                                    </FormItem>
+                                                )}/>
+                                                 <FormField control={form.control} name="localmileAccess" render={({ field }) => (
+                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                        <div className="space-y-1 leading-none"><FormLabel>Grant LocalMile Access</FormLabel></div>
+                                                    </FormItem>
+                                                )}/>
+                                            </div>
+                                            <hr/>
+                                            <FormField control={form.control} name="addServices" render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                    <FormLabel className="font-normal text-base">Add MailPlus Services</FormLabel>
+                                                </FormItem>
+                                            )}/>
+                                        </div>
+                                    )}
 
-                                        {selectedServices?.map((serviceName) => (
-                                          <div key={serviceName} className="space-y-4 rounded-md border p-4">
-                                            <h3 className="font-medium">{serviceName}</h3>
+                                    {(mode === 'service-trial' || (mode === 'signup' && addServices)) && (
+                                        <>
                                             <FormField
+                                            control={form.control}
+                                            name="selectedServices"
+                                            render={() => (
+                                                <FormItem>
+                                                <FormLabel>Services*</FormLabel>
+                                                <div className="space-y-2">
+                                                    {services.map((service) => (
+                                                    <FormField
+                                                        key={service.id}
+                                                        control={form.control}
+                                                        name="selectedServices"
+                                                        render={({ field }) => (
+                                                        <FormItem className="flex items-center space-x-3">
+                                                            <FormControl>
+                                                            <Checkbox
+                                                                checked={field.value?.includes(service.label)}
+                                                                onCheckedChange={(checked) => {
+                                                                    const newSelected = checked
+                                                                        ? [...(field.value || []), service.label]
+                                                                        : field.value?.filter((value) => value !== service.label);
+                                                                    field.onChange(newSelected);
+
+                                                                    if (checked) {
+                                                                        form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                                                    }
+                                                                }}
+                                                            />
+                                                            </FormControl>
+                                                            <FormLabel className="font-normal">{service.label}</FormLabel>
+                                                        </FormItem>
+                                                        )}
+                                                    />
+                                                    ))}
+                                                </div>
+                                                <FormMessage />
+                                                </FormItem>
+                                            )}
+                                            />
+
+                                            {selectedServices && selectedServices.length > 0 && <hr />}
+
+                                            {selectedServices?.map((serviceName) => (
+                                            <div key={serviceName} className="space-y-4 rounded-md border p-4">
+                                                <h3 className="font-medium">{serviceName}</h3>
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`rates.${serviceName}`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Rate ($)</FormLabel>
+                                                            <FormControl>
+                                                                <Input type="number" placeholder="e.g. 15.50" {...field} />
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                    />
+                                                <FormField
                                                 control={form.control}
-                                                name={`rates.${serviceName}`}
+                                                name={`frequencies.${serviceName}`}
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Rate ($)</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" placeholder="e.g. 15.50" {...field} />
-                                                        </FormControl>
-                                                        <FormMessage />
+                                                    <FormLabel>Frequency</FormLabel>
+                                                    <RadioGroup 
+                                                        onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
+                                                        value={Array.isArray(field.value) && field.value.length === 5 ? 'Daily' : (field.value === 'Adhoc' ? 'Adhoc' : 'Custom')}
+                                                        className="mb-2"
+                                                    >
+                                                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
+                                                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
+                                                        <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Custom" /></FormControl><FormLabel className="font-normal">Custom</FormLabel></FormItem>
+                                                    </RadioGroup>
+                                                    {form.getValues(`frequencies.${serviceName}`) !== 'Adhoc' && (
+                                                        <div className="flex flex-wrap gap-4 pt-2">
+                                                        {days.map((day) => (
+                                                            <FormField key={day} control={form.control} name={`frequencies.${serviceName}`} render={({ field: dayField }) => (
+                                                            <FormItem className="flex items-center space-x-2">
+                                                                <FormControl>
+                                                                <Checkbox
+                                                                    checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
+                                                                    onCheckedChange={(checked) => {
+                                                                        const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
+                                                                        const newDays = checked
+                                                                            ? [...currentDays, day]
+                                                                            : currentDays.filter((d) => d !== day);
+                                                                        dayField.onChange(newDays);
+                                                                    }}
+                                                                />
+                                                                </FormControl>
+                                                                <FormLabel className="font-normal">{day}</FormLabel>
+                                                            </FormItem>
+                                                            )}/>
+                                                        ))}
+                                                        </div>
+                                                    )}
+                                                    <FormMessage />
                                                     </FormItem>
                                                 )}
                                                 />
-                                            <FormField
-                                              control={form.control}
-                                              name={`frequencies.${serviceName}`}
-                                              render={({ field }) => (
-                                                <FormItem>
-                                                  <FormLabel>Frequency</FormLabel>
-                                                  <RadioGroup 
-                                                      onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
-                                                      value={Array.isArray(field.value) && field.value.length === 5 ? 'Daily' : (field.value === 'Adhoc' ? 'Adhoc' : 'Custom')}
-                                                      className="mb-2"
-                                                  >
-                                                    <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
-                                                    <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
-                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Custom" /></FormControl><FormLabel className="font-normal">Custom</FormLabel></FormItem>
-                                                  </RadioGroup>
-                                                  {form.getValues(`frequencies.${serviceName}`) !== 'Adhoc' && (
-                                                    <div className="flex flex-wrap gap-4 pt-2">
-                                                      {days.map((day) => (
-                                                        <FormField key={day} control={form.control} name={`frequencies.${serviceName}`} render={({ field: dayField }) => (
-                                                          <FormItem className="flex items-center space-x-2">
-                                                            <FormControl>
-                                                              <Checkbox
-                                                                checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
-                                                                onCheckedChange={(checked) => {
-                                                                    const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
-                                                                    const newDays = checked
-                                                                        ? [...currentDays, day]
-                                                                        : currentDays.filter((d) => d !== day);
-                                                                    dayField.onChange(newDays);
-                                                                }}
-                                                              />
-                                                            </FormControl>
-                                                            <FormLabel className="font-normal">{day}</FormLabel>
-                                                          </FormItem>
-                                                        )}/>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  <FormMessage />
-                                                </FormItem>
-                                              )}
-                                            />
-                                          </div>
-                                        ))}
-                                    </>
-                                  )}
+                                            </div>
+                                            ))}
+                                        </>
+                                    )}
 
-                                  {mode === 'service-trial' && (
-                                    <FormField
-                                      control={form.control}
-                                      name="trialDateRange"
-                                      render={({ field }) => (
-                                        <FormItem className="flex flex-col">
-                                          <FormLabel>Free Trial Period (max 5 business days)*</FormLabel>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <FormControl>
-                                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal sm:w-[300px]", !field.value?.from && "text-muted-foreground")}>
-                                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                                  {field.value?.from ? field.value.to ? `${format(field.value.from, "LLL dd, y")} - ${format(field.value.to, "LLL dd, y")}` : format(field.value.from, "LLL dd, y") : <span>Pick a date range</span>}
-                                                </Button>
-                                              </FormControl>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                              <Calendar initialFocus mode="range" defaultMonth={field.value?.from} selected={field.value} onSelect={(range) => handleDateSelect(range, field.onChange)} numberOfMonths={2} disabled={(date) => isWeekend(date) || date < new Date()} />
-                                            </PopoverContent>
-                                          </Popover>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-                                  
-                                  {mode === 'signup' && (
-                                    <FormField
-                                      control={form.control}
-                                      name="startDate"
-                                      render={({ field }) => (
-                                        <FormItem className="flex flex-col">
-                                          <FormLabel>Service Start Date*</FormLabel>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <FormControl>
-                                                <Button variant={"outline"} className={cn("w-full sm:w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                                                  {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                </Button>
-                                              </FormControl>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                              <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date() || isWeekend(date)} initialFocus />
-                                            </PopoverContent>
-                                          </Popover>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-                                </div>
+                                    {mode === 'service-trial' && (
+                                        <FormField
+                                        control={form.control}
+                                        name="trialDateRange"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-col">
+                                            <FormLabel>Free Trial Period (max 5 business days)*</FormLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal sm:w-[300px]", !field.value?.from && "text-muted-foreground")}>
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {field.value?.from ? field.value.to ? `${format(field.value.from, "LLL dd, y")} - ${format(field.value.to, "LLL dd, y")}` : format(field.value.from, "LLL dd, y") : <span>Pick a date range</span>}
+                                                    </Button>
+                                                </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar initialFocus mode="range" defaultMonth={field.value?.from} selected={field.value} onSelect={(range) => handleDateSelect(range, field.onChange)} numberOfMonths={2} disabled={(date) => isWeekend(date) || date < new Date()} />
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
+                                    )}
+                                    
+                                    {mode === 'signup' && (
+                                        <FormField
+                                        control={form.control}
+                                        name="startDate"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-col">
+                                            <FormLabel>Service Start Date*</FormLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button variant={"outline"} className={cn("w-full sm:w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date() || isWeekend(date)} initialFocus />
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
+                                    )}
+                                    </div>
+                                </ScrollArea>
                                 <div className="flex justify-end pt-4 border-t">
                                     <Button type="submit" disabled={isSubmitting}>
                                         {isSubmitting ? <Loader /> : 'Submit'}
