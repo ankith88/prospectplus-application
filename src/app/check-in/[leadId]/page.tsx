@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -393,7 +394,7 @@ export default function CheckInPage() {
             case 5: return <DiscoveryStep2 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={()={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
@@ -713,7 +714,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -864,3 +865,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
+    
+
+    
