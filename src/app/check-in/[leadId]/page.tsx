@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -199,65 +198,44 @@ export default function CheckInPage() {
     }, [params.leadId, router, toast, methods]);
 
     const handleNext = async () => {
-        const stepFields: (keyof z.infer<typeof discoverySchema>)[] = [
-            [], // Step 1 is company info
-            [], // Step 2 is contact info
-            ['relevanceCheck'], // Step 3
-            ['reasonsToLeave'], // Step 4
-            ['postOfficeRelationship', 'logisticsSetup', 'servicePayment'], // Step 5
-            ['shippingVolume', 'expressVsStandard', 'packageType'], // Step 6
-            ['currentProvider', 'eCommerceTech'], // Step 7
-            ['sameDayCourier', 'decisionMaker', 'painPoints'], // Step 8
-        ];
-
-        const fieldsToValidate = stepFields[currentStep -1];
-        const isValid = fieldsToValidate.length > 0 ? await methods.trigger(fieldsToValidate) : true;
-        
-        if (isValid) {
-            setIsSaving(true);
-            try {
-                const currentData = methods.getValues();
-                
-                // Sanitize undefined values before saving to Firestore
-                if (currentData.otherProvider === undefined) {
-                    currentData.otherProvider = '';
-                }
-                if (currentData.otherECommerceTech === undefined) {
-                    currentData.otherECommerceTech = '';
-                }
-                 if (currentData.painPoints === undefined) {
-                    currentData.painPoints = '';
-                }
-
-                if(lead?.id) {
-                    const leadRef = doc(firestore, 'leads', lead.id);
-                    await updateDoc(leadRef, { discoveryData: currentData });
-                }
-                
-                if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
-                    const allFieldsValid = await methods.trigger();
-                    if (allFieldsValid) {
-                        const discoveryData = calculateScoreAndRouting(methods.getValues());
-                        setFinalDiscoveryData(discoveryData);
-                        await updateLeadDiscoveryData(lead!.id, discoveryData);
-                        await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
-                        setCurrentStep(prev => prev + 1); // Go to final actions step
-                    } else {
-                         toast({ variant: "destructive", title: "Missing Information", description: "Please go back and fill out all required fields." });
-                    }
-                } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
-                     setCurrentStep(prev => prev + 2); // Skip step 4
-                } else {
-                    setCurrentStep(prev => prev + 1);
-                }
-            } catch (error: any) {
-                console.error("Failed to save discovery data:", error);
-                toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
-            } finally {
-                setIsSaving(false);
+        setIsSaving(true);
+        try {
+            const currentData = methods.getValues();
+            
+            // Sanitize undefined values before saving to Firestore
+            if (currentData.otherProvider === undefined) {
+                currentData.otherProvider = '';
             }
-        } else {
-            toast({ variant: "destructive", title: "Missing Information", description: "Please fill out all required fields before proceeding." });
+            if (currentData.otherECommerceTech === undefined) {
+                currentData.otherECommerceTech = '';
+            }
+                if (currentData.painPoints === undefined) {
+                currentData.painPoints = '';
+            }
+
+            if(lead?.id) {
+                const leadRef = doc(firestore, 'leads', lead.id);
+                await updateDoc(leadRef, { discoveryData: currentData });
+            }
+            
+            if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
+                // The form is no longer strictly validated on each step,
+                // but we can still calculate the score on the final step.
+                const discoveryData = calculateScoreAndRouting(methods.getValues());
+                setFinalDiscoveryData(discoveryData);
+                await updateLeadDiscoveryData(lead!.id, discoveryData);
+                await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
+                setCurrentStep(prev => prev + 1); // Go to final actions step
+            } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
+                    setCurrentStep(prev => prev + 2); // Skip step 4
+            } else {
+                setCurrentStep(prev => prev + 1);
+            }
+        } catch (error: any) {
+            console.error("Failed to save discovery data:", error);
+            toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -415,7 +393,7 @@ export default function CheckInPage() {
             case 5: return <DiscoveryStep2 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={()={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
                 setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
                 setIsServiceSelectionOpen(true);
@@ -814,6 +792,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
         if (lead.id) calendlyUrl.searchParams.append('a1', lead.id);
         window.open(calendlyUrl.toString(), '_blank');
     };
+    const router = useRouter();
 
   return (
     <div className="space-y-6">
@@ -875,7 +854,7 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
                     </DropdownMenu>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -885,17 +864,3 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
-
-
-
-    
-
-    
-
-    
-
-  
-
-
-
-

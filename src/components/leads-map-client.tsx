@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -421,7 +420,15 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
     const handleLoadRoute = (route: SavedRoute) => {
         if (!isLoaded) return;
-        setSelectedRouteLeads(route.leads);
+        
+        // Filter out archived leads before loading the route
+        const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'Free Trial', 'LocalMile Pending'];
+        const activeLeadsInRoute = route.leads.filter(leadInRoute => {
+            const fullLead = mapData.find(l => l.id === leadInRoute.id);
+            return fullLead && !archivedStatuses.includes(fullLead.status);
+        });
+
+        setSelectedRouteLeads(activeLeadsInRoute);
         
         if (route.directions) {
             setDirections(route.directions as google.maps.DirectionsResult);
@@ -449,38 +456,37 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   
     const filteredData = useMemo(() => {
-    if (!userProfile) return [];
+        if (!userProfile) return [];
 
-    let dataToFilter = mapData;
+        let dataToFilter = mapData;
 
-    dataToFilter = dataToFilter.filter(item => {
-        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
-        
-        let typeMatch = true;
-        if (filters.type === 'leads') {
-            typeMatch = !item.isCompany;
-        } else if (filters.type === 'companies') {
-            typeMatch = !!item.isCompany;
+        dataToFilter = dataToFilter.filter(item => {
+            const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+            const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+            const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
+            
+            let typeMatch = true;
+            if (filters.type === 'leads') {
+                typeMatch = !item.isCompany;
+            } else if (filters.type === 'companies') {
+                typeMatch = !!item.isCompany;
+            }
+
+            return franchiseeMatch && stateMatch && statusMatch && typeMatch;
+        });
+
+        if (userProfile.role === 'Field Sales') {
+            const assignedLeadIds = new Set(dataToFilter.filter(item => item.dialerAssigned === userProfile.displayName).map(item => item.id));
+            return dataToFilter.filter(item => item.isCompany || assignedLeadIds.has(item.id));
         }
 
-        return franchiseeMatch && stateMatch && statusMatch && typeMatch;
-    });
-
-    if (userProfile.role === 'Field Sales') {
-        const assignedLeadIds = new Set(dataToFilter.filter(item => item.dialerAssigned === userProfile.displayName).map(item => item.id));
-        return dataToFilter.filter(item => item.isCompany || assignedLeadIds.has(item.id));
-    }
-
-    if (userProfile.role === 'user') {
-        return dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
-    }
+        if (userProfile.role === 'user') {
+            return dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
+        }
+        
+        return dataToFilter;
     
-    return dataToFilter;
-    
-  }, [mapData, filters, userProfile]);
-
+    }, [mapData, filters, userProfile]);
 
   const onMarkerClick = useCallback((item: MapLead) => {
     if (selectionMode === 'select') {
@@ -1476,7 +1482,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <Select value={routeAssignee} onValueChange={setRouteAssignee}>
                                                 <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
                                                 <SelectContent>
-                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
+                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1869,3 +1875,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
+    
