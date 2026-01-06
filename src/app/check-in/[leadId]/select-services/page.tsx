@@ -326,7 +326,11 @@ function SelectServicesContent() {
                                               name={`frequencies.${serviceName}`}
                                               render={({ field }) => (
                                                 <FormItem>
-                                                  <RadioGroup onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} defaultValue={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} className="mb-2">
+                                                  <RadioGroup 
+                                                      onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
+                                                      defaultValue={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} 
+                                                      className="mb-2"
+                                                  >
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
                                                   </RadioGroup>
@@ -436,3 +440,5 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
+
+    
