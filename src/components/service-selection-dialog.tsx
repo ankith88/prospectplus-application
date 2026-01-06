@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -202,10 +201,12 @@ export function ServiceSelectionDialog({
 
   if (!lead) {
     return (
-        <DialogHeader>
-            <DialogTitle>Loading...</DialogTitle>
-            <div className="py-8"><Loader /></div>
-        </DialogHeader>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Loading...</DialogTitle>
+                <div className="py-8"><Loader /></div>
+            </DialogHeader>
+        </DialogContent>
     );
   }
 
@@ -473,6 +474,8 @@ export function ServiceSelectionDialog({
       </DialogContent>
   );
 }
+
+    
 
     
 

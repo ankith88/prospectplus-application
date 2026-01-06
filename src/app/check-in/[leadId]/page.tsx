@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
@@ -7,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, initiateLocalMileTrial, initiateMPProductsTrial } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
@@ -431,12 +430,14 @@ export default function CheckInPage() {
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
                 
-                <ServiceSelectionDialog
-                    isOpen={isServiceSelectionOpen}
-                    onOpenChange={setIsServiceSelectionOpen}
-                    lead={lead}
-                    mode={serviceSelectionMode}
-                />
+                <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
+                    <ServiceSelectionDialog
+                        isOpen={isServiceSelectionOpen}
+                        onOpenChange={setIsServiceSelectionOpen}
+                        lead={lead}
+                        mode={serviceSelectionMode}
+                    />
+                </Dialog>
                 
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
@@ -846,6 +847,8 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
   )
 };
 
+
+    
 
     
 
