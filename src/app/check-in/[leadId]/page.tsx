@@ -334,23 +334,23 @@ export default function CheckInPage() {
     const handleLocalMileTrial = async () => {
         if (!lead) return;
         setIsLoadingLocalMile(true);
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
+        const { id: toastId, update } = toast({ title: 'Processing...', description: 'Setting up LocalMile free trial.' });
         try {
             const responseBody = await initiateLocalMileTrial({ leadId: lead.id });
 
             if (responseBody.success === true) {
                 await updateLeadStatus(lead.id, 'LocalMile Pending');
-                toast.update(toastId, { title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
+                update({ id: toastId, title: 'Success!', description: 'LocalMile free trial initiated. Lead status updated to "LocalMile Pending".' });
                 router.push('/leads/map');
             } else if (responseBody.success === false && responseBody.message === "Lead Already Synced to LocalMile") {
-                toast.update(toastId, { variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
+                update({ id: toastId, variant: "default", title: 'Already Synced', description: 'This lead has already been synced for a LocalMile trial.' });
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
 
         } catch (error: any) {
             console.error('LocalMile free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
+            update({ id: toastId, variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate LocalMile free trial.' });
         } finally {
             setIsLoadingLocalMile(false);
         }
@@ -371,19 +371,19 @@ export default function CheckInPage() {
     const handleMPProductsTrial = async () => {
         if (!lead) return;
         setIsLoadingMPProducts(true);
-        const { id: toastId } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
+        const { id: toastId, update } = toast({ title: 'Processing...', description: 'Initiating ShipMate free trial.' });
         try {
             const responseBody = await initiateMPProductsTrial({ leadId: lead.id });
             if (responseBody.success) {
                 await updateLeadStatus(lead.id, 'Trialing ShipMate');
-                toast.update(toastId, { title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
-                router.push('/leads/map');
+                update({ id: toastId, title: 'Success!', description: 'ShipMate free trial has been initiated and lead status updated.' });
+                router.push('/field-sales');
             } else {
                 throw new Error(responseBody.message || 'An unknown error occurred in NetSuite.');
             }
         } catch (error: any) {
             console.error('ShipMate free trial failed:', error);
-            toast.update(toastId, { variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
+            update({ id: toastId, variant: 'destructive', title: 'Error', description: error.message || 'Could not initiate ShipMate free trial.' });
         } finally {
             setIsLoadingMPProducts(false);
         }
@@ -467,7 +467,7 @@ export default function CheckInPage() {
                     lead={lead}
                     onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
                 />
-                 {isServiceSelectionOpen && (
+                 {isServiceSelectionOpen && lead && (
                     <Dialog open={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen}>
                         <DialogContent>
                             <ServiceSelectionDialog
@@ -483,7 +483,7 @@ export default function CheckInPage() {
                     {/* This is just a holder, the dialog is controlled by isOpen state */}
                     <div/>
                  </LogNoteDialog>
-                  {isLocalMileAccessOpen && (
+                  {isLocalMileAccessOpen && lead && (
                     <LocalMileAccessDialog
                         isOpen={isLocalMileAccessOpen}
                         onOpenChange={setIsLocalMileAccessOpen}
@@ -491,7 +491,7 @@ export default function CheckInPage() {
                         onConfirm={handleLocalMileTrial}
                     />
                  )}
-                 {isShipMateAccessOpen && (
+                 {isShipMateAccessOpen && lead && (
                     <ShipMateAccessDialog
                         isOpen={isShipMateAccessOpen}
                         onOpenChange={setIsShipMateAccessOpen}
@@ -499,7 +499,7 @@ export default function CheckInPage() {
                         onConfirm={handleMPProductsTrial}
                     />
                  )}
-                 {isRevisitDialogOpen && (
+                 {isRevisitDialogOpen && lead && (
                     <RevisitDialog 
                         isOpen={isRevisitDialogOpen}
                         onOpenChange={setIsRevisitDialogOpen}
@@ -507,7 +507,7 @@ export default function CheckInPage() {
                         onRevisitScheduled={handleRevisitScheduled}
                     />
                  )}
-                 {isScheduleAppointmentOpen && (
+                 {isScheduleAppointmentOpen && lead && (
                     <ScheduleAppointmentDialog
                         isOpen={isScheduleAppointmentOpen}
                         onOpenChange={setIsScheduleAppointmentOpen}
@@ -754,7 +754,7 @@ const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpe
 
 const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
 const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: ()=> void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     const { control } = useFormContext();
     return (
          <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
@@ -891,3 +891,4 @@ const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLog
     </div>
   )
 };
+
