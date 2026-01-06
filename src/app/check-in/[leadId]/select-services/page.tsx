@@ -298,11 +298,17 @@ function SelectServicesContent() {
                                                         <FormControl>
                                                           <Checkbox
                                                             checked={field.value?.includes(service.label)}
-                                                            onCheckedChange={(checked) => field.onChange(
-                                                              checked
-                                                                ? [...(field.value || []), service.label]
-                                                                : field.value?.filter((value) => value !== service.label)
-                                                            )}
+                                                            onCheckedChange={(checked) => {
+                                                                const newSelected = checked
+                                                                    ? [...(field.value || []), service.label]
+                                                                    : field.value?.filter((value) => value !== service.label);
+                                                                field.onChange(newSelected);
+
+                                                                if (checked) {
+                                                                    // Default to Daily when a service is selected
+                                                                    form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                                                }
+                                                            }}
                                                           />
                                                         </FormControl>
                                                         <FormLabel className="font-normal">{service.label}</FormLabel>
@@ -328,13 +334,13 @@ function SelectServicesContent() {
                                                 <FormItem>
                                                   <RadioGroup 
                                                       onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])} 
-                                                      defaultValue={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} 
+                                                      value={Array.isArray(field.value) ? 'Daily' : field.value || 'Daily'} 
                                                       className="mb-2"
                                                   >
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel></FormItem>
                                                     <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Adhoc" /></FormControl><FormLabel className="font-normal">Adhoc (On Demand)</FormLabel></FormItem>
                                                   </RadioGroup>
-                                                  {field.value !== 'Adhoc' && (
+                                                  {form.getValues(`frequencies.${serviceName}`) !== 'Adhoc' && (
                                                     <div className="flex flex-wrap gap-4 pt-2">
                                                       {days.map((day) => (
                                                         <FormField key={day} control={form.control} name={`frequencies.${serviceName}`} render={({ field: dayField }) => (
