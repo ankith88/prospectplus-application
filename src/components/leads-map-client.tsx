@@ -301,7 +301,7 @@ export default function LeadsMapClient() {
     if (!isLoaded) return null;
     const geocoder = new window.google.maps.Geocoder();
     return new Promise((resolve) => {
-        geocoder.geocode({ address, componentRestrictions: { country: 'AU' } }, (results, status) => {
+        geocoder.geocode({ address, componentRestrictions: { country: 'au' } }, (results, status) => {
             if (status === 'OK' && results?.[0]?.geometry.location) {
                 resolve(results[0].geometry.location);
             } else {
@@ -519,6 +519,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   const onMarkerClick = useCallback((item: MapLead) => {
     if (selectionMode === 'select') {
+        const archivedStatuses: LeadStatus[] = ['Won', 'Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending'];
+        if (item.status && archivedStatuses.includes(item.status)) {
+            toast({
+                variant: 'destructive',
+                title: 'Cannot Add Lead',
+                description: `${item.companyName} has an archived status and cannot be added to a route.`
+            });
+            return;
+        }
+
         const isAssigned = leadToRouteMap.has(item.id);
         if (isAssigned) {
             toast({
@@ -1804,12 +1814,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <div className="font-medium">{prospectInfo.place.name}</div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex flex-col items-start max-w-xs">
-                                                <p className="text-sm text-muted-foreground line-clamp-2">
-                                                    {prospectInfo.description}
-                                                </p>
-                                                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                            </div>
+                                                <div className="flex flex-col items-start max-w-xs">
+                                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                                        {prospectInfo.description}
+                                                    </p>
+                                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                                </div>
                                         </TableCell>
                                         <TableCell>{prospectInfo.place.vicinity}</TableCell>
                                         <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
