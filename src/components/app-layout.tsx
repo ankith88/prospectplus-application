@@ -172,6 +172,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+            {canViewD2D && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/completed-routes")} tooltip="Completed Routes">
+                  <Link href="/completed-routes">
+                    <CheckSquare />
+                    <span>Completed Routes</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
