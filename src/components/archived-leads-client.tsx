@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -51,6 +50,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal } from 'lucide-react'
 import { Checkbox } from './ui/checkbox'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -87,7 +87,7 @@ export default function ArchivedLeadsClientPage() {
     franchisee: [] as string[],
     dialerAssigned: [] as string[],
     date: undefined as DateRange | undefined,
-    campaign: '',
+    campaign: 'all',
   });
 
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -159,7 +159,7 @@ export default function ArchivedLeadsClientPage() {
       franchisee: [],
       dialerAssigned: [],
       date: undefined,
-      campaign: '',
+      campaign: 'all',
     });
     setCurrentPage(1);
   };
@@ -187,7 +187,14 @@ export default function ArchivedLeadsClientPage() {
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        const campaignMatch = filters.campaign ? lead.campaign?.toLowerCase().includes(filters.campaign.toLowerCase()) : true;
+        let campaignMatch = true;
+        if (filters.campaign && filters.campaign !== 'all') {
+            if (filters.campaign === 'D2D') {
+                campaignMatch = lead.campaign === 'Door-to-Door Field Sales';
+            } else if (filters.campaign === 'Outbound') {
+                campaignMatch = lead.campaign !== 'Door-to-Door Field Sales';
+            }
+        }
 
         return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch;
     });
@@ -473,7 +480,16 @@ export default function ArchivedLeadsClientPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="campaign">Campaign</Label>
-                            <Input id="campaign" value={filters.campaign} onChange={(e) => handleFilterChange('campaign', e.target.value)} />
+                             <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                <SelectTrigger id="campaign-select">
+                                    <SelectValue placeholder="Select a campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    <SelectItem value="D2D">D2D</SelectItem>
+                                    <SelectItem value="Outbound">Outbound</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="date">Date Archived</Label>
@@ -770,6 +786,7 @@ export default function ArchivedLeadsClientPage() {
   )
 }
     
+
 
 
 
