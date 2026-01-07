@@ -5,11 +5,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, UserProfile } from '@/lib/types';
+import type { Lead, Activity, UserProfile, SavedRoute } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, SlidersHorizontal, X, RefreshCw, BarChart3, Users } from 'lucide-react';
+import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, SlidersHorizontal, X, RefreshCw, BarChart3, Users, Route, Clock } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -19,13 +19,14 @@ import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subM
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers, getAllActivities } from '@/services/firebase';
+import { getAllLeadsForReport, getAllUsers, getAllActivities, getAllUserRoutes } from '@/services/firebase';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 
 export default function DoorToDoorReportingPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -50,16 +51,18 @@ export default function DoorToDoorReportingPage() {
     setLoading(true);
     toast({ title: 'Loading Report Data...', description: 'Fetching the latest information.' });
     try {
-        const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
+        const [refreshedLeads, refreshedUsers, refreshedActivities, refreshedRoutes] = await Promise.all([
             getAllLeadsForReport(),
             getAllUsers(),
             getAllActivities(),
+            getAllUserRoutes(),
         ]);
         
         const fieldSalesLeads = refreshedLeads.filter(lead => (lead as any).fieldSales === true);
 
         setAllLeads(fieldSalesLeads);
         setAllActivities(refreshedActivities);
+        setAllRoutes(refreshedRoutes.map(r => ({...r, userName: users.find(u => u.uid === (r as any).userId)?.displayName || 'Unknown User' })));
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
         toast({ title: 'Success', description: 'Report data has been loaded.' });
     } catch (error) {
@@ -87,6 +90,22 @@ export default function DoorToDoorReportingPage() {
       user: [],
     });
   };
+  
+    const filteredRoutes = useMemo(() => {
+    return allRoutes.filter(route => {
+      let dateMatch = true;
+      if (filters.date?.from && route.scheduledDate) {
+        const routeDate = new Date(route.scheduledDate);
+        const fromDate = startOfDay(filters.date.from);
+        const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+        dateMatch = routeDate >= fromDate && routeDate <= toDate;
+      } else if (filters.date?.from) {
+        dateMatch = false; // no scheduled date, doesn't match
+      }
+      const userMatch = filters.user.length === 0 || filters.user.includes((route as any).userName);
+      return dateMatch && userMatch;
+    });
+  }, [allRoutes, filters]);
 
   const filteredActivities = useMemo(() => {
     return allActivities.filter(activity => {
@@ -125,18 +144,42 @@ export default function DoorToDoorReportingPage() {
     const totalTrials = trialingLeads.length;
     
     const conversionRate = totalCheckIns > 0 ? ((totalSignups + totalTrials) / totalCheckIns) * 100 : 0;
+    
+    const parseDurationToMinutes = (durationStr: string | null | undefined): number => {
+        if (!durationStr) return 0;
+        const hoursMatch = durationStr.match(/(\d+)\s*hr/);
+        const minutesMatch = durationStr.match(/(\d+)\s*min/);
+        const hours = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
+        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+        return hours * 60 + minutes;
+    };
+    
+    const totalDistance = filteredRoutes.reduce((sum, route) => {
+        const dist = parseFloat(route.totalDistance || '0');
+        return sum + (isNaN(dist) ? 0 : dist);
+    }, 0);
+
+    const totalDurationInMinutes = filteredRoutes.reduce((sum, route) => {
+        return sum + parseDurationToMinutes(route.totalDuration);
+    }, 0);
 
     const performanceData = allFieldSalesUsers.map(user => {
       const userName = user.displayName!;
       const userCheckins = new Set(checkInActivities.filter(a => a.author === userName).map(a => a.leadId)).size;
       const userSignups = signedUpLeads.filter(l => l.dialerAssigned === userName).length;
       const userTrials = trialingLeads.filter(l => l.dialerAssigned === userName).length;
-
+      
+      const user_routes = filteredRoutes.filter(r => (r as any).userName === userName);
+      const userTotalDistance = user_routes.reduce((sum, route) => sum + parseFloat(route.totalDistance || '0'), 0);
+      const userTotalDuration = user_routes.reduce((sum, route) => sum + parseDurationToMinutes(route.totalDuration), 0);
+      
       return {
         name: userName,
         'Check-ins': userCheckins,
         'Signups': userSignups,
         'Trials': userTrials,
+        'Total Distance (km)': parseFloat(userTotalDistance.toFixed(1)),
+        'Total Duration (hrs)': parseFloat((userTotalDuration / 60).toFixed(1)),
       };
     }).filter(u => u['Check-ins'] > 0 || u['Signups'] > 0 || u['Trials'] > 0);
 
@@ -156,8 +199,10 @@ export default function DoorToDoorReportingPage() {
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       performanceData,
       checkInsTrendData,
+      totalDistance: parseFloat(totalDistance.toFixed(1)),
+      totalDurationHours: parseFloat((totalDurationInMinutes / 60).toFixed(1)),
     };
-  }, [filteredActivities, filteredLeads, allFieldSalesUsers]);
+  }, [filteredActivities, filteredLeads, allFieldSalesUsers, filteredRoutes]);
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
@@ -266,11 +311,13 @@ export default function DoorToDoorReportingPage() {
         </Card>
       </Collapsible>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
         <StatCard title="Total Check-ins" value={stats.totalCheckIns} icon={CheckSquare} description="Unique leads visited" />
         <StatCard title="Total Signups" value={stats.totalSignups} icon={UserPlus} description="Leads marked as 'Won'" />
         <StatCard title="Total Free Trials" value={stats.totalTrials} icon={TrendingUp} description="Leads in 'Trialing ShipMate' status" />
         <StatCard title="Visit Conversion Rate" value={`${stats.conversionRate}%`} icon={Percent} description="(Signups + Trials) / Check-ins" />
+        <StatCard title="Total Distance" value={`${stats.totalDistance} km`} icon={Route} description="Across all scheduled routes" />
+        <StatCard title="Total Duration" value={`${stats.totalDurationHours} hrs`} icon={Clock} description="Across all scheduled routes" />
       </div>
       
       <Card>
@@ -293,6 +340,8 @@ export default function DoorToDoorReportingPage() {
                     <Bar dataKey="Check-ins" fill="#8884d8" />
                     <Bar dataKey="Signups" fill="#82ca9d" />
                     <Bar dataKey="Trials" fill="#ffc658" />
+                    <Bar dataKey="Total Distance (km)" fill="#FB8C00" />
+                    <Bar dataKey="Total Duration (hrs)" fill="#8dd1e1" />
                 </BarChart>
             </ChartContainer>
           ) : (

@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -335,12 +336,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         }
     }
     
-    let destination: google.maps.LatLng | string | null = origin;
+    let destination: google.maps.LatLng | string | null = null;
     if (endPoint) {
         destination = await geocodeAddress(endPoint);
         if (!destination) {
-            toast({ variant: 'destructive', title: 'Invalid End Point', description: 'Could not find the specified end address. Using start point as end point.' });
-            destination = origin;
+            toast({ variant: 'destructive', title: 'Invalid End Point', description: 'Could not find the specified end address.' });
+            destination = null;
         }
     }
 
@@ -368,8 +369,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
     directionsService.route(
         {
-            origin,
-            destination,
+            origin: origin,
+            destination: destination || origin,
             waypoints,
             optimizeWaypoints: true,
             travelMode: selectedTravelMode,
@@ -1550,25 +1551,27 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </div>
                             <Separator />
                             <div className="w-full space-y-2">
-                                <Label htmlFor="route-name">Route Name</Label>
-                                <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1">
                                         <Label htmlFor="route-date">Schedule Date (Optional)</Label>
                                         <Popover><PopoverTrigger asChild><Button id="route-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !routeDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus /></PopoverContent></Popover>
                                     </div>
-                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
-                                        <div className="space-y-1">
-                                            <Label htmlFor="route-assignee">Assign Route To</Label>
-                                            <Select value={routeAssignee} onValueChange={setRouteAssignee}>
-                                                <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
+                                    <div className="space-y-1">
+                                        <Label htmlFor="route-name">Route Name</Label>
+                                        <Input id="route-name" placeholder="e.g. Tuesday Afternoon Run" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                                    </div>
                                 </div>
+                                {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                    <div className="space-y-1">
+                                        <Label htmlFor="route-assignee">Assign Route To</Label>
+                                        <Select value={routeAssignee} onValueChange={setRouteAssignee}>
+                                            <SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {assignableUsers.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <Button onClick={handleSaveRoute} disabled={!routeName || ((userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && !routeAssignee)} className="w-full">
                                     <Save className="mr-2 h-4 w-4" /> Save Route
                                 </Button>
