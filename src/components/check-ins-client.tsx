@@ -17,7 +17,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers, getAllActivities } from '@/services/firebase';
+import { getLeadsFromFirebase, getAllUsers, getAllActivities } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
@@ -228,7 +228,7 @@ export default function CheckinsClientPage() {
                         <CollapsibleTrigger asChild>
                             <Button variant="ghost" size="sm">
                                 <SlidersHorizontal className="h-4 w-4" />
-                                <span className="ml-2">Toggle Filters</span>
+                                <span className="ml-2">Toggle Controls</span>
                             </Button>
                         </CollapsibleTrigger>
                     </div>
