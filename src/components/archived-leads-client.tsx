@@ -87,6 +87,7 @@ export default function ArchivedLeadsClientPage() {
     franchisee: [] as string[],
     dialerAssigned: [] as string[],
     date: undefined as DateRange | undefined,
+    campaign: '',
   });
 
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -158,6 +159,7 @@ export default function ArchivedLeadsClientPage() {
       franchisee: [],
       dialerAssigned: [],
       date: undefined,
+      campaign: '',
     });
     setCurrentPage(1);
   };
@@ -185,7 +187,9 @@ export default function ArchivedLeadsClientPage() {
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch;
+        const campaignMatch = filters.campaign ? lead.campaign?.toLowerCase().includes(filters.campaign.toLowerCase()) : true;
+
+        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch;
     });
   }, [allLeads, filters]);
 
@@ -435,7 +439,7 @@ export default function ArchivedLeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -466,6 +470,10 @@ export default function ArchivedLeadsClientPage() {
                                 onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
                                 placeholder="Select franchisees..."
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="campaign">Campaign</Label>
+                            <Input id="campaign" value={filters.campaign} onChange={(e) => handleFilterChange('campaign', e.target.value)} />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="date">Date Archived</Label>
@@ -762,6 +770,7 @@ export default function ArchivedLeadsClientPage() {
   )
 }
     
+
 
 
 
