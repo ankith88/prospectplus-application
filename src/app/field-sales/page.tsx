@@ -172,7 +172,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
-  const [weeklyActivities, setWeeklyActivities] = useState<Activity[]>([]);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
@@ -213,21 +213,17 @@ export default function FieldSalesPage() {
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-        const sevenDaysAgo = subDays(new Date(), 7).toISOString();
-        
-        const dataPromises = [
+        const [leads, users, routes, appointments, activities] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllUsers(),
             (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
             getAllAppointments(),
-            userProfile?.displayName ? getUserActivitiesForPeriod(userProfile.displayName, sevenDaysAgo) : Promise.resolve([])
-        ];
-
-        const [leads, users, routes, appointments, weeklyActs] = await Promise.all(dataPromises);
+            getAllActivities(),
+        ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
-        setWeeklyActivities(weeklyActs);
+        setAllActivities(activities);
         setAllAppointments(appointments);
         if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             setAllRoutes(routes);
@@ -261,13 +257,13 @@ export default function FieldSalesPage() {
   
     const weeklyStats = useMemo(() => {
     if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
-
-    const activitiesThisWeek = weeklyActivities;
+    
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const activitiesThisWeek = allActivities.filter(a => new Date(a.date) >= weekStart);
 
     const checkInActivities = activitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
     const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
     
-    // Filter leads based on this week's check-ins, not ALL leads
     const leadsThisWeek = allLeads.filter(l => {
         return checkInActivities.some(a => a.leadId === l.id);
     });
@@ -286,7 +282,7 @@ export default function FieldSalesPage() {
       totalTrials,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
     };
-  }, [allLeads, weeklyActivities, userProfile]);
+  }, [allLeads, allActivities, userProfile]);
 
   const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
     <Card>
@@ -363,11 +359,10 @@ export default function FieldSalesPage() {
     }, {} as Record<string, Record<string, Lead[]>>);
   }, [allLeads, userProfile, filters]);
   
-  const scheduledRevisits = useMemo(() => {
+    const scheduledRevisits = useMemo(() => {
     const revisits = allAppointments.filter(appt => appt.revisit);
     
     let userRevisits = revisits;
-    // If not an admin, filter to only show revisits for leads assigned to the current user
     if (userProfile?.role === 'Field Sales') {
         userRevisits = revisits.filter(appt => {
             const lead = allLeads.find(l => l.id === appt.leadId);
@@ -375,13 +370,24 @@ export default function FieldSalesPage() {
         });
     }
 
-    return userRevisits
+    const filteredRevisits = userRevisits.filter(appt => {
+        const revisitTime = new Date(appt.starttime).getTime();
+        const hasSubsequentCheckIn = allActivities.some(activity => 
+            activity.leadId === appt.leadId && 
+            activity.notes === 'Checked in at location via map.' &&
+            new Date(activity.date).getTime() > revisitTime
+        );
+        return !hasSubsequentCheckIn;
+    });
+
+    return filteredRevisits
         .map(appt => {
             const lead = allLeads.find(l => l.id === appt.leadId);
             return lead ? { ...appt, lead } : null;
         })
         .filter(Boolean) as (Appointment & { lead: Lead })[];
-  }, [allAppointments, allLeads, userProfile]);
+  }, [allAppointments, allLeads, userProfile, allActivities]);
+
 
   const handleLoadRoute = (route: SavedRoute) => {
     if (!route.id) return;
@@ -1122,6 +1128,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
