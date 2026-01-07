@@ -407,10 +407,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
             setLoadingData(true);
             try {
-                const mapLeads = await getLeadsFromFirebase({ summary: true });
-                let allMapData: MapLead[] = [];
+                const [mapLeads, mapCompanies] = await Promise.all([
+                    getLeadsFromFirebase({ summary: true }),
+                    getCompaniesFromFirebase()
+                ]);
+                
+                let leadsMapData: MapLead[] = [];
                 if (mapLeads) {
-                    allMapData = mapLeads
+                    leadsMapData = mapLeads
                         .filter(lead => lead.latitude != null && lead.longitude != null)
                         .map(lead => ({
                             ...lead,
@@ -420,7 +424,21 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             isProspect: false
                         }));
                 }
-                setMapData(allMapData);
+
+                let companiesMapData: MapLead[] = [];
+                if (mapCompanies) {
+                    companiesMapData = mapCompanies
+                        .filter(company => company.latitude != null && company.longitude != null)
+                        .map(company => ({
+                            ...company,
+                            latitude: Number(company.latitude),
+                            longitude: Number(company.longitude),
+                            isCompany: true,
+                            isProspect: false
+                        }));
+                }
+
+                setMapData([...leadsMapData, ...companiesMapData]);
 
                 const users = await getAllUsers();
                 setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
@@ -478,7 +496,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         let dataToFilter = mapData;
 
-        if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
+        if (userProfile.role === 'Field Sales') {
+            dataToFilter = dataToFilter.filter(item => (item.fieldSales === true && item.dialerAssigned === userProfile.displayName) || item.isCompany);
+        } else if (userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => item.fieldSales === true || item.isCompany);
         } else if (userProfile.role === 'user') {
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
@@ -1903,6 +1923,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
                                         <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
                                         {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
+                                        {company.websiteUrl && (
+                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
+                                                <Globe className="h-4 w-4" />
+                                                <span>Visit Website</span>
+                                            </a>
+                                        )}
                                     </div>
                                 </Card>
                             ))}
