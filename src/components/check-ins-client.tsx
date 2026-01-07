@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Briefcase, MapPin, ArrowUpDown } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Briefcase, MapPin, ArrowUpDown, Download } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -203,6 +203,46 @@ export default function CheckinsClientPage() {
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || !!val);
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+  
+  const handleExport = () => {
+    if (sortedCheckedInLeads.length === 0) {
+        toast({ title: 'No Data', description: 'There is no data to export.'});
+        return;
+    }
+
+    const headers = ['Check-in Date', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales'];
+    const rows = sortedCheckedInLeads.map(lead => [
+        escapeCsvCell(format(new Date(lead.checkInActivity.date), 'PPpp')),
+        escapeCsvCell(lead.id),
+        escapeCsvCell(lead.entityId || 'N/A'),
+        escapeCsvCell(lead.companyName),
+        escapeCsvCell(lead.status),
+        escapeCsvCell(lead.franchisee || 'N/A'),
+        escapeCsvCell(lead.dialerAssigned || 'N/A'),
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `check-in-history_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+
   if (authLoading || loading) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
@@ -303,53 +343,60 @@ export default function CheckinsClientPage() {
             </Card>
         </Collapsible>
         <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row justify-between items-center">
+              <div>
                 <CardTitle>Checked-in Leads</CardTitle>
                 <CardDescription>Found {sortedCheckedInLeads.length} check-in(s) matching your criteria.</CardDescription>
+              </div>
+              <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedCheckedInLeads.length === 0}>
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sortedCheckedInLeads.length > 0 ? (
-                            sortedCheckedInLeads.map(lead => (
-                                <TableRow key={lead.id}>
-                                    <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
-                                    <TableCell>{lead.id}</TableCell>
-                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
-                                    <TableCell>
-                                        <Button variant="link" asChild className="p-0 h-auto">
-                                            <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
-                                        </Button>
-                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                            <MapPin className="h-3 w-3"/>
-                                            {lead.address?.city || 'N/A'}
-                                        </p>
-                                    </TableCell>
-                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center">
-                                    No check-ins found for the selected filters.
-                                </TableCell>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
                             </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {sortedCheckedInLeads.length > 0 ? (
+                                sortedCheckedInLeads.map(lead => (
+                                    <TableRow key={lead.id}>
+                                        <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
+                                        <TableCell>{lead.id}</TableCell>
+                                        <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Button variant="link" asChild className="p-0 h-auto">
+                                                <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
+                                            </Button>
+                                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <MapPin className="h-3 w-3"/>
+                                                {lead.address?.city || 'N/A'}
+                                            </p>
+                                        </TableCell>
+                                        <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                        <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
+                                        <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="h-24 text-center">
+                                        No check-ins found for the selected filters.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
     </div>
