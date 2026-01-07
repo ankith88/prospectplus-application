@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -226,8 +225,6 @@ export default function LeadsMapClient() {
   const [analyzingTerritory, setAnalyzingTerritory] = useState(false);
   const [drawnTerritory, setDrawnTerritory] = useState<{ center: google.maps.LatLng | null; radius: number } | null>(null);
 
-  const [showCompanies, setShowCompanies] = useState(false);
-
   const [filters, setFilters] = useState({
     franchisee: [] as string[],
     status: [] as string[],
@@ -439,28 +436,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         fetchData();
     }, [isLoaded, userProfile, toast]);
     
-    useEffect(() => {
-        const fetchCompanies = async () => {
-            if (showCompanies) {
-                const mapCompanies = await getCompaniesFromFirebase();
-                 const companiesWithCoords = mapCompanies
-                    .filter(company => company.latitude != null && company.longitude != null)
-                    .map(company => ({
-                        ...company,
-                        latitude: Number(company.latitude),
-                        longitude: Number(company.longitude),
-                        isCompany: true,
-                        isProspect: false,
-                        status: 'Won' as LeadStatus,
-                    }));
-                setMapData(prev => [...prev.filter(d => !d.isCompany), ...companiesWithCoords]);
-            } else {
-                setMapData(prev => prev.filter(d => !d.isCompany));
-            }
-        };
-        fetchCompanies();
-    }, [showCompanies]);
-
     const handleLoadRoute = (route: SavedRoute) => {
         if (!isLoaded) return;
         
@@ -502,9 +477,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         if (!userProfile) return [];
 
         let dataToFilter = mapData;
-
-        if (filters.type === 'leads') dataToFilter = dataToFilter.filter(item => !item.isCompany);
-        if (filters.type === 'companies') dataToFilter = dataToFilter.filter(item => item.isCompany);
 
         if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => item.fieldSales === true || item.isCompany);
@@ -1289,11 +1261,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </TabsList>
                         </CardContent>
                         <TabsContent value="filters">
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-                                 <div className="flex items-center space-x-2">
-                                    <Switch id="show-companies" checked={showCompanies} onCheckedChange={setShowCompanies} />
-                                    <Label htmlFor="show-companies">Show Signed Customers</Label>
-                                </div>
+                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="franchisee-mobile">Franchisee</Label>
                                     <MultiSelectCombobox
@@ -1951,6 +1919,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
-    
-
