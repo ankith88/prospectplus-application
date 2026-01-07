@@ -17,7 +17,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getLeadsFromFirebase, getAllUsers, getAllActivities } from '@/services/firebase';
+import { getAllLeadsForReport, getAllUsers, getAllActivities } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
@@ -51,7 +51,7 @@ export default function CheckinsClientPage() {
     toast({ title: 'Loading Data...', description: 'Fetching check-in records.' });
     try {
         const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
-            getLeadsFromFirebase({ summary: true }),
+            getAllLeadsForReport(),
             getAllUsers(),
             getAllActivities(),
         ]);
@@ -312,12 +312,12 @@ export default function CheckinsClientPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
-                            <TableHead className="hidden md:table-cell"><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
-                            <TableHead className="hidden lg:table-cell"><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
-                            <TableHead className="hidden md:table-cell"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                            <TableHead className="hidden sm:table-cell"><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -325,8 +325,8 @@ export default function CheckinsClientPage() {
                             sortedCheckedInLeads.map(lead => (
                                 <TableRow key={lead.id}>
                                     <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
-                                    <TableCell className="hidden md:table-cell">{lead.id}</TableCell>
-                                    <TableCell className="hidden lg:table-cell">{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.id}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Button variant="link" asChild className="p-0 h-auto">
                                             <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
@@ -337,8 +337,8 @@ export default function CheckinsClientPage() {
                                         </p>
                                     </TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell className="hidden md:table-cell"><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
-                                    <TableCell className="hidden sm:table-cell">{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                 </TableRow>
                             ))
                         ) : (
