@@ -17,15 +17,27 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers, getAllActivities } from '@/services/firebase';
+import { getLeadsFromFirebase, getAllUsers, getSubCollection } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
 import { Badge } from './ui/badge';
+import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
+
+async function getCheckInActivities(): Promise<Activity[]> {
+    const q = query(collectionGroup(firestore, 'activity'), where('notes', '==', 'Checked in at location via map.'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        leadId: doc.ref.parent.parent!.id,
+        ...doc.data()
+    } as Activity));
+}
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [allCheckInActivities, setAllCheckInActivities] = useState<Activity[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -45,13 +57,13 @@ export default function CheckinsClientPage() {
     toast({ title: 'Loading Data...', description: 'Fetching check-in records.' });
     try {
         const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
-            getAllLeadsForReport(),
+            getLeadsFromFirebase({ summary: true }),
             getAllUsers(),
-            getAllActivities(),
+            getCheckInActivities(),
         ]);
         
         setAllLeads(refreshedLeads);
-        setAllActivities(refreshedActivities);
+        setAllCheckInActivities(refreshedActivities);
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
         toast({ title: 'Success', description: 'Data has been loaded.' });
     } catch (error) {
@@ -81,10 +93,9 @@ export default function CheckinsClientPage() {
   };
 
   const checkedInLeads = useMemo(() => {
-    const checkInActivities = allActivities.filter(a => a.notes?.includes('Checked in at location via map.'));
     const checkInLeadIds = new Map<string, Activity>();
 
-    checkInActivities.forEach(activity => {
+    allCheckInActivities.forEach(activity => {
         if (!checkInLeadIds.has(activity.leadId) || new Date(activity.date) > new Date(checkInLeadIds.get(activity.leadId)!.date)) {
             checkInLeadIds.set(activity.leadId, activity);
         }
@@ -125,7 +136,7 @@ export default function CheckinsClientPage() {
 
     return leads.sort((a,b) => new Date(b.checkInActivity.date).getTime() - new Date(a.checkInActivity.date).getTime());
 
-  }, [allActivities, allLeads, filters, userProfile]);
+  }, [allCheckInActivities, allLeads, filters, userProfile]);
 
   const userOptions: Option[] = useMemo(() => {
     return allFieldSalesUsers.map(u => ({ value: u.displayName!, label: u.displayName! }));
@@ -252,6 +263,8 @@ export default function CheckinsClientPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Company</TableHead>
+                            <TableHead>Lead ID</TableHead>
+                            <TableHead>Company ID</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Franchisee</TableHead>
                             <TableHead>User</TableHead>
@@ -271,6 +284,8 @@ export default function CheckinsClientPage() {
                                             {lead.address?.city || 'N/A'}
                                         </p>
                                     </TableCell>
+                                    <TableCell>{lead.id}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
                                     <TableCell>{lead.checkInActivity.author}</TableCell>
@@ -279,7 +294,7 @@ export default function CheckinsClientPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
+                                <TableCell colSpan={7} className="h-24 text-center">
                                     No check-ins found for the selected filters.
                                 </TableCell>
                             </TableRow>
