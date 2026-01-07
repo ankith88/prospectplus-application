@@ -17,23 +17,11 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getLeadsFromFirebase, getAllUsers, getSubCollection } from '@/services/firebase';
+import { getLeadsFromFirebase, getAllUsers, getAllActivities } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
 import { Badge } from './ui/badge';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
-
-async function getCheckInActivities(): Promise<Activity[]> {
-    const q = query(collectionGroup(firestore, 'activity'), where('notes', '==', 'Checked in at location via map.'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-        id: doc.id,
-        leadId: doc.ref.parent.parent!.id,
-        ...doc.data()
-    } as Activity));
-}
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -59,11 +47,16 @@ export default function CheckinsClientPage() {
         const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllUsers(),
-            getCheckInActivities(),
+            getAllActivities(), // Fetch all activities
         ]);
         
+        // Filter for check-ins on the client
+        const checkInActivities = refreshedActivities.filter(
+            (activity) => activity.notes === 'Checked in at location via map.'
+        );
+
         setAllLeads(refreshedLeads);
-        setAllCheckInActivities(refreshedActivities);
+        setAllCheckInActivities(checkInActivities);
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
         toast({ title: 'Success', description: 'Data has been loaded.' });
     } catch (error) {
