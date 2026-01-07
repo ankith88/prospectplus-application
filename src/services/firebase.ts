@@ -557,7 +557,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
             const data = doc.data();
             return {
                 id: doc.id,
-                entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
+                entityId: data.entityId || data.customerEntityId || data.internalid,
                 companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
@@ -746,12 +746,9 @@ async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
 async function getAllActivities(checkInOnly = false): Promise<Array<Activity & { leadId: string }>> {
     try {
         let activitiesQuery = query(collectionGroup(firestore, 'activity'));
-        if (checkInOnly) {
-            activitiesQuery = query(activitiesQuery, where('notes', '==', 'Checked in at location via map.'));
-        }
         
         const activitiesSnapshot = await getDocs(activitiesQuery);
-        const allActivities = activitiesSnapshot.docs.map(doc => {
+        let allActivities = activitiesSnapshot.docs.map(doc => {
             const activityData = doc.data() as Activity;
             const leadId = doc.ref.parent.parent!.id;
             return {
@@ -760,6 +757,10 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
                 leadId: leadId,
             };
         });
+
+        if (checkInOnly) {
+            allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
+        }
         
         allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allActivities;
@@ -1944,6 +1945,7 @@ export {
     
 
     
+
 
 
 
