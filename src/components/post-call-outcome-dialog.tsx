@@ -66,7 +66,7 @@ const callOutcomes = [
     'LOST - No Contact',
 ];
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const { toast } = useToast();
@@ -225,7 +225,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 </ul>
                 {submissionState === 'complete' && (
                      <DialogFooter className="mt-8 flex w-full items-center justify-end">
-                        <Button variant="secondary" onClick={resetAndClose}>Done</Button>
+                        {isSessionActive && onSessionNext ? (
+                            <Button onClick={onSessionNext}>Next in Session</Button>
+                        ) : (
+                            <Button variant="secondary" onClick={resetAndClose}>Done</Button>
+                        )}
                      </DialogFooter>
                 )}
             </div>

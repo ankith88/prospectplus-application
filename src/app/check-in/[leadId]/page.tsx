@@ -310,8 +310,23 @@ export default function CheckInPage() {
 
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
-        router.push('/field-sales');
+        const activeRouteId = localStorage.getItem('activeRouteId');
+        if (activeRouteId) {
+            router.push('/leads/map');
+        } else {
+            router.push('/field-sales');
+        }
     };
+
+    const handleOutcomeLogged = () => {
+        setIsLogOutcomeOpen(false);
+        const activeRouteId = localStorage.getItem('activeRouteId');
+        if (activeRouteId) {
+            router.push('/leads/map');
+        } else {
+            router.push('/field-sales');
+        }
+    }
     
     const renderStep = () => {
         switch (currentStep) {
@@ -367,7 +382,7 @@ export default function CheckInPage() {
                     isOpen={isLogOutcomeOpen} 
                     onClose={() => setIsLogOutcomeOpen(false)}
                     lead={lead}
-                    onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
+                    onOutcomeLogged={handleOutcomeLogged}
                 />
                 
                  <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
@@ -762,5 +777,6 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
