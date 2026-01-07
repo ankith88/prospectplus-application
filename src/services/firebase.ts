@@ -762,6 +762,30 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
     }
 }
 
+async function getUserActivitiesForPeriod(displayName: string, startDate: string): Promise<Activity[]> {
+    try {
+        const q = query(
+            collectionGroup(firestore, 'activity'),
+            where('author', '==', displayName),
+            where('date', '>=', startDate)
+        );
+        const activitiesSnapshot = await getDocs(q);
+        const userActivities = activitiesSnapshot.docs.map(doc => {
+            const activityData = doc.data() as Activity;
+            const leadId = doc.ref.parent.parent!.id;
+            return {
+                ...activityData,
+                id: doc.id,
+                leadId: leadId,
+            };
+        });
+        return userActivities;
+    } catch (error) {
+        console.error(`Failed to fetch activities for user ${displayName}:`, error);
+        return [];
+    }
+}
+
 async function getAllTranscripts(): Promise<Transcript[]> {
     try {
         const transcriptsSnapshot = await getDocs(collectionGroup(firestore, 'transcripts'));
@@ -1907,11 +1931,13 @@ export {
     bulkMoveLeadsToBucket,
     deleteLeadsByCampaign,
     updateContactSendEmail,
+    getUserActivitiesForPeriod,
 };
 
     
 
     
+
 
 
 

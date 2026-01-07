@@ -55,7 +55,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from './ui/input';
 import { Switch } from './ui/switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from './ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { Checkbox } from './ui/checkbox'
@@ -226,11 +226,12 @@ export default function LeadsMapClient() {
   const [analyzingTerritory, setAnalyzingTerritory] = useState(false);
   const [drawnTerritory, setDrawnTerritory] = useState<{ center: google.maps.LatLng | null; radius: number } | null>(null);
 
+  const [showCompanies, setShowCompanies] = useState(false);
+
   const [filters, setFilters] = useState({
     franchisee: [] as string[],
     status: [] as string[],
     state: [] as string[],
-    type: 'all' as 'all' | 'leads' | 'companies'
   });
   
   const router = useRouter()
@@ -409,16 +410,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
             setLoadingData(true);
             try {
-                const [mapLeads, mapCompanies, users] = await Promise.all([
-                    getLeadsFromFirebase({ summary: true }),
-                    getCompaniesFromFirebase(),
-                    getAllUsers(),
-                ]);
-                
+                const mapLeads = await getLeadsFromFirebase({ summary: true });
                 let allMapData: MapLead[] = [];
-
                 if (mapLeads) {
-                    const leadsWithCoords = mapLeads
+                    allMapData = mapLeads
                         .filter(lead => lead.latitude != null && lead.longitude != null)
                         .map(lead => ({
                             ...lead,
@@ -427,24 +422,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             isCompany: false,
                             isProspect: false
                         }));
-                    allMapData = [...allMapData, ...leadsWithCoords];
                 }
-
-                if (mapCompanies) {
-                    const companiesWithCoords = mapCompanies
-                        .filter(company => company.latitude != null && company.longitude != null)
-                        .map(company => ({
-                            ...company,
-                            latitude: Number(company.latitude),
-                            longitude: Number(company.longitude),
-                            isCompany: true,
-                            isProspect: false,
-                            status: 'Won' as LeadStatus,
-                        }));
-                    allMapData = [...allMapData, ...companiesWithCoords];
-                }
-                
                 setMapData(allMapData);
+
+                const users = await getAllUsers();
                 setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
 
             } catch (error) {
@@ -457,6 +438,28 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         fetchData();
     }, [isLoaded, userProfile, toast]);
+    
+    useEffect(() => {
+        const fetchCompanies = async () => {
+            if (showCompanies) {
+                const mapCompanies = await getCompaniesFromFirebase();
+                 const companiesWithCoords = mapCompanies
+                    .filter(company => company.latitude != null && company.longitude != null)
+                    .map(company => ({
+                        ...company,
+                        latitude: Number(company.latitude),
+                        longitude: Number(company.longitude),
+                        isCompany: true,
+                        isProspect: false,
+                        status: 'Won' as LeadStatus,
+                    }));
+                setMapData(prev => [...prev.filter(d => !d.isCompany), ...companiesWithCoords]);
+            } else {
+                setMapData(prev => prev.filter(d => !d.isCompany));
+            }
+        };
+        fetchCompanies();
+    }, [showCompanies]);
 
     const handleLoadRoute = (route: SavedRoute) => {
         if (!isLoaded) return;
@@ -500,11 +503,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         let dataToFilter = mapData;
 
-        // Filter out leads with "Won" or "Lost" status from being selectable
-        const nonSelectableStatuses: LeadStatus[] = ['Won', 'Lost'];
-        dataToFilter = dataToFilter.filter(item => !nonSelectableStatuses.includes(item.status));
+        if (filters.type === 'leads') dataToFilter = dataToFilter.filter(item => !item.isCompany);
+        if (filters.type === 'companies') dataToFilter = dataToFilter.filter(item => item.isCompany);
 
-        // Role-based filtering
         if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => item.fieldSales === true || item.isCompany);
         } else if (userProfile.role === 'user') {
@@ -517,14 +518,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
             const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
             
-            let typeMatch = true;
-            if (filters.type === 'leads') {
-                typeMatch = !item.isCompany;
-            } else if (filters.type === 'companies') {
-                typeMatch = !!item.isCompany;
-            }
-
-            return franchiseeMatch && stateMatch && statusMatch && typeMatch;
+            return franchiseeMatch && stateMatch && statusMatch;
         });
         
         return dataToFilter;
@@ -1296,18 +1290,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </CardContent>
                         <TabsContent value="filters">
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="type-mobile">Show</Label>
-                                    <Select value={filters.type} onValueChange={(value) => handleFilterChange('type', value)}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select type" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Locations</SelectItem>
-                                            <SelectItem value="leads">Leads Only</SelectItem>
-                                            <SelectItem value="companies">Signed Customers Only</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                 <div className="flex items-center space-x-2">
+                                    <Switch id="show-companies" checked={showCompanies} onCheckedChange={setShowCompanies} />
+                                    <Label htmlFor="show-companies">Show Signed Customers</Label>
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="franchisee-mobile">Franchisee</Label>
@@ -1968,3 +1953,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 }
 
     
+

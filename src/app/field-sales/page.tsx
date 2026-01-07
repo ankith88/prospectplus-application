@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute } from '@/services/firebase'
+import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute, getUserActivitiesForPeriod } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
@@ -58,7 +58,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast } from 'date-fns'
+import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast, subDays } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -172,7 +172,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
 
 export default function FieldSalesPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [weeklyActivities, setWeeklyActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
@@ -213,17 +213,21 @@ export default function FieldSalesPage() {
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-        const [leads, activities, users, routes, appointments] = await Promise.all([
+        const sevenDaysAgo = subDays(new Date(), 7).toISOString();
+        
+        const dataPromises = [
             getLeadsFromFirebase({ summary: true }),
-            getAllActivities(),
             getAllUsers(),
             (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
             getAllAppointments(),
-        ]);
+            userProfile?.displayName ? getUserActivitiesForPeriod(userProfile.displayName, sevenDaysAgo) : Promise.resolve([])
+        ];
+
+        const [leads, users, routes, appointments, weeklyActs] = await Promise.all(dataPromises);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
-        setAllActivities(activities);
+        setWeeklyActivities(weeklyActs);
         setAllAppointments(appointments);
         if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             setAllRoutes(routes);
@@ -258,18 +262,12 @@ export default function FieldSalesPage() {
     const weeklyStats = useMemo(() => {
     if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
 
-    const now = new Date();
-    const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
-    const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
-    
-    const activitiesThisWeek = allActivities.filter(a => {
-        const activityDate = new Date(a.date);
-        return a.author === userProfile.displayName && activityDate >= startOfThisWeek && activityDate <= endOfThisWeek;
-    });
+    const activitiesThisWeek = weeklyActivities;
 
     const checkInActivities = activitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
     const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
     
+    // Filter leads based on this week's check-ins, not ALL leads
     const leadsThisWeek = allLeads.filter(l => {
         return checkInActivities.some(a => a.leadId === l.id);
     });
@@ -288,7 +286,7 @@ export default function FieldSalesPage() {
       totalTrials,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
     };
-  }, [allLeads, allActivities, userProfile]);
+  }, [allLeads, weeklyActivities, userProfile]);
 
   const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
     <Card>
@@ -1124,6 +1122,7 @@ export default function FieldSalesPage() {
     
 
     
+
 
 
 
