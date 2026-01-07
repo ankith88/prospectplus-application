@@ -165,7 +165,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customerEntityId'] || data['internalid'] || '',
+          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
@@ -266,7 +266,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
 
         const transformedCompany: Lead = {
           id: docSnapshot.id,
-          entityId: data['customerEntityId'] || data['internalid'] || '',
+          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'] || '',
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
@@ -376,7 +376,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 
         const transformedLead: Lead = {
           id: doc.id,
-          entityId: data['customerEntityId'] || data['internalid'],
+          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
@@ -456,7 +456,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
 
                 const transformedCompany: Lead = {
                     id: doc.id,
-                    entityId: data['customerEntityId'] || data['internalid'],
+                    entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
@@ -508,7 +508,7 @@ async function getArchivedLeads(): Promise<Lead[]> {
                 
                 const transformedLead: Lead = {
                     id: doc.id,
-                    entityId: data['customerEntityId'] || data['internalid'],
+                    entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: companyName,
                     status: safeGetStatus(data.customerStatus),
@@ -557,6 +557,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
             const data = doc.data();
             return {
                 id: doc.id,
+                entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
                 companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
@@ -1937,6 +1938,7 @@ export {
     
 
     
+
 
 
 
