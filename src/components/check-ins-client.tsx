@@ -103,10 +103,10 @@ export default function CheckinsClientPage() {
 
     // Apply filters
     if (userProfile?.role === 'Field Sales') {
-        leads = leads.filter(l => l.checkInActivity.author === userProfile.displayName);
+        leads = leads.filter(l => l.dialerAssigned === userProfile.displayName);
     } else {
          if (filters.user.length > 0) {
-            leads = leads.filter(l => l.checkInActivity.author && filters.user.includes(l.checkInActivity.author));
+            leads = leads.filter(l => l.dialerAssigned && filters.user.includes(l.dialerAssigned));
         }
     }
     
@@ -255,9 +255,9 @@ export default function CheckinsClientPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Company</TableHead>
                             <TableHead>Lead ID</TableHead>
                             <TableHead>Company ID</TableHead>
+                            <TableHead>Company</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Franchisee</TableHead>
                             <TableHead>User</TableHead>
@@ -268,6 +268,8 @@ export default function CheckinsClientPage() {
                         {checkedInLeads.length > 0 ? (
                             checkedInLeads.map(lead => (
                                 <TableRow key={lead.id}>
+                                    <TableCell>{lead.id}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Button variant="link" asChild className="p-0 h-auto">
                                             <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
@@ -277,11 +279,9 @@ export default function CheckinsClientPage() {
                                             {lead.address?.city || 'N/A'}
                                         </p>
                                     </TableCell>
-                                    <TableCell>{lead.id}</TableCell>
-                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
-                                    <TableCell>{lead.checkInActivity.author}</TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
                                 </TableRow>
                             ))
