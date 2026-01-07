@@ -88,6 +88,7 @@ export default function ArchivedLeadsClientPage() {
     dialerAssigned: [] as string[],
     date: undefined as DateRange | undefined,
     campaign: 'all',
+    checkInDate: undefined as DateRange | undefined,
   });
 
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -160,6 +161,7 @@ export default function ArchivedLeadsClientPage() {
       dialerAssigned: [],
       date: undefined,
       campaign: 'all',
+      checkInDate: undefined,
     });
     setCurrentPage(1);
   };
@@ -187,6 +189,19 @@ export default function ArchivedLeadsClientPage() {
             dateMatch = lastActivityDate >= fromDate && lastActivityDate <= toDate;
         }
 
+        let checkInDateMatch = true;
+        if (filters.checkInDate?.from) {
+            const fromDate = startOfDay(filters.checkInDate.from);
+            const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
+            const checkInActivity = lead.activity?.find(a => a.notes === 'Checked in at location via map.');
+            if (checkInActivity) {
+                const checkInDate = new Date(checkInActivity.date);
+                checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+            } else {
+                checkInDateMatch = false; // If no check-in activity, it doesn't match the filter
+            }
+        }
+
         let campaignMatch = true;
         if (filters.campaign && filters.campaign !== 'all') {
             if (filters.campaign === 'D2D') {
@@ -196,7 +211,7 @@ export default function ArchivedLeadsClientPage() {
             }
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch;
+        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
     });
   }, [allLeads, filters]);
 
@@ -533,6 +548,40 @@ export default function ArchivedLeadsClientPage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="checkInDate">Check-in Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    id="checkInDate"
+                                    variant={"outline"}
+                                    className="w-full justify-start text-left font-normal"
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {filters.checkInDate?.from ? (
+                                    filters.checkInDate.to ? (
+                                        <>
+                                        {format(filters.checkInDate.from, "LLL dd, y")} -{" "}
+                                        {format(filters.checkInDate.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(filters.checkInDate.from, "LLL dd, y")
+                                    )
+                                    ) : (
+                                    <span>Pick a date</span>
+                                    )}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar
+                                        mode="range"
+                                        selected={filters.checkInDate}
+                                        onSelect={(date) => handleFilterChange('checkInDate', date)}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
                     </CardContent>
                     {hasActiveFilters && (
                         <CardContent>
@@ -791,3 +840,6 @@ export default function ArchivedLeadsClientPage() {
 
 
 
+
+
+    
