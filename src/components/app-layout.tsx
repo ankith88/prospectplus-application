@@ -29,7 +29,7 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect } from "react"
@@ -158,6 +158,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/field-sales">
                     <Route />
                     <span>Door-to-Door</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+             {canViewD2D && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/check-ins")} tooltip="Check-ins">
+                  <Link href="/check-ins">
+                    <CheckSquare />
+                    <span>Check-ins</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
