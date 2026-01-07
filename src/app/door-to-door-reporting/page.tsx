@@ -62,7 +62,7 @@ export default function DoorToDoorReportingPage() {
 
         setAllLeads(fieldSalesLeads);
         setAllActivities(refreshedActivities);
-        setAllRoutes(refreshedRoutes.map(r => ({...r, userName: users.find(u => u.uid === (r as any).userId)?.displayName || 'Unknown User' })));
+        setAllRoutes(refreshedRoutes.map(r => ({...r, userName: refreshedUsers.find(u => u.uid === (r as any).userId)?.displayName || 'Unknown User' })));
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
         toast({ title: 'Success', description: 'Report data has been loaded.' });
     } catch (error) {
