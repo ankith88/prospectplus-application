@@ -353,52 +353,52 @@ export default function CheckinsClientPage() {
               </Button>
             </CardHeader>
             <CardContent>
-                <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                                <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {sortedCheckedInLeads.length > 0 ? (
-                                sortedCheckedInLeads.map(lead => (
-                                    <TableRow key={lead.id}>
-                                        <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
-                                        <TableCell>{lead.id}</TableCell>
-                                        <TableCell>{lead.entityId || 'N/A'}</TableCell>
-                                        <TableCell>
-                                            <Button variant="link" asChild className="p-0 h-auto">
-                                                <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
-                                            </Button>
-                                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                                <MapPin className="h-3 w-3"/>
-                                                {lead.address?.city || 'N/A'}
-                                            </p>
-                                        </TableCell>
-                                        <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                        <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
-                                        <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center">
-                                        No check-ins found for the selected filters.
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedCheckedInLeads.length > 0 ? (
+                            sortedCheckedInLeads.map(lead => (
+                                <TableRow key={lead.id}>
+                                    <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
+                                    <TableCell>{lead.id}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        <Button variant="link" asChild className="p-0 h-auto">
+                                            <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
+                                        </Button>
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <MapPin className="h-3 w-3"/>
+                                            {lead.address?.city || 'N/A'}
+                                        </p>
                                     </TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                    No check-ins found for the selected filters.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
             </CardContent>
         </Card>
     </div>
   );
 }
+
+    
