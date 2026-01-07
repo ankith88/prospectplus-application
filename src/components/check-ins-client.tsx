@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Briefcase, MapPin } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Briefcase, MapPin, ArrowUpDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -22,6 +22,9 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
 import { Badge } from './ui/badge';
+
+type CheckedInLead = Lead & { checkInActivity: Activity };
+type SortableKeys = 'checkInDate' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned';
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -39,6 +42,9 @@ export default function CheckinsClientPage() {
     franchisee: [] as string[],
     status: [] as string[],
   });
+  
+  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'checkInDate', direction: 'descending' });
+
 
   const fetchData = async () => {
     setLoading(true);
@@ -85,7 +91,7 @@ export default function CheckinsClientPage() {
     });
   };
 
-  const checkedInLeads = useMemo(() => {
+  const filteredCheckedInLeads = useMemo(() => {
     const checkInLeadIds = new Map<string, Activity>();
 
     allCheckInActivities.forEach(activity => {
@@ -127,9 +133,61 @@ export default function CheckinsClientPage() {
         });
     }
 
-    return leads.sort((a,b) => new Date(b.checkInActivity.date).getTime() - new Date(a.checkInActivity.date).getTime());
+    return leads;
 
   }, [allCheckInActivities, allLeads, filters, userProfile]);
+
+  const sortedCheckedInLeads = useMemo(() => {
+    let sortableItems: CheckedInLead[] = [...filteredCheckedInLeads];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortConfig.key) {
+            case 'checkInDate':
+                aValue = new Date(a.checkInActivity.date).getTime();
+                bValue = new Date(b.checkInActivity.date).getTime();
+                break;
+            case 'leadId':
+                aValue = a.id;
+                bValue = b.id;
+                break;
+            case 'entityId':
+                aValue = a.entityId || '';
+                bValue = b.entityId || '';
+                break;
+            default:
+                aValue = a[sortConfig.key] ?? '';
+                bValue = b[sortConfig.key] ?? '';
+        }
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredCheckedInLeads, sortConfig]);
+
+  const requestSort = (key: SortableKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIndicator = (key: SortableKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
 
   const userOptions: Option[] = useMemo(() => {
     return allFieldSalesUsers.map(u => ({ value: u.displayName!, label: u.displayName! }));
@@ -249,25 +307,26 @@ export default function CheckinsClientPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Checked-in Leads</CardTitle>
-                <CardDescription>Found {checkedInLeads.length} check-in(s) matching your criteria.</CardDescription>
+                <CardDescription>Found {sortedCheckedInLeads.length} check-in(s) matching your criteria.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Lead ID</TableHead>
-                            <TableHead>Company ID</TableHead>
-                            <TableHead>Company</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Franchisee</TableHead>
-                            <TableHead>User</TableHead>
-                            <TableHead>Check-in Date</TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {checkedInLeads.length > 0 ? (
-                            checkedInLeads.map(lead => (
+                        {sortedCheckedInLeads.length > 0 ? (
+                            sortedCheckedInLeads.map(lead => (
                                 <TableRow key={lead.id}>
+                                    <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
                                     <TableCell>{lead.id}</TableCell>
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
@@ -282,7 +341,6 @@ export default function CheckinsClientPage() {
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
                                     <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
                                 </TableRow>
                             ))
                         ) : (
