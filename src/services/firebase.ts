@@ -743,9 +743,14 @@ async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
     }
 }
 
-async function getAllActivities(): Promise<Array<Activity & { leadId: string }>> {
+async function getAllActivities(checkInOnly = false): Promise<Array<Activity & { leadId: string }>> {
     try {
-        const activitiesSnapshot = await getDocs(collectionGroup(firestore, 'activity'));
+        let activitiesQuery = query(collectionGroup(firestore, 'activity'));
+        if (checkInOnly) {
+            activitiesQuery = query(activitiesQuery, where('notes', '==', 'Checked in at location via map.'));
+        }
+        
+        const activitiesSnapshot = await getDocs(activitiesQuery);
         const allActivities = activitiesSnapshot.docs.map(doc => {
             const activityData = doc.data() as Activity;
             const leadId = doc.ref.parent.parent!.id;
@@ -755,7 +760,8 @@ async function getAllActivities(): Promise<Array<Activity & { leadId: string }>>
                 leadId: leadId,
             };
         });
-        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
+        
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -1938,6 +1944,7 @@ export {
     
 
     
+
 
 
 

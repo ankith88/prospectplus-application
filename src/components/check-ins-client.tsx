@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
@@ -53,15 +54,12 @@ export default function CheckinsClientPage() {
         const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
             getAllLeadsForReport(),
             getAllUsers(),
-            getAllActivities(),
+            getAllActivities(true),
         ]);
         
-        const checkInActivities = refreshedActivities.filter(
-            (activity) => activity.notes === 'Checked in at location via map.'
-        );
 
         setAllLeads(refreshedLeads);
-        setAllCheckInActivities(checkInActivities);
+        setAllCheckInActivities(refreshedActivities);
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
     } catch (error) {
         console.error("Failed to refresh data:", error);
