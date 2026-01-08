@@ -408,79 +408,81 @@ export default function SavedRoutesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Route Name</TableHead>
-                { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead>User</TableHead> }
-                <TableHead>Scheduled Date</TableHead>
-                <TableHead>Stops</TableHead>
-                <TableHead>Total Distance</TableHead>
-                <TableHead>Total Duration</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {routes.length > 0 ? (
-                routes.map(route => (
-                  <TableRow key={route.id}>
-                    <TableCell className="font-medium">{route.name}</TableCell>
-                     { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableCell>{(route as any).userName || 'N/A'}</TableCell> }
-                    <TableCell>
-                        {route.scheduledDate ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Route Name</TableHead>
+                  { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead className="hidden sm:table-cell">User</TableHead> }
+                  <TableHead className="hidden md:table-cell">Scheduled Date</TableHead>
+                  <TableHead>Stops</TableHead>
+                  <TableHead className="hidden lg:table-cell">Total Distance</TableHead>
+                  <TableHead className="hidden lg:table-cell">Total Duration</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {routes.length > 0 ? (
+                  routes.map(route => (
+                    <TableRow key={route.id}>
+                      <TableCell className="font-medium">{route.name}</TableCell>
+                       { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableCell className="hidden sm:table-cell">{(route as any).userName || 'N/A'}</TableCell> }
+                      <TableCell className="hidden md:table-cell">
+                          {route.scheduledDate ? (
+                             <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4 text-muted-foreground"/>
+                                  {format(new Date(route.scheduledDate), 'PP')}
+                             </div>
+                          ) : 'N/A'}
+                      </TableCell>
+                      <TableCell>{route.leads.length}</TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                          <div className="flex items-center gap-2">
+                             <MapPin className="h-4 w-4 text-muted-foreground"/>
+                             {route.totalDistance || 'N/A'}
+                          </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
                            <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground"/>
-                                {format(new Date(route.scheduledDate), 'PP')}
-                           </div>
-                        ) : 'N/A'}
-                    </TableCell>
-                    <TableCell>{route.leads.length}</TableCell>
-                    <TableCell>
-                        <div className="flex items-center gap-2">
-                           <MapPin className="h-4 w-4 text-muted-foreground"/>
-                           {route.totalDistance || 'N/A'}
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                         <div className="flex items-center gap-2">
-                           <Clock className="h-4 w-4 text-muted-foreground"/>
-                           {route.totalDuration || 'N/A'}
-                        </div>
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button size="icon" variant="outline" onClick={() => handleLoadRoute(route)}>
-                        <Route className="h-4 w-4" />
-                      </Button>
-                       <Button size="icon" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                           <Button size="icon" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>This will permanently delete the route "{route.name}".</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteRoute(route)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                             <Clock className="h-4 w-4 text-muted-foreground"/>
+                             {route.totalDuration || 'N/A'}
+                          </div>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="icon" variant="outline" onClick={() => handleLoadRoute(route)}>
+                          <Route className="h-4 w-4" />
+                        </Button>
+                         <Button size="icon" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
+                          <Play className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                             <Button size="icon" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>This will permanently delete the route "{route.name}".</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteRoute(route)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' ? 7 : 6} className="h-24 text-center">
+                      No saved routes found.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' ? 7 : 6} className="h-24 text-center">
-                    No saved routes found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
