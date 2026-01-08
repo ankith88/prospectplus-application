@@ -53,6 +53,7 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { userProfile } = useAuth();
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -89,6 +90,7 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
         description: `A revisit has been scheduled for ${lead.companyName}.`,
       });
       onRevisitScheduled();
+      onOpenChange(false);
     } catch (error) {
       console.error('Failed to schedule revisit:', error);
       toast({
@@ -117,7 +119,7 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Date</FormLabel>
-                    <Popover>
+                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -130,7 +132,16 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date() || isWeekend(date)} initialFocus />
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                            setIsCalendarOpen(false);
+                          }}
+                          disabled={(date) => date < new Date() || isWeekend(date)}
+                          initialFocus
+                        />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
