@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -134,16 +133,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const wonIcon = {
-  path: 'M -8,0 a 8,8 0 1,0 16,0 a 8,8 0 1,0 -16,0',
-  fillColor: '#095c7b',
-  fillOpacity: 1,
-  strokeColor: '#ffffff',
-  strokeWeight: 2,
-  scale: 1,
-};
-
-const getPinColor = (status: LeadStatus, isSelected: boolean): string | google.maps.Icon => {
+const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
@@ -155,7 +145,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string | google.m
     }
     
     if (status === 'Won') {
-      return wonIcon;
+      return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -1364,9 +1354,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
         <h4 className="font-bold text-center">Legend</h4>
         <div className="flex items-center gap-2">
-            <div style={{ width: '16px', height: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: '#095c7b', border: '1px solid white' }}></div>
-            </div>
+             <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Signed" className="h-4 w-4" />
             Signed Customer
         </div>
         <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
@@ -2021,3 +2009,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
+    
