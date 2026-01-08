@@ -20,7 +20,7 @@ import { getArchivedLeads, getLastNote, deleteLead, getAllUsers } from '@/servic
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, Contact, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
@@ -184,6 +184,8 @@ export default function ArchivedLeadsClientPage() {
 
      if (userProfile?.role === 'Field Sales Admin') {
         leads = leads.filter(lead => lead.fieldSales === true);
+     } else if (userProfile?.role === 'Field Sales' && userProfile.displayName) {
+        leads = leads.filter(lead => lead.fieldSales === true && lead.dialerAssigned === userProfile.displayName);
      }
      
      return leads.filter(lead => {
@@ -860,4 +862,5 @@ export default function ArchivedLeadsClientPage() {
 
 
     
+
 

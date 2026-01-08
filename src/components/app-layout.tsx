@@ -279,18 +279,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>History</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  {canViewHistory && (
-                    <>
-                      <SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
-                          <Link href="/appointments">
+                        <Link href="/appointments">
                             <Calendar />
                             <span>All Appointments</span>
-                          </Link>
+                        </Link>
                         </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      {userProfile?.role !== 'Field Sales Admin' && (
-                        <>
+                    </SidebarMenuSubItem>
+                    {(userProfile?.role !== 'Field Sales Admin' && userProfile?.role !== 'Field Sales') && (
+                    <>
                         <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
                             <Link href="/calls">
@@ -307,20 +305,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                             </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        </>
-                      )}
                     </>
-                  )}
-                  {canViewD2D && (
+                    )}
+                    {canViewD2D && (
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/check-ins")}>
+                        <SidebarMenuSubButton asChild isActive={isActive("/check-ins")}>
                         <Link href="/check-ins">
-                          <CheckSquare />
-                          <span>Check-ins</span>
+                            <CheckSquare />
+                            <span>Check-ins</span>
                         </Link>
-                      </SidebarMenuSubButton>
+                        </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                  )}
+                    )}
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
