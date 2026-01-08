@@ -540,13 +540,15 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
         }
 
+        const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
+
         // Apply UI filters
         dataToFilter = dataToFilter.filter(item => {
             const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
             const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
             const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
             
-            const hasBeenCheckedIn = allCheckInActivities.some(a => a.leadId === item.id);
+            const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
             const checkInStatusMatch = filters.checkInStatus === 'all' ||
                                      (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
                                      (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
