@@ -1352,16 +1352,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const MapLegend = () => (
       <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
         <h4 className="font-bold text-center">Legend</h4>
-        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
-        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" alt="In Progress" className="h-4 w-4" /> In Progress</div>
-        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Qualified" className="h-4 w-4" /> Qualified/Trial</div>
-        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lost" className="h-4 w-4" /> Lost/Unqualified</div>
         <div className="flex items-center gap-2">
             <div style={{ width: '16px', height: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: '#095c7b', border: '1px solid white' }}></div>
             </div>
             Signed Customer
         </div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" alt="In Progress" className="h-4 w-4" /> In Progress</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Qualified" className="h-4 w-4" /> Qualified/Trial</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lost" className="h-4 w-4" /> Lost/Unqualified</div>
       </div>
     );
 
@@ -1836,7 +1836,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </div>
                         </InfoWindowF>
                     )}
-                    {isFieldSalesUser && <MapLegend />}
+                    {!isFieldSalesUser && <MapLegend />}
                 </GoogleMap>
             </div>
         </div>
