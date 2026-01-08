@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -475,7 +476,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         fetchData();
     }, [isLoaded, userProfile, toast]);
     
-    const handleLoadRoute = (route: SavedRoute) => {
+    const handleLoadRoute = useCallback((route: SavedRoute) => {
         if (!isLoaded) return;
         
         const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'Free Trial', 'LocalMile Pending'];
@@ -498,18 +499,20 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setTotalDistance(route.totalDistance || null);
         setTotalDuration(route.totalDuration || null);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
-    };
+    }, [isLoaded, mapData, toast]);
 
      useEffect(() => {
+        if (loadingData || !isLoaded || localSavedRoutes.length === 0) return;
+
         const activeRouteId = localStorage.getItem('activeRouteId');
-        if (activeRouteId && localSavedRoutes.length > 0) {
+        if (activeRouteId) {
             const routeToLoad = localSavedRoutes.find(r => r.id === activeRouteId);
             if (routeToLoad) {
                 handleLoadRoute(routeToLoad);
                 setIsRouteActive(true);
             }
         }
-    }, [localSavedRoutes, isLoaded]);
+    }, [localSavedRoutes, isLoaded, loadingData, handleLoadRoute]);
 
   
     const filteredData = useMemo(() => {
@@ -518,12 +521,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         let dataToFilter = mapData;
 
         // Role-based filtering
+        const displayName = userProfile.displayName;
         if (userProfile.role === 'Field Sales') {
-            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true && item.dialerAssigned === userProfile.displayName);
+            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true && item.dialerAssigned === displayName);
         } else if (userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true);
         } else if (userProfile.role === 'user') {
-            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
+            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
         }
 
         // Apply UI filters
@@ -1329,8 +1333,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <div className="flex items-center gap-2">
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
-                        {isFieldSalesUser && (
-                            <CardDescription>Default view shows un-routed, un-visited leads.</CardDescription>
+                        {isFieldSalesUser && filters.checkInStatus === 'not-checked-in' && filters.routeStatus === 'not-in-route' && (
+                            <CardDescription className="hidden lg:block">Default view: un-routed, un-visited leads.</CardDescription>
                         )}
                     </div>
                     <div className="flex items-center gap-2">
