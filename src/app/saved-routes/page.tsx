@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
 
 const containerStyle = {
   width: '100%',
@@ -87,7 +88,7 @@ export default function SavedRoutesPage() {
           const usersMap = new Map(allUsers.map(u => [u.uid, u.displayName]));
           const routesWithUser = allRoutesData.map(r => ({
               ...r,
-              userName: usersMap.get((r as any).userId) || 'Unknown User'
+              userName: (r as any).userId ? usersMap.get((r as any).userId) || 'Unknown User' : 'Unknown User'
           }));
           setRoutes(routesWithUser);
         } else {
