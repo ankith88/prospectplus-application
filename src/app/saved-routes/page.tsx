@@ -413,7 +413,7 @@ export default function SavedRoutesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Route Name</TableHead>
-                  { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead className="hidden sm:table-cell">User</TableHead> }
+                  { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead className="hidden sm:table-cell">Field Sales</TableHead> }
                   <TableHead className="hidden md:table-cell">Scheduled Date</TableHead>
                   <TableHead>Stops</TableHead>
                   <TableHead className="hidden lg:table-cell">Total Distance</TableHead>
@@ -488,3 +488,4 @@ export default function SavedRoutesPage() {
     </div>
   );
 }
+
