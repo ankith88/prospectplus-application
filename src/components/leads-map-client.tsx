@@ -145,7 +145,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+      return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -1354,7 +1354,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
         <h4 className="font-bold text-center">Legend</h4>
         <div className="flex items-center gap-2">
-             <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Signed" className="h-4 w-4" />
+             <img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Signed" className="h-4 w-4" />
             Signed Customer
         </div>
         <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
@@ -2009,5 +2009,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
+    
     
