@@ -525,14 +525,60 @@ SidebarMenu.displayName = "SidebarMenu"
 const SidebarMenuItem = React.forwardRef<
   HTMLLIElement,
   React.ComponentProps<"li">
->(({ className, ...props }, ref) => (
-  <li
-    ref={ref}
-    data-sidebar="menu-item"
-    className={cn("group/menu-item relative px-2", className)}
-    {...props}
-  />
-))
+>(({ className, children, ...props }, ref) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const { state } = useSidebar();
+  const hasSubMenu = React.Children.toArray(children).some(
+    (child) => React.isValidElement(child) && child.type === SidebarMenuSub
+  );
+
+  React.useEffect(() => {
+    if (state === "collapsed") {
+      setIsOpen(false);
+    }
+  }, [state]);
+
+  const handleToggle = () => {
+    if (state === "expanded") {
+      setIsOpen(!isOpen);
+    }
+  };
+
+  const button = React.Children.map(children, (child) => {
+    if (React.isValidElement(child) && child.type === SidebarMenuButton) {
+      return React.cloneElement(child, {
+        onClick: (e: React.MouseEvent) => {
+          if (hasSubMenu) {
+            handleToggle();
+          }
+          child.props.onClick?.(e);
+        },
+        "data-state": hasSubMenu ? (isOpen ? "open" : "closed") : undefined,
+      } as React.ComponentProps<typeof SidebarMenuButton>);
+    }
+    return child;
+  });
+
+  const subMenu = React.Children.map(children, (child) => {
+    if (React.isValidElement(child) && child.type === SidebarMenuSub) {
+      return isOpen ? child : null;
+    }
+    return null;
+  });
+
+  return (
+    <li
+      ref={ref}
+      data-sidebar="menu-item"
+      className={cn("group/menu-item relative px-2", className)}
+      {...props}
+    >
+      {button}
+      {subMenu}
+    </li>
+  );
+});
+
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
