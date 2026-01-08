@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Appointment, LeadStatus, AppointmentStatus, DiscoveryData } from '@/lib/types'
+import type { Appointment, Lead, LeadStatus, AppointmentStatus, DiscoveryData } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -24,7 +24,7 @@ import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllAppointments } from '@/services/firebase'
+import { getAllAppointments, getLeadsFromFirebase } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -46,6 +46,7 @@ type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' |
 
 export default function AllAppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState<{ key: SortableAppointmentKeys; direction: 'ascending' | 'descending' } | null>(null);
   const [filters, setFilters] = useState({
@@ -62,7 +63,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -74,8 +75,12 @@ export default function AllAppointmentsPage() {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const fetchedAppointments = await getAllAppointments();
+      const [fetchedAppointments, fetchedLeads] = await Promise.all([
+        getAllAppointments(),
+        getLeadsFromFirebase({ summary: true })
+      ]);
       setAllAppointments(fetchedAppointments);
+      setAllLeads(fetchedLeads);
     } catch (error) {
       console.error("Failed to fetch appointments:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch appointments.' });
@@ -128,7 +133,10 @@ export default function AllAppointmentsPage() {
         return appointment.leadName !== 'Unknown Lead';
     });
 
-    if (userProfile?.role !== 'admin' && userProfile?.displayName) {
+    if (userProfile?.role === 'Field Sales Admin') {
+        const fieldSalesLeadIds = new Set(allLeads.filter(l => l.fieldSales).map(l => l.id));
+        appointmentsToFilter = appointmentsToFilter.filter(appt => fieldSalesLeadIds.has(appt.leadId));
+    } else if (userProfile?.role !== 'admin' && userProfile?.displayName) {
         appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
     
@@ -169,8 +177,8 @@ export default function AllAppointmentsPage() {
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
-        const finalAppointmentUserMatch = userProfile?.role === 'admin' ? appointmentUserMatch : true;
-        const finalLeadUserMatch = userProfile?.role === 'admin' ? leadUserMatch : true;
+        const finalAppointmentUserMatch = (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? appointmentUserMatch : true;
+        const finalLeadUserMatch = (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? leadUserMatch : true;
 
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         
@@ -178,7 +186,7 @@ export default function AllAppointmentsPage() {
 
         return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch && appointmentStatusMatch;
     });
-  }, [allAppointments, filters, userProfile]);
+  }, [allAppointments, filters, userProfile, allLeads]);
   
   const sortedAppointments = useMemo(() => {
     let sortableItems = [...filteredAppointments];
@@ -199,8 +207,8 @@ export default function AllAppointmentsPage() {
           aValue = a.discoveryData?.score ?? -1;
           bValue = b.discoveryData?.score ?? -1;
         } else {
-            aValue = a[sortConfig.key] || '';
-            bValue = b[sortConfig.key] || '';
+            aValue = a[sortConfig.key as keyof AppointmentWithLead] || '';
+            bValue = b[sortConfig.key as keyof AppointmentWithLead] || '';
         }
 
         if (aValue < bValue) {
@@ -320,7 +328,7 @@ export default function AllAppointmentsPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
-                    {userProfile?.role === 'admin' && (
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>

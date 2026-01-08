@@ -180,7 +180,13 @@ export default function ArchivedLeadsClientPage() {
   };
 
   const archivedLeads = useMemo(() => {
-     return allLeads.filter(lead => {
+     let leads = allLeads;
+
+     if (userProfile?.role === 'Field Sales Admin') {
+        leads = leads.filter(lead => lead.fieldSales === true);
+     }
+     
+     return leads.filter(lead => {
         const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
         const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
@@ -223,7 +229,7 @@ export default function ArchivedLeadsClientPage() {
 
         return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
     });
-  }, [allLeads, filters]);
+  }, [allLeads, filters, userProfile]);
 
   const sortedLeads = useMemo(() => {
     let sortableItems = [...archivedLeads];
@@ -239,8 +245,8 @@ export default function ArchivedLeadsClientPage() {
           aValue = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
           bValue = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
         } else {
-          aValue = a[sortConfig.key] ?? '';
-          bValue = b[sortConfig.key] ?? '';
+          aValue = a[sortConfig.key as keyof Lead] ?? '';
+          bValue = b[sortConfig.key as keyof Lead] ?? '';
         }
         
         if (aValue < bValue) {
@@ -715,7 +721,7 @@ export default function ArchivedLeadsClientPage() {
                         />
                       </TableCell>
                       <TableCell>
-                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
+                         <Button variant="link" className="p-0 h-auto" onClick={() => window.open(lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`, '_blank')}>
                             {lead.companyName}
                         </Button>
                       </TableCell>
@@ -787,28 +793,30 @@ export default function ArchivedLeadsClientPage() {
                         <TableRow>
                             <TableCell colSpan={10} className="p-0">
                                 <div className="p-4 bg-secondary/50">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                        <div>
-                                            <h4 className="font-semibold mb-2">Last Activity</h4>
-                                            {expandedDetails[lead.id].activity ? (
-                                                <div>
-                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
-                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
-                                                </div>
-                                            ) : <p className="text-muted-foreground">No activities found.</p>}
+                                    {expandedDetails[lead.id].loadingNote ? (
+                                        <Loader />
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <h4 className="font-semibold mb-2">Last Activity</h4>
+                                                {expandedDetails[lead.id].activity ? (
+                                                    <div>
+                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].activity!.date), 'PPpp')}</p>
+                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].activity!.notes}</p>
+                                                    </div>
+                                                ) : <p className="text-muted-foreground">No activities found.</p>}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-semibold mb-2">Last Note</h4>
+                                                {expandedDetails[lead.id].note ? (
+                                                    <div>
+                                                        <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
+                                                        <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
+                                                    </div>
+                                                ) : <p className="text-muted-foreground">No notes found.</p>}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="font-semibold mb-2">Last Note</h4>
-                                            {expandedDetails[lead.id].loadingNote ? (
-                                                <Loader />
-                                            ) : expandedDetails[lead.id].note ? (
-                                                <div>
-                                                    <p className="font-medium">{format(new Date(expandedDetails[lead.id].note!.date), 'PPpp')}</p>
-                                                    <p className="text-muted-foreground">{expandedDetails[lead.id].note!.content}</p>
-                                                </div>
-                                            ) : <p className="text-muted-foreground">No notes found.</p>}
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>
@@ -852,3 +860,4 @@ export default function ArchivedLeadsClientPage() {
 
 
     
+

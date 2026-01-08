@@ -124,7 +124,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
 
   return (
     <>
@@ -142,7 +142,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+             {userProfile?.role === 'admin' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Admin Dashboard">
                   <Link href="/admin/dashboard">
@@ -188,7 +188,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
+            {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
                   <Link href="/leads/new">
@@ -216,7 +216,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {canViewReporting && (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+            {canViewReporting && (userProfile?.role === 'admin') && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <BarChart2 />
@@ -252,7 +252,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             {canViewReporting && userProfile?.role === 'Field Sales' && (
+             {(canViewReporting && (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin')) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
                   <Link href="/door-to-door-reporting">
@@ -262,15 +262,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
-                <Link href="/signed-customers">
-                  <Star />
-                  <span>Signed Customers</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             {(canViewHistory || canViewD2D) && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin') && (
+                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
+                    <Link href="/signed-customers">
+                      <Star />
+                      <span>Signed Customers</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+             )}
+             {canViewHistory && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <History />
@@ -287,22 +289,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
-                          <Link href="/calls">
-                            <Phone />
-                            <span>All Calls</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
-                          <Link href="/transcripts">
-                            <FileText />
-                            <span>All Transcripts</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      {userProfile?.role !== 'Field Sales Admin' && (
+                        <>
+                        <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
+                            <Link href="/calls">
+                                <Phone />
+                                <span>All Calls</span>
+                            </Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
+                            <Link href="/transcripts">
+                                <FileText />
+                                <span>All Transcripts</span>
+                            </Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        </>
+                      )}
                     </>
                   )}
                   {canViewD2D && (

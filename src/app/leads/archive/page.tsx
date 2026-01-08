@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import ArchivedLeadsClientPage from '@/components/archived-leads-client';
@@ -12,7 +13,7 @@ export default function ArchivedLeadsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = !userProfile?.role?.includes('Lead Gen');
+  const hasAccess = userProfile?.role && !userProfile.role.includes('Lead Gen');
 
   useEffect(() => {
     if (!loading && !hasAccess) {
