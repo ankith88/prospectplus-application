@@ -392,8 +392,8 @@ export default function FieldSalesPage() {
   const handleLoadRoute = (route: SavedRoute) => {
     if (!route.id) return;
     localStorage.setItem('activeRouteId', route.id);
-    router.push(`/leads/map`);
-    toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active on the map.` });
+    router.push(`/saved-routes`);
+    toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
   };
 
   const handleStartRoute = (route: SavedRoute) => {
@@ -1129,12 +1129,4 @@ export default function FieldSalesPage() {
 
     
 
-
-
-
-
-
-
-
-
-
+    
