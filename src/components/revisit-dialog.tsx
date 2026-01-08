@@ -22,15 +22,12 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { Input } from './ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { cn } from '@/lib/utils';
-import { format, isWeekend } from 'date-fns';
+import { isWeekend, startOfToday } from 'date-fns';
 import { firestore } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
@@ -53,7 +50,6 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { userProfile } = useAuth();
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -105,45 +101,30 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-fit">
         <DialogHeader>
           <DialogTitle>Schedule Revisit</DialogTitle>
           <DialogDescription>Select a date and time to revisit {lead.companyName}.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-            <div className="flex gap-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start">
               <FormField
                 control={form.control}
                 name="revisitDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Date</FormLabel>
-                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn('w-[240px] pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                          >
-                            {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
+                    <FormControl>
+                      <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date);
-                            setIsCalendarOpen(false);
-                          }}
-                          disabled={(date) => date < new Date() || isWeekend(date)}
+                          onSelect={field.onChange}
+                          disabled={(date) => date < startOfToday() || isWeekend(date)}
                           initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                          className="rounded-md border"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -152,10 +133,10 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
                 control={form.control}
                 name="revisitTime"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Time</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} />
+                      <Input type="time" {...field} className="w-full" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
