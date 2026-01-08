@@ -13,9 +13,9 @@ import {
   DrawingManagerF,
   CircleF,
 } from '@react-google-maps/api'
-import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers, getAllUserRoutes } from '@/services/firebase'
+import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers, getAllUserRoutes, getAllActivities } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute } from '@/lib/types'
+import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute, Activity } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
 import { Button } from './ui/button'
@@ -73,7 +73,8 @@ import { Separator } from './ui/separator'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { CalendarIcon } from 'lucide-react'
 import { Calendar } from './ui/calendar'
-import { format } from 'date-fns'
+import { format, startOfDay, endOfDay } from 'date-fns'
+import type { DateRange } from 'react-day-picker';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
 
@@ -197,6 +198,8 @@ export default function LeadsMapClient() {
   const [routeDate, setRouteDate] = useState<Date>();
   const [routeAssignee, setRouteAssignee] = useState<string>('');
   const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
+  const [allCheckInActivities, setAllCheckInActivities] = useState<Activity[]>([]);
+
   
   const geoSearchAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -229,6 +232,9 @@ export default function LeadsMapClient() {
     franchisee: [] as string[],
     status: [] as string[],
     state: [] as string[],
+    checkInStatus: 'not-checked-in' as 'all' | 'checked-in' | 'not-checked-in',
+    checkInDate: undefined as DateRange | undefined,
+    routeStatus: 'not-in-route' as 'all' | 'in-route' | 'not-in-route',
   });
   
   const router = useRouter()
@@ -407,11 +413,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
             setLoadingData(true);
             try {
-                const [mapLeads, mapCompanies] = await Promise.all([
+                const [mapLeads, mapCompanies, checkIns] = await Promise.all([
                     getLeadsFromFirebase({ summary: true }),
-                    getCompaniesFromFirebase()
+                    getCompaniesFromFirebase(),
+                    getAllActivities(true)
                 ]);
                 
+                setAllCheckInActivities(checkIns);
+
                 let leadsMapData: MapLead[] = [];
                 if (mapLeads) {
                     leadsMapData = mapLeads
@@ -496,10 +505,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         let dataToFilter = mapData;
 
+        // Role-based filtering
         if (userProfile.role === 'Field Sales') {
-            dataToFilter = dataToFilter.filter(item => (item.fieldSales === true && item.dialerAssigned === userProfile.displayName) || item.isCompany);
+            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true && item.dialerAssigned === userProfile.displayName);
         } else if (userProfile.role === 'Field Sales Admin') {
-            dataToFilter = dataToFilter.filter(item => item.fieldSales === true || item.isCompany);
+            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true);
         } else if (userProfile.role === 'user') {
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === userProfile.displayName);
         }
@@ -510,12 +520,37 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
             const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
             
-            return franchiseeMatch && stateMatch && statusMatch;
+            const hasBeenCheckedIn = allCheckInActivities.some(a => a.leadId === item.id);
+            const checkInStatusMatch = filters.checkInStatus === 'all' ||
+                                     (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
+                                     (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
+
+            let checkInDateMatch = true;
+            if (filters.checkInDate?.from && hasBeenCheckedIn) {
+                const fromDate = startOfDay(filters.checkInDate.from);
+                const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
+                const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
+                if (checkInActivity) {
+                    const checkInDate = new Date(checkInActivity.date);
+                    checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+                } else {
+                    checkInDateMatch = false;
+                }
+            } else if (filters.checkInDate?.from) {
+                checkInDateMatch = false;
+            }
+            
+            const isInRoute = leadToRouteMap.has(item.id);
+            const routeStatusMatch = filters.routeStatus === 'all' ||
+                                     (filters.routeStatus === 'in-route' && isInRoute) ||
+                                     (filters.routeStatus === 'not-in-route' && !isInRoute);
+
+            return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch;
         });
         
         return dataToFilter;
     
-    }, [mapData, filters, userProfile]);
+    }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
 
   const onMarkerClick = useCallback((item: MapLead) => {
     if (selectionMode === 'select') {
@@ -736,26 +771,38 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     findProspects({ lat: selectedLead.latitude!, lng: selectedLead.longitude! }, searchKeywords.join(' '));
   }, [selectedLead, map, toast, findProspects]);
   
-  const handleFindNearbyCompanies = useCallback(() => {
-    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google?.maps?.geometry) return;
-
-    const leadLatLng = new window.google.maps.LatLng(selectedLead.latitude, selectedLead.longitude);
-    
-    const nearby = mapData.filter(item => {
-      if (!item.isCompany || !item.latitude || !item.longitude || item.id === selectedLead.id) {
-        return false;
-      }
-      const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
-      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
-      return distance <= 500; // 500m radius
-    });
-
-    setNearbyCompanies(nearby);
-    setIsNearbyCompaniesDialogOpen(true);
-    if(nearby.length === 0) {
-        toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
+  const handleFindNearbyCompanies = useCallback(async () => {
+    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google?.maps?.geometry) {
+        toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
+        return;
     }
-  }, [selectedLead, mapData, toast]);
+
+    setIsFindingNearby(true);
+    try {
+        const leadLatLng = new window.google.maps.LatLng(selectedLead.latitude, selectedLead.longitude);
+        const allCompanies = await getCompaniesFromFirebase();
+        
+        const nearby = allCompanies.filter(company => {
+          if (!company.latitude || !company.longitude || company.id === selectedLead.id) {
+            return false;
+          }
+          const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+          const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+          return distance <= 500; // 500m radius
+        });
+
+        setNearbyCompanies(nearby);
+        setIsNearbyCompaniesDialogOpen(true);
+        if(nearby.length === 0) {
+            toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
+        }
+    } catch (error) {
+        console.error("Error finding nearby companies:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch nearby companies.' });
+    } finally {
+        setIsFindingNearby(false);
+    }
+  }, [selectedLead, toast]);
 
     const handleFindMultiSites = useCallback(() => {
     if (!selectedLead) return;
@@ -1291,33 +1338,30 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </TabsList>
                         </CardContent>
                         <TabsContent value="filters">
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="franchisee-mobile">Franchisee</Label>
-                                    <MultiSelectCombobox
-                                        options={uniqueFranchisees}
-                                        selected={filters.franchisee}
-                                        onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                                        placeholder="Select Franchisees..."
-                                    />
+                                    <Label>Franchisee</Label>
+                                    <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="status-mobile">Status</Label>
-                                    <MultiSelectCombobox
-                                        options={uniqueStatuses}
-                                        selected={filters.status}
-                                        onSelectedChange={(selected) => handleFilterChange('status', selected)}
-                                        placeholder="Select Statuses..."
-                                    />
+                                    <Label>Status</Label>
+                                    <MultiSelectCombobox options={uniqueStatuses} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select Statuses..." />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="state-mobile">State</Label>
-                                    <MultiSelectCombobox
-                                        options={uniqueStates}
-                                        selected={filters.state}
-                                        onSelectedChange={(selected) => handleFilterChange('state', selected)}
-                                        placeholder="Select States..."
-                                    />
+                                    <Label>State</Label>
+                                    <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label>Visit Status</Label>
+                                    <Select value={filters.checkInStatus} onValueChange={(value) => handleFilterChange('checkInStatus', value)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="checked-in">Checked-in</SelectItem><SelectItem value="not-checked-in">Not Checked-in</SelectItem></SelectContent></Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Check-in Date</Label>
+                                    <Popover><PopoverTrigger asChild><Button variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)} /></PopoverContent></Popover>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Route Status</Label>
+                                    <Select value={filters.routeStatus} onValueChange={(value) => handleFilterChange('routeStatus', value)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="in-route">In a Saved Route</SelectItem><SelectItem value="not-in-route">Not in a Route</SelectItem></SelectContent></Select>
                                 </div>
                             </CardContent>
                         </TabsContent>
