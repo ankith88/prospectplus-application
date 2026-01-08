@@ -568,12 +568,15 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             
             let campaignMatch = true;
             if (filters.campaign && filters.campaign !== 'all') {
-                if (filters.campaign === 'D2D') {
-                    campaignMatch = (item as Lead).campaign === 'Door-to-Door Field Sales';
+                const leadCampaign = (item as Lead).campaign;
+                const filterCampaign = filters.campaign;
+                if (filterCampaign === 'D2D') {
+                    campaignMatch = leadCampaign === 'Door-to-Door Field Sales';
                 } else {
-                    campaignMatch = (item as Lead).campaign === filters.campaign;
+                    campaignMatch = leadCampaign === filterCampaign;
                 }
             }
+
 
             return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && campaignMatch;
         });
@@ -671,12 +674,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   }, [mapData]);
 
   const uniqueCampaigns: Option[] = useMemo(() => {
-    const campaigns = new Set(mapData.map(lead => {
-        const campaign = (lead as Lead).campaign;
-        if (campaign === 'Door-to-Door Field Sales') {
-            return 'D2D';
-        }
-        return campaign;
+    const campaigns = new Set(mapData.map(item => {
+        const lead = item as Lead;
+        const campaign = lead.campaign;
+        return campaign === 'Door-to-Door Field Sales' ? 'D2D' : campaign;
     }).filter(Boolean));
 
     return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
