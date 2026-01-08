@@ -124,7 +124,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
 
   return (
     <>

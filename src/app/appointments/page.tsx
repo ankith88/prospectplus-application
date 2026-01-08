@@ -63,7 +63,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -133,10 +133,11 @@ export default function AllAppointmentsPage() {
         return appointment.leadName !== 'Unknown Lead';
     });
 
-    if (userProfile?.role === 'Field Sales Admin') {
+    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
         const fieldSalesLeadIds = new Set(allLeads.filter(l => l.fieldSales).map(l => l.id));
         appointmentsToFilter = appointmentsToFilter.filter(appt => fieldSalesLeadIds.has(appt.leadId));
-    } else if (userProfile?.role !== 'admin' && userProfile?.displayName) {
+    }
+    if (userProfile?.role === 'user' || userProfile?.role === 'Field Sales') {
         appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
     
