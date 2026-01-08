@@ -134,6 +134,14 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
+const wonIcon = {
+  path: 'M -8,0 a 8,8 0 1,0 16,0 a 8,8 0 1,0 -16,0',
+  fillColor: '#095c7b',
+  fillOpacity: 1,
+  strokeColor: '#ffffff',
+  strokeWeight: 2,
+  scale: 1,
+};
 
 const getPinColor = (status: LeadStatus, isSelected: boolean): string | google.maps.Icon => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
@@ -147,14 +155,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string | google.m
     }
     
     if (status === 'Won') {
-      return {
-          path: 'M -8,0 a 8,8 0 1,0 16,0 a 8,8 0 1,0 -16,0',
-          fillColor: '#095c7b',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-          scale: 1,
-      };
+      return wonIcon;
     }
 
     if (greenStatuses.includes(status)) {
@@ -2015,45 +2016,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-
-         <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Nearby Signed Customers</DialogTitle>
-                    <DialogDescription>
-                        Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {selectedLead?.companyName}.
-                    </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh]">
-                    {nearbyCompanies.length > 0 ? (
-                        <div className="space-y-2 p-1">
-                            {nearbyCompanies.map(company => (
-                                <Card key={company.id} className="p-3">
-                                    <div className="flex flex-col space-y-1">
-                                        <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                        <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
-                                        <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                        {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                        {company.websiteUrl && (
-                                            <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
-                                                <Globe className="h-4 w-4" />
-                                                <span>Visit Website</span>
-                                            </a>
-                                        )}
-                                    </div>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-                    )}
-                </ScrollArea>
-                <DialogFooter>
-                    <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
     </div>
     );
 }
-
