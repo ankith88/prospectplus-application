@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -77,6 +78,7 @@ import { format, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useIsMobile } from '@/hooks/use-mobile'
 
 
 const containerStyle = {
@@ -241,6 +243,7 @@ export default function LeadsMapClient() {
   const router = useRouter()
   const { toast } = useToast()
   const { userProfile, loading: authLoading, savedRoutes } = useAuth();
+  const isMobile = useIsMobile();
 
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
 
@@ -1367,7 +1370,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
     return (
     <div className="flex flex-col h-full gap-4">
-        <Collapsible defaultOpen>
+        <Collapsible defaultOpen={!isMobile}>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2">
