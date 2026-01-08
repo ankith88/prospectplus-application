@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, GripVertical, CheckSquare, Bike, Car, Footprints, Save } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, GripVertical, CheckSquare, Bike, Car, Footprints, Save, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, getAllUsers, deleteUserRoute, updateUserRoute, getLeadsFromFirebase } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +32,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const containerStyle = {
   width: '100%',
@@ -104,6 +103,18 @@ export default function SavedRoutesPage() {
 
     fetchRoutes();
   }, [userProfile, savedRoutes, toast]);
+
+  const { myRoutes, otherRoutes } = useMemo(() => {
+    if (!userProfile) return { myRoutes: [], otherRoutes: [] };
+    
+    if (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') {
+      const myRoutes = routes.filter(r => (r as any).userId === userProfile.uid);
+      const otherRoutes = routes.filter(r => (r as any).userId !== userProfile.uid);
+      return { myRoutes, otherRoutes };
+    }
+
+    return { myRoutes: routes, otherRoutes: [] };
+  }, [routes, userProfile]);
 
   const handleLoadRoute = useCallback((route: SavedRoute) => {
     setLoadedRoute(route);
@@ -411,97 +422,107 @@ export default function SavedRoutesPage() {
     );
   }
 
+  const RouteTable = ({ routes, title }: { routes: SavedRoute[], title: string }) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>
+          Showing {routes.length} saved route(s).
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Route Name</TableHead>
+                { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead className="hidden sm:table-cell">Field Sales</TableHead> }
+                <TableHead className="hidden md:table-cell">Scheduled Date</TableHead>
+                <TableHead>Stops</TableHead>
+                <TableHead className="hidden lg:table-cell">Total Distance</TableHead>
+                <TableHead className="hidden lg:table-cell">Total Duration</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {routes.length > 0 ? (
+                routes.map(route => (
+                  <TableRow key={route.id}>
+                    <TableCell className="font-medium">{route.name}</TableCell>
+                     { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableCell className="hidden sm:table-cell">{(route as any).userName || 'N/A'}</TableCell> }
+                    <TableCell className="hidden md:table-cell">
+                        {route.scheduledDate ? (
+                           <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-muted-foreground"/>
+                                {format(new Date(route.scheduledDate), 'PP')}
+                           </div>
+                        ) : 'N/A'}
+                    </TableCell>
+                    <TableCell>{route.leads.length}</TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                           <MapPin className="h-4 w-4 text-muted-foreground"/>
+                           {route.totalDistance || 'N/A'}
+                        </div>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                         <div className="flex items-center gap-2">
+                           <Clock className="h-4 w-4 text-muted-foreground"/>
+                           {route.totalDuration || 'N/A'}
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button size="icon" variant="outline" onClick={() => handleLoadRoute(route)}>
+                        <Route className="h-4 w-4" />
+                      </Button>
+                       <Button size="icon" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
+                        <Play className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button size="icon" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This will permanently delete the route "{route.name}".</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteRoute(route)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? 7 : 6} className="h-24 text-center">
+                    No saved routes found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Saved Routes</h1>
         <p className="text-muted-foreground">Manage and start your field sales routes.</p>
       </header>
-      <Card>
-        <CardHeader>
-          <CardTitle>My Routes</CardTitle>
-          <CardDescription>
-            Showing {routes.length} saved route(s).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Route Name</TableHead>
-                  { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableHead className="hidden sm:table-cell">Field Sales</TableHead> }
-                  <TableHead className="hidden md:table-cell">Scheduled Date</TableHead>
-                  <TableHead>Stops</TableHead>
-                  <TableHead className="hidden lg:table-cell">Total Distance</TableHead>
-                  <TableHead className="hidden lg:table-cell">Total Duration</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {routes.length > 0 ? (
-                  routes.map(route => (
-                    <TableRow key={route.id}>
-                      <TableCell className="font-medium">{route.name}</TableCell>
-                       { (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && <TableCell className="hidden sm:table-cell">{(route as any).userName || 'N/A'}</TableCell> }
-                      <TableCell className="hidden md:table-cell">
-                          {route.scheduledDate ? (
-                             <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4 text-muted-foreground"/>
-                                  {format(new Date(route.scheduledDate), 'PP')}
-                             </div>
-                          ) : 'N/A'}
-                      </TableCell>
-                      <TableCell>{route.leads.length}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                          <div className="flex items-center gap-2">
-                             <MapPin className="h-4 w-4 text-muted-foreground"/>
-                             {route.totalDistance || 'N/A'}
-                          </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                           <div className="flex items-center gap-2">
-                             <Clock className="h-4 w-4 text-muted-foreground"/>
-                             {route.totalDuration || 'N/A'}
-                          </div>
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button size="icon" variant="outline" onClick={() => handleLoadRoute(route)}>
-                          <Route className="h-4 w-4" />
-                        </Button>
-                         <Button size="icon" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
-                          <Play className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                             <Button size="icon" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription>This will permanently delete the route "{route.name}".</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteRoute(route)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' ? 7 : 6} className="h-24 text-center">
-                      No saved routes found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      
+      <RouteTable routes={myRoutes} title="My Routes" />
+
+      {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && otherRoutes.length > 0 && (
+        <RouteTable routes={otherRoutes} title="Other User Routes" />
+      )}
     </div>
   );
 }
+
