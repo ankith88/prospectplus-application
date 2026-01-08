@@ -147,7 +147,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png';
+      return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -579,8 +579,17 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
     }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
     
-    const visibleLeadsCount = useMemo(() => {
-        return filteredData.filter(item => !item.isCompany).length;
+    const { leadsCount, signedCustomersCount } = useMemo(() => {
+        let leads = 0;
+        let signedCustomers = 0;
+        filteredData.forEach(item => {
+            if (item.isCompany) {
+                signedCustomers++;
+            } else {
+                leads++;
+            }
+        });
+        return { leadsCount: leads, signedCustomersCount: signedCustomers };
     }, [filteredData]);
 
 
@@ -1340,6 +1349,18 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             </div>
         )
     }
+    
+    const MapLegend = () => (
+      <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
+        <h4 className="font-bold text-center">Legend</h4>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" alt="In Progress" className="h-4 w-4" /> In Progress</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Qualified" className="h-4 w-4" /> Qualified/Trial</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lost" className="h-4 w-4" /> Lost/Unqualified</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/purple-dot.png" alt="Signed Customer" className="h-4 w-4" /> Signed Customer</div>
+      </div>
+    );
+
 
     return (
     <div className="flex flex-col h-full gap-4">
@@ -1350,7 +1371,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
                         <CardDescription>
-                            Displaying {visibleLeadsCount} leads.
+                            Displaying {leadsCount} leads and {signedCustomersCount} signed customers.
                         </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1811,6 +1832,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </div>
                         </InfoWindowF>
                     )}
+                    {isFieldSalesUser && <MapLegend />}
                 </GoogleMap>
             </div>
         </div>
@@ -2025,3 +2047,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
+const MapLegend = () => (
+    <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
+        <h4 className="font-bold text-center">Legend</h4>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="New" className="h-4 w-4" /> New</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" alt="In Progress" className="h-4 w-4" /> In Progress</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Qualified" className="h-4 w-4" /> Qualified/Trial</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lost" className="h-4 w-4" /> Lost/Unqualified</div>
+        <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/purple-dot.png" alt="Signed Customer" className="h-4 w-4" /> Signed Customer</div>
+    </div>
+);
