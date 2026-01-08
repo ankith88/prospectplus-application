@@ -570,8 +570,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             if (filters.campaign && filters.campaign !== 'all') {
                 if (filters.campaign === 'D2D') {
                     campaignMatch = (item as Lead).campaign === 'Door-to-Door Field Sales';
-                } else if (filters.campaign === 'Outbound') {
-                    campaignMatch = (item as Lead).campaign !== 'Door-to-Door Field Sales';
+                } else {
+                    campaignMatch = (item as Lead).campaign === filters.campaign;
                 }
             }
 
@@ -668,6 +668,18 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   const uniqueStates: Option[] = useMemo(() => {
     const states = new Set(mapData.map(item => item.address?.state).filter(Boolean));
     return Array.from(states as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [mapData]);
+
+  const uniqueCampaigns: Option[] = useMemo(() => {
+    const campaigns = new Set(mapData.map(lead => {
+        const campaign = (lead as Lead).campaign;
+        if (campaign === 'Door-to-Door Field Sales') {
+            return 'D2D';
+        }
+        return campaign;
+    }).filter(Boolean));
+
+    return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
   }, [mapData]);
   
   const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
@@ -1414,12 +1426,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Campaign</Label>
-                                    <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                     <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Campaigns</SelectItem>
-                                            <SelectItem value="D2D">D2D</SelectItem>
-                                            <SelectItem value="Outbound">Outbound</SelectItem>
+                                            {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2005,6 +2016,23 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
                     <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
                         {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        
+        <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Duplicate Lead Found</DialogTitle>
+                    <DialogDescription>
+                        A lead with this name or phone number already exists in the system.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setDuplicateLeadId(null)}>Cancel</Button>
+                    <Button onClick={() => { window.open(`/leads/${duplicateLeadId}`, '_blank'); setDuplicateLeadId(null); }}>
+                        View Existing Lead
                     </Button>
                 </DialogFooter>
             </DialogContent>

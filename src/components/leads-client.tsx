@@ -196,6 +196,7 @@ export default function LeadsClientPage() {
     companyName: '',
     status: [] as string[],
     franchisee: [],
+    campaign: 'all',
   });
   
   useEffect(() => {
@@ -264,6 +265,7 @@ export default function LeadsClientPage() {
       companyName: '',
       status: [],
       franchisee: [],
+      campaign: 'all',
     });
   };
 
@@ -275,7 +277,13 @@ export default function LeadsClientPage() {
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true;
 
-      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch;
+      let campaignMatch = true;
+        if (filters.campaign && filters.campaign !== 'all') {
+            const leadCampaign = lead.campaign === 'Door-to-Door Field Sales' ? 'D2D' : lead.campaign;
+            campaignMatch = leadCampaign === filters.campaign;
+        }
+
+      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch;
     });
 
     if (sortConfig !== null) {
@@ -725,6 +733,18 @@ export default function LeadsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
+  const uniqueCampaigns: Option[] = useMemo(() => {
+    const campaigns = new Set(allLeads.map(lead => {
+        const campaign = lead.campaign;
+        if (campaign === 'Door-to-Door Field Sales') {
+            return 'D2D';
+        }
+        return campaign;
+    }).filter(Boolean));
+
+    return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  
   const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
   if (loading || authLoading) {
@@ -773,7 +793,7 @@ export default function LeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -795,6 +815,18 @@ export default function LeadsClientPage() {
                                 onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
                                 placeholder="Select franchisees..."
                             />
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="campaign">Campaign</Label>
+                             <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                <SelectTrigger id="campaign-select">
+                                    <SelectValue placeholder="Select a campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardContent>
                     {hasActiveFilters && (
@@ -1059,7 +1091,7 @@ export default function LeadsClientPage() {
                               id={`select-all-${dialer}`}
                               aria-label={`Select all leads for ${dialer}`}
                           />
-                          <AccordionTrigger className="py-2 flex-1">
+                          <AccordionTrigger className="py-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold">{dialer}</span>
                               <Badge>{Object.values(statusGroups).flat().length} Leads</Badge>

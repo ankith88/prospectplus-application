@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -108,6 +109,18 @@ export default function ArchivedLeadsClientPage() {
   const statusOptions: Option[] = useMemo(() => {
     return archivedStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
   }, []);
+  
+  const uniqueCampaigns: Option[] = useMemo(() => {
+    const campaigns = new Set(allLeads.map(lead => {
+        const campaign = lead.campaign;
+        if (campaign === 'Door-to-Door Field Sales') {
+            return 'D2D';
+        }
+        return campaign;
+    }).filter(Boolean));
+
+    return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
 
 
   useEffect(() => {
@@ -204,11 +217,8 @@ export default function ArchivedLeadsClientPage() {
 
         let campaignMatch = true;
         if (filters.campaign && filters.campaign !== 'all') {
-            if (filters.campaign === 'D2D') {
-                campaignMatch = lead.campaign === 'Door-to-Door Field Sales';
-            } else if (filters.campaign === 'Outbound') {
-                campaignMatch = lead.campaign !== 'Door-to-Door Field Sales';
-            }
+            const leadCampaign = lead.campaign === 'Door-to-Door Field Sales' ? 'D2D' : lead.campaign;
+            campaignMatch = leadCampaign === filters.campaign;
         }
 
         return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
@@ -501,8 +511,7 @@ export default function ArchivedLeadsClientPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    <SelectItem value="D2D">D2D</SelectItem>
-                                    <SelectItem value="Outbound">Outbound</SelectItem>
+                                    {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
