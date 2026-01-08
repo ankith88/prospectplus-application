@@ -77,6 +77,7 @@ import { Calendar } from './ui/calendar'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 const containerStyle = {
@@ -135,7 +136,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 
 
 const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
-    const greenStatuses: LeadStatus[] = ['Qualified', 'Won', 'Pre Qualified', 'Trialing ShipMate'];
+    const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
     const blueStatuses: LeadStatus[] = ['New'];
@@ -146,7 +147,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'http://maps.google.com/mapfiles/ms/icons/teal-pushpin.png';
+      return 'https://maps.google.com/mapfiles/ms/icons/yellow-star.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -164,7 +165,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
      if (purpleStatuses.includes(status)) {
         return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
-    return 'http://maps.google.com/mapfiles/ms/icons/grey-dot.png'; // Default
+    return 'http://maps.google.com/mapfiles/ms/icons/grey.png'; // Default
 };
 
 
@@ -1333,9 +1334,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <div className="flex items-center gap-2">
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
-                        {isFieldSalesUser && filters.checkInStatus === 'not-checked-in' && filters.routeStatus === 'not-in-route' && (
-                            <CardDescription className="hidden lg:block">Default view: un-routed, un-visited leads.</CardDescription>
-                        )}
+                        <CardDescription>
+                            Displaying {filteredData.length} leads.
+                        </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button onClick={handleShowMyLocation} variant="outline" size="sm"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
@@ -1350,10 +1351,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 <CollapsibleContent>
                     <Tabs defaultValue="filters">
                         <CardContent>
-                            <TabsList className="grid w-full grid-cols-3">
+                            <TabsList className="grid w-full grid-cols-2">
                                 <TabsTrigger value="filters">Filters</TabsTrigger>
                                 <TabsTrigger value="actions">Actions</TabsTrigger>
-                                <TabsTrigger value="routes">Routes</TabsTrigger>
                             </TabsList>
                         </CardContent>
                         <TabsContent value="filters">
@@ -1429,36 +1429,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         )}
                                     </div>
                                 </div>
-                            </CardContent>
-                        </TabsContent>
-                        <TabsContent value="routes">
-                            <CardContent>
-                                {localSavedRoutes.length > 0 ? (
-                                    <ScrollArea className="h-48">
-                                        <div className="space-y-2">
-                                            {localSavedRoutes.map(route => (
-                                                <Card key={route.id} className="p-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <p className="font-semibold">{route.name}</p>
-                                                            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2">
-                                                                <span>{route.leads.length} stops</span>
-                                                                {route.totalDistance && <span>&bull; {route.totalDistance}</span>}
-                                                                {route.totalDuration && <span>&bull; {route.totalDuration}</span>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
-                                                            <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route.id!, route.name)}><Trash2 className="h-4 w-4" /></Button>
-                                                        </div>
-                                                    </div>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                ) : (
-                                    <div className="text-center text-muted-foreground py-10">No saved routes yet.</div>
-                                )}
                             </CardContent>
                         </TabsContent>
                     </Tabs>

@@ -161,6 +161,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+            {canViewD2D && (
+                 <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/saved-routes")} tooltip="Saved Routes">
+                        <Link href="/saved-routes">
+                        <Route />
+                        <span>Saved Routes</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            )}
              {canViewD2D && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/check-ins")} tooltip="Check-ins">
@@ -180,16 +190,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            )}
-            {canViewD2D && (
-                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/saved-routes")} tooltip="Saved Routes">
-                        <Link href="/saved-routes">
-                        <Route />
-                        <span>Saved Routes</span>
-                        </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
             )}
             {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
