@@ -136,11 +136,13 @@ export default function SavedRoutesPage() {
   }, [loading, isLoaded, routes, savedRoutes, handleLoadRoute]);
   
   const handleStartRoute = (route: SavedRoute) => {
-    if (!directions) {
+    const routeDirections = loadedRoute?.id === route.id ? directions : route.directions;
+
+    if (!routeDirections) {
         toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
         return;
     }
-    const directionsData = directions as any;
+    const directionsData = routeDirections as any;
     const origin = route.startPoint === 'My Location' ? 'Current+Location' : route.startPoint;
     const destination = route.endPoint || origin;
     const waypoints = directionsData.routes[0].legs
