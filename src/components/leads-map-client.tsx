@@ -135,7 +135,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 };
 
 
-const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean): string | google.maps.Icon => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
@@ -147,7 +147,14 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="%23095c7b" stroke="white" stroke-width="2"/></svg>');
+      return {
+          path: 'M -8,0 a 8,8 0 1,0 16,0 a 8,8 0 1,0 -16,0',
+          fillColor: '#095c7b',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          scale: 1,
+      };
     }
 
     if (greenStatuses.includes(status)) {
@@ -1699,10 +1706,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
                             position={{ lat: item.latitude!, lng: item.longitude! }}
                             onClick={() => onMarkerClick(item)}
-                            icon={{ 
-                                url: getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id)),
-                                scaledSize: new window.google.maps.Size(32, 32)
-                            }}
+                            icon={getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id))}
                             visible={directions === null}
                         />
                     ))}
@@ -2052,3 +2056,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
