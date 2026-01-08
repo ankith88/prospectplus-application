@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, UserProfile, Lead, MapLead, Address } from '@/lib/types';
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, GripVertical, CheckSquare, Bike, Car, Footprints } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, GripVertical, CheckSquare, Bike, Car, Footprints, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, getAllUsers, deleteUserRoute, updateUserRoute, getLeadsFromFirebase } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +33,6 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import Link from 'next/link';
 
 const containerStyle = {
   width: '100%',
@@ -448,15 +448,15 @@ export default function SavedRoutesPage() {
                         </div>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>
-                        <Route className="mr-2 h-4 w-4" /> Load
+                      <Button size="icon" variant="outline" onClick={() => handleLoadRoute(route)}>
+                        <Route className="h-4 w-4" />
                       </Button>
-                       <Button size="sm" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
-                        <Play className="mr-2 h-4 w-4" /> Start
+                       <Button size="icon" variant="default" onClick={() => handleStartRoute(route)} disabled={!route.directions}>
+                        <Play className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button size="sm" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
+                           <Button size="icon" variant="destructive"><Trash2 className="h-4 w-4" /></Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
