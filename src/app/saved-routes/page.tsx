@@ -120,6 +120,21 @@ export default function SavedRoutesPage() {
     localStorage.setItem('activeRouteId', route.id!);
   }, [allLeads]);
   
+  useEffect(() => {
+    if (loading || !isLoaded) return;
+
+    const activeRouteId = localStorage.getItem('activeRouteId');
+    if (activeRouteId) {
+      const allAvailableRoutes = [...routes, ...savedRoutes];
+      const routeToLoad = allAvailableRoutes.find(r => r.id === activeRouteId);
+      if (routeToLoad) {
+        handleLoadRoute(routeToLoad);
+      } else {
+        localStorage.removeItem('activeRouteId');
+      }
+    }
+  }, [loading, isLoaded, routes, savedRoutes, handleLoadRoute]);
+  
   const handleStartRoute = (route: SavedRoute) => {
     if (!directions) {
         toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
@@ -488,4 +503,3 @@ export default function SavedRoutesPage() {
     </div>
   );
 }
-
