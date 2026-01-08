@@ -147,7 +147,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'https://maps.google.com/mapfiles/ms/icons/yellow-star.png';
+      return 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
 
     if (greenStatuses.includes(status)) {
@@ -237,6 +237,7 @@ export default function LeadsMapClient() {
     checkInStatus: 'all' as 'all' | 'checked-in' | 'not-checked-in',
     checkInDate: undefined as DateRange | undefined,
     routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
+    campaign: 'all',
   });
   
   const router = useRouter()
@@ -561,13 +562,27 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             const routeStatusMatch = filters.routeStatus === 'all' ||
                                      (filters.routeStatus === 'in-route' && isInRoute) ||
                                      (filters.routeStatus === 'not-in-route' && !isInRoute);
+            
+            let campaignMatch = true;
+            if (filters.campaign && filters.campaign !== 'all') {
+                if (filters.campaign === 'D2D') {
+                    campaignMatch = (item as Lead).campaign === 'Door-to-Door Field Sales';
+                } else if (filters.campaign === 'Outbound') {
+                    campaignMatch = (item as Lead).campaign !== 'Door-to-Door Field Sales';
+                }
+            }
 
-            return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch;
+            return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && campaignMatch;
         });
         
         return dataToFilter;
     
     }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
+    
+    const visibleLeadsCount = useMemo(() => {
+        return filteredData.filter(item => !item.isCompany).length;
+    }, [filteredData]);
+
 
   const onMarkerClick = useCallback((item: MapLead) => {
     if (selectionMode === 'select') {
@@ -1335,7 +1350,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
                         <CardDescription>
-                            Displaying {filteredData.length} leads.
+                            Displaying {visibleLeadsCount} leads.
                         </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1369,6 +1384,17 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 <div className="space-y-2">
                                     <Label>State</Label>
                                     <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Campaign</Label>
+                                    <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Campaigns</SelectItem>
+                                            <SelectItem value="D2D">D2D</SelectItem>
+                                            <SelectItem value="Outbound">Outbound</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                  <div className="space-y-2">
                                     <Label>Visit Status</Label>
@@ -1432,6 +1458,17 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </CardContent>
                         </TabsContent>
                     </Tabs>
+                     {isFieldSalesUser && (
+                        <div className="px-6 pb-4">
+                             <Alert>
+                                <Sparkles className="h-4 w-4" />
+                                <AlertTitle className="text-sm font-semibold">Field Sales View</AlertTitle>
+                                <AlertDescription className="text-xs">
+                                By default, the map shows your assigned leads that have NOT been checked into and are NOT in a saved route.
+                                </AlertDescription>
+                            </Alert>
+                        </div>
+                    )}
                 </CollapsibleContent>
             </Card>
         </Collapsible>
