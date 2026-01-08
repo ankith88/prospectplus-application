@@ -232,14 +232,26 @@ export default function LeadsMapClient() {
     franchisee: [] as string[],
     status: [] as string[],
     state: [] as string[],
-    checkInStatus: 'not-checked-in' as 'all' | 'checked-in' | 'not-checked-in',
+    checkInStatus: 'all' as 'all' | 'checked-in' | 'not-checked-in',
     checkInDate: undefined as DateRange | undefined,
-    routeStatus: 'not-in-route' as 'all' | 'in-route' | 'not-in-route',
+    routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
   });
   
   const router = useRouter()
   const { toast } = useToast()
   const { userProfile, loading: authLoading, savedRoutes } = useAuth();
+
+  const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
+
+  useEffect(() => {
+    if (isFieldSalesUser) {
+      setFilters(prev => ({
+        ...prev,
+        checkInStatus: 'not-checked-in',
+        routeStatus: 'not-in-route',
+      }));
+    }
+  }, [isFieldSalesUser]);
 
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -1317,6 +1329,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <div className="flex items-center gap-2">
                         <MapIcon className="h-5 w-5" />
                         <CardTitle>Map Controls</CardTitle>
+                        {isFieldSalesUser && (
+                            <CardDescription>Default view shows un-routed, un-visited leads.</CardDescription>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <Button onClick={handleShowMyLocation} variant="outline" size="sm"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
