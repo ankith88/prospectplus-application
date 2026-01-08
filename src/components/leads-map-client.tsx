@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -146,7 +147,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     }
     
     if (status === 'Won') {
-      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="%23095c7b" stroke="white" stroke-width="2"/></svg>');
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="%23095c7b" stroke="white" stroke-width="2"/></svg>');
     }
 
     if (greenStatuses.includes(status)) {
