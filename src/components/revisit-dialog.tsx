@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isWeekend } from 'date-fns';
 import { firestore } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
@@ -130,7 +130,7 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date('1900-01-01')} initialFocus />
+                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date() || isWeekend(date)} initialFocus />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
