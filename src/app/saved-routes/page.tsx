@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -26,7 +26,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF } from '@react-google-maps/api';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +50,7 @@ export default function SavedRoutesPage() {
   const [totalDistance, setTotalDistance] = useState<string | null>(null);
   const [totalDuration, setTotalDuration] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [draggedItem, setDraggedItem] = useState<MapLead | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
@@ -189,16 +189,31 @@ export default function SavedRoutesPage() {
     localStorage.removeItem('activeRouteId');
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(selectedRouteLeads);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-    setSelectedRouteLeads(items);
-    setDirections(null); // Force recalculation
-    setTotalDistance(null);
-    setTotalDuration(null);
-  };
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: MapLead) => {
+        setDraggedItem(item);
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: MapLead) => {
+        if (!draggedItem) return;
+
+        const currentIndex = selectedRouteLeads.findIndex(item => item.id === draggedItem.id);
+        const targetIndex = selectedRouteLeads.findIndex(item => item.id === targetItem.id);
+
+        if (currentIndex !== -1 && targetIndex !== -1) {
+            const newItems = [...selectedRouteLeads];
+            const [removed] = newItems.splice(currentIndex, 1);
+            newItems.splice(targetIndex, 0, removed);
+            setSelectedRouteLeads(newItems);
+            setDirections(null);
+            setTotalDistance(null);
+            setTotalDuration(null);
+        }
+        setDraggedItem(null);
+    };
   
   const handleRecalculateRoute = async (travelMode: google.maps.TravelMode) => {
     if (!loadedRoute || !userProfile || selectedRouteLeads.length < 2) return;
@@ -330,60 +345,56 @@ export default function SavedRoutesPage() {
                 </CardHeader>
                 <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
                    <ScrollArea className="flex-grow">
-                      <DragDropContext onDragEnd={handleDragEnd}>
-                        <Droppable droppableId="droppable-stops">
-                          {(provided) => (
-                            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                              {sortedRouteLegs.map((item, index) => {
-                                if (!item.lead) return null;
-                                const lead = item.lead;
-                                const leg = item.leg;
-                                return (
-                                  <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                                    {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
-                                        <Card className="p-3 flex items-start gap-2">
-                                          <GripVertical className="cursor-grab text-muted-foreground mt-1" />
-                                          <div className="flex-grow">
-                                            <div className="flex justify-between items-start">
-                                              <div>
-                                                <p className="font-bold">
-                                                  <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                    <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber}. {lead.companyName}</Link>
-                                                  </Button>
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">{lead.address.street}, {lead.address.city}</p>
-                                              </div>
-                                              <LeadStatusBadge status={lead.status} />
-                                            </div>
-                                            <div className="flex items-center justify-between mt-2">
-                                                {leg && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {leg?.duration?.text} • {leg?.distance?.text}
-                                                    </p>
-                                                )}
-                                                <div className='flex gap-2'>
-                                                  <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
-                                                    <CheckSquare className="mr-2 h-4 w-4" />
-                                                    Check In
-                                                  </Button>
-                                                  <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                  </Button>
-                                                </div>
-                                            </div>
-                                          </div>
-                                        </Card>
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                )
-                              })}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-                      </DragDropContext>
+                        <div className="space-y-2">
+                            {sortedRouteLegs.map((item, index) => {
+                            if (!item.lead) return null;
+                            const lead = item.lead;
+                            const leg = item.leg;
+                            return (
+                                <div
+                                key={lead.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, lead)}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDrop(e, lead)}
+                                className={cn('cursor-grab', draggedItem?.id === lead.id && 'opacity-50')}
+                                >
+                                <Card className="p-3 flex items-start gap-2">
+                                    <GripVertical className="text-muted-foreground mt-1" />
+                                    <div className="flex-grow">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                        <p className="font-bold">
+                                            <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber}. {lead.companyName}</Link>
+                                            </Button>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">{lead.address.street}, {lead.address.city}</p>
+                                        </div>
+                                        <LeadStatusBadge status={lead.status} />
+                                    </div>
+                                    <div className="flex items-center justify-between mt-2">
+                                        {leg && (
+                                            <p className="text-xs text-muted-foreground">
+                                                {leg?.duration?.text} • {leg?.distance?.text}
+                                            </p>
+                                        )}
+                                        <div className='flex gap-2'>
+                                            <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
+                                            <CheckSquare className="mr-2 h-4 w-4" />
+                                            Check In
+                                            </Button>
+                                            <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </Card>
+                                </div>
+                            )
+                            })}
+                        </div>
                     </ScrollArea>
                 </CardContent>
                  <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
@@ -525,4 +536,3 @@ export default function SavedRoutesPage() {
     </div>
   );
 }
-

@@ -19,7 +19,7 @@ import {
 import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute, getUserActivitiesForPeriod } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead } from '@/lib/types'
-import { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
@@ -977,18 +977,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
