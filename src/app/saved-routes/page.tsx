@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -10,7 +11,7 @@ import {
   InfoWindowF,
   DirectionsRenderer,
 } from '@react-google-maps/api';
-import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity } from '@/lib/types';
+import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getAllUserRoutes, getUserRoutes } from '@/services/firebase';
 
 const containerStyle = {
   width: '100%',
@@ -32,36 +34,6 @@ const containerStyle = {
 const center = {
   lat: -25.2744,
   lng: 133.7751,
-};
-
-const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
-    if (isSelected) {
-      return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
-    }
-    if (status === 'Won') {
-      return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
-    }
-    const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
-    if (greenStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
-    }
-    const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
-    if (yellowStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
-    }
-     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
-    if (redStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png';
-    }
-    const blueStatuses: LeadStatus[] = ['New'];
-    if (blueStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
-    }
-     const purpleStatuses: LeadStatus[] = ['LPO Review'];
-    if (purpleStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
-    }
-    return 'http://maps.google.com/mapfiles/ms/icons/grey.png'; // Default
 };
 
 
@@ -78,13 +50,14 @@ export default function SavedRoutesPage() {
     const [totalDuration, setTotalDuration] = useState<string | null>(null);
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isRouteActive, setIsRouteActive] = useState(false);
+    const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
 
 
-    const { savedRoutes, userProfile } = useAuth();
+    const { userProfile, loading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
-
-    const loadingData = !isLoaded || !userProfile;
+    
+    const loadingData = !isLoaded || !userProfile || authLoading;
 
     const handleLoadRoute = useCallback((route: SavedRoute) => {
         if (!isLoaded) return;
@@ -96,17 +69,33 @@ export default function SavedRoutesPage() {
     }, [isLoaded]);
 
     useEffect(() => {
-        if (loadingData || !isLoaded || savedRoutes.length === 0) return;
+        const fetchAllRoutesForAdmin = async () => {
+          if (userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')) {
+            const routes = await getAllUserRoutes();
+            setAllRoutes(routes);
+          } else if (userProfile) {
+            const routes = await getUserRoutes(userProfile.uid);
+            setAllRoutes(routes);
+          }
+        };
+
+        if (isLoaded && userProfile) {
+          fetchAllRoutesForAdmin();
+        }
+    }, [isLoaded, userProfile]);
+
+    useEffect(() => {
+        if (loadingData || !isLoaded || allRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
-            const routeToLoad = savedRoutes.find(r => r.id === activeRouteId);
+            const routeToLoad = allRoutes.find(r => r.id === activeRouteId);
             if (routeToLoad) {
                 handleLoadRoute(routeToLoad);
                 setIsRouteActive(true);
             }
         }
-    }, [savedRoutes, isLoaded, loadingData, handleLoadRoute]);
+    }, [allRoutes, isLoaded, loadingData, handleLoadRoute]);
     
     const sortedRouteLegs = useMemo(() => {
         if (!directions || !loadedRoute?.leads.length) return [];
@@ -286,3 +275,4 @@ export default function SavedRoutesPage() {
         </div>
     );
 }
+

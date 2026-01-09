@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -388,6 +389,42 @@ export default function FieldSalesPage() {
   }, [allAppointments, allLeads, userProfile, allActivities]);
 
 
+  const handleLoadRoute = (route: SavedRoute) => {
+    if (!route.id) return;
+    localStorage.setItem('activeRouteId', route.id);
+    router.push(`/saved-routes`);
+    toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
+  };
+
+  const handleStartRoute = (route: SavedRoute) => {
+    if (!route.directions) {
+        toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
+        return;
+    }
+    const directionsData = route.directions as any; // Cast to access nested properties
+    const origin = 'Current+Location';
+    const destination = directionsData.routes[0].legs.slice(-1)[0].end_address;
+    const waypoints = directionsData.routes[0].legs
+        .slice(0, -1) // All legs except the last one
+        .map((leg: any) => leg.end_address)
+        .join('|');
+
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
+    window.open(mapsUrl, '_blank');
+  };
+
+  const handleDeleteRoute = async (route: RouteWithUser) => {
+    const routeOwner = allDialers.find(d => d.displayName === route.userName);
+    if (!routeOwner?.uid || !route.id) return;
+    await deleteUserRoute(routeOwner.uid, route.id);
+    if(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
+      setAllRoutes(prev => prev.filter(r => r.id !== route.id));
+    } else {
+      setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
+    }
+    toast({ title: 'Route Deleted', description: `Route "${route.name}" has been removed.` });
+  };
+
   const handleMoveRoute = async () => {
     if (!routeToMove || !targetUserId || !userProfile?.uid) return;
     setIsMovingRoute(true);
@@ -518,6 +555,26 @@ export default function FieldSalesPage() {
         });
     }, []);
 
+
+  const routesToShow = useMemo(() => {
+    if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' && userProfile?.uid) {
+        const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
+        const allSystemRoutes = new Map<string, RouteWithUser>();
+        allRoutes.forEach(route => {
+            const userName = usersMap.get(route.userId) || 'Unknown User';
+            allSystemRoutes.set(route.id, { ...route, userName });
+        });
+        savedRoutes.forEach(route => {
+            allSystemRoutes.set(route.id, {
+                ...route,
+                userName: userProfile.displayName || 'Admin',
+                userId: userProfile.uid,
+            });
+        });
+        return Array.from(allSystemRoutes.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return savedRoutes.map(r => ({ ...r, userName: userProfile?.displayName || '', userId: userProfile?.uid || '' }));
+  }, [userProfile, savedRoutes, allRoutes, allDialers]);
   
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
@@ -530,6 +587,49 @@ export default function FieldSalesPage() {
     return stringData;
   };
   
+    const handleExportRoutes = () => {
+    if (routesToShow.length === 0) {
+        toast({ variant: 'destructive', title: 'No Routes', description: 'There are no routes to export.' });
+        return;
+    }
+
+    const headers = ['Route Name', 'Assigned User', 'Scheduled Date', 'Stop Number', 'Lead Name', 'Lead Address'];
+    const rows: string[][] = [];
+
+    routesToShow.forEach(route => {
+        if (route.leads.length === 0) {
+            rows.push([
+                escapeCsvCell(route.name),
+                escapeCsvCell(route.userName),
+                escapeCsvCell(route.scheduledDate ? new Date(route.scheduledDate).toLocaleDateString() : 'N/A'),
+                '', '', ''
+            ]);
+        } else {
+            route.leads.forEach((lead, index) => {
+                const address = lead.address ? `${lead.address.street}, ${lead.address.city}, ${lead.address.state} ${lead.address.zip}` : 'N/A';
+                rows.push([
+                    escapeCsvCell(route.name),
+                    escapeCsvCell(route.userName),
+                    escapeCsvCell(route.scheduledDate ? new Date(route.scheduledDate).toLocaleDateString() : 'N/A'),
+                    escapeCsvCell(index + 1),
+                    escapeCsvCell(lead.companyName),
+                    escapeCsvCell(address),
+                ]);
+            });
+        }
+    });
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `saved_routes_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -751,6 +851,53 @@ export default function FieldSalesPage() {
                 )}
             </CardContent>
         </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2"><Route className="h-5 w-5"/> Saved Routes</CardTitle>
+          <Button onClick={handleExportRoutes} variant="outline" size="sm" disabled={routesToShow.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export All Routes
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {routesToShow.length > 0 ? (
+            <div className="space-y-2">
+              {routesToShow.map(route => (
+                <Card key={route.id} className="p-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                            <p className="font-semibold">{route.name}</p>
+                            <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                            {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
+                            )}
+                        </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
+                        <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
+                        {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
+                            <>
+                                <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
+                                    <Move className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </>
+                        ) : (
+                             <Button size="sm" variant="destructive" onClick={() => handleDeleteRoute(route as RouteWithUser)}><Trash2 className="h-4 w-4" /></Button>
+                        )}
+                      </div>
+                    </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-10">You have no saved routes. Create one from the Territory Map.</div>
+          )}
+        </CardContent>
+      </Card>
       
       <Card>
         <CardHeader>
@@ -977,3 +1124,9 @@ export default function FieldSalesPage() {
     </div>
   );
 }
+
+    
+
+    
+
+    
