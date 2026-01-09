@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   GoogleMap,
@@ -12,7 +12,7 @@ import {
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,6 @@ import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Tra
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const containerStyle = {
@@ -283,3 +282,5 @@ export default function SavedRoutesPage() {
         </div>
     );
 }
+
+    
