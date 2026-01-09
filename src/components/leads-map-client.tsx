@@ -76,7 +76,6 @@ import { CalendarIcon } from 'lucide-react'
 import { Calendar } from './ui/calendar'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -1252,17 +1251,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         });
     };
 
-    const handleDragEnd = (result: DropResult) => {
-      if (!result.destination) return;
-      const items = Array.from(selectedRouteLeads);
-      const [reorderedItem] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, reorderedItem);
-      setSelectedRouteLeads(items);
-      setDirections(null);
-      setTotalDistance(null);
-      setTotalDuration(null);
-    };
-
     const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
         if (!address) return 'Address not available';
         if (typeof address === 'string') return address;
@@ -1528,60 +1516,49 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     </CardHeader>
                     <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
                         <ScrollArea className="flex-grow">
-                          <DragDropContext onDragEnd={handleDragEnd}>
-                            <Droppable droppableId="droppable-stops">
-                              {(provided) => (
-                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                  {(directions ? sortedRouteLegs : selectedRouteLeads.map((l, i) => ({lead: l, stopNumber: i+1}))).map((item, index) => {
-                                    if (!item.lead) return null;
-                                    const lead = item.lead;
-                                    const leg = (item as any).leg;
-                                    return (
-                                      <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
-                                            <Card className="p-3 flex items-center gap-2">
-                                              <GripVertical className="cursor-grab text-muted-foreground" />
-                                              <div className="flex-grow">
-                                                <div className="flex justify-between items-start">
-                                                  <div>
-                                                    <p className="font-bold">
-                                                      <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                        <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
-                                                      </Button>
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
-                                                  </div>
-                                                  <LeadStatusBadge status={lead.status} />
-                                                </div>
-                                                <div className="flex items-center justify-between mt-2">
-                                                  {leg && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                      {leg?.duration?.text} • {leg?.distance?.text}
-                                                    </p>
-                                                  )}
-                                                  <div className='flex gap-2'>
-                                                    <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                                                      {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
-                                                      {lead.isProspect ? 'Add New Lead' : 'Check In'}
-                                                    </Button>
-                                                    <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                      <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </Card>
-                                          </div>
+                          <div className="space-y-2">
+                            {(directions ? sortedRouteLegs : selectedRouteLeads.map((l, i) => ({lead: l, stopNumber: i+1}))).map((item, index) => {
+                              if (!item.lead) return null;
+                              const lead = item.lead;
+                              const leg = (item as any).leg;
+                              return (
+                                <div key={lead.id}>
+                                  <Card className="p-3 flex items-center gap-2">
+                                    <GripVertical className="cursor-grab text-muted-foreground" />
+                                    <div className="flex-grow">
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-bold">
+                                            <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                              <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
+                                            </Button>
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                        </div>
+                                        <LeadStatusBadge status={lead.status} />
+                                      </div>
+                                      <div className="flex items-center justify-between mt-2">
+                                        {leg && (
+                                          <p className="text-xs text-muted-foreground">
+                                            {leg?.duration?.text} • {leg?.distance?.text}
+                                          </p>
                                         )}
-                                      </Draggable>
-                                    )
-                                  })}
-                                  {provided.placeholder}
+                                        <div className='flex gap-2'>
+                                          <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
+                                            {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                                            {lead.isProspect ? 'Add New Lead' : 'Check In'}
+                                          </Button>
+                                          <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </Card>
                                 </div>
-                              )}
-                            </Droppable>
-                          </DragDropContext>
+                              )
+                            })}
+                          </div>
                         </ScrollArea>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
@@ -1919,6 +1896,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
                                         <TableCell>
                                             <div className="font-medium">{prospectInfo.place.name}</div>
+                                             {prospectInfo.place.website && (
+                                                <Button asChild variant="link" size="sm" className="p-0 h-auto">
+                                                    <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1">
+                                                        <Globe className="h-3 w-3" />
+                                                        Website
+                                                    </a>
+                                                </Button>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                                 <div className="flex flex-col items-start max-w-xs">
