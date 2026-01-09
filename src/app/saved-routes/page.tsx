@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, UserProfile, Lead, MapLead, Address } from '@/lib/types';
@@ -10,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, GripVertical, CheckSquare, Bike, Car, Footprints, Save, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Play, Trash2, X, CheckSquare, Bike, Car, Footprints, Save, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, getAllUsers, deleteUserRoute, updateUserRoute, getLeadsFromFirebase } from '@/services/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipProvider, TooltipContent } from '@/components/ui/tooltip';
 
 const containerStyle = {
   width: '100%',
@@ -51,7 +51,6 @@ export default function SavedRoutesPage() {
   const [totalDistance, setTotalDistance] = useState<string | null>(null);
   const [totalDuration, setTotalDuration] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
-  const [draggedItem, setDraggedItem] = useState<MapLead | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
@@ -189,32 +188,6 @@ export default function SavedRoutesPage() {
     setDirections(null);
     localStorage.removeItem('activeRouteId');
   };
-
-    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, item: MapLead) => {
-        setDraggedItem(item);
-    };
-
-    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-    };
-
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetItem: MapLead) => {
-        if (!draggedItem) return;
-
-        const currentIndex = selectedRouteLeads.findIndex(item => item.id === draggedItem.id);
-        const targetIndex = selectedRouteLeads.findIndex(item => item.id === targetItem.id);
-
-        if (currentIndex !== -1 && targetIndex !== -1) {
-            const newItems = [...selectedRouteLeads];
-            const [removed] = newItems.splice(currentIndex, 1);
-            newItems.splice(targetIndex, 0, removed);
-            setSelectedRouteLeads(newItems);
-            setDirections(null);
-            setTotalDistance(null);
-            setTotalDuration(null);
-        }
-        setDraggedItem(null);
-    };
   
   const handleRecalculateRoute = async (travelMode: google.maps.TravelMode) => {
     if (!loadedRoute || !userProfile || selectedRouteLeads.length < 2) return;
@@ -352,22 +325,14 @@ export default function SavedRoutesPage() {
                             const lead = item.lead;
                             const leg = item.leg;
                             return (
-                                <div
-                                key={lead.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, lead)}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, lead)}
-                                className={cn('cursor-grab', draggedItem?.id === lead.id && 'opacity-50')}
-                                >
+                                <div key={lead.id}>
                                 <Card className="p-3 flex items-start gap-2">
-                                    <GripVertical className="text-muted-foreground mt-1" />
                                     <div className="flex-grow">
                                     <div className="flex justify-between items-start">
                                         <div>
                                         <p className="font-bold">
                                             <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                            <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber}. {lead.companyName}</Link>
+                                                <a href={`/leads/${lead.id}`} target="_blank">{item.stopNumber}. {lead.companyName}</a>
                                             </Button>
                                         </p>
                                         <p className="text-xs text-muted-foreground">{lead.address.street}, {lead.address.city}</p>
@@ -537,5 +502,6 @@ export default function SavedRoutesPage() {
     </div>
   );
 }
+    
 
     
