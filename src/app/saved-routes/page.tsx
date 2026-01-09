@@ -194,6 +194,7 @@ export default function SavedRoutesPage() {
                          <ScrollArea className="flex-grow">
                             <div className="space-y-2">
                                 {sortedRouteLegs.map(({ lead, leg, stopNumber }) => {
+                                    if (!lead) return null;
                                     return (
                                         <div key={lead.id}>
                                             <Card className="p-3 flex items-center gap-2">
