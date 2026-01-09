@@ -6,7 +6,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   GoogleMap,
-  useJsApiLoader,
   MarkerF,
   InfoWindowF,
   KmlLayer,
@@ -169,11 +168,7 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
 
 
 export default function LeadsMapClient() {
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-  });
-
+  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [mapData, setMapData] = useState<MapLead[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
@@ -246,6 +241,12 @@ export default function LeadsMapClient() {
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.google) {
+        setScriptLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isFieldSalesUser) {
       setFilters(prev => ({
         ...prev,
@@ -256,10 +257,10 @@ export default function LeadsMapClient() {
   }, [isFieldSalesUser]);
 
   useEffect(() => {
-    if (isLoaded && window.google) {
+    if (scriptLoaded && window.google) {
       setTravelMode(null);
     }
-  }, [isLoaded]);
+  }, [scriptLoaded]);
 
   useEffect(() => {
     setLocalSavedRoutes(savedRoutes);
@@ -312,13 +313,13 @@ export default function LeadsMapClient() {
   }, [map, toast]);
 
   useEffect(() => {
-    if (isLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
+    if (scriptLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
       handleShowMyLocation();
     }
-  }, [isLoaded, map, userProfile, myLocation, handleShowMyLocation]);
+  }, [scriptLoaded, map, userProfile, myLocation, handleShowMyLocation]);
 
   const geocodeAddress = useCallback(async (address: string): Promise<google.maps.LatLng | null> => {
-    if (!isLoaded) return null;
+    if (!scriptLoaded) return null;
     const geocoder = new window.google.maps.Geocoder();
     return new Promise((resolve) => {
         geocoder.geocode({ address, componentRestrictions: { country: 'au' } }, (results, status) => {
@@ -329,7 +330,7 @@ export default function LeadsMapClient() {
             }
         });
     });
-  }, [isLoaded]);
+  }, [scriptLoaded]);
 
 const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.TravelMode, leadsForRoute: MapLead[]) => {
     if (!map) return;
@@ -423,7 +424,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   
     useEffect(() => {
         const fetchData = async () => {
-            if (!isLoaded || !userProfile) return;
+            if (!scriptLoaded || !userProfile) return;
 
             setLoadingData(true);
             try {
@@ -475,10 +476,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         };
 
         fetchData();
-    }, [isLoaded, userProfile, toast]);
+    }, [scriptLoaded, userProfile, toast]);
     
     const handleLoadRoute = useCallback((route: SavedRoute) => {
-        if (!isLoaded) return;
+        if (!scriptLoaded) return;
         
         const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'Free Trial', 'LocalMile Pending'];
         const activeLeadsInRoute = route.leads.filter(leadInRoute => {
@@ -500,10 +501,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setTotalDistance(route.totalDistance || null);
         setTotalDuration(route.totalDuration || null);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
-    }, [isLoaded, mapData, toast]);
+    }, [scriptLoaded, mapData, toast]);
 
      useEffect(() => {
-        if (loadingData || !isLoaded || localSavedRoutes.length === 0) return;
+        if (loadingData || !scriptLoaded || localSavedRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
@@ -513,7 +514,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 setIsRouteActive(true);
             }
         }
-    }, [localSavedRoutes, isLoaded, loadingData, handleLoadRoute]);
+    }, [localSavedRoutes, scriptLoaded, loadingData, handleLoadRoute]);
 
   
     const filteredData = useMemo(() => {
@@ -1292,7 +1293,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       autocompleteRef: React.MutableRefObject<google.maps.places.Autocomplete | null>,
       onPlaceChanged: (place: google.maps.places.PlaceResult) => void
     ) => {
-      if (inputEl && isLoaded && !autocompleteRef.current) {
+      if (inputEl && scriptLoaded && !autocompleteRef.current) {
         const autocomplete = new window.google.maps.places.Autocomplete(inputEl, {
           types: ['geocode'],
           componentRestrictions: { country: 'au' },
@@ -1306,7 +1307,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         });
         autocompleteRef.current = autocomplete;
       }
-    }, [isLoaded]);
+    }, [scriptLoaded]);
     
     const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
       if (node !== null && map) {
@@ -1341,10 +1342,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       }
     }, [initAutocomplete]);
 
-    if (loadError) {
-        return <div>Error loading maps. Please check your API key and network connection.</div>
-    }
-    
     if (authLoading || loadingData) {
         return (
             <div className="flex h-full items-center justify-center">

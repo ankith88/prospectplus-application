@@ -6,7 +6,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   GoogleMap,
-  useJsApiLoader,
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
@@ -38,12 +37,7 @@ const center = {
 
 
 export default function SavedRoutesPage() {
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-        libraries: ['geometry']
-    });
-
+    const [scriptLoaded, setScriptLoaded] = useState(false);
     const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [totalDistance, setTotalDistance] = useState<string | null>(null);
@@ -57,16 +51,22 @@ export default function SavedRoutesPage() {
     const router = useRouter();
     const { toast } = useToast();
     
-    const loadingData = !isLoaded || !userProfile || authLoading;
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.google) {
+            setScriptLoaded(true);
+        }
+    }, []);
+
+    const loadingData = !scriptLoaded || !userProfile || authLoading;
 
     const handleLoadRoute = useCallback((route: SavedRoute) => {
-        if (!isLoaded) return;
+        if (!scriptLoaded) return;
         
         setDirections(route.directions);
         setLoadedRoute(route);
         setTotalDistance(route.totalDistance || null);
         setTotalDuration(route.totalDuration || null);
-    }, [isLoaded]);
+    }, [scriptLoaded]);
 
     useEffect(() => {
         const fetchAllRoutesForAdmin = async () => {
@@ -79,13 +79,13 @@ export default function SavedRoutesPage() {
           }
         };
 
-        if (isLoaded && userProfile) {
+        if (scriptLoaded && userProfile) {
           fetchAllRoutesForAdmin();
         }
-    }, [isLoaded, userProfile]);
+    }, [scriptLoaded, userProfile]);
 
     useEffect(() => {
-        if (loadingData || !isLoaded || allRoutes.length === 0) return;
+        if (loadingData || !scriptLoaded || allRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
@@ -95,7 +95,7 @@ export default function SavedRoutesPage() {
                 setIsRouteActive(true);
             }
         }
-    }, [allRoutes, isLoaded, loadingData, handleLoadRoute]);
+    }, [allRoutes, scriptLoaded, loadingData, handleLoadRoute]);
     
     const sortedRouteLegs = useMemo(() => {
         if (!directions || !loadedRoute?.leads.length) return [];
@@ -146,10 +146,6 @@ export default function SavedRoutesPage() {
             address.city,
             address.state,
         ].filter(Boolean).join(', ');
-    }
-
-    if (loadError) {
-        return <div>Error loading maps. Please check your API key and network connection.</div>
     }
 
     if (loadingData) {
