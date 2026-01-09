@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -171,7 +170,12 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
 
 
 export default function LeadsMapClient() {
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [map, setMap] = useState<google.maps.Map | null>(null)
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script', // IMPORTANT: this ID has to be unique for every useJsApiLoader
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries,
+  })
   const [mapData, setMapData] = useState<MapLead[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
@@ -180,7 +184,6 @@ export default function LeadsMapClient() {
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false)
   const [selectedProspects, setSelectedProspects] = useState<google.maps.places.PlaceResult[]>([]);
   const [isSearchingNearby, setIsSearchingNearby] = useState(false)
-  const [map, setMap] = useState<google.maps.Map | null>(null)
   const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [prospectSearchQuery, setProspectSearchQuery] = useState('')
@@ -244,12 +247,6 @@ export default function LeadsMapClient() {
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.google) {
-        setScriptLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (isFieldSalesUser) {
       setFilters(prev => ({
         ...prev,
@@ -260,10 +257,10 @@ export default function LeadsMapClient() {
   }, [isFieldSalesUser]);
 
   useEffect(() => {
-    if (scriptLoaded && window.google) {
+    if (isLoaded) {
       setTravelMode(google.maps.TravelMode.DRIVING);
     }
-  }, [scriptLoaded]);
+  }, [isLoaded]);
 
   useEffect(() => {
     setLocalSavedRoutes(savedRoutes);
@@ -316,13 +313,13 @@ export default function LeadsMapClient() {
   }, [map, toast]);
 
   useEffect(() => {
-    if (scriptLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
+    if (isLoaded && map && userProfile?.role === 'Field Sales' && !myLocation) {
       handleShowMyLocation();
     }
-  }, [scriptLoaded, map, userProfile, myLocation, handleShowMyLocation]);
+  }, [isLoaded, map, userProfile, myLocation, handleShowMyLocation]);
 
   const geocodeAddress = useCallback(async (address: string): Promise<google.maps.LatLng | null> => {
-    if (!scriptLoaded) return null;
+    if (!isLoaded) return null;
     const geocoder = new window.google.maps.Geocoder();
     return new Promise((resolve) => {
         geocoder.geocode({ address, componentRestrictions: { country: 'au' } }, (results, status) => {
@@ -333,7 +330,7 @@ export default function LeadsMapClient() {
             }
         });
     });
-  }, [scriptLoaded]);
+  }, [isLoaded]);
 
 const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.TravelMode, leadsForRoute: MapLead[]) => {
     if (!map) return;
@@ -427,7 +424,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   
     useEffect(() => {
         const fetchData = async () => {
-            if (!scriptLoaded || !userProfile) return;
+            if (!isLoaded || !userProfile) return;
 
             setLoadingData(true);
             try {
@@ -479,10 +476,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         };
 
         fetchData();
-    }, [scriptLoaded, userProfile, toast]);
+    }, [isLoaded, userProfile, toast]);
     
     const handleLoadRoute = useCallback((route: SavedRoute) => {
-        if (!scriptLoaded) return;
+        if (!isLoaded) return;
         
         const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'Free Trial', 'LocalMile Pending'];
         const activeLeadsInRoute = route.leads.filter(leadInRoute => {
@@ -504,10 +501,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setTotalDistance(route.totalDistance || null);
         setTotalDuration(route.totalDuration || null);
         toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
-    }, [scriptLoaded, mapData, toast]);
+    }, [isLoaded, mapData, toast]);
 
      useEffect(() => {
-        if (loadingData || !scriptLoaded || localSavedRoutes.length === 0) return;
+        if (loadingData || !isLoaded || localSavedRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
@@ -517,7 +514,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 setIsRouteActive(true);
             }
         }
-    }, [localSavedRoutes, scriptLoaded, loadingData, handleLoadRoute]);
+    }, [localSavedRoutes, isLoaded, loadingData, handleLoadRoute]);
 
   
     const filteredData = useMemo(() => {
@@ -527,13 +524,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         // Role-based filtering
         const displayName = userProfile.displayName;
-        if (userProfile.role === 'Field Sales') {
+        if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => {
-                return item.isCompany || (item.fieldSales === true && item.dialerAssigned === displayName);
-            });
-        } else if (userProfile.role === 'Field Sales Admin') {
-            dataToFilter = dataToFilter.filter(item => {
-                return item.isCompany || item.fieldSales === true;
+                return item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
             });
         } else if (userProfile.role === 'user') {
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
@@ -1300,7 +1293,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       autocompleteRef: React.MutableRefObject<google.maps.places.Autocomplete | null>,
       onPlaceChanged: (place: google.maps.places.PlaceResult) => void
     ) => {
-      if (inputEl && scriptLoaded && !autocompleteRef.current) {
+      if (inputEl && isLoaded && !autocompleteRef.current) {
         const autocomplete = new window.google.maps.places.Autocomplete(inputEl, {
           types: ['geocode'],
           componentRestrictions: { country: 'au' },
@@ -1314,7 +1307,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         });
         autocompleteRef.current = autocomplete;
       }
-    }, [scriptLoaded]);
+    }, [isLoaded]);
     
     const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
       if (node !== null && map) {
@@ -1349,7 +1342,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       }
     }, [initAutocomplete]);
 
-    if (authLoading || loadingData) {
+    if (authLoading || loadingData || !isLoaded) {
         return (
             <div className="flex h-full items-center justify-center">
             <Loader />
@@ -1827,7 +1820,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </div>
                         </InfoWindowF>
                     )}
-                    {!isFieldSalesUser && <MapLegend />}
+                    <MapLegend />
                 </GoogleMap>
             </div>
         </div>
@@ -2031,3 +2024,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 }
     
     
+
