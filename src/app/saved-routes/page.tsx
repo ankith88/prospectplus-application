@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -84,6 +85,8 @@ export default function SavedRoutesPage() {
     const router = useRouter();
     const { toast } = useToast();
 
+    const loadingData = !isLoaded || !userProfile;
+
     const handleLoadRoute = useCallback((route: SavedRoute) => {
         if (!isLoaded) return;
         
@@ -105,8 +108,6 @@ export default function SavedRoutesPage() {
             }
         }
     }, [savedRoutes, isLoaded, loadingData, handleLoadRoute]);
-
-    const loadingData = !isLoaded || !userProfile;
     
     const sortedRouteLegs = useMemo(() => {
         if (!directions || !loadedRoute?.leads.length) return [];
@@ -127,8 +128,8 @@ export default function SavedRoutesPage() {
             return;
         }
     
-        const origin = loadedRoute.startPoint || `${directions.routes[0].legs[0].start_location.lat()},${directions.routes[0].legs[0].start_location.lng()}`;
-        const destination = loadedRoute.endPoint || `${directions.routes[0].legs.slice(-1)[0].end_location.lat()},${directions.routes[0].legs.slice(-1)[0].end_location.lng()}`;
+        const origin = loadedRoute.startPoint || `${''}${directions.routes[0].legs[0].start_location.lat()},${''}${directions.routes[0].legs[0].start_location.lng()}`;
+        const destination = loadedRoute.endPoint || `${''}${directions.routes[0].legs.slice(-1)[0].end_location.lat()},${''}${directions.routes[0].legs.slice(-1)[0].end_location.lng()}`;
         const waypoints = directions.routes[0].legs
             .slice(0, -1)
             .map((leg: any) => leg.end_address)
