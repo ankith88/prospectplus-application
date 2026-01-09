@@ -261,7 +261,7 @@ export default function LeadsMapClient() {
 
   useEffect(() => {
     if (scriptLoaded && window.google) {
-      setTravelMode(null);
+      setTravelMode(google.maps.TravelMode.DRIVING);
     }
   }, [scriptLoaded]);
 
@@ -529,16 +529,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         const displayName = userProfile.displayName;
         if (userProfile.role === 'Field Sales') {
             dataToFilter = dataToFilter.filter(item => {
-                // Include all signed customers OR their assigned leads
                 return item.isCompany || (item.fieldSales === true && item.dialerAssigned === displayName);
             });
         } else if (userProfile.role === 'Field Sales Admin') {
             dataToFilter = dataToFilter.filter(item => {
-                // Include all signed customers OR any field sales lead
                 return item.isCompany || item.fieldSales === true;
             });
         } else if (userProfile.role === 'user') {
-            // Dialer role sees only their assigned leads, no signed customers
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
         }
 
