@@ -270,18 +270,19 @@ export default function SavedRoutesPage() {
                                 }}
                             />
                         )}
-                        {loadedRoute && sortedRouteLegs.map(({ lead, stopNumber }) => (
-                           <MarkerF
-                            key={`route-${lead.id}`}
-                            position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                            label={stopNumber.toString()}
-                           />
-                        ))}
+                        {loadedRoute && sortedRouteLegs.map(({ lead, stopNumber }) => {
+                           if (!lead) return null;
+                           return (
+                               <MarkerF
+                                key={`route-${lead.id}`}
+                                position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                                label={stopNumber.toString()}
+                               />
+                           )
+                        })}
                     </GoogleMap>
                 </div>
             </div>
         </div>
     );
 }
-
-    
