@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   GoogleMap,
+  useJsApiLoader,
   MarkerF,
   InfoWindowF,
   KmlLayer,
@@ -89,6 +90,8 @@ const center = {
   lat: -25.2744,
   lng: 133.7751,
 }
+
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -525,10 +528,17 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         // Role-based filtering
         const displayName = userProfile.displayName;
         if (userProfile.role === 'Field Sales') {
-            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true && item.dialerAssigned === displayName);
+            dataToFilter = dataToFilter.filter(item => {
+                // Include all signed customers OR their assigned leads
+                return item.isCompany || (item.fieldSales === true && item.dialerAssigned === displayName);
+            });
         } else if (userProfile.role === 'Field Sales Admin') {
-            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.fieldSales === true);
+            dataToFilter = dataToFilter.filter(item => {
+                // Include all signed customers OR any field sales lead
+                return item.isCompany || item.fieldSales === true;
+            });
         } else if (userProfile.role === 'user') {
+            // Dialer role sees only their assigned leads, no signed customers
             dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
         }
 
@@ -1177,10 +1187,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             createdAt: new Date().toISOString(),
             leads: selectedRouteLeads,
             travelMode: travelMode!,
-            directions: directions ? JSON.stringify(directions) : undefined,
-            scheduledDate: routeDate ? new Date(routeDate).toISOString() : undefined,
             startPoint,
             endPoint,
+            directions: directions ? JSON.stringify(directions) : undefined,
+            scheduledDate: routeDate ? new Date(routeDate).toISOString() : undefined,
             totalDistance: totalDistance,
             totalDuration: totalDuration,
         };
