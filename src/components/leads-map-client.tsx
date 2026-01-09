@@ -170,10 +170,9 @@ const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
 
 export default function LeadsMapClient() {
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: ['places', 'drawing', 'geometry']
-  })
+  });
 
   const [mapData, setMapData] = useState<MapLead[]>([])
   const [loadingData, setLoadingData] = useState(true)
@@ -810,8 +809,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       }
     }
   
-    if (searchKeywords.length === 0 && selectedLead.discoveryData?.searchKeywords?.length) {
-      searchKeywords = selectedLead.discoveryData.searchKeywords;
+    if (searchKeywords.length === 0 && (selectedLead as any).discoveryData?.searchKeywords?.length) {
+      searchKeywords = (selectedLead as any).discoveryData.searchKeywords;
     }
   
     if (searchKeywords.length === 0 && selectedLead.industryCategory) {
@@ -965,7 +964,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         };
 
         try {
-            const result = await createNewLead(newLeadData);
+            const result = await createNewLead(newLeadData as any);
             if (result.success && result.leadId) {
                 toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created.` });
                 
@@ -1077,12 +1076,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             if (leadToRouteMap.has(lead.id)) return false;
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-                if (overlay.get('radius')) {
+                if ((overlay as any).get('radius')) {
                     return google.maps.geometry.spherical.computeDistanceBetween(
                         (overlay as google.maps.Circle).getCenter()!, 
                         leadLatLng
                     ) <= (overlay as google.maps.Circle).getRadius();
-                } else if (overlay.get('bounds')) {
+                } else if ((overlay as any).get('bounds')) {
                     return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
                 } else {
                     return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
@@ -1533,7 +1532,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                               <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
                                             </Button>
                                           </p>
-                                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
                                         </div>
                                         <LeadStatusBadge status={lead.status} />
                                       </div>
@@ -1759,7 +1758,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     )}
                                     <div className="flex items-start gap-2">
                                         <Building className="h-4 w-4 shrink-0 mt-0.5" />
-                                        <span>{formatAddress(selectedLead.address)}</span>
+                                        <span>{formatAddress(selectedLead.address as Address)}</span>
                                     </div>
                                     {selectedLead.websiteUrl && (
                                         <div className="flex items-center gap-2">

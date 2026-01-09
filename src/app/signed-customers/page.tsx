@@ -118,7 +118,7 @@ export default function SignedCustomersPage() {
 
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -239,8 +239,8 @@ export default function SignedCustomersPage() {
             aValue = a.lastProspected ? new Date(a.lastProspected).getTime() : 0;
             bValue = b.lastProspected ? new Date(b.lastProspected).getTime() : 0;
         } else {
-            aValue = a[sortConfig.key as keyof MapLead] as string | number | undefined;
-            bValue = b[sortConfig.key as keyof MapLead] as string | number | undefined;
+            aValue = (a as any)[sortConfig.key as keyof MapLead] as string | number | undefined;
+            bValue = (b as any)[sortConfig.key as keyof MapLead] as string | number | undefined;
         }
 
         if (aValue === undefined || aValue === '') aValue = sortConfig.direction === 'ascending' ? Infinity : -Infinity;
@@ -318,7 +318,7 @@ export default function SignedCustomersPage() {
         const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, itemLatLng);
         return distance <= 500;
       })
-      .map(lead => ({ place: { name: lead.companyName, vicinity: lead.address?.street, place_id: lead.id }, existingLead: lead, classification: 'B2B' as const }));
+      .map(lead => ({ place: { name: lead.companyName, vicinity: (lead.address as any)?.street, place_id: lead.id }, existingLead: lead, classification: 'B2B' as const }));
 
     setProspects(nearby);
     if (nearby.length > 0) {
@@ -552,7 +552,7 @@ export default function SignedCustomersPage() {
         escapeCsvCell((lead as any).entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
         escapeCsvCell(lead.franchisee || 'N/A'),
-        escapeCsvCell(formatAddress(lead.address)),
+        escapeCsvCell(formatAddress(lead.address as Address)),
         escapeCsvCell(lead.customerServiceEmail || 'N/A'),
         escapeCsvCell(lead.customerPhone || 'N/A'),
         escapeCsvCell(lead.lastProspected ? new Date(lead.lastProspected).toLocaleDateString() : 'N/A'),
@@ -712,7 +712,7 @@ export default function SignedCustomersPage() {
     }
     const nameParts = primaryContact.name.split(' ');
     
-    const addressData = { street: place.vicinity, city: '', state: '', zip: '', country: 'Australia' };
+    const addressData: Partial<Address> = { country: 'Australia' };
     if (place.address_components) {
         const get = (type: string, useShortName = false) => {
             const comp = place.address_components?.find(c => c.types.includes(type));
@@ -722,6 +722,7 @@ export default function SignedCustomersPage() {
         addressData.state = get('administrative_area_level_1', true) || '';
         addressData.zip = get('postal_code') || '';
     }
+    addressData.street = place.vicinity;
 
     const newLeadData = {
         companyName: place.name,
@@ -731,7 +732,7 @@ export default function SignedCustomersPage() {
             lat: place.geometry.location.lat(),
             lng: place.geometry.location.lng(),
             ...addressData,
-        },
+        } as Address,
         contact: {
             firstName: nameParts[0] || 'Info',
             lastName: nameParts.slice(1).join(' ') || place.name,
@@ -800,12 +801,12 @@ export default function SignedCustomersPage() {
         const companiesInShape = filteredCompanies.filter(company => {
             if (company.latitude && company.longitude) {
                 const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-                if (overlay.get('radius')) { // Circle
+                if ((overlay as any).get('radius')) { // Circle
                     return google.maps.geometry.spherical.computeDistanceBetween(
                         (overlay as google.maps.Circle).getCenter()!, 
                         companyLatLng
                     ) <= (overlay as google.maps.Circle).getRadius();
-                } else if (overlay.get('bounds')) { // Rectangle
+                } else if ((overlay as any).get('bounds')) { // Rectangle
                     return (overlay as google.maps.Rectangle).getBounds()!.contains(companyLatLng);
                 } else { // Polygon
                     return google.maps.geometry.poly.containsLocation(companyLatLng, overlay as google.maps.Polygon);
@@ -1024,7 +1025,7 @@ export default function SignedCustomersPage() {
                                             <span>Last prospected: {new Date(selectedCompany.lastProspected).toLocaleDateString()}</span>
                                         </div>
                                     )}
-                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedCompany.address)}</p>
+                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedCompany.address as Address)}</p>
                                     <div className="flex flex-col gap-2">
                                         <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
                                             <ExternalLink className="mr-2 h-4 w-4" /> View Profile
@@ -1121,7 +1122,7 @@ export default function SignedCustomersPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
-                            <span>{formatAddress(lead.address)}</span>
+                            <span>{formatAddress(lead.address as Address)}</span>
                         </div>
                       </TableCell>
                        <TableCell>
@@ -1172,7 +1173,7 @@ export default function SignedCustomersPage() {
                         }}
                     >
                         <SelectTrigger className="h-8 w-[70px]">
-                            <SelectValue placeholder={companiesPerPage} />
+                            <SelectValue placeholder={`${companiesPerPage}`} />
                         </SelectTrigger>
                         <SelectContent>
                             {[100, 250, 500].map(size => (

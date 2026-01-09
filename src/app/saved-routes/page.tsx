@@ -39,7 +39,7 @@ const center = {
 
 export default function SavedRoutesPage() {
     const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
+        id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
         libraries: ['geometry']
     });

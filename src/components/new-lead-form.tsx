@@ -149,7 +149,7 @@ export function NewLeadForm() {
 
       if (result.contacts && result.contacts.length > 0) {
         const primaryContact = result.contacts[0];
-        const nameParts = primaryContact.name?.split(' ') || [];
+        const nameParts = (primaryContact.name || '').split(' ') ;
         form.setValue('contact.firstName', nameParts[0] || '');
         form.setValue('contact.lastName', nameParts.slice(1).join(' ') || '');
         form.setValue('contact.title', primaryContact.title || '');
