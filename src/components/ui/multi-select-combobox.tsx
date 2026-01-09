@@ -69,8 +69,17 @@ export function MultiSelectCombobox({
                     className="mr-1 flex items-center gap-1"
                   >
                     {option?.label || value}
-                    <button
+                    <div
+                      role="button"
+                      aria-label={`Remove ${option?.label}`}
+                      tabIndex={0}
                       className="appearance-none rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelect(value);
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSelect(value);
@@ -78,7 +87,7 @@ export function MultiSelectCombobox({
                     >
                       <X className="h-3 w-3" />
                       <span className="sr-only">Remove {option?.label}</span>
-                    </button>
+                    </div>
                   </Badge>
                 );
               })
