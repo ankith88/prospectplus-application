@@ -577,10 +577,10 @@ interface NewLeadData {
   campaign?: string;
   address: Address;
   contact: {
-    firstName: string;
-    lastName: string;
-    title: string;
-    email: string;
+    firstName?: string;
+    lastName?: string;
+    title?: string;
+    email?: string;
     phone?: string;
   };
   initialNotes?: string;
@@ -608,9 +608,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         billstate: address.state,
         billzip: address.zip,
         billcountry: address.country,
-        custentity_primary_contact_name: `${contact.firstName} ${contact.lastName}`,
-        custentity_primary_contact_title: contact.title,
-        custentity_primary_contact_email: contact.email,
+        custentity_primary_contact_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+        custentity_primary_contact_title: contact.title || '',
+        custentity_primary_contact_email: contact.email || '',
         custentity_primary_contact_phone: contact.phone || '',
     });
     
