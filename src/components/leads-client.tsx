@@ -622,11 +622,6 @@ export default function LeadsClientPage() {
     }
   };
   
-  const formatAddress = (address: Lead['address']) => {
-    if (!address) return 'N/A';
-    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
-  }
-
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
     logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
@@ -863,7 +858,7 @@ export default function LeadsClientPage() {
                         Unassign ({selectedLeads.length})
                     </Button>
                      <Button onClick={openMoveLeadsDialog} variant="outline" size="sm">
-                        <Move className="mr-2 h-4 w-4" />
+                        <Move className="h-4 w-4 mr-2" />
                         Move to Field Sales ({selectedLeads.length})
                     </Button>
                     </>
@@ -941,7 +936,7 @@ export default function LeadsClientPage() {
                                             <TableCell className="px-2 md:px-4">
                                             <Checkbox 
                                                     checked={selectedLeads.includes(lead.id)} 
-                                                    onCheckedChange={(checked) => handleSelectLead(lead.id, checked)} 
+                                                    onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)} 
                                                     aria-label={`Select lead ${lead.companyName}`} 
                                                 />
                                             </TableCell>
