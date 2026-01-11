@@ -570,6 +570,9 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 interface NewLeadData {
   companyName: string;
   websiteUrl?: string;
+  customerPhone?: string;
+  customerServiceEmail?: string;
+  abn?: string;
   industryCategory?: string;
   campaign?: string;
   address: Address;
@@ -585,7 +588,7 @@ interface NewLeadData {
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string }> {
-    const { companyName, websiteUrl, industryCategory, campaign, address, contact, initialNotes, dialerAssigned } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -595,6 +598,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         "ns-at": "AAEJ7tMQ6MIVXCrzpiLKSEmYLRVtAlRSAOWEC4Dyr1D-_83sS4g",
         companyname: companyName,
         website: websiteUrl || '',
+        phone: customerPhone || '',
+        email: customerServiceEmail || '',
+        custentity_abn: abn || '',
         category: industryCategory || '',
         custentity_leadsource: campaign || '',
         billaddr1: address.street,

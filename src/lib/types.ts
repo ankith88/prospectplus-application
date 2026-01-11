@@ -181,6 +181,7 @@ export interface Lead {
   campaign?: string
   customerServiceEmail?: string
   customerPhone?: string
+  abn?: string;
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;

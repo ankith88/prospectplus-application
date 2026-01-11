@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,19 +40,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
+import { Textarea } from './ui/textarea';
 
-const phoneRegex = new RegExp(
-  /^(\+61|0061|0)?\s?4[0-9]{2}\s?[0-9]{3}\s?[0-9]{3}$|^(\+61|0061|0)?\s?[2378]\s?[0-9]{4}\s?[0-9]{4}$/
-);
+const abnRegex = /^\d{11}$/;
 
 const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
+  customerPhone: z.string().optional(),
+  customerServiceEmail: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
+  abn: z.string().regex(abnRegex, 'ABN must be 11 digits.').optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   campaign: z.string().optional(),
+  initialNotes: z.string().optional(),
   address: z.object({
     address1: z.string().optional(),
     street: z.string().min(1, 'Street name is required.'),
@@ -112,8 +114,12 @@ export function NewLeadForm() {
     defaultValues: {
       companyName: '',
       websiteUrl: '',
+      customerPhone: '',
+      customerServiceEmail: '',
+      abn: '',
       industryCategory: '',
       campaign: '',
+      initialNotes: '',
       address: {
         address1: '',
         street: '',
@@ -193,7 +199,7 @@ export function NewLeadForm() {
         form.setValue('companyName', companyName);
         const websiteUrl = place.website || '';
         form.setValue('websiteUrl', websiteUrl);
-        if(phoneNumber) form.setValue('contact.phone', phoneNumber);
+        if(phoneNumber) form.setValue('customerPhone', phoneNumber);
 
         const getAddressComponent = (type: string, useShortName = false) => {
             const component = place.address_components?.find(c => c.types.includes(type));
@@ -216,7 +222,9 @@ export function NewLeadForm() {
         form.setValue('contact.lastName', place.name || '');
         const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
         if (websiteDomain) {
-            form.setValue('contact.email', `info@${websiteDomain}`);
+            const email = `info@${websiteDomain}`;
+            form.setValue('contact.email', email);
+            form.setValue('customerServiceEmail', email);
         }
 
         if (websiteUrl) {
@@ -251,7 +259,10 @@ export function NewLeadForm() {
     if (lng) form.setValue('address.lng', parseFloat(lng));
     if (websiteUrl) form.setValue('websiteUrl', websiteUrl);
     if (industryCategory) form.setValue('industryCategory', industryCategory);
-    if (phone) form.setValue('contact.phone', phone);
+    if (phone) {
+        form.setValue('contact.phone', phone);
+        form.setValue('customerPhone', phone);
+    }
 
     if(websiteUrl) {
         handleAiProspect(websiteUrl);
@@ -361,6 +372,15 @@ export function NewLeadForm() {
                 <FormField control={form.control} name="websiteUrl" render={({ field }) => (
                     <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
                 )}/>
+                <FormField control={form.control} name="customerPhone" render={({ field }) => (
+                    <FormItem><FormLabel>Company Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                 <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
+                    <FormItem><FormLabel>Company Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                 <FormField control={form.control} name="abn" render={({ field }) => (
+                    <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="11 digits" /></FormControl><FormMessage /></FormItem>
+                )}/>
                 <FormField
                   control={form.control}
                   name="industryCategory"
@@ -445,6 +465,25 @@ export function NewLeadForm() {
                     )}/>
                 </div>
             </div>
+             <hr/>
+             <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2"><StickyNote className="w-5 h-5" />Initial Notes</h3>
+                 <FormField
+                    control={form.control}
+                    name="initialNotes"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormControl>
+                            <Textarea
+                                placeholder="Add any initial notes or comments about this lead..."
+                                {...field}
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+             </div>
 
           </CardContent>
         </Card>
