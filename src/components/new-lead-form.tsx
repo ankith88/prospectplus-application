@@ -67,10 +67,10 @@ const formSchema = z.object({
     lng: z.number().optional(),
   }),
   contact: z.object({
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
-    title: z.string().min(1, 'Title is required'),
-    email: z.string().email('Invalid email address'),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    title: z.string().optional(),
+    email: z.string().email('Invalid email address').optional().or(z.literal('')),
     phone: z.string().optional(),
   }),
 });
@@ -442,23 +442,23 @@ export function NewLeadForm() {
             
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <h3 className="text-lg font-medium flex items-center gap-2"><User className="w-5 h-5" />Primary Contact*</h3>
+                    <h3 className="text-lg font-medium flex items-center gap-2"><User className="w-5 h-5" />Primary Contact</h3>
                     <Button type="button" variant="outline" size="sm" onClick={() => handleAiProspect()} disabled={isProspecting}>
                         {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect Website</>}
                     </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField control={form.control} name="contact.firstName" render={({ field }) => (
-                        <FormItem><FormLabel>First Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.lastName" render={({ field }) => (
-                        <FormItem><FormLabel>Last Name*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.title" render={({ field }) => (
-                        <FormItem><FormLabel>Title*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.email" render={({ field }) => (
-                        <FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.phone" render={({ field }) => (
                         <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
