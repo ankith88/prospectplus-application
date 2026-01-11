@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -189,15 +190,29 @@ export function NewLeadForm() {
 
         const companyName = place.name || '';
         const phoneNumber = place.formatted_phone_number || '';
+        const websiteUrl = place.website || '';
+        const email = `info@${(websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`;
         
-        const duplicateId = await checkForDuplicateLead(companyName, phoneNumber);
+        const duplicateId = await checkForDuplicateLead(
+            companyName, 
+            phoneNumber,
+            websiteUrl,
+            email,
+            {
+                street: place.address_components?.find(c => c.types.includes('route'))?.long_name,
+                city: place.address_components?.find(c => c.types.includes('locality'))?.long_name,
+                state: place.address_components?.find(c => c.types.includes('administrative_area_level_1'))?.short_name,
+                zip: place.address_components?.find(c => c.types.includes('postal_code'))?.long_name,
+                country: 'Australia'
+            } as Address
+        );
+
         if (duplicateId) {
             setDuplicateLeadId(duplicateId);
             return;
         }
 
         form.setValue('companyName', companyName);
-        const websiteUrl = place.website || '';
         form.setValue('websiteUrl', websiteUrl);
         if(phoneNumber) form.setValue('customerPhone', phoneNumber);
 
@@ -273,7 +288,13 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
-    const duplicateId = await checkForDuplicateLead(values.companyName, values.customerPhone || '');
+    const duplicateId = await checkForDuplicateLead(
+        values.companyName, 
+        values.customerPhone,
+        values.websiteUrl,
+        values.customerServiceEmail,
+        values.address
+    );
     if (duplicateId) {
         setDuplicateLeadId(duplicateId);
         setIsSubmitting(false);

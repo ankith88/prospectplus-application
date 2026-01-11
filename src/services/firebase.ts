@@ -1605,6 +1605,9 @@ interface NewLeadData {
   };
   initialNotes?: string;
   dialerAssigned?: string;
+  customerPhone?: string;
+  customerServiceEmail?: string;
+  abn?: string;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
@@ -1619,27 +1622,89 @@ async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; 
     return { searchKeywords: [], contacts: [] };
 }
 
-async function checkForDuplicateLead(companyName: string, phoneNumber: string): Promise<string | null> {
+function getDomain(urlOrEmail: string): string | null {
+    if (!urlOrEmail) return null;
+    try {
+        if (urlOrEmail.includes('@')) {
+            return urlOrEmail.split('@')[1];
+        }
+        const hostname = new URL(urlOrEmail).hostname;
+        return hostname.replace(/^www\./, '');
+    } catch (e) {
+        return null;
+    }
+}
+
+async function checkForDuplicateLead(
+    companyName: string, 
+    phoneNumber?: string,
+    website?: string,
+    email?: string,
+    address?: Address
+): Promise<string | null> {
     const collectionsToSearch = ['leads', 'companies'];
+    const websiteDomain = getDomain(website || '');
+    const emailDomain = getDomain(email || '');
     
     for (const collectionName of collectionsToSearch) {
         const collectionRef = collection(firestore, collectionName);
-        
-        // Check by company name (case-insensitive can be tricky, so we do exact match for now, but Firestore queries are case-sensitive)
-        const nameQuery = query(collectionRef, where('companyName', '==', companyName), limit(1));
-        const nameSnapshot = await getDocs(nameQuery);
-        if (!nameSnapshot.empty) {
-            console.warn(`Duplicate found in '${collectionName}' by name: ${companyName}`);
-            return nameSnapshot.docs[0].id;
-        }
 
-        // Check by phone number if provided
+        // Check by company name (case-insensitive can be tricky)
+        if (companyName) {
+            const nameQuery = query(collectionRef, where('companyName', '==', companyName), limit(1));
+            const nameSnapshot = await getDocs(nameQuery);
+            if (!nameSnapshot.empty) {
+                console.warn(`Duplicate found in '${collectionName}' by name: ${companyName}`);
+                return nameSnapshot.docs[0].id;
+            }
+        }
+        
+        // Check by phone number
         if (phoneNumber) {
             const phoneQuery = query(collectionRef, where('customerPhone', '==', phoneNumber), limit(1));
             const phoneSnapshot = await getDocs(phoneQuery);
             if (!phoneSnapshot.empty) {
                 console.warn(`Duplicate found in '${collectionName}' by phone: ${phoneNumber}`);
                 return phoneSnapshot.docs[0].id;
+            }
+        }
+
+        // Check by website domain
+        if (websiteDomain) {
+            const allDocs = await getDocs(collectionRef);
+            for (const doc of allDocs.docs) {
+                const data = doc.data();
+                if (data.websiteUrl && getDomain(data.websiteUrl) === websiteDomain) {
+                    console.warn(`Duplicate found in '${collectionName}' by website domain: ${websiteDomain}`);
+                    return doc.id;
+                }
+            }
+        }
+
+        // Check by email domain
+        if (emailDomain) {
+            const allDocs = await getDocs(collectionRef);
+            for (const doc of allDocs.docs) {
+                const data = doc.data();
+                if (data.customerServiceEmail && getDomain(data.customerServiceEmail) === emailDomain) {
+                    console.warn(`Duplicate found in '${collectionName}' by email domain: ${emailDomain}`);
+                    return doc.id;
+                }
+            }
+        }
+        
+        // Check by address
+        if (address && address.street && address.city && address.state && address.zip) {
+             const addressQuery = query(collectionRef, 
+                where('address.street', '==', address.street),
+                where('address.city', '==', address.city),
+                where('address.state', '==', address.state),
+                where('address.zip', '==', address.zip),
+                limit(1));
+            const addressSnapshot = await getDocs(addressQuery);
+            if (!addressSnapshot.empty) {
+                console.warn(`Duplicate found in '${collectionName}' by address: ${address.street}`);
+                return addressSnapshot.docs[0].id;
             }
         }
     }
@@ -1945,6 +2010,7 @@ export {
     
 
     
+
 
 
 
