@@ -197,6 +197,7 @@ export default function LeadsClientPage() {
     status: [] as string[],
     franchisee: [],
     campaign: 'all',
+    suburb: '',
   });
   
   useEffect(() => {
@@ -266,6 +267,7 @@ export default function LeadsClientPage() {
       status: [],
       franchisee: [],
       campaign: 'all',
+      suburb: '',
     });
   };
 
@@ -274,6 +276,7 @@ export default function LeadsClientPage() {
       const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
+      const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true;
 
@@ -283,7 +286,7 @@ export default function LeadsClientPage() {
             campaignMatch = leadCampaign === filters.campaign;
         }
 
-      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch;
+      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch;
     });
 
     if (sortConfig !== null) {
@@ -714,7 +717,7 @@ export default function LeadsClientPage() {
     };
     
     const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
-        const leadsToProcess = targetBucket === 'field' ? selectedLeads : selectedForReassignment;
+        const leadsToProcess = selectedLeads;
         const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
         setLeadsToMove(leads);
         setIsMoveLeadDialogOpen(true);
@@ -790,14 +793,18 @@ export default function LeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
                         </div>
                         <div className="space-y-2">
+                            <Label htmlFor="suburb">Suburb</Label>
+                            <Input id="suburb" value={filters.suburb} onChange={(e) => handleFilterChange('suburb', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
-                            <MultiSelectCombobox
+                             <MultiSelectCombobox
                                 options={leadStatusOptions}
                                 selected={filters.status}
                                 onSelectedChange={(selected) => handleFilterChange('status', selected)}
@@ -1056,17 +1063,13 @@ export default function LeadsClientPage() {
                            <Trash2 className="mr-2 h-4 w-4" />
                            Delete ({selectedForReassignment.length})
                         </Button>
-                        <Button onClick={handleBulkUnassign} variant="outline" size="sm">
-                            <UserX className="mr-2 h-4 w-4" />
-                            Unassign ({selectedForReassignment.length})
+                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                            <Move className="h-4 w-4 mr-2" />
+                            Move to Field Sales ({selectedForReassignment.length})
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
                             <UserCog className="mr-2 h-4 w-4" />
                             Reassign ({selectedForReassignment.length})
-                        </Button>
-                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <Move className="h-4 w-4 mr-2" />
-                            Move to Field Sales ({selectedForReassignment.length})
                         </Button>
                     </>
                 )}
