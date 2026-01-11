@@ -499,17 +499,18 @@ export default function LeadsClientPage() {
   };
 
 
-  const handleBulkUnassign = async () => {
-    if (selectedLeads.length === 0) return;
+  const handleBulkUnassign = async (idsToUnassign: string[]) => {
+    if (idsToUnassign.length === 0) return;
     try {
-      await bulkUpdateLeadDialerRep(selectedLeads, [null]);
+      await bulkUpdateLeadDialerRep(idsToUnassign, [null]);
       
       const updatedLeads = allLeads.map(lead =>
-        selectedLeads.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
+        idsToUnassign.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
       );
       setAllLeads(updatedLeads);
-      toast({ title: "Success", description: `${selectedLeads.length} lead(s) unassigned.` });
+      toast({ title: "Success", description: `${idsToUnassign.length} lead(s) unassigned.` });
       setSelectedLeads([]);
+      setSelectedForReassignment([]);
     } catch (error) {
       console.error("Failed to bulk unassign leads:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
@@ -576,15 +577,18 @@ export default function LeadsClientPage() {
 
   const handleSelectAllInGroup = (leadsInGroup: LeadWithDetails[], listType: 'myLeads' | 'unassigned' | 'reassign') => {
       const leadIdsInGroup = leadsInGroup.map(l => l.id);
-      const isChecked = leadIdsInGroup.length > 0 && leadIdsInGroup.every(id => selectedLeads.includes(id));
+      const targetSelection = listType === 'reassign' ? selectedForReassignment : selectedLeads;
+      const setTargetSelection = listType === 'reassign' ? setSelectedForReassignment : setSelectedLeads;
+
+      const isChecked = leadIdsInGroup.length > 0 && leadIdsInGroup.every(id => targetSelection.includes(id));
       
-      let newSelectedLeads = [...selectedLeads];
+      let newSelectedLeads = [...targetSelection];
       if (isChecked) {
           newSelectedLeads = newSelectedLeads.filter(id => !leadIdsInGroup.includes(id));
       } else {
           newSelectedLeads = [...new Set([...newSelectedLeads, ...leadIdsInGroup])];
       }
-      setSelectedLeads(newSelectedLeads);
+      setTargetSelection(newSelectedLeads);
   };
   
   const handleSelectAllForReassignment = (leadsInGroup: LeadWithDetails[], isChecked: boolean) => {
@@ -709,7 +713,7 @@ export default function LeadsClientPage() {
             setSelectedForReassignment([]);
         } catch (error) {
             console.error("Failed to delete leads:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the selected leads.' });
+            toast({ variant: "destructive", title: "Error", description: "Could not delete the selected leads." });
         } finally {
             setIsDeleting(false);
             setLeadsToDelete([]);
@@ -860,7 +864,7 @@ export default function LeadsClientPage() {
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete ({selectedLeads.length})
                         </Button>
-                        <Button onClick={handleBulkUnassign} variant="outline" size="sm">
+                        <Button onClick={() => handleBulkUnassign(selectedLeads)} variant="outline" size="sm">
                             <UserX className="mr-2 h-4 w-4" />
                             Unassign ({selectedLeads.length})
                         </Button>
@@ -1067,7 +1071,7 @@ export default function LeadsClientPage() {
                             <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedForReassignment.length})
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign()}>
+                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
                             <UserX className="mr-2 h-4 w-4" />
                             Unassign ({selectedForReassignment.length})
                         </Button>
