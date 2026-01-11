@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -195,7 +194,6 @@ export function NewLeadForm() {
         
         const duplicateId = await checkForDuplicateLead(
             companyName, 
-            phoneNumber,
             websiteUrl,
             email,
             {
@@ -290,7 +288,6 @@ export function NewLeadForm() {
 
     const duplicateId = await checkForDuplicateLead(
         values.companyName, 
-        values.customerPhone,
         values.websiteUrl,
         values.customerServiceEmail,
         values.address

@@ -1637,7 +1637,6 @@ function getDomain(urlOrEmail: string): string | null {
 
 async function checkForDuplicateLead(
     companyName: string, 
-    phoneNumber?: string,
     website?: string,
     email?: string,
     address?: Address
@@ -1697,6 +1696,24 @@ async function checkForDuplicateLead(
                 return addressSnapshot.docs[0].id;
             }
         }
+        
+        // Looser address check if exact match fails
+        if (address && address.street && address.city && address.state) {
+            const looserAddressQuery = query(collectionRef, 
+                where('address.city', '==', address.city),
+                where('address.state', '==', address.state),
+                limit(20) // Limit to avoid fetching too many docs
+            );
+            const snapshot = await getDocs(looserAddressQuery);
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                if (data.address && data.address.street && data.address.street.toLowerCase() === address.street.toLowerCase()) {
+                     console.warn(`Duplicate found in '${collectionName}' by looser address match: ${address.street}`);
+                     return doc.id;
+                }
+            }
+        }
+
     }
     
     return null;
@@ -1999,7 +2016,6 @@ export {
 
     
 
-    
 
 
 
