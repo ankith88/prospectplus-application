@@ -273,6 +273,13 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
+    const duplicateId = await checkForDuplicateLead(values.companyName, values.customerPhone || '');
+    if (duplicateId) {
+        setDuplicateLeadId(duplicateId);
+        setIsSubmitting(false);
+        return;
+    }
+
     if (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') {
         if (!values.campaign) {
             form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
