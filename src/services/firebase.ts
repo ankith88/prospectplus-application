@@ -1658,16 +1658,6 @@ async function checkForDuplicateLead(
                 return nameSnapshot.docs[0].id;
             }
         }
-        
-        // Check by phone number
-        if (phoneNumber) {
-            const phoneQuery = query(collectionRef, where('customerPhone', '==', phoneNumber), limit(1));
-            const phoneSnapshot = await getDocs(phoneQuery);
-            if (!phoneSnapshot.empty) {
-                console.warn(`Duplicate found in '${collectionName}' by phone: ${phoneNumber}`);
-                return phoneSnapshot.docs[0].id;
-            }
-        }
 
         // Check by website domain
         if (websiteDomain) {
@@ -2010,6 +2000,7 @@ export {
     
 
     
+
 
 
 
