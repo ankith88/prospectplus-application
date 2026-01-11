@@ -288,8 +288,8 @@ export default function LeadsClientPage() {
 
     if (sortConfig !== null) {
       leads.sort((a, b) => {
-        let aValue = a[sortConfig.key] ?? '';
-        let bValue = b[sortConfig.key] ?? '';
+        let aValue = a[sortConfig.key as keyof Lead] ?? '';
+        let bValue = b[sortConfig.key as keyof Lead] ?? '';
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
@@ -713,8 +713,9 @@ export default function LeadsClientPage() {
         }
     };
     
-    const openMoveLeadsDialog = () => {
-        const leads = allLeads.filter(l => selectedLeads.includes(l.id));
+    const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
+        const leadsToProcess = targetBucket === 'field' ? selectedLeads : selectedForReassignment;
+        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
         setLeadsToMove(leads);
         setIsMoveLeadDialogOpen(true);
     };
@@ -759,6 +760,7 @@ export default function LeadsClientPage() {
         onLeadsMoved={() => {
             fetchData(); // Refresh data after moving
             setSelectedLeads([]);
+            setSelectedForReassignment([]);
         }}
         targetBucket="field"
     />
@@ -857,7 +859,7 @@ export default function LeadsClientPage() {
                         <UserX className="mr-2 h-4 w-4" />
                         Unassign ({selectedLeads.length})
                     </Button>
-                     <Button onClick={openMoveLeadsDialog} variant="outline" size="sm">
+                    <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
                         <Move className="h-4 w-4 mr-2" />
                         Move to Field Sales ({selectedLeads.length})
                     </Button>
@@ -1062,6 +1064,10 @@ export default function LeadsClientPage() {
                             <UserCog className="mr-2 h-4 w-4" />
                             Reassign ({selectedForReassignment.length})
                         </Button>
+                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                            <Move className="h-4 w-4 mr-2" />
+                            Move to Field Sales ({selectedForReassignment.length})
+                        </Button>
                     </>
                 )}
                 <Button onClick={() => exportLeadsToCsv(filteredLeads.filter(l => l.dialerAssigned), `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
@@ -1254,10 +1260,16 @@ export default function LeadsClientPage() {
             </CardTitle>
             <div className="flex items-center gap-4">
                  {selectedLeads.length > 0 && (
-                    <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete ({selectedLeads.length})
-                    </Button>
+                     <>
+                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete ({selectedLeads.length})
+                        </Button>
+                         <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                            <Move className="h-4 w-4 mr-2" />
+                            Move to Field Sales ({selectedLeads.length})
+                        </Button>
+                     </>
                  )}
                 {selectedLeads.length > 0 && (
                     <Button onClick={handleBulkAssign} variant="outline">
