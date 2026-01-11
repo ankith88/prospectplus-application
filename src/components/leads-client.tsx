@@ -717,7 +717,7 @@ export default function LeadsClientPage() {
     };
     
     const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
-        const leadsToProcess = selectedLeads;
+        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
         const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
         setLeadsToMove(leads);
         setIsMoveLeadDialogOpen(true);
@@ -854,23 +854,23 @@ export default function LeadsClientPage() {
                     End Session
                   </Button>
                 )}
-                {selectedLeads.length > 0 && (
+                {selectedLeads.length > 0 && isAdminView && (
                     <>
-                     {isAdminView && (
                         <Button onClick={() => confirmDelete(selectedLeads)} variant="destructive" size="sm">
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete ({selectedLeads.length})
                         </Button>
-                     )}
-                    <Button onClick={handleBulkUnassign} variant="outline" size="sm">
-                        <UserX className="mr-2 h-4 w-4" />
-                        Unassign ({selectedLeads.length})
-                    </Button>
+                        <Button onClick={handleBulkUnassign} variant="outline" size="sm">
+                            <UserX className="mr-2 h-4 w-4" />
+                            Unassign ({selectedLeads.length})
+                        </Button>
+                    </>
+                )}
+                {selectedLeads.length > 0 && (
                     <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
                         <Move className="h-4 w-4 mr-2" />
                         Move to Field Sales ({selectedLeads.length})
                     </Button>
-                    </>
                 )}
                 <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
@@ -1067,8 +1067,12 @@ export default function LeadsClientPage() {
                             <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedForReassignment.length})
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign()}>
+                            <UserX className="mr-2 h-4 w-4" />
+                            Unassign ({selectedForReassignment.length})
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
-                            <UserCog className="mr-2 h-4 w-4" />
+                            <UserCog className="h-4 w-4 mr-2" />
                             Reassign ({selectedForReassignment.length})
                         </Button>
                     </>
