@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -678,6 +679,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             const leadData = leadsData[leadId];
 
             if (!leadData) {
+                console.warn(`[getAllCallActivities] No lead data found for lead ID: ${leadId}. Skipping activity ${activityDoc.id}.`);
                 return null;
             }
 
@@ -2012,3 +2014,4 @@ export {
     updateContactSendEmail,
     getUserActivitiesForPeriod,
 };
+
