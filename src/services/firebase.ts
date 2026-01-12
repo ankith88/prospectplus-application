@@ -545,8 +545,8 @@ async function getArchivedLeads(): Promise<Lead[]> {
 
 
 async function getAllLeadsForReport(): Promise<Lead[]> {
-    console.log('[getAllLeadsForReport] Starting to fetch all leads for reporting...');
     try {
+        console.log('[getAllLeadsForReport] Starting to fetch all leads for reporting...');
         const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
         if (leadsSnapshot.empty) {
             console.log("[getAllLeadsForReport] No leads found.");
@@ -577,7 +577,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
 
     } catch (error) {
         console.error("[getAllLeadsForReport] Failed to fetch leads:", error);
-        return [];
+        throw new Error('An unexpected response was received from the server.');
     }
 }
 
@@ -675,6 +675,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             const leadId = activityDoc.ref.parent.parent!.id;
             const leadData = leadsData[leadId];
 
+            // Safely skip if leadData is missing
             if (!leadData) {
                 console.warn(`[getAllCallActivities] No lead data found for lead ID: ${leadId}. Skipping activity ${activityDoc.id}.`);
                 return null;
@@ -2009,5 +2010,6 @@ export {
     updateContactSendEmail,
     getUserActivitiesForPeriod,
 };
+
 
 
