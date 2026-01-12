@@ -643,19 +643,16 @@ async function getLeadActivity(leadId: string, limitNum: number = 10, lastDocId:
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
-    console.log('[getAllCallActivities] Starting to fetch call activities...');
     try {
         const activitySnapshot = await getDocs(collectionGroup(firestore, 'activity'));
         const callActivityDocs = activitySnapshot.docs.filter(doc => doc.data().type === 'Call');
 
         if (callActivityDocs.length === 0) {
-            console.log("[getAllCallActivities] No call activities found after filtering.");
             return [];
         }
 
         const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) {
-             console.log("[getAllCallActivities] No lead IDs found from activities.");
              return [];
         }
 
@@ -666,7 +663,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
         }
 
         for (const chunk of leadChunks) {
-            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
@@ -706,12 +703,10 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
         });
 
         const finalCalls = Array.from(uniqueCallsMap.values());
-        console.log(`[getAllCallActivities] Returning ${finalCalls.length} unique call activities.`);
         return finalCalls;
-
     } catch (error) {
-        console.error('[getAllCallActivities] Failed to fetch all call activities:', error);
-        return [];
+        console.error('An unexpected error occurred in getAllCallActivities:', error);
+        throw new Error('An unexpected response was received from the server.');
     }
 }
 
@@ -2014,4 +2009,5 @@ export {
     updateContactSendEmail,
     getUserActivitiesForPeriod,
 };
+
 
