@@ -237,6 +237,7 @@ export default function LeadsMapClient() {
     checkInDate: undefined as DateRange | undefined,
     routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
     campaign: 'all',
+    fieldSales: 'all' as 'all' | 'yes' | 'no',
   });
   
   const router = useRouter()
@@ -576,8 +577,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 }
             }
 
+            const fieldSalesMatch = filters.fieldSales === 'all' ||
+                                  (filters.fieldSales === 'yes' && item.fieldSales === true) ||
+                                  (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
 
-            return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && campaignMatch;
+
+            return franchiseeMatch && stateMatch && statusMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && campaignMatch && fieldSalesMatch;
         });
         
         return dataToFilter;
@@ -1410,6 +1415,17 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
                                 </div>
                                 <div className="space-y-2">
+                                    <Label>Lead Type</Label>
+                                    <Select value={filters.fieldSales} onValueChange={(value) => handleFilterChange('fieldSales', value)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Leads</SelectItem>
+                                            <SelectItem value="yes">Field Sales</SelectItem>
+                                            <SelectItem value="no">Outbound</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
                                     <Label>Campaign</Label>
                                      <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
@@ -2025,3 +2041,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
     
 
+
+
+    
