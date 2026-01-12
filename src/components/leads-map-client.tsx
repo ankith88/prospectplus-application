@@ -575,7 +575,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         const leadCampaign = (item as Lead).campaign;
         const filterCampaign = filters.campaign;
         if (filterCampaign === 'D2D') {
-          campaignMatch = leadCampaign === 'Door-to-Door Field Sales';
+          campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
         } else {
           campaignMatch = leadCampaign === filterCampaign;
         }
@@ -684,7 +684,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const campaigns = new Set(mapData.map(item => {
         const lead = item as Lead;
         const campaign = lead.campaign;
-        return campaign === 'Door-to-Door Field Sales' ? 'D2D' : campaign;
+        if (campaign === 'Door-to-Door Field Sales' || campaign === 'Door-to-door Field Sales') {
+            return 'D2D';
+        }
+        return campaign;
     }).filter(Boolean));
 
     return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));

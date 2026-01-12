@@ -69,7 +69,17 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
         const lowercasedCampaignFilter = debouncedCampaignFilter.toLowerCase();
         
         const nameMatch = debouncedSearchTerm ? item.companyName.toLowerCase().includes(lowercasedSearchTerm) || item.id.toLowerCase().includes(lowercasedSearchTerm) : true;
-        const campaignMatch = debouncedCampaignFilter ? item.campaign?.toLowerCase().includes(lowercasedCampaignFilter) : true;
+        
+        let campaignMatch = true;
+        if (lowercasedCampaignFilter) {
+            const campaign = item.campaign?.toLowerCase();
+            if (lowercasedCampaignFilter === 'd2d') {
+                campaignMatch = campaign === 'door-to-door field sales' || campaign === 'door-to-door field sales';
+            } else {
+                campaignMatch = campaign?.includes(lowercasedCampaignFilter) || false;
+            }
+        }
+        
         const statusMatch = statusFilter.length > 0 ? statusFilter.includes(item.status) : true;
         
         return nameMatch && campaignMatch && statusMatch;

@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -113,7 +112,7 @@ export default function ArchivedLeadsClientPage() {
   const uniqueCampaigns: Option[] = useMemo(() => {
     const campaigns = new Set(allLeads.map(lead => {
         const campaign = lead.campaign;
-        if (campaign === 'Door-to-Door Field Sales') {
+        if (campaign === 'Door-to-Door Field Sales' || campaign === 'Door-to-door Field Sales') {
             return 'D2D';
         }
         return campaign;
@@ -225,8 +224,13 @@ export default function ArchivedLeadsClientPage() {
 
         let campaignMatch = true;
         if (filters.campaign && filters.campaign !== 'all') {
-            const leadCampaign = lead.campaign === 'Door-to-Door Field Sales' ? 'D2D' : lead.campaign;
-            campaignMatch = leadCampaign === filters.campaign;
+            const leadCampaign = lead.campaign;
+            const filterCampaign = filters.campaign;
+            if (filterCampaign === 'D2D') {
+              campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
+            } else {
+              campaignMatch = leadCampaign === filterCampaign;
+            }
         }
 
         return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
@@ -862,5 +866,6 @@ export default function ArchivedLeadsClientPage() {
 
 
     
+
 
 
