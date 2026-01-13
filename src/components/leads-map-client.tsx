@@ -206,6 +206,9 @@ export default function LeadsMapClient() {
   const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const endPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
+  const [selectedForRouting, setSelectedForRouting] = useState<string[]>([]);
+  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
+
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [travelMode, setTravelMode] = useState<google.maps.TravelMode | null>(null);
@@ -399,8 +402,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             setIsCalculatingRoute(false);
             if (status === window.google.maps.DirectionsStatus.OK && result) {
                 setDirections(result);
-                setSelectedRouteLeads(leadsToRoute);
-
+                // The leads are already set in `selectedRouteLeads` for sorting, so we don't need to set them here.
                 let totalDist = 0;
                 let totalDur = 0;
                 result.routes[0].legs.forEach(leg => {
@@ -683,9 +685,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   const uniqueCampaigns: Option[] = useMemo(() => {
     const campaigns = new Set(mapData.map(item => {
         const lead = item as Lead;
-        const campaign = lead.campaign;
+        let campaign = lead.campaign;
         if (campaign === 'Door-to-Door Field Sales' || campaign === 'Door-to-door Field Sales') {
-            return 'D2D';
+            campaign = 'D2D';
         }
         return campaign;
     }).filter(Boolean));
@@ -877,18 +879,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   }, [selectedLead, findProspects]);
 
 
-  const handleFindProspectsNearMe = () => {
-    if (!myLocation) {
-        toast({ variant: 'destructive', title: 'Location unknown', description: 'Click "My Location" first to find your position.' });
-        return;
-    }
-    if (!prospectSearchQuery) {
-        toast({ variant: 'destructive', title: 'Search term required', description: 'Please enter a business type to search for (e.g., "cafe", "warehouse").' });
-        return;
-    }
-    findProspects(myLocation, prospectSearchQuery);
-  };
-  
     const handleCreateLeadFromProspect = async () => {
         if (!prospectToCreate || !userProfile?.displayName) return;
 
@@ -1014,6 +1004,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     const handleClearRoute = () => {
         setDirections(null);
         setSelectedRouteLeads([]);
+        setSelectedForRouting([]);
         setRouteName('');
         setTravelMode(null);
         setIsRouteActive(false);
@@ -1272,16 +1263,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         ].filter(Boolean).join(', ');
     }
     
-    const sortedRouteLegs = useMemo(() => {
-        if (!directions || !selectedRouteLeads.length) return [];
-        
-        const waypointOrder = directions.routes[0].waypoint_order;
-        return waypointOrder.map((index, stopNumber) => {
-            const lead = selectedRouteLeads[index];
-            const leg = directions.routes[0].legs[stopNumber];
-            return { lead, leg, stopNumber: stopNumber + 1 };
+    const sortedSelectedRouteLeads = useMemo(() => {
+        return [...selectedRouteLeads].sort((a, b) => {
+            const addressA = a.address?.street || '';
+            const addressB = b.address?.street || '';
+            if (addressA.localeCompare(addressB) !== 0) {
+                return addressA.localeCompare(addressB);
+            }
+            return a.companyName.localeCompare(b.companyName);
         });
-    }, [directions, selectedRouteLeads]);
+    }, [selectedRouteLeads]);
     
     const waypointOrderMap = useMemo(() => {
         if (!directions) return new Map();
@@ -1519,7 +1510,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         </Collapsible>
         
         <div className="flex-grow flex flex-col md:flex-row-reverse gap-4">
-            {(selectedRouteLeads.length > 0 || directions) && (
+            {(selectedRouteLeads.length > 0) && (
                  <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                     <CardHeader className="pb-2 flex-shrink-0">
                         <CardTitle className="flex items-center justify-between">
@@ -1534,49 +1525,34 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     </CardHeader>
                     <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
                         <ScrollArea className="flex-grow">
-                          <div className="space-y-2">
-                            {(directions ? sortedRouteLegs : selectedRouteLeads.map((l, i) => ({lead: l, stopNumber: i+1}))).map((item, index) => {
-                              if (!item.lead) return null;
-                              const lead = item.lead;
-                              const leg = (item as any).leg;
-                              return (
-                                <div key={lead.id}>
-                                  <Card className="p-3 flex items-center gap-2">
-                                    <GripVertical className="cursor-grab text-muted-foreground" />
-                                    <div className="flex-grow">
-                                      <div className="flex justify-between items-start">
-                                        <div>
+                            <div className="space-y-2">
+                                {sortedSelectedRouteLeads.map((lead) => {
+                                  return (
+                                    <div key={lead.id} onMouseEnter={() => setHoveredLeadId(lead.id)} onMouseLeave={() => setHoveredLeadId(null)}>
+                                      <Card className="p-3 flex items-center gap-2">
+                                        <Checkbox
+                                          checked={selectedForRouting.includes(lead.id)}
+                                          onCheckedChange={(checked) => {
+                                            setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                          }}
+                                          className="mr-2"
+                                        />
+                                        <div className="flex-grow">
                                           <p className="font-bold">
                                             <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                              <Link href={`/leads/${lead.id}`} target="_blank">{item.stopNumber ? `${item.stopNumber}. ` : ''}{lead.companyName}</Link>
+                                              <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
                                             </Button>
                                           </p>
                                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
                                         </div>
-                                        <LeadStatusBadge status={lead.status} />
-                                      </div>
-                                      <div className="flex items-center justify-between mt-2">
-                                        {leg && (
-                                          <p className="text-xs text-muted-foreground">
-                                            {leg?.duration?.text} • {leg?.distance?.text}
-                                          </p>
-                                        )}
-                                        <div className='flex gap-2'>
-                                          <Button size="sm" variant="secondary" onClick={() => handleCheckIn(lead)}>
-                                            {lead.isProspect ? <PlusCircle className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
-                                            {lead.isProspect ? 'Add New Lead' : 'Check In'}
-                                          </Button>
-                                          <Button size="sm" variant="destructive" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      </div>
+                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                      </Card>
                                     </div>
-                                  </Card>
-                                </div>
-                              )
-                            })}
-                          </div>
+                                  )
+                                })}
+                            </div>
                         </ScrollArea>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
@@ -1611,15 +1587,15 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button disabled={isCalculatingRoute || selectedRouteLeads.length === 0} className="w-full">
+                                <Button disabled={isCalculatingRoute || selectedForRouting.length === 0} className="w-full">
                                     {isCalculatingRoute ? <Loader /> : <Route className="mr-2 h-4 w-4" />}
-                                    {directions ? 'Re-calculate Route' : 'Create Route'}
+                                    Create Route from Selected ({selectedForRouting.length})
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads)}><Car className="mr-2 h-4 w-4" />Driving</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads)}><Footprints className="mr-2 h-4 w-4" />Walking</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads)}><Bike className="mr-2 h-4 w-4" />Bicycling</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.DRIVING, selectedRouteLeads.filter(l => selectedForRouting.includes(l.id)))}><Car className="mr-2 h-4 w-4" />Driving</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.WALKING, selectedRouteLeads.filter(l => selectedForRouting.includes(l.id)))}><Footprints className="mr-2 h-4 w-4" />Walking</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCreateRoute(google.maps.TravelMode.BICYCLING, selectedRouteLeads.filter(l => selectedForRouting.includes(l.id)))}><Bike className="mr-2 h-4 w-4" />Bicycling</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {directions && (
@@ -1707,7 +1683,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
                             position={{ lat: item.latitude!, lng: item.longitude! }}
                             onClick={() => onMarkerClick(item)}
-                            icon={getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id))}
+                            icon={getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id) || (hoveredLeadId === item.id))}
                             visible={directions === null}
                         />
                     ))}
