@@ -135,14 +135,14 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
     const blueStatuses: LeadStatus[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
 
-    if (isHovered || isSelected) {
+    if (isSelected) {
       return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
     
@@ -207,7 +207,6 @@ export default function LeadsMapClient() {
   const endPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const [selectedForRouting, setSelectedForRouting] = useState<string[]>([]);
-  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
 
   const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -1048,6 +1047,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         router.push(`/check-in/${lead.id}`);
     };
     
+    const handleLocateLead = (lead: MapLead) => {
+        if (map && lead.latitude && lead.longitude) {
+            map.panTo({ lat: lead.latitude, lng: lead.longitude });
+            map.setZoom(17);
+            setSelectedLead(lead);
+        }
+    };
 
   const handleAnalyzeTerritory = useCallback(async () => {
     if (!drawnTerritory?.center || selectedRouteLeads.length === 0) {
@@ -1553,7 +1559,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             <div className="space-y-2">
                                 {sortedSelectedRouteLeads.map((lead) => {
                                   return (
-                                    <div key={lead.id} onMouseEnter={() => setHoveredLeadId(lead.id)} onMouseLeave={() => setHoveredLeadId(null)}>
+                                    <div key={lead.id}>
                                       <Card className="p-3 flex items-center gap-2">
                                         <Checkbox
                                           checked={selectedForRouting.includes(lead.id)}
@@ -1570,6 +1576,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                           </p>
                                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
                                         </div>
+                                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
+                                            <MapPin className="h-4 w-4 text-blue-500" />
+                                        </Button>
                                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
@@ -1710,8 +1719,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             onClick={() => onMarkerClick(item)}
                             icon={getPinColor(
                                 item.status, 
-                                selectedRouteLeads.some(l => l.id === item.id),
-                                hoveredLeadId === item.id && selectedRouteLeads.some(l => l.id === item.id)
+                                selectedRouteLeads.some(l => l.id === item.id)
                             )}
                             visible={directions === null}
                         />
@@ -2057,4 +2065,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
 
     
+
 
