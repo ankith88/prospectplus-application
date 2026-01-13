@@ -1559,10 +1559,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <CardHeader className="pb-2 flex-shrink-0">
                         <CardTitle className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <Checkbox
+                               <Checkbox
                                     checked={selectedForRouting.length === sortedSelectedRouteLeads.length && sortedSelectedRouteLeads.length > 0}
                                     onCheckedChange={(checked) => setSelectedForRouting(checked ? sortedSelectedRouteLeads.map(l => l.id) : [])}
                                     aria-label="Select all stops"
+                                    className="mr-2"
                                 />
                                 <Route className="h-5 w-5" /> 
                                 <span>Selected Stops ({selectedRouteLeads.length})</span>
@@ -1578,46 +1579,48 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </div>
                     </CardHeader>
                     <CardContent className="flex-grow overflow-hidden flex flex-col gap-2 p-4">
-                         <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-2">
-                            {sortedSelectedRouteLeads.map((lead) => {
-                              return (
-                                <div key={lead.id}>
-                                  <Card 
-                                    className="p-3"
-                                    onMouseEnter={() => setHoveredLeadId(lead.id)}
-                                    onMouseLeave={() => setHoveredLeadId(null)}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-shrink-0">
-                                            <Checkbox
-                                                checked={selectedForRouting.includes(lead.id)}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="flex items-center">
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
-                                                <MapPin className="h-4 w-4 text-blue-500" />
-                                            </Button>
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
-                                        </div>
-                                        <div className="flex-grow overflow-hidden">
-                                            <p className="font-bold truncate">
-                                                <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                         <ScrollArea className="flex-grow">
+                            <div className="space-y-2">
+                                {sortedSelectedRouteLeads.map((lead) => {
+                                  return (
+                                    <div key={lead.id}>
+                                      <Card 
+                                        className="p-3"
+                                        onMouseEnter={() => setHoveredLeadId(lead.id)}
+                                        onMouseLeave={() => setHoveredLeadId(null)}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-shrink-0">
+                                                <Checkbox
+                                                    checked={selectedForRouting.includes(lead.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="flex items-center">
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
+                                                    <MapPin className="h-4 w-4 text-blue-500" />
                                                 </Button>
-                                            </p>
-                                            <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                            <div className="flex-grow overflow-hidden">
+                                                <p className="font-bold truncate">
+                                                    <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                                    </Button>
+                                                </p>
+                                                <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                            </div>
                                         </div>
+                                      </Card>
                                     </div>
-                                  </Card>
-                                </div>
-                              )
-                            })}
-                        </div>
+                                  )
+                                })}
+                            </div>
+                         </ScrollArea>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
                        <div className="w-full space-y-1">
