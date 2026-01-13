@@ -801,6 +801,26 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
   }, [map, mapData, getPlaceDetails, toast]);
   
+  const handleFindProspectsNearMe = useCallback(() => {
+    if (!myLocation) {
+        toast({
+            variant: "destructive",
+            title: "Location Required",
+            description: "Please enable location services or use 'My Location' first.",
+        });
+        return;
+    }
+    if (!prospectSearchQuery) {
+        toast({
+            variant: "destructive",
+            title: "Search Term Required",
+            description: "Please enter a keyword to search for (e.g., 'cafe').",
+        });
+        return;
+    }
+    findProspects(myLocation, prospectSearchQuery);
+  }, [myLocation, prospectSearchQuery, findProspects, toast]);
+
   const handleFindNearby = useCallback(async () => {
     if (!selectedLead || !map) return;
   
