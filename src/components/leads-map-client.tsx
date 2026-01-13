@@ -136,12 +136,6 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 };
 
 const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean): string => {
-    const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
-    const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
-    const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
-    const blueStatuses: LeadStatus[] = ['New'];
-    const purpleStatuses: LeadStatus[] = ['LPO Review'];
-
     if (isHovered) {
         return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
@@ -150,26 +144,26 @@ const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean
       return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
     
-    if (status === 'Won') {
-      return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
-    }
-
-    if (greenStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
-    }
-    if (yellowStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
-    }
-     if (redStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png';
-    }
-    if (blueStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png';
-    }
-     if (purpleStatuses.includes(status)) {
-        return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
-    }
-    return 'http://maps.google.com/mapfiles/ms/icons/grey.png'; // Default
+    const statusColors: Record<LeadStatus, string> = {
+        'New': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+        'Contacted': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        'In Progress': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        'Connected': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        'High Touch': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        'Reschedule': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+        'Qualified': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'Pre Qualified': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'Trialing ShipMate': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'Free Trial': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'LocalMile Pending': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'Won': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'Lost': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        'Unqualified': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        'Priority Lead': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        'LPO Review': 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png',
+    };
+    
+    return statusColors[status] || 'http://maps.google.com/mapfiles/ms/icons/grey.png'; // Default
 };
 
 
@@ -235,6 +229,9 @@ export default function LeadsMapClient() {
 
   const [analyzingTerritory, setAnalyzingTerritory] = useState(false);
   const [drawnTerritory, setDrawnTerritory] = useState<{ center: google.maps.LatLng | null; radius: number } | null>(null);
+
+  const [routeNameFilter, setRouteNameFilter] = useState('');
+  const [routeAddressFilter, setRouteAddressFilter] = useState('');
 
   const [filters, setFilters] = useState({
     franchisee: [] as string[],
@@ -1299,7 +1296,19 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }
     
     const sortedSelectedRouteLeads = useMemo(() => {
-        return [...selectedRouteLeads].sort((a, b) => {
+        let filtered = [...selectedRouteLeads];
+
+        if (routeNameFilter) {
+            filtered = filtered.filter(lead => lead.companyName.toLowerCase().includes(routeNameFilter.toLowerCase()));
+        }
+
+        if (routeAddressFilter) {
+            filtered = filtered.filter(lead => 
+                formatAddress(lead.address as Address).toLowerCase().includes(routeAddressFilter.toLowerCase())
+            );
+        }
+
+        return filtered.sort((a, b) => {
             const addressA = (a.address?.street || '').toLowerCase();
             const addressB = (b.address?.street || '').toLowerCase();
             if (addressA.localeCompare(addressB) !== 0) {
@@ -1307,7 +1316,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             }
             return a.companyName.toLowerCase().localeCompare(b.companyName.toLowerCase());
         });
-    }, [selectedRouteLeads]);
+    }, [selectedRouteLeads, routeNameFilter, routeAddressFilter]);
     
     const waypointOrderMap = useMemo(() => {
         if (!directions) return new Map();
@@ -1551,7 +1560,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         <CardTitle className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Checkbox
-                                    checked={selectedForRouting.length === selectedRouteLeads.length && selectedRouteLeads.length > 0}
+                                    checked={selectedForRouting.length === sortedSelectedRouteLeads.length && sortedSelectedRouteLeads.length > 0}
                                     onCheckedChange={(checked) => setSelectedForRouting(checked ? sortedSelectedRouteLeads.map(l => l.id) : [])}
                                     aria-label="Select all stops"
                                 />
@@ -1563,9 +1572,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 <X className="h-4 w-4" />
                             </Button>
                         </CardTitle>
+                        <div className="flex gap-2 pt-2">
+                            <Input placeholder="Filter by name..." value={routeNameFilter} onChange={(e) => setRouteNameFilter(e.target.value)} />
+                            <Input placeholder="Filter by address..." value={routeAddressFilter} onChange={(e) => setRouteAddressFilter(e.target.value)} />
+                        </div>
                     </CardHeader>
-                    <CardContent className="flex-grow overflow-y-auto flex flex-col gap-2 p-4 max-h-[60vh]">
-                        <div className="space-y-2">
+                    <CardContent className="flex-grow overflow-hidden flex flex-col gap-2 p-4">
+                         <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-2">
                             {sortedSelectedRouteLeads.map((lead) => {
                               return (
                                 <div key={lead.id}>
@@ -1583,7 +1596,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                 }}
                                             />
                                         </div>
-                                        <div className="flex-shrink-0 flex items-center">
+                                        <div className="flex items-center">
                                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
                                                 <MapPin className="h-4 w-4 text-blue-500" />
                                             </Button>
