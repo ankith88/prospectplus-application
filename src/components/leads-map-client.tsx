@@ -135,15 +135,19 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
     const blueStatuses: LeadStatus[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
 
+    if (isHovered) {
+        return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
+    }
+
     if (isSelected) {
-      return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
+      return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
     
     if (status === 'Won') {
@@ -179,6 +183,7 @@ export default function LeadsMapClient() {
   const [mapData, setMapData] = useState<MapLead[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null)
+  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
   const [clickedKmlFeature, setClickedKmlFeature] = useState<ClickedKmlFeature | null>(null)
   const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
   const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false)
@@ -574,11 +579,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       let campaignMatch = true;
       if (filters.campaign && filters.campaign !== 'all') {
         const leadCampaign = (item as Lead).campaign;
-        const filterCampaign = filters.campaign;
-        if (filterCampaign === 'D2D') {
+        if (filters.campaign === 'D2D') {
           campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
         } else {
-          campaignMatch = leadCampaign === filterCampaign;
+          campaignMatch = leadCampaign === filters.campaign;
         }
       }
 
@@ -1560,28 +1564,36 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 {sortedSelectedRouteLeads.map((lead) => {
                                   return (
                                     <div key={lead.id}>
-                                      <Card className="p-3 flex items-center gap-2">
-                                        <Checkbox
-                                          checked={selectedForRouting.includes(lead.id)}
-                                          onCheckedChange={(checked) => {
-                                            setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
-                                          }}
-                                          className="mr-2"
-                                        />
-                                        <div className="flex-grow">
-                                          <p className="font-bold">
-                                            <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                              <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
-                                            </Button>
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
+                                      <Card 
+                                        className="p-3"
+                                        onMouseEnter={() => setHoveredLeadId(lead.id)}
+                                        onMouseLeave={() => setHoveredLeadId(null)}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                            checked={selectedForRouting.includes(lead.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                            }}
+                                            className="mr-2"
+                                            />
+                                            <div className="flex-grow overflow-hidden">
+                                                <p className="font-bold truncate">
+                                                    <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                                    </Button>
+                                                </p>
+                                                <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                            </div>
+                                            <div className="flex-shrink-0 flex items-center">
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
+                                                    <MapPin className="h-4 w-4 text-blue-500" />
+                                                </Button>
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
                                         </div>
-                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
-                                          <MapPin className="h-4 w-4 text-blue-500" />
-                                        </Button>
-                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
                                       </Card>
                                     </div>
                                   )
@@ -1719,7 +1731,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             onClick={() => onMarkerClick(item)}
                             icon={getPinColor(
                                 item.status, 
-                                selectedRouteLeads.some(l => l.id === item.id)
+                                selectedRouteLeads.some(l => l.id === item.id),
+                                hoveredLeadId === item.id
                             )}
                             visible={directions === null}
                         />
@@ -2065,5 +2078,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
 
     
+
 
 
