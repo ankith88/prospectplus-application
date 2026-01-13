@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -241,6 +242,7 @@ export default function LeadsMapClient() {
     status: [] as string[],
     state: [] as string[],
     checkInStatus: 'all' as 'all' | 'checked-in' | 'not-checked-in',
+    checkInDate: undefined as DateRange | undefined,
     routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
     campaign: 'all',
     fieldSales: 'all' as 'all' | 'yes' | 'no',
@@ -2076,6 +2078,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
 
     
+
 
 
 
