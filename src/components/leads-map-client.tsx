@@ -135,12 +135,12 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean, isChecked: boolean): string => {
     if (isHovered) {
         return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
 
-    if (isSelected) {
+    if (isSelected || isChecked) {
       return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
     }
     
@@ -1557,22 +1557,25 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             {(selectedRouteLeads.length > 0) && (
                  <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                     <CardHeader className="pb-2 flex-shrink-0">
-                        <CardTitle className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                               <Checkbox
-                                    checked={selectedForRouting.length === sortedSelectedRouteLeads.length && sortedSelectedRouteLeads.length > 0}
-                                    onCheckedChange={(checked) => setSelectedForRouting(checked ? sortedSelectedRouteLeads.map(l => l.id) : [])}
-                                    aria-label="Select all stops"
-                                    className="mr-2"
-                                />
+                        <div className="flex items-center justify-between">
+                             <CardTitle className="flex items-center gap-2">
                                 <Route className="h-5 w-5" /> 
                                 <span>Selected Stops ({selectedRouteLeads.length})</span>
                                 {isRouteActive && <Badge variant="destructive">Active</Badge>}
-                            </div>
+                            </CardTitle>
                             <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}>
                                 <X className="h-4 w-4" />
                             </Button>
-                        </CardTitle>
+                        </div>
+                         <div className="flex gap-2 pt-2">
+                            <Checkbox
+                                checked={selectedForRouting.length === sortedSelectedRouteLeads.length && sortedSelectedRouteLeads.length > 0}
+                                onCheckedChange={(checked) => setSelectedForRouting(checked ? sortedSelectedRouteLeads.map(l => l.id) : [])}
+                                aria-label="Select all stops"
+                                id="select-all-stops"
+                            />
+                            <Label htmlFor="select-all-stops" className="text-sm">Select All</Label>
+                        </div>
                         <div className="flex gap-2 pt-2">
                             <Input placeholder="Filter by name..." value={routeNameFilter} onChange={(e) => setRouteNameFilter(e.target.value)} />
                             <Input placeholder="Filter by address..." value={routeAddressFilter} onChange={(e) => setRouteAddressFilter(e.target.value)} />
@@ -1588,22 +1591,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     onMouseEnter={() => setHoveredLeadId(lead.id)}
                                     onMouseLeave={() => setHoveredLeadId(null)}
                                     >
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-shrink-0">
+                                    <div className="flex items-start gap-2">
+                                        <div className="flex-shrink-0 pt-1">
                                             <Checkbox
                                                 checked={selectedForRouting.includes(lead.id)}
                                                 onCheckedChange={(checked) => {
                                                     setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
                                                 }}
                                             />
-                                        </div>
-                                        <div className="flex items-center">
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
-                                                <MapPin className="h-4 w-4 text-blue-500" />
-                                            </Button>
-                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
                                         </div>
                                         <div className="flex-grow overflow-hidden">
                                             <p className="font-bold truncate">
@@ -1612,6 +1607,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                 </Button>
                                             </p>
                                             <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                 <Button size="sm" variant="ghost" className="h-6 px-1" onClick={() => handleLocateLead(lead)}>
+                                                    <MapPin className="h-4 w-4 text-blue-500" />
+                                                </Button>
+                                                <Button size="sm" variant="ghost" className="h-6 px-1" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                     </Card>
@@ -1752,7 +1755,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 url: getPinColor(
                                     item.status, 
                                     selectedRouteLeads.some(l => l.id === item.id),
-                                    hoveredLeadId === item.id
+                                    hoveredLeadId === item.id,
+                                    selectedForRouting.includes(item.id)
                                 ),
                             }}
                             visible={directions === null}
