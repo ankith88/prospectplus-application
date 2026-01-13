@@ -1549,10 +1549,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                  <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                     <CardHeader className="pb-2 flex-shrink-0">
                         <CardTitle className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                                <Route className="h-5 w-5" /> Selected Stops ({selectedRouteLeads.length})
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    checked={selectedForRouting.length === selectedRouteLeads.length && selectedRouteLeads.length > 0}
+                                    onCheckedChange={(checked) => setSelectedForRouting(checked ? sortedSelectedRouteLeads.map(l => l.id) : [])}
+                                    aria-label="Select all stops"
+                                />
+                                <Route className="h-5 w-5" /> 
+                                <span>Selected Stops ({selectedRouteLeads.length})</span>
                                 {isRouteActive && <Badge variant="destructive">Active</Badge>}
-                            </span>
+                            </div>
                             <Button variant="ghost" size="icon" onClick={() => { handleClearRoute(); setDrawnTerritory(null); }}>
                                 <X className="h-4 w-4" />
                             </Button>
@@ -1569,12 +1575,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                     onMouseLeave={() => setHoveredLeadId(null)}
                                   >
                                     <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            checked={selectedForRouting.includes(lead.id)}
-                                            onCheckedChange={(checked) => {
-                                                setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
-                                            }}
-                                        />
+                                        <div className="flex-shrink-0">
+                                            <Checkbox
+                                                checked={selectedForRouting.includes(lead.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                                }}
+                                            />
+                                        </div>
                                         <div className="flex-shrink-0 flex items-center">
                                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
                                                 <MapPin className="h-4 w-4 text-blue-500" />
