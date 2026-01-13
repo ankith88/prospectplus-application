@@ -135,14 +135,14 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const getPinColor = (status: LeadStatus, isSelected: boolean): string => {
+const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean): string => {
     const greenStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Trialing ShipMate'];
     const yellowStatuses: LeadStatus[] = ['Contacted', 'In Progress', 'Connected', 'High Touch', 'Reschedule'];
     const redStatuses: LeadStatus[] = ['Lost', 'Unqualified', 'Priority Lead'];
     const blueStatuses: LeadStatus[] = ['New'];
     const purpleStatuses: LeadStatus[] = ['LPO Review'];
 
-    if (isSelected) {
+    if (isHovered || isSelected) {
       return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
     
@@ -426,59 +426,59 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   
     useEffect(() => {
-        const fetchData = async () => {
-            if (!isLoaded || !userProfile) return;
+        if (isLoaded && userProfile) {
+            const fetchData = async () => {
 
-            setLoadingData(true);
-            try {
-                const [mapLeads, mapCompanies, checkIns] = await Promise.all([
-                    getLeadsFromFirebase({ summary: true }),
-                    getCompaniesFromFirebase(),
-                    getAllActivities(true)
-                ]);
-                
-                setAllCheckInActivities(checkIns);
+                setLoadingData(true);
+                try {
+                    const [mapLeads, mapCompanies, checkIns] = await Promise.all([
+                        getLeadsFromFirebase({ summary: true }),
+                        getCompaniesFromFirebase(),
+                        getAllActivities(true)
+                    ]);
+                    
+                    setAllCheckInActivities(checkIns);
 
-                let leadsMapData: MapLead[] = [];
-                if (mapLeads) {
-                    leadsMapData = mapLeads
-                        .filter(lead => lead.latitude != null && lead.longitude != null)
-                        .map(lead => ({
-                            ...lead,
-                            latitude: Number(lead.latitude),
-                            longitude: Number(lead.longitude),
-                            isCompany: false,
-                            isProspect: false
-                        }));
+                    let leadsMapData: MapLead[] = [];
+                    if (mapLeads) {
+                        leadsMapData = mapLeads
+                            .filter(lead => lead.latitude != null && lead.longitude != null)
+                            .map(lead => ({
+                                ...lead,
+                                latitude: Number(lead.latitude),
+                                longitude: Number(lead.longitude),
+                                isCompany: false,
+                                isProspect: false
+                            }));
+                    }
+
+                    let companiesMapData: MapLead[] = [];
+                    if (mapCompanies) {
+                        companiesMapData = mapCompanies
+                            .filter(company => company.latitude != null && company.longitude != null)
+                            .map(company => ({
+                                ...company,
+                                latitude: Number(company.latitude),
+                                longitude: Number(company.longitude),
+                                isCompany: true,
+                                isProspect: false
+                            }));
+                    }
+
+                    setMapData([...leadsMapData, ...companiesMapData]);
+
+                    const users = await getAllUsers();
+                    setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
+
+                } catch (error) {
+                    console.error("Failed to fetch map data:", error);
+                    toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data.' });
+                } finally {
+                    setLoadingData(false);
                 }
-
-                let companiesMapData: MapLead[] = [];
-                if (mapCompanies) {
-                    companiesMapData = mapCompanies
-                        .filter(company => company.latitude != null && company.longitude != null)
-                        .map(company => ({
-                            ...company,
-                            latitude: Number(company.latitude),
-                            longitude: Number(company.longitude),
-                            isCompany: true,
-                            isProspect: false
-                        }));
-                }
-
-                setMapData([...leadsMapData, ...companiesMapData]);
-
-                const users = await getAllUsers();
-                setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
-
-            } catch (error) {
-                console.error("Failed to fetch map data:", error);
-                toast({ variant: 'destructive', title: 'Error', description: 'Could not load map data.' });
-            } finally {
-                setLoadingData(false);
-            }
-        };
-
-        fetchData();
+            };
+            fetchData();
+        }
     }, [isLoaded, userProfile, toast]);
     
     const handleLoadRoute = useCallback((route: SavedRoute) => {
@@ -914,7 +914,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             return;
         }
 
-        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
+        const duplicateId = await checkForDuplicateLead(
+            place.name, 
+            place.website,
+            `info@${(place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`,
+            parseAddressComponents(place.address_components || [])
+        );
         if (duplicateId) {
             setDuplicateLeadId(duplicateId);
             setProspectToCreate(null);
@@ -1285,12 +1290,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
     const sortedSelectedRouteLeads = useMemo(() => {
         return [...selectedRouteLeads].sort((a, b) => {
-            const addressA = a.address?.street || '';
-            const addressB = b.address?.street || '';
+            const addressA = (a.address?.street || '').toLowerCase();
+            const addressB = (b.address?.street || '').toLowerCase();
             if (addressA.localeCompare(addressB) !== 0) {
                 return addressA.localeCompare(addressB);
             }
-            return a.companyName.localeCompare(b.companyName);
+            return a.companyName.toLowerCase().localeCompare(b.companyName.toLowerCase());
         });
     }, [selectedRouteLeads]);
     
@@ -1458,7 +1463,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Check-in Date</Label>
-                                    <Popover><PopoverTrigger asChild><Button variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)} /></PopoverContent></Popover>
+                                    <Popover><PopoverTrigger asChild><Button id="checkInDate" variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0 z-[11]"><Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)} /></PopoverContent></Popover>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Route Status</Label>
@@ -1703,7 +1708,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
                             position={{ lat: item.latitude!, lng: item.longitude! }}
                             onClick={() => onMarkerClick(item)}
-                            icon={getPinColor(item.status, selectedRouteLeads.some(l => l.id === item.id) || (hoveredLeadId === item.id))}
+                            icon={getPinColor(
+                                item.status, 
+                                selectedRouteLeads.some(l => l.id === item.id),
+                                hoveredLeadId === item.id && selectedRouteLeads.some(l => l.id === item.id)
+                            )}
                             visible={directions === null}
                         />
                     ))}
@@ -2048,3 +2057,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
 
     
+
