@@ -1558,47 +1558,45 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </Button>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
-                        <ScrollArea className="flex-grow pr-4 -mr-4">
-                            <div className="space-y-2">
-                                {sortedSelectedRouteLeads.map((lead) => {
-                                  return (
-                                    <div key={lead.id}>
-                                      <Card 
-                                        className="p-3"
-                                        onMouseEnter={() => setHoveredLeadId(lead.id)}
-                                        onMouseLeave={() => setHoveredLeadId(null)}
-                                      >
-                                          <div className="flex items-center gap-2">
-                                            <Checkbox
-                                                checked={selectedForRouting.includes(lead.id)}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
-                                                }}
-                                            />
-                                            <div className="flex-shrink-0 flex items-center">
-                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
-                                                    <MapPin className="h-4 w-4 text-blue-500" />
-                                                </Button>
-                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </div>
-                                            <div className="flex-grow overflow-hidden">
-                                                <p className="font-bold truncate">
-                                                    <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
-                                                    </Button>
-                                                </p>
-                                                <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
-                                            </div>
+                    <CardContent className="flex-grow overflow-y-auto flex flex-col gap-2 p-4 max-h-[60vh]">
+                        <div className="space-y-2">
+                            {sortedSelectedRouteLeads.map((lead) => {
+                              return (
+                                <div key={lead.id}>
+                                  <Card 
+                                    className="p-3"
+                                    onMouseEnter={() => setHoveredLeadId(lead.id)}
+                                    onMouseLeave={() => setHoveredLeadId(null)}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            checked={selectedForRouting.includes(lead.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                            }}
+                                        />
+                                        <div className="flex-shrink-0 flex items-center">
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
+                                                <MapPin className="h-4 w-4 text-blue-500" />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
                                         </div>
-                                      </Card>
+                                        <div className="flex-grow overflow-hidden">
+                                            <p className="font-bold truncate">
+                                                <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                                </Button>
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                        </div>
                                     </div>
-                                  )
-                                })}
-                            </div>
-                        </ScrollArea>
+                                  </Card>
+                                </div>
+                              )
+                            })}
+                        </div>
                     </CardContent>
                     <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
                        <div className="w-full space-y-1">
