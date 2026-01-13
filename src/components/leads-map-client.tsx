@@ -135,13 +135,17 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const getPinColor = (status: LeadStatus, isSelected: boolean, isHovered: boolean, isChecked: boolean): string => {
+const getPinColor = (status: LeadStatus, isInRouteList: boolean, isCheckedForRouting: boolean, isHovered: boolean): string => {
     if (isHovered) {
         return 'http://maps.google.com/mapfiles/ms/icons/purple-pushpin.png';
     }
 
-    if (isSelected || isChecked) {
+    if (isCheckedForRouting) {
       return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
+    }
+    
+    if (isInRouteList) {
+        return 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png';
     }
     
     const statusColors: Record<LeadStatus, string> = {
@@ -1581,7 +1585,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             <Input placeholder="Filter by address..." value={routeAddressFilter} onChange={(e) => setRouteAddressFilter(e.target.value)} />
                         </div>
                     </CardHeader>
-                    <CardContent className="p-4 flex-grow flex flex-col gap-2 overflow-y-auto max-h-[60vh]">
+                     <CardContent className="p-4 flex-grow flex flex-col gap-2 overflow-y-auto max-h-[60vh]">
                         <div className="space-y-2">
                             {sortedSelectedRouteLeads.map((lead) => {
                                 return (
@@ -1751,10 +1755,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             onClick={() => onMarkerClick(item)}
                             icon={{
                                 url: getPinColor(
-                                    item.status, 
+                                    item.status,
                                     selectedRouteLeads.some(l => l.id === item.id),
+                                    selectedForRouting.includes(item.id),
                                     hoveredLeadId === item.id,
-                                    selectedForRouting.includes(item.id)
                                 ),
                             }}
                             visible={directions === null}
