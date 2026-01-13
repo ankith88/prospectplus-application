@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -1560,7 +1559,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
-                        <ScrollArea className="flex-grow">
+                        <ScrollArea className="flex-grow pr-4 -mr-4">
                             <div className="space-y-2">
                                 {sortedSelectedRouteLeads.map((lead) => {
                                   return (
@@ -1729,11 +1728,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             key={item.isCompany ? `company-${item.id}` : `lead-${item.id}`}
                             position={{ lat: item.latitude!, lng: item.longitude! }}
                             onClick={() => onMarkerClick(item)}
-                            icon={getPinColor(
-                                item.status, 
-                                selectedRouteLeads.some(l => l.id === item.id),
-                                hoveredLeadId === item.id
-                            )}
+                            icon={{
+                                url: getPinColor(
+                                    item.status, 
+                                    selectedRouteLeads.some(l => l.id === item.id),
+                                    hoveredLeadId === item.id
+                                ),
+                            }}
                             visible={directions === null}
                         />
                     ))}
@@ -2070,16 +2071,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-    
-    
-
-
-
-    
-
-    
-
-
-
-
-
