@@ -1576,8 +1576,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                           </p>
                                           <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
                                         </div>
-                                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
-                                            <MapPin className="h-4 w-4 text-blue-500" />
+                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
+                                          <MapPin className="h-4 w-4 text-blue-500" />
                                         </Button>
                                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
