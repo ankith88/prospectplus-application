@@ -241,7 +241,6 @@ export default function LeadsMapClient() {
     status: [] as string[],
     state: [] as string[],
     checkInStatus: 'all' as 'all' | 'checked-in' | 'not-checked-in',
-    checkInDate: undefined as DateRange | undefined,
     routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
     campaign: 'all',
     fieldSales: 'all' as 'all' | 'yes' | 'no',
@@ -1569,22 +1568,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         onMouseEnter={() => setHoveredLeadId(lead.id)}
                                         onMouseLeave={() => setHoveredLeadId(null)}
                                       >
-                                        <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2">
                                             <Checkbox
-                                            checked={selectedForRouting.includes(lead.id)}
-                                            onCheckedChange={(checked) => {
-                                                setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
-                                            }}
-                                            className="mr-2"
+                                                checked={selectedForRouting.includes(lead.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedForRouting(prev => checked ? [...prev, lead.id] : prev.filter(id => id !== lead.id));
+                                                }}
                                             />
-                                            <div className="flex-grow overflow-hidden">
-                                                <p className="font-bold truncate">
-                                                    <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
-                                                    </Button>
-                                                </p>
-                                                <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
-                                            </div>
                                             <div className="flex-shrink-0 flex items-center">
                                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleLocateLead(lead)}>
                                                     <MapPin className="h-4 w-4 text-blue-500" />
@@ -1592,6 +1582,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleRemoveFromRoute(lead.id)}>
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
+                                            </div>
+                                            <div className="flex-grow overflow-hidden">
+                                                <p className="font-bold truncate">
+                                                    <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                    <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                                    </Button>
+                                                </p>
+                                                <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
                                             </div>
                                         </div>
                                       </Card>
@@ -2078,6 +2076,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
 
     
+
 
 
 
