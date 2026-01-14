@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
@@ -217,9 +218,18 @@ function SelectServicesContent() {
             leadId: lead.id,
             services: serviceSelections,
             startDate: format(values.startDate, 'yyyy-MM-dd'),
+            shipmateAccess: values.shipmateAccess,
+            localmileAccess: values.localmileAccess,
           });
         } else {
-          nsResponse = { success: true, message: 'Signup processed without services.' }; 
+          // If no services are added, we still need to potentially activate ShipMate/LocalMile
+          nsResponse = await initiateSignup({
+            leadId: lead.id,
+            services: [],
+            startDate: format(new Date(), 'yyyy-MM-dd'), // Default to today if no services
+            shipmateAccess: values.shipmateAccess,
+            localmileAccess: values.localmileAccess,
+          });
         }
         newStatus = 'Won';
         successDescription = 'The new customer has been signed up.';

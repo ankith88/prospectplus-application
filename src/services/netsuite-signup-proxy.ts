@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -15,6 +16,8 @@ interface InitiateSignupPayload {
   leadId: string;
   services: ServiceSelection[];
   startDate: string; // YYYY-MM-DD
+  shipmateAccess?: boolean;
+  localmileAccess?: boolean;
 }
 
 interface NetSuiteResponse {
@@ -23,7 +26,7 @@ interface NetSuiteResponse {
 }
 
 export async function initiateSignup(payload: InitiateSignupPayload): Promise<NetSuiteResponse> {
-    const { leadId, services, startDate } = payload;
+    const { leadId, services, startDate, shipmateAccess, localmileAccess } = payload;
     
     if (!leadId || !services || services.length === 0 || !startDate) {
         const errorMsg = 'Invalid payload: leadId, services, and startDate are required.';
@@ -41,6 +44,13 @@ export async function initiateSignup(payload: InitiateSignupPayload): Promise<Ne
         startDate: startDate,
     });
     
+    if (shipmateAccess) {
+        params.append('giveShipMateAccess', 'T');
+    }
+    if (localmileAccess) {
+        params.append('giveLocalMileAccess', 'T');
+    }
+
     services.forEach((s, index) => {
         params.append(`service_${index + 1}`, s.service);
         params.append(`frequency_${index + 1}`, Array.isArray(s.frequency) ? s.frequency.join(',') : s.frequency);
