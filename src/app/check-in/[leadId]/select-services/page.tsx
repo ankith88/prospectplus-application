@@ -21,8 +21,9 @@ import { useToast } from '@/hooks/use-toast';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
 import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, getLeadFromFirebase } from '@/services/firebase';
 import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
-import { initiateMPProductsTrial } from '@/services/netsuite-mpproducts-proxy';
+import { initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
+import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, UserPlus, ArrowLeft } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
@@ -187,12 +188,13 @@ function SelectServicesContent() {
         await updateContactSendEmail(lead.id, contactId);
       }
 
+      const serviceSelections = (values.selectedServices || []).map(serviceName => ({
+        service: serviceName as any,
+        frequency: values.frequencies[serviceName],
+        rate: parseFloat(values.rates[serviceName]),
+      }));
+
       if (mode === 'service-trial') {
-        const serviceSelections = values.selectedServices!.map(serviceName => ({
-            service: serviceName as any,
-            frequency: values.frequencies[serviceName],
-            rate: parseFloat(values.rates[serviceName]),
-        }));
         const trialDates = eachDayOfInterval({
           start: values.trialDateRange!.from!,
           end: values.trialDateRange!.to || values.trialDateRange!.from!,
@@ -210,7 +212,15 @@ function SelectServicesContent() {
         newStatus = 'LocalMile Pending';
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
-        nsResponse = { success: true, message: 'Signup processed locally.' }; 
+        if (values.addServices && values.startDate) {
+          nsResponse = await initiateSignup({
+            leadId: lead.id,
+            services: serviceSelections,
+            startDate: format(values.startDate, 'yyyy-MM-dd'),
+          });
+        } else {
+          nsResponse = { success: true, message: 'Signup processed without services.' }; 
+        }
         newStatus = 'Won';
         successDescription = 'The new customer has been signed up.';
       } else {
@@ -576,5 +586,3 @@ export default function SelectServicesPage() {
         </Suspense>
     )
 }
-
-    
