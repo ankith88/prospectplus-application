@@ -1101,14 +1101,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
+                   <div className="flex items-start gap-3">
                     <Briefcase className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Campaign</p>
                       <p className="font-medium">{lead.campaign ?? 'N/A'}</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
+                   <div className="flex items-start gap-3">
+                    <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-muted-foreground">Lead Source</p>
+                      <p className="font-medium">{lead.customerSource ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                   <div className="flex items-start gap-3">
                     <Calendar className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Date Lead Entered</p>
