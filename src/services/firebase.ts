@@ -194,6 +194,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           invoices: [],
           services: data.services || [],
           lastProspected: data.lastProspected,
+          dateLeadEntered: data.dateLeadEntered,
+          customerSource: data.customerSource,
         };
 
         if (includeSubCollections) {
@@ -294,6 +296,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           fieldSales: data.fieldSales,
           services: data.services || [],
           lastProspected: data.lastProspected,
+          dateLeadEntered: data.dateLeadEntered,
+          customerSource: data.customerSource,
         };
         
         if (includeSubCollections) {
@@ -405,6 +409,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           fieldSales: data.fieldSales,
           services: data.services || [],
           lastProspected: data.lastProspected,
+          dateLeadEntered: data.dateLeadEntered,
+          customerSource: data.customerSource,
         };
 
         return transformedLead;
@@ -472,6 +478,8 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     fieldSales: data.fieldSales,
                     services: data.services || [],
                     lastProspected: data.lastProspected,
+                    dateLeadEntered: data.dateLeadEntered,
+                    customerSource: data.customerSource,
                 };
 
                 return transformedCompany;
@@ -521,6 +529,8 @@ async function getArchivedLeads(): Promise<Lead[]> {
                     fieldSales: data.fieldSales,
                     services: data.services || [],
                     lastProspected: data.lastProspected,
+                    dateLeadEntered: data.dateLeadEntered,
+                    customerSource: data.customerSource,
                 };
                 
                 const lastActivity = await getLastActivity(doc.id);
@@ -569,6 +579,8 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 fieldSales: data.fieldSales,
                 activity: [],
                 lastProspected: data.lastProspected,
+                dateLeadEntered: data.dateLeadEntered,
+                customerSource: data.customerSource,
             } as Lead;
         });
 
@@ -2010,6 +2022,7 @@ export {
     updateContactSendEmail,
     getUserActivitiesForPeriod,
 };
+
 
 
 

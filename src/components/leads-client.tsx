@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -38,7 +38,7 @@ import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { format } from 'date-fns'
+import { format, startOfDay, endOfDay } from 'date-fns'
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 import {
   AlertDialog,
@@ -51,6 +51,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { Calendar } from './ui/calendar'
+import type { DateRange } from 'react-day-picker'
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -197,6 +200,8 @@ export default function LeadsClientPage() {
     franchisee: [],
     campaign: 'all',
     suburb: '',
+    dateLeadEntered: undefined as DateRange | undefined,
+    source: [] as string[],
   });
   
   useEffect(() => {
@@ -256,7 +261,7 @@ export default function LeadsClientPage() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[] | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -267,6 +272,8 @@ export default function LeadsClientPage() {
       franchisee: [],
       campaign: 'all',
       suburb: '',
+      dateLeadEntered: undefined,
+      source: [],
     });
   };
 
@@ -289,8 +296,11 @@ export default function LeadsClientPage() {
               campaignMatch = leadCampaign === filterCampaign;
             }
         }
+        
+      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+      const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
-      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch;
+      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch;
     });
 
     if (sortConfig !== null) {
@@ -740,6 +750,11 @@ export default function LeadsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
+  const uniqueSources: Option[] = useMemo(() => {
+    const sources = new Set(allLeads.map(lead => lead.customerSource).filter(Boolean));
+    return Array.from(sources as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  
   const uniqueCampaigns: Option[] = useMemo(() => {
     const campaigns = new Set(allLeads.map(lead => {
         const campaign = lead.campaign;
@@ -801,7 +816,7 @@ export default function LeadsClientPage() {
                     </div>
                 </CardHeader>
                 <CollapsibleContent>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -839,6 +854,29 @@ export default function LeadsClientPage() {
                                     {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="source">Source</Label>
+                            <MultiSelectCombobox
+                                options={uniqueSources}
+                                selected={filters.source}
+                                onSelectedChange={(selected) => handleFilterChange('source', selected)}
+                                placeholder="Select sources..."
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="dateLeadEntered" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {filters.dateLeadEntered?.from ? (filters.dateLeadEntered.to ? <>{format(filters.dateLeadEntered.from, "LLL dd, y")} - {format(filters.dateLeadEntered.to, "LLL dd, y")}</> : format(filters.dateLeadEntered.from, "LLL dd, y")) : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar mode="range" selected={filters.dateLeadEntered} onSelect={(date) => handleFilterChange('dateLeadEntered', date)} initialFocus />
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </CardContent>
                     {hasActiveFilters && (
@@ -1058,7 +1096,7 @@ export default function LeadsClientPage() {
       </Card>
       
       {isAdminView && (
-      <Card>
+       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
                 <span>All Assigned Leads</span>

@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -24,7 +23,7 @@ import React, { useEffect, useState, useMemo, Fragment, useCallback } from 'reac
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar as CalendarIcon } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -58,12 +57,16 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast, subDays } from 'date-fns'
+import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast, subDays, startOfDay, endOfDay } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Calendar } from '../ui/calendar'
+import type { DateRange } from 'react-day-picker'
+
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
 type RouteWithUser = SavedRoute & { userName: string; userId: string };
@@ -195,6 +198,8 @@ export default function FieldSalesPage() {
     companyName: '',
     status: [] as string[],
     franchisee: [] as string[],
+    dateLeadEntered: undefined as DateRange | undefined,
+    source: [] as string[],
   });
 
 
@@ -243,7 +248,7 @@ export default function FieldSalesPage() {
     }
   }, [userProfile, fetchData]);
   
-  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[]) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | string[] | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
@@ -252,6 +257,8 @@ export default function FieldSalesPage() {
       companyName: '',
       status: [],
       franchisee: [],
+      dateLeadEntered: undefined,
+      source: [],
     });
   };
   
@@ -299,21 +306,22 @@ export default function FieldSalesPage() {
   const filteredMyLeads = useMemo(() => {
     if (!userProfile?.displayName) return [];
     
-    let leads = allLeads.filter(lead => 
-      lead.dialerAssigned === userProfile.displayName &&
-      !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending'].includes(lead.status) &&
-      lead.fieldSales === true
-    );
+    let leads = allLeads.filter(lead => {
+      const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+      const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
+      const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
+      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+      const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
-    if (filters.companyName) {
-      leads = leads.filter(lead => lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()));
-    }
-    if (filters.status.length > 0) {
-      leads = leads.filter(lead => filters.status.includes(lead.status));
-    }
-    if (filters.franchisee.length > 0) {
-      leads = leads.filter(lead => lead.franchisee && filters.franchisee.includes(lead.franchisee));
-    }
+      return lead.dialerAssigned === userProfile.displayName &&
+        !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending'].includes(lead.status) &&
+        lead.fieldSales === true &&
+        companyNameMatch &&
+        statusMatch &&
+        franchiseeMatch &&
+        dateLeadEnteredMatch &&
+        sourceMatch;
+    });
 
     return leads;
   }, [allLeads, userProfile, filters]);
@@ -333,17 +341,15 @@ export default function FieldSalesPage() {
   const groupedAllAssignedLeads = useMemo(() => {
     if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') return {};
     
-    let relevantLeads = allLeads.filter(lead => lead.fieldSales === true);
+    let relevantLeads = allLeads.filter(lead => {
+        const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
+        const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
+        const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+        const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
-    if (filters.companyName) {
-      relevantLeads = relevantLeads.filter(lead => lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()));
-    }
-    if (filters.status.length > 0) {
-      relevantLeads = relevantLeads.filter(lead => filters.status.includes(lead.status));
-    }
-    if (filters.franchisee.length > 0) {
-      relevantLeads = relevantLeads.filter(lead => lead.franchisee && filters.franchisee.includes(lead.franchisee));
-    }
+        return lead.fieldSales === true && companyNameMatch && statusMatch && franchiseeMatch && dateLeadEnteredMatch && sourceMatch;
+    });
       
     return relevantLeads.reduce((acc, lead) => {
         const dialer = lead.dialerAssigned || 'Unassigned';
@@ -636,7 +642,11 @@ export default function FieldSalesPage() {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
-  const hasActiveFilters = filters.companyName !== '' || filters.status.length > 0 || filters.franchisee.length > 0;
+  const uniqueSources: Option[] = useMemo(() => {
+    const sources = new Set(allLeads.map(lead => lead.customerSource).filter(Boolean));
+    return Array.from(sources as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  const hasActiveFilters = filters.companyName !== '' || filters.status.length > 0 || filters.franchisee.length > 0 || !!filters.dateLeadEntered || filters.source.length > 0;
 
   if (loading || authLoading || !userProfile) {
     return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
@@ -747,7 +757,7 @@ export default function FieldSalesPage() {
                 </CollapsibleTrigger>
             </CardHeader>
             <CollapsibleContent>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="companyName">Company Name</Label>
                         <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -769,6 +779,29 @@ export default function FieldSalesPage() {
                             onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
                             placeholder="Select franchisees..."
                         />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="source">Source</Label>
+                        <MultiSelectCombobox
+                            options={uniqueSources}
+                            selected={filters.source}
+                            onSelectedChange={(selected) => handleFilterChange('source', selected)}
+                            placeholder="Select sources..."
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button id="dateLeadEntered" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {filters.dateLeadEntered?.from ? (filters.dateLeadEntered.to ? <>{format(filters.dateLeadEntered.from, "LLL dd, y")} - {format(filters.dateLeadEntered.to, "LLL dd, y")}</> : format(filters.dateLeadEntered.from, "LLL dd, y")) : <span>Pick a date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <Calendar mode="range" selected={filters.dateLeadEntered} onSelect={(date) => handleFilterChange('dateLeadEntered', date)} initialFocus />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 </CardContent>
                 {hasActiveFilters && (
@@ -1124,9 +1157,3 @@ export default function FieldSalesPage() {
     </div>
   );
 }
-
-    
-
-    
-
-    

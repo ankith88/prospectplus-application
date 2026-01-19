@@ -192,6 +192,8 @@ export interface Lead {
   fieldSales?: boolean;
   initialNotes?: string;
   lastProspected?: string;
+  dateLeadEntered?: string;
+  customerSource?: string;
 }
 
 export interface UserProfile {
