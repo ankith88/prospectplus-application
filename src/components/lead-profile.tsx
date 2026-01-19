@@ -154,10 +154,8 @@ function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDia
     
     useEffect(() => {
         const fetchUsers = async () => {
-            if (!bucket) {
-                setUsers([]);
-                return;
-            }
+            if (!isOpen) return;
+
             setIsLoadingUsers(true);
             const allUsers = await getAllUsers();
             const filteredUsers = allUsers.filter(u => {
@@ -173,7 +171,7 @@ function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDia
             setIsLoadingUsers(false);
         };
         fetchUsers();
-    }, [bucket]);
+    }, [bucket, isOpen]);
 
     const handleMoveLead = async () => {
         if (!bucket || !selectedUser) {
@@ -1106,8 +1104,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   <div className="flex items-start gap-3">
                     <Briefcase className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
-                      <p className="text-muted-foreground">Lead Source</p>
+                      <p className="text-muted-foreground">Campaign</p>
                       <p className="font-medium">{lead.campaign ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Calendar className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-muted-foreground">Date Lead Entered</p>
+                      <p className="font-medium">{lead.dateLeadEntered ? new Date(lead.dateLeadEntered).toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
                </div>

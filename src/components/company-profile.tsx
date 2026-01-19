@@ -52,9 +52,10 @@ import { firestore } from '@/lib/firebase'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
+  onNoteLogged: (newNote: Note) => void;
 }
 
-export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
+export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
@@ -110,10 +111,6 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
     setLoadingBack(true);
     router.push('/signed-customers');
   };
-  
-  const handleNoteLogged = (newNote: Note) => {
-    setCompany(prev => ({ ...prev, notes: [newNote, ...(prev.notes || [])] }));
-  };
 
   if (!user) {
     return (
@@ -148,7 +145,7 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
           </div>
         </div>
          <div className="flex flex-wrap items-center gap-2">
-            <LogNoteDialog lead={company} onNoteLogged={handleNoteLogged}>
+            <LogNoteDialog lead={company} onNoteLogged={onNoteLogged}>
               <Button variant="outline">
                 <ClipboardEdit className="mr-2 h-4 w-4" />
                 Log a Note
@@ -285,8 +282,15 @@ export function CompanyProfile({ initialCompany }: CompanyProfileProps) {
                   <div className="flex items-start gap-3">
                     <Briefcase className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
-                      <p className="text-muted-foreground">Lead Source</p>
+                      <p className="text-muted-foreground">Campaign</p>
                       <p className="font-medium">{company.campaign ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                   <div className="flex items-start gap-3">
+                    <Calendar className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-muted-foreground">Date Lead Entered</p>
+                      <p className="font-medium">{company.dateLeadEntered ? new Date(company.dateLeadEntered).toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
                </div>
