@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -202,6 +203,7 @@ export default function LeadsClientPage() {
     suburb: '',
     dateLeadEntered: undefined as DateRange | undefined,
     source: [] as string[],
+    entityId: '',
   });
   
   useEffect(() => {
@@ -274,7 +276,9 @@ export default function LeadsClientPage() {
       suburb: '',
       dateLeadEntered: undefined,
       source: [],
+      entityId: '',
     });
+    setCurrentPage(1);
   };
 
   const filteredLeads = useMemo(() => {
@@ -299,8 +303,9 @@ export default function LeadsClientPage() {
         
       const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
+      const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
 
-      return !isArchived && !isFieldSalesLead && companyMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch;
     });
 
     if (sortConfig !== null) {
@@ -817,6 +822,10 @@ export default function LeadsClientPage() {
                 </CardHeader>
                 <CollapsibleContent>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                        <div className="space-y-2">
+                            <Label htmlFor="entityId">Customer ID</Label>
+                            <Input id="entityId" value={filters.entityId} onChange={(e) => handleFilterChange('entityId', e.target.value)} />
+                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="companyName">Company Name</Label>
                             <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
@@ -1481,3 +1490,5 @@ export default function LeadsClientPage() {
     </>
   )
 }
+
+    
