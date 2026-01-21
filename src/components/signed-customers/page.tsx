@@ -2,38 +2,36 @@
 
 'use client'
 
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import type { Lead, Address, MapLead, Contact } from '@/lib/types'
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+  GoogleMap,
+  useJsApiLoader,
+  MarkerF,
+  InfoWindowF,
+  DrawingManagerF,
+} from '@react-google-maps/api'
+import { createNewLead, getCompaniesFromFirebase, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import type { Lead, LeadStatus, Address, MapLead, Contact } from '@/lib/types'
+import { Loader } from './ui/loader'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/use-auth'
-import { Loader } from '@/components/ui/loader'
-import { Button } from '@/components/ui/button'
 import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, DrawingManagerF } from '@react-google-maps/api'
-import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
+import { useAuth } from '@/hooks/use-auth'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -42,16 +40,27 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Input } from './ui/input';
+import { ScrollArea } from './ui/scroll-area'
+import { Checkbox } from './ui/checkbox'
+import { Textarea } from './ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
+import { Label } from './ui/label'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { CalendarIcon } from 'lucide-react'
-import { Calendar } from '@/components/ui/calendar'
+import { Calendar } from './ui/calendar'
 import { format, startOfDay, endOfDay } from 'date-fns'
-import type { DateRange } from 'react-day-picker'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import type { DateRange } from 'react-day-picker';
 
 
 type ProspectWithLeadInfo = {
@@ -366,15 +375,14 @@ export default function SignedCustomersPage() {
                 
                 if (!isSameLocation) return false;
 
-                const prospectName = (detailedPlace.name || '').toLowerCase();
-                const existingName = existing.companyName.toLowerCase();
+                const prospectName = (detailedPlace.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const existingName = existing.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
                 
                 // Partial match check
                 const isSimilarName = existingName.includes(prospectName) || prospectName.includes(existingName);
                 
                 return isSimilarName;
             });
-
 
             if (isDuplicate) {
                 return null;
