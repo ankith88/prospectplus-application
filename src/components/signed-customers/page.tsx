@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import {
@@ -349,21 +348,22 @@ export default function SignedCustomersPage() {
             const detailedPlace = await getPlaceDetails(place.place_id);
             if (!detailedPlace) return null;
 
-            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name || '';
+            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
             const prospectSuburb = getComponent('locality');
             const prospectPostcode = getComponent('postal_code');
             const streetNumber = getComponent('street_number');
             const routeName = getComponent('route');
             const prospectStreet = `${streetNumber} ${routeName}`.trim();
-
+            
             const isDuplicate = allMapData.some(existing => {
-                if (!existing.address) return false;
-
                 const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
+
+                const existingAddress = (existing as any).address || {};
+                const existingStreet = (existingAddress.street || (existing as any).street || '').trim().toLowerCase();
+                const existingCity = (existingAddress.city || (existing as any).city || '').trim().toLowerCase();
+                const existingZip = (existingAddress.zip || (existing as any).zip || '');
                 
-                const existingStreet = existing.address.street?.trim().toLowerCase();
-                const existingCity = existing.address.city?.trim().toLowerCase();
-                const existingZip = existing.address.zip;
+                if (!existingStreet || !existingCity || !existingZip) return false;
 
                 const isSameLocation = 
                     existingStreet === prospectStreet.toLowerCase() &&
