@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import {
@@ -353,9 +354,6 @@ export default function SignedCustomersPage() {
             const prospectPostcode = getComponent('postal_code');
             
             const isDuplicate = allMapData.some(existing => {
-                const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
-                
-                // Handle potentially different address structures
                 const existingAddress = (existing as any).address || existing;
                 const existingCity = (existingAddress.city || '').trim().toLowerCase();
                 const existingZip = (existingAddress.zip || '');
@@ -365,8 +363,16 @@ export default function SignedCustomersPage() {
                 const isSameLocation = 
                     existingCity === prospectSuburb?.toLowerCase() &&
                     existingZip === prospectPostcode;
+                
+                if (!isSameLocation) return false;
 
-                return isSimilarName && isSameLocation;
+                const prospectName = (detailedPlace.name || '').toLowerCase();
+                const existingName = existing.companyName.toLowerCase();
+                
+                // Partial match check
+                const isSimilarName = existingName.includes(prospectName) || prospectName.includes(existingName);
+                
+                return isSimilarName;
             });
 
 
