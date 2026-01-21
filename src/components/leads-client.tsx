@@ -263,8 +263,10 @@ export default function LeadsClientPage() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
   const handleFilterChange = (filterName: keyof typeof filters, value: string | string[] | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+    setCurrentPage(1);
   };
 
   const clearFilters = () => {
@@ -283,7 +285,7 @@ export default function LeadsClientPage() {
 
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
-      const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+      const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
@@ -771,6 +773,10 @@ export default function LeadsClientPage() {
 
     return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
+  
+  const dialerOptions: Option[] = useMemo(() => {
+    return allDialers.map(d => ({ value: d.displayName!, label: d.displayName! })).sort((a,b) => a.label.localeCompare(b.label));
+  }, [allDialers]);
   
   const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
@@ -1490,5 +1496,3 @@ export default function LeadsClientPage() {
     </>
   )
 }
-
-    
