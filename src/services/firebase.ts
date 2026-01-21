@@ -670,11 +670,12 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 30) {
-            leadChunks.push(leadIds.slice(i, i + 30));
+        for (let i = 0; i < leadIds.length; i += 10) {
+            leadChunks.push(leadIds.slice(i, i + 10));
         }
 
         for (const chunk of leadChunks) {
+            if (chunk.length === 0) continue;
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
@@ -812,8 +813,8 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 30) {
-            leadChunks.push(leadIds.slice(i, i + 30));
+        for (let i = 0; i < leadIds.length; i += 10) {
+            leadChunks.push(leadIds.slice(i, i + 10));
         }
         for (const chunk of leadChunks) {
             const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
@@ -853,10 +854,11 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 30) {
-            leadChunks.push(leadIds.slice(i, i + 30));
+        for (let i = 0; i < leadIds.length; i += 10) {
+            leadChunks.push(leadIds.slice(i, i + 10));
         }
         for (const chunk of leadChunks) {
+            if (chunk.length === 0) continue;
             const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
@@ -1293,8 +1295,8 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         const leadsData: Record<string, Lead> = {};
 
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 30) {
-            leadChunks.push(leadIds.slice(i, i + 30));
+        for (let i = 0; i < leadIds.length; i += 10) {
+            leadChunks.push(leadIds.slice(i, i + 10));
         }
 
         for (const chunk of leadChunks) {
