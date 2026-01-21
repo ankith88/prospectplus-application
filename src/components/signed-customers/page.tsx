@@ -352,52 +352,51 @@ export default function SignedCustomersPage() {
             const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
             const detailedProspectsPromises = openProspects.map(async (place) => {
-            if (!place.place_id) return null;
-            
-            const detailedPlace = await getPlaceDetails(place.place_id);
-            if (!detailedPlace) return null;
-
-            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
-            const prospectSuburb = getComponent('locality');
-            const prospectPostcode = getComponent('postal_code');
-            
-            const existingLead = allMapData.find(existing => {
-                const prospectName = (detailedPlace.name || '').replace(/[^a-z0-9]/g, '').toLowerCase();
-                const existingName = existing.companyName.replace(/[^a-z0-9]/g, '').toLowerCase();
+                if (!place.place_id) return null;
                 
-                if (!prospectName.includes(existingName) && !existingName.includes(prospectName)) {
-                    return false;
-                }
+                const detailedPlace = await getPlaceDetails(place.place_id);
+                if (!detailedPlace) return null;
 
-                const existingAddress = (existing as any).address || existing;
-                const existingCity = (existingAddress.city || '').trim().toLowerCase();
-                const existingZip = (existingAddress.zip || '');
+                const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+                const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
+                const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
+
+                const keywordLower = keyword.toLowerCase();
                 
-                if (!existingCity || !existingZip) return false;
+                const existingLead = allMapData.find(existing => {
+                    const existingNameLower = existing.companyName.toLowerCase();
+                    
+                    if (!existingNameLower.includes(keywordLower)) {
+                        return false;
+                    }
 
-                return existingCity === (prospectSuburb || '').toLowerCase() &&
-                       existingZip === prospectPostcode;
-            });
+                    const existingAddress = (existing as any).address || existing;
+                    const existingCity = (existingAddress.city || '').trim().toLowerCase();
+                    const existingZip = (existingAddress.zip || '').toLowerCase();
+                    
+                    if (!existingCity || !existingZip) return false;
 
-
-            let description = 'No website to analyze.';
-            if (detailedPlace.website) {
-                try {
-                const prospectResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting',
-                    websiteUrl: detailedPlace.website,
+                    return existingCity === prospectSuburb && existingZip === prospectPostcode;
                 });
-                description = prospectResult.companyDescription || 'AI analysis of website failed.';
-                } catch (e) {
-                console.error('Error prospecting website for description', e);
-                description = 'AI analysis of website failed.';
-                }
-            }
 
-            const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-            const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-            
-            return { place: detailedPlace, existingLead: existingLead, classification, description };
+                let description = 'No website to analyze.';
+                if (detailedPlace.website) {
+                    try {
+                    const prospectResult = await aiProspectWebsiteTool({
+                        leadId: 'new-lead-prospecting',
+                        websiteUrl: detailedPlace.website,
+                    });
+                    description = prospectResult.companyDescription || 'AI analysis of website failed.';
+                    } catch (e) {
+                    console.error('Error prospecting website for description', e);
+                    description = 'AI analysis of website failed.';
+                    }
+                }
+
+                const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+                const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+                
+                return { place: detailedPlace, existingLead, classification, description };
             });
 
             const resolvedProspects = (await Promise.all(detailedProspectsPromises))
