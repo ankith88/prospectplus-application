@@ -343,58 +343,58 @@ export default function SignedCustomersPage() {
             const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
             const detailedProspectsPromises = openProspects.map(async (place) => {
-            if (!place.place_id) return null;
-            
-            const detailedPlace = await getPlaceDetails(place.place_id);
-            if (!detailedPlace) return null;
-
-            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
-            const prospectSuburb = getComponent('locality');
-            const prospectPostcode = getComponent('postal_code');
-            const streetNumber = getComponent('street_number');
-            const routeName = getComponent('route');
-            const prospectStreet = `${streetNumber} ${routeName}`.trim();
-            
-            const isDuplicate = allMapData.some(existing => {
-                const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
-
-                const existingAddress = (existing as any).address || {};
-                const existingStreet = (existingAddress.street || (existing as any).street || '').trim().toLowerCase();
-                const existingCity = (existingAddress.city || (existing as any).city || '').trim().toLowerCase();
-                const existingZip = (existingAddress.zip || (existing as any).zip || '');
+                if (!place.place_id) return null;
                 
-                if (!existingStreet || !existingCity || !existingZip) return false;
+                const detailedPlace = await getPlaceDetails(place.place_id);
+                if (!detailedPlace) return null;
 
-                const isSameLocation = 
-                    existingStreet === prospectStreet.toLowerCase() &&
-                    existingCity === prospectSuburb.toLowerCase() &&
-                    existingZip === prospectPostcode;
+                const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+                const prospectSuburb = getComponent('locality');
+                const prospectPostcode = getComponent('postal_code');
+                const streetNumber = getComponent('street_number');
+                const routeName = getComponent('route');
+                const prospectStreet = `${streetNumber} ${routeName}`.trim();
+                
+                const isDuplicate = allMapData.some(existing => {
+                    const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
+                    
+                    const existingAddress = (existing as any).address || existing;
+                    const existingStreet = (existingAddress.street || '').trim().toLowerCase();
+                    const existingCity = (existingAddress.city || '').trim().toLowerCase();
+                    const existingZip = (existingAddress.zip || '');
+                    
+                    if (!existingStreet || !existingCity || !existingZip) return false;
 
-                return isSimilarName && isSameLocation;
-            });
+                    const isSameLocation = 
+                        existingStreet === prospectStreet.toLowerCase() &&
+                        existingCity === prospectSuburb?.toLowerCase() &&
+                        existingZip === prospectPostcode;
 
-            if (isDuplicate) {
-                return null;
-            }
-
-            let description = 'No website to analyze.';
-            if (detailedPlace.website) {
-                try {
-                const prospectResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting',
-                    websiteUrl: detailedPlace.website,
+                    return isSimilarName && isSameLocation;
                 });
-                description = prospectResult.companyDescription || 'AI analysis of website failed.';
-                } catch (e) {
-                console.error('Error prospecting website for description', e);
-                description = 'AI analysis of website failed.';
-                }
-            }
 
-            const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-            const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-            
-            return { place: detailedPlace, existingLead: undefined, classification, description };
+                if (isDuplicate) {
+                    return null;
+                }
+
+                let description = 'No website to analyze.';
+                if (detailedPlace.website) {
+                    try {
+                    const prospectResult = await aiProspectWebsiteTool({
+                        leadId: 'new-lead-prospecting',
+                        websiteUrl: detailedPlace.website,
+                    });
+                    description = prospectResult.companyDescription || 'AI analysis of website failed.';
+                    } catch (e) {
+                    console.error('Error prospecting website for description', e);
+                    description = 'AI analysis of website failed.';
+                    }
+                }
+
+                const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+                const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+                
+                return { place: detailedPlace, existingLead: undefined, classification, description };
             });
 
             const resolvedProspects = (await Promise.all(detailedProspectsPromises))
