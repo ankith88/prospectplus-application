@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -362,31 +361,24 @@ export default function SignedCustomersPage() {
             const prospectSuburb = getComponent('locality');
             const prospectPostcode = getComponent('postal_code');
             
-            const isDuplicate = allMapData.some(existing => {
+            const existingLead = allMapData.find(existing => {
+                const prospectName = (detailedPlace.name || '').replace(/[^a-z0-9]/g, '').toLowerCase();
+                const existingName = existing.companyName.replace(/[^a-z0-9]/g, '').toLowerCase();
+                
+                if (!prospectName.includes(existingName) && !existingName.includes(prospectName)) {
+                    return false;
+                }
+
                 const existingAddress = (existing as any).address || existing;
                 const existingCity = (existingAddress.city || '').trim().toLowerCase();
                 const existingZip = (existingAddress.zip || '');
                 
                 if (!existingCity || !existingZip) return false;
 
-                const isSameLocation = 
-                    existingCity === prospectSuburb?.toLowerCase() &&
-                    existingZip === prospectPostcode;
-                
-                if (!isSameLocation) return false;
-
-                const prospectName = (detailedPlace.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                const existingName = existing.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                
-                // Partial match check
-                const isSimilarName = existingName.includes(prospectName) || prospectName.includes(existingName);
-                
-                return isSimilarName;
+                return existingCity === (prospectSuburb || '').toLowerCase() &&
+                       existingZip === prospectPostcode;
             });
 
-            if (isDuplicate) {
-                return null;
-            }
 
             let description = 'No website to analyze.';
             if (detailedPlace.website) {
@@ -405,7 +397,7 @@ export default function SignedCustomersPage() {
             const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
             const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
             
-            return { place: detailedPlace, existingLead: undefined, classification, description };
+            return { place: detailedPlace, existingLead: existingLead, classification, description };
             });
 
             const resolvedProspects = (await Promise.all(detailedProspectsPromises))
@@ -522,7 +514,8 @@ export default function SignedCustomersPage() {
 
   const handleFindMultiSites = useCallback(() => {
     if (!selectedCompany) return;
-    findProspects({ lat: -25.2744, lng: 133.7751 }, selectedCompany.companyName, true);
+    const baseName = selectedCompany.companyName.split(' - ')[0].split('(')[0].trim();
+    findProspects({ lat: -25.2744, lng: 133.7751 }, baseName, true);
     setSelectedCompany(null);
   }, [selectedCompany, findProspects]);
 
@@ -1323,7 +1316,7 @@ export default function SignedCustomersPage() {
                                                     View
                                                 </Button>
                                             ) : (
-                                                <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                     {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
                                                     {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                                 </Button>
