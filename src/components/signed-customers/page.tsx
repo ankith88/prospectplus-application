@@ -338,7 +338,7 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, [selectedCompany, allMapData, map, toast]);
 
-    const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
+ const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
     setProspects([]); 
 
@@ -360,12 +360,11 @@ export default function SignedCustomersPage() {
                 const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
                 const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
                 const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
-
+                
                 const keywordLower = keyword.toLowerCase();
                 
-                const existingLead = allMapData.find(existing => {
+                const existingLead = mapData.find(existing => {
                     const existingNameLower = existing.companyName.toLowerCase();
-                    
                     if (!existingNameLower.includes(keywordLower)) {
                         return false;
                     }
@@ -375,8 +374,11 @@ export default function SignedCustomersPage() {
                     const existingZip = (existingAddress.zip || '').toLowerCase();
                     
                     if (!existingCity || !existingZip) return false;
+                    
+                    const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+                    const isPostcodeMatch = existingZip === prospectPostcode;
 
-                    return existingCity === prospectSuburb && existingZip === prospectPostcode;
+                    return isSuburbMatch && isPostcodeMatch;
                 });
 
                 let description = 'No website to analyze.';
@@ -763,7 +765,7 @@ export default function SignedCustomersPage() {
     };
 
     try {
-        const result = await createNewLead(newLeadData);
+        const result = await createNewLead(newLeadData as any);
         if (result.success && result.leadId) {
             toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
             
