@@ -330,83 +330,95 @@ export default function SignedCustomersPage() {
 
     const placesService = new window.google.maps.places.PlacesService(map);
     
+    // Use the core name for a broader match
+    const coreName = keyword.split(' - ')[0];
+
     const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-            const detailedProspectsPromises = openProspects.map(async (place) => {
-                if (!place.place_id) return null;
-                
-                const detailedPlace = await getPlaceDetails(place.place_id);
-                if (!detailedPlace) return null;
+        const detailedProspectsPromises = openProspects.map(async (place) => {
+          if (!place.place_id) return null;
+          
+          const detailedPlace = await getPlaceDetails(place.place_id);
+          if (!detailedPlace) return null;
 
-                const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
-                const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
-                const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
-                
-                const coreName = keyword.toLowerCase();
-                
-                const existingLead = allMapData.find(existing => {
-                    const existingNameLower = existing.companyName.toLowerCase();
-                    const prospectNameLower = (detailedPlace.name || '').toLowerCase();
-                    const isSimilarName = existingNameLower.includes(prospectNameLower) || prospectNameLower.includes(existingNameLower);
-                    
-                    if (!isSimilarName) return false;
+          const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+          const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
+          const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
+          
+          const isDuplicate = allMapData.some(existing => {
+              const existingNameLower = existing.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              
+              const coreNameToMatch = coreName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              if (!existingNameLower.includes(coreNameToMatch)) {
+                  return false;
+              }
 
-                    let existingCity = '';
-                    let existingZip = '';
+              const existingCity = ((existing as any).city || '').trim().toLowerCase();
+              const existingZip = ((existing as any).zip || '').trim().toLowerCase();
+              
+              if (!existingCity || !existingZip) return false;
 
-                    if (existing.isCompany) {
-                        existingCity = ((existing as any).city || (existing.address?.city) || '').trim().toLowerCase();
-                        existingZip = ((existing as any).zip || (existing.address?.zip) || '').toLowerCase();
-                    } else {
-                        existingCity = (existing.address?.city || '').trim().toLowerCase();
-                        existingZip = (existing.address?.zip || '').toLowerCase();
-                    }
+              const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+              const isPostcodeMatch = existingZip === prospectPostcode;
 
-                    if (!existingCity || !existingZip) return false;
+              return isSuburbMatch && isPostcodeMatch;
+          });
 
-                    const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
-                    const isPostcodeMatch = existingZip === prospectPostcode;
+          if (isDuplicate) {
+             const existingLead = allMapData.find(l => {
+                  const existingNameLower = l.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+                  if (!existingNameLower.includes(coreName.toLowerCase().replace(/[^a-z0-9]/gi, ''))) return false;
+                  
+                  const existingCity = ((l as any).city || '').trim().toLowerCase();
+                  const existingZip = ((l as any).zip || '').trim().toLowerCase();
+                  
+                   if (!existingCity || !existingZip) return false;
 
-                    return isSuburbMatch && isPostcodeMatch;
-                });
+                   const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+                   const isPostcodeMatch = existingZip === prospectPostcode;
 
-                let description = 'No website to analyze.';
-                if (detailedPlace.website) {
-                    try {
-                    const prospectResult = await aiProspectWebsiteTool({
-                        leadId: 'new-lead-prospecting',
-                        websiteUrl: detailedPlace.website,
-                    });
-                    description = prospectResult.companyDescription || 'AI analysis of website failed.';
-                    } catch (e) {
-                    console.error('Error prospecting website for description', e);
-                    description = 'AI analysis of website failed.';
-                    }
-                }
+                   return isSuburbMatch && isPostcodeMatch;
+             });
+             return { place: detailedPlace, existingLead: existingLead, classification: 'B2B', description: 'Existing lead/customer.' };
+          }
 
-                const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-                const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-                
-                return { place: detailedPlace, existingLead, classification, description };
-            });
-
-            const resolvedProspects = (await Promise.all(detailedProspectsPromises))
-                .filter((p): p is ProspectWithLeadInfo => p !== null);
-
-            setProspects(resolvedProspects);
-            setIsSearchingNearby(false);
-
-            if (resolvedProspects.length > 0) {
-                setIsProspectsDialogOpen(true);
-            } else {
-                toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
+          let description = 'No website to analyze.';
+          if (detailedPlace.website) {
+            try {
+              const prospectResult = await aiProspectWebsiteTool({
+                leadId: 'new-lead-prospecting',
+                websiteUrl: detailedPlace.website,
+              });
+              description = prospectResult.companyDescription || 'AI analysis of website failed.';
+            } catch (e) {
+              console.error('Error prospecting website for description', e);
+              description = 'AI analysis of website failed.';
             }
+          }
+
+          const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+          const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+          
+          return { place: detailedPlace, existingLead: undefined, classification, description };
+        });
+
+        const resolvedProspects = (await Promise.all(detailedProspectsPromises))
+            .filter((p): p is ProspectWithLeadInfo => p !== null);
+
+        setProspects(resolvedProspects);
+        setIsSearchingNearby(false);
+
+        if (resolvedProspects.length > 0) {
+            setIsProspectsDialogOpen(true);
         } else {
-            toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
-            setIsSearchingNearby(false);
+            toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
         }
+      } else {
+        toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
+        setIsSearchingNearby(false);
+      }
     };
     
     if (useTextSearch) {
@@ -423,6 +435,7 @@ export default function SignedCustomersPage() {
         };
         placesService.nearbySearch(request, handleResults);
     }
+    
   }, [map, allMapData, getPlaceDetails, toast]);
 
     const handleBulkFindSimilar = useCallback(async (companyIds: string[]) => {
