@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
+import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, Download } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,6 +34,9 @@ import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { PrintableCheckInQuestions } from '@/components/printable-check-in-questions';
 
 
 const discoverySchema = z.object({
@@ -134,6 +137,7 @@ export default function CheckInPage() {
     
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -141,6 +145,7 @@ export default function CheckInPage() {
     
     const leadId = params.leadId as string;
     const storageKey = `checkin-progress-${leadId}`;
+    const printableRef = useRef<HTMLDivElement>(null);
 
     const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
         resolver: zodResolver(discoverySchema.partial()),
@@ -388,6 +393,43 @@ export default function CheckInPage() {
         }
     }
     
+    const handleDownloadPdf = async () => {
+        if (!printableRef.current) return;
+        setIsGeneratingPdf(true);
+        try {
+            const canvas = await html2canvas(printableRef.current, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'pt',
+                format: 'a4'
+            });
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            
+            let position = 0;
+            let heightLeft = pdfHeight;
+            
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pdf.internal.pageSize.getHeight();
+
+            while (heightLeft > 0) {
+              position = -heightLeft;
+              pdf.addPage();
+              pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+              heightLeft -= pdf.internal.pageSize.getHeight();
+            }
+            pdf.save('check-in-questions.pdf');
+
+        } catch (error) {
+            console.error("Failed to generate PDF:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not generate PDF.' });
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
+
     const renderStep = () => {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
@@ -413,6 +455,9 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                <PrintableCheckInQuestions ref={printableRef} />
+            </div>
             <div className="flex flex-col bg-background max-w-2xl mx-auto w-full h-svh">
                 <div className='p-4'>
                     <header className="flex-shrink-0 flex items-center justify-between">
@@ -421,9 +466,14 @@ export default function CheckInPage() {
                             <h1 className="text-lg font-bold">{lead.companyName}</h1>
                             <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                         </div>
-                        <div className="w-20 text-center">
-                            <div className="border border-border rounded-full px-2 py-1 text-xs">
-                                Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
+                        <div className="flex items-center gap-2">
+                             <Button variant="ghost" size="icon" onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
+                                {isGeneratingPdf ? <Loader /> : <Download />}
+                            </Button>
+                            <div className="w-20 text-center">
+                                <div className="border border-border rounded-full px-2 py-1 text-xs">
+                                    Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
+                                </div>
                             </div>
                         </div>
                     </header>
@@ -837,6 +887,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
 
