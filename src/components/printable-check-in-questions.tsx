@@ -65,10 +65,12 @@ export const PrintableCheckInQuestions = React.forwardRef<HTMLDivElement>((props
                     <div className="grid grid-cols-3 gap-2">
                         {currentProviders.map(item => <CheckBox key={item.id} label={item.label} />)}
                     </div>
+                    <TextInputLine label="Other Provider" />
                     <p className="font-semibold mt-4">What platform do you use for labels?</p>
                      <div className="grid grid-cols-3 gap-2">
                         {eCommerceTechs.map(item => <CheckBox key={item.id} label={item.label} />)}
                     </div>
+                    <TextInputLine label="Other Platform" />
                 </QuestionSection>
 
                 <QuestionSection title="Discovery: Business Needs">
@@ -101,7 +103,7 @@ const CheckBox = ({ label }: { label: string }) => (
 
 const TextInputLine = ({ label }: { label: string }) => (
     <div className="flex items-end gap-2 mt-2">
-        <label className="text-sm font-semibold whitespace-nowrap w-20">{label}:</label>
+        <label className="text-sm font-semibold whitespace-nowrap w-28">{label}:</label>
         <div className="border-b border-black w-full"></div>
     </div>
 );
