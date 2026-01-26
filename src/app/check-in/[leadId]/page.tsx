@@ -34,9 +34,6 @@ import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { PrintableCheckInQuestions } from '@/components/printable-check-in-questions';
 
 
 const discoverySchema = z.object({
@@ -137,7 +134,6 @@ export default function CheckInPage() {
     
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -145,7 +141,6 @@ export default function CheckInPage() {
     
     const leadId = params.leadId as string;
     const storageKey = `checkin-progress-${leadId}`;
-    const printableRef = useRef<HTMLDivElement>(null);
 
     const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
         resolver: zodResolver(discoverySchema.partial()),
@@ -392,43 +387,6 @@ export default function CheckInPage() {
             router.push('/field-sales');
         }
     }
-    
-    const handleDownloadPdf = async () => {
-        if (!printableRef.current) return;
-        setIsGeneratingPdf(true);
-        try {
-            const canvas = await html2canvas(printableRef.current, { scale: 2 });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'pt',
-                format: 'a4'
-            });
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            
-            let position = 0;
-            let heightLeft = pdfHeight;
-            
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pdf.internal.pageSize.getHeight();
-
-            while (heightLeft > 0) {
-              position = -heightLeft;
-              pdf.addPage();
-              pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-              heightLeft -= pdf.internal.pageSize.getHeight();
-            }
-            pdf.save('check-in-questions.pdf');
-
-        } catch (error) {
-            console.error("Failed to generate PDF:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not generate PDF.' });
-        } finally {
-            setIsGeneratingPdf(false);
-        }
-    };
 
     const renderStep = () => {
         switch (currentStep) {
@@ -455,9 +413,6 @@ export default function CheckInPage() {
 
     return (
         <FormProvider {...methods}>
-            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-                <PrintableCheckInQuestions ref={printableRef} />
-            </div>
             <div className="flex flex-col bg-background max-w-2xl mx-auto w-full h-svh">
                 <div className='p-4'>
                     <header className="flex-shrink-0 flex items-center justify-between">
@@ -467,8 +422,10 @@ export default function CheckInPage() {
                             <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                             <Button variant="ghost" size="icon" onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
-                                {isGeneratingPdf ? <Loader /> : <Download />}
+                             <Button variant="ghost" size="icon" asChild>
+                                <a href="/check-in/printable" target="_blank" rel="noopener noreferrer">
+                                    <Download />
+                                </a>
                             </Button>
                             <div className="w-20 text-center">
                                 <div className="border border-border rounded-full px-2 py-1 text-xs">
@@ -887,6 +844,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
 
