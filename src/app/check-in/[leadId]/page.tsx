@@ -138,6 +138,9 @@ export default function CheckInPage() {
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
+    
+    const leadId = params.leadId as string;
+    const storageKey = `checkin-progress-${leadId}`;
 
     const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
         resolver: zodResolver(discoverySchema.partial()),
@@ -150,10 +153,29 @@ export default function CheckInPage() {
         resolver: zodResolver(newContactSchema),
         defaultValues: { name: '', title: '', email: '', phone: '' }
     });
+    
+    const syncFinalData = useCallback(async (leadForSync: Lead) => {
+        const savedProgress = localStorage.getItem(storageKey);
+        if (savedProgress) {
+            const { step, data } = JSON.parse(savedProgress);
+            if (step > TOTAL_STEPS && navigator.onLine) {
+                toast({ title: "Syncing Offline Data", description: "Attempting to sync your previously saved check-in." });
+                try {
+                    const discoveryData = calculateScoreAndRouting(data);
+                    await updateLeadDiscoveryData(leadForSync.id, discoveryData);
+                    await logActivity(leadForSync.id, { type: 'Update', notes: 'Discovery questions form was completed (synced from offline).' });
+                    localStorage.removeItem(storageKey);
+                    toast({ title: "Sync Complete!", description: "Your check-in data has been saved to the server." });
+                } catch (error) {
+                    console.error("Offline sync failed:", error);
+                    toast({ variant: "destructive", title: "Sync Failed", description: "Could not sync offline data. It will be retried later." });
+                }
+            }
+        }
+    }, [storageKey, toast]);
 
     useEffect(() => {
         const fetchLeadData = async () => {
-            const leadId = params.leadId as string;
             if (!leadId) {
                 router.push('/field-sales');
                 return;
@@ -163,14 +185,32 @@ export default function CheckInPage() {
                 if (leadData) {
                     setLead(leadData);
                     setContacts(leadData.contacts || []);
-                    if (leadData.discoveryData) {
-                        methods.reset(leadData.discoveryData);
-                         if (leadData.discoveryData.checkInCompleted) {
-                            setCurrentStep(TOTAL_STEPS + 1);
-                            setFinalDiscoveryData(leadData.discoveryData);
+                    
+                    // Attempt to restore progress AFTER fetching lead data
+                    try {
+                        const savedProgress = localStorage.getItem(storageKey);
+                        if (savedProgress) {
+                            const { step, data } = JSON.parse(savedProgress);
+                            methods.reset(data);
+                            setCurrentStep(step);
+                            toast({ title: "Progress Restored", description: "Your previous check-in progress has been loaded." });
+                        } else if (leadData.discoveryData) {
+                           methods.reset(leadData.discoveryData);
+                           if (leadData.discoveryData.checkInCompleted) {
+                               setCurrentStep(TOTAL_STEPS + 1);
+                               setFinalDiscoveryData(leadData.discoveryData);
+                           }
                         }
+                    } catch (error) {
+                        console.error("Failed to restore progress from local storage", error);
+                        localStorage.removeItem(storageKey); // Clear corrupted data
                     }
+
                     await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
+                    
+                    // Try to sync any final data that was saved offline
+                    await syncFinalData(leadData);
+
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Lead not found.' });
                     router.push('/field-sales');
@@ -183,11 +223,26 @@ export default function CheckInPage() {
             }
         };
         fetchLeadData();
-    }, [params.leadId, router, toast, methods]);
+    }, [leadId, router, toast, methods, storageKey, syncFinalData]);
 
     const handleNext = async () => {
+        // --- OFFLINE-FIRST SAVE ---
+        const currentData = methods.getValues();
+        let nextStep = currentStep + 1;
+        if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
+            nextStep = currentStep + 2; // Skip step 4
+        }
+        try {
+            localStorage.setItem(storageKey, JSON.stringify({ step: nextStep, data: currentData }));
+        } catch (e) {
+            console.error("Could not save progress to local storage", e);
+            toast({ variant: "destructive", title: "Could not save progress", description: "Your progress might not be saved if you go offline." });
+        }
+        // --- END OFFLINE-FIRST SAVE ---
+
         setIsSaving(true);
         try {
+            // Validation
             let isValid = true;
             if (currentStep === 3) {
                  isValid = await methods.trigger(['relevanceCheck']);
@@ -197,39 +252,44 @@ export default function CheckInPage() {
                     return;
                  }
             }
-            
-            const currentData = { ...methods.getValues() };
-            
-            // Sanitize undefined values before saving to Firestore
-            for (const key in currentData) {
-                if (currentData[key as keyof typeof currentData] === undefined) {
-                    delete currentData[key as keyof typeof currentData];
-                }
-            }
 
+            // Attempt to sync incremental progress to Firebase (will fail gracefully if offline)
             if(lead?.id && Object.keys(currentData).length > 0) {
-                const leadRef = doc(firestore, 'leads', lead.id);
-                await updateDoc(leadRef, { discoveryData: currentData });
+                updateDoc(doc(firestore, 'leads', lead.id), { discoveryData: currentData })
+                    .catch(err => console.warn("Could not sync incremental progress:", err));
             }
             
-            if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
-                const discoveryData = calculateScoreAndRouting(methods.getValues());
-                setFinalDiscoveryData(discoveryData);
-                await updateLeadDiscoveryData(lead!.id, discoveryData);
-                await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
-                setCurrentStep(prev => prev + 1); // Go to final actions step
-            } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
-                    setCurrentStep(prev => prev + 2); // Skip step 4
+            if (currentStep === TOTAL_STEPS) { // Final step logic
+                const finalData = calculateScoreAndRouting(methods.getValues());
+                setFinalDiscoveryData(finalData);
+
+                // Save final data locally before attempting to sync
+                localStorage.setItem(storageKey, JSON.stringify({ step: nextStep, data: finalData }));
+                
+                // Attempt to sync final data
+                updateLeadDiscoveryData(lead!.id, finalData).then(() => {
+                    logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
+                    console.log("Final data synced to Firebase successfully.");
+                    // No need to remove storageKey here, as it acts as a record until explicitly cleared
+                }).catch(error => {
+                    console.warn("Failed to sync final data, will retry on next load.", error);
+                    toast({ title: "Offline Mode", description: "Check-in complete. Data will sync when you're back online." });
+                });
+                
+                setCurrentStep(nextStep);
+
             } else {
-                setCurrentStep(prev => prev + 1);
+                setCurrentStep(nextStep);
             }
         } catch (error: any) {
-            console.error("Failed to save discovery data:", error);
-            toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
+            // This will now only catch major errors, not network failures in the sync attempts
+            console.error("An unexpected error occurred in handleNext:", error);
+            toast({ variant: "destructive", title: "Error", description: `An unexpected error occurred. Please try again.` });
         } finally {
             setIsSaving(false);
         }
     };
+
 
     const handleBack = () => {
          if (currentStep === 5 && methods.getValues('relevanceCheck') === 'No') {
@@ -777,6 +837,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
 
