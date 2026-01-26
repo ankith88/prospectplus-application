@@ -13,6 +13,17 @@ export const PrintableCheckInQuestions = React.forwardRef<HTMLDivElement>((props
             <h1 className="text-2xl font-bold mb-4 text-center">Check-in Discovery Questions</h1>
 
             <div className="space-y-6">
+                <QuestionSection title="Company Details">
+                    <TextInputLine label="Company Name" />
+                    <TextInputLine label="Address" />
+                </QuestionSection>
+
+                <QuestionSection title="Contacts">
+                    <ContactInputSet />
+                    <ContactInputSet />
+                    <ContactInputSet />
+                </QuestionSection>
+
                 <QuestionSection title="Relevance Check">
                     <p className="font-semibold">Do people leave the office during the day?</p>
                     <div className="flex gap-4"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
@@ -85,5 +96,23 @@ const CheckBox = ({ label }: { label: string }) => (
     <div className="flex items-center gap-2">
         <div className="w-4 h-4 border border-black bg-white"></div>
         <span className="text-sm">{label}</span>
+    </div>
+);
+
+const TextInputLine = ({ label }: { label: string }) => (
+    <div className="flex items-end gap-2 mt-2">
+        <label className="text-sm font-semibold whitespace-nowrap w-20">{label}:</label>
+        <div className="border-b border-black w-full"></div>
+    </div>
+);
+
+const ContactInputSet = () => (
+    <div className="space-y-2 border-t border-gray-200 pt-4 first:border-t-0 first:pt-0">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <TextInputLine label="Name" />
+            <TextInputLine label="Title" />
+            <TextInputLine label="Email" />
+            <TextInputLine label="Phone" />
+        </div>
     </div>
 );
