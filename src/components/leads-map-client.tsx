@@ -197,6 +197,7 @@ export default function LeadsMapClient() {
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [localSavedRoutes, setLocalSavedRoutes] = useState<SavedRoute[]>([]);
   const [allSystemRoutes, setAllSystemRoutes] = useState<SavedRoute[]>([]);
+  const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [leadToRouteMap, setLeadToRouteMap] = useState<Map<string, string>>(new Map());
   const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
   const [routeDate, setRouteDate] = useState<Date>();
@@ -246,6 +247,7 @@ export default function LeadsMapClient() {
     routeStatus: 'all' as 'all' | 'in-route' | 'not-in-route',
     campaign: 'all',
     fieldSales: 'all' as 'all' | 'yes' | 'no',
+    dialerAssigned: [] as string[],
   });
   
   const router = useRouter()
@@ -436,13 +438,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
                 setLoadingData(true);
                 try {
-                    const [mapLeads, mapCompanies, checkIns] = await Promise.all([
+                    const [mapLeads, mapCompanies, checkIns, users] = await Promise.all([
                         getLeadsFromFirebase({ summary: true }),
                         getCompaniesFromFirebase(),
-                        getAllActivities(true)
+                        getAllActivities(true),
+                        getAllUsers(),
                     ]);
                     
                     setAllCheckInActivities(checkIns);
+                    setAllDialers(users);
+                    setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
 
                     let leadsMapData: MapLead[] = [];
                     if (mapLeads) {
@@ -471,9 +476,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     }
 
                     setMapData([...leadsMapData, ...companiesMapData]);
-
-                    const users = await getAllUsers();
-                    setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
 
                 } catch (error) {
                     console.error("Failed to fetch map data:", error);
@@ -544,6 +546,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         // Filters that apply to all items (leads and companies)
         const universalFilters = (item: MapLead) => {
+            const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
             const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
             const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
             const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
@@ -557,7 +560,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     campaignMatch = leadCampaign === filters.campaign;
                 }
             }
-            return franchiseeMatch && stateMatch && statusMatch && campaignMatch;
+            return franchiseeMatch && stateMatch && statusMatch && campaignMatch && dialerMatch;
         };
 
         // Filters that apply only to leads
@@ -674,6 +677,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
+
+  const dialerOptions: Option[] = useMemo(() => {
+    return allDialers
+      .filter(d => d.displayName)
+      .map(d => ({ value: d.displayName!, label: d.displayName! }))
+      .sort((a,b) => a.label.localeCompare(b.label));
+  }, [allDialers]);
 
   const uniqueFranchisees: Option[] = useMemo(() => {
     const franchisees = new Set(mapData.map(item => item.franchisee).filter(Boolean));
@@ -1479,6 +1489,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </CardContent>
                         <TabsContent value="filters">
                              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Dialer Assigned</Label>
+                                    <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
+                                </div>
                                 <div className="space-y-2">
                                     <Label>Franchisee</Label>
                                     <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
