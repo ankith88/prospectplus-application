@@ -259,7 +259,7 @@ function SelectServicesContent() {
       
       const activeRouteId = localStorage.getItem('activeRouteId');
       if (activeRouteId) {
-        router.push('/leads/map');
+        router.push('/saved-routes');
       } else {
         router.push('/field-sales');
       }

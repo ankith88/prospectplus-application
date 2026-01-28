@@ -372,7 +372,7 @@ export default function CheckInPage() {
         setIsRevisitDialogOpen(false);
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
-            router.push('/leads/map');
+            router.push('/saved-routes');
         } else {
             router.push('/field-sales');
         }
@@ -382,7 +382,7 @@ export default function CheckInPage() {
         setIsLogOutcomeOpen(false);
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
-            router.push('/leads/map');
+            router.push('/saved-routes');
         } else {
             router.push('/field-sales');
         }
@@ -834,7 +834,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/saved-routes')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -844,6 +844,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
 
