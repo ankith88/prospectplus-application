@@ -20,11 +20,11 @@ import {
 import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute, getUserActivitiesForPeriod } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead } from '@/lib/types'
-import { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar, PenSquare } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -170,7 +170,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
-export default function FieldSalesPage() {
+export default function DoorToDoorDashboard() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
@@ -713,7 +713,7 @@ export default function FieldSalesPage() {
         targetBucket="outbound"
       />
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Field Sales Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Door-to-Door Dashboard</h1>
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
       </header>
 
@@ -878,6 +878,9 @@ export default function FieldSalesPage() {
                         <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
                         {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
                             <>
+                                <Button size="sm" variant="outline" onClick={() => router.push(`/leads/map?routeId=${route.id}`)}>
+                                    <PenSquare className="h-4 w-4" />
+                                </Button>
                                 <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
                                     <Move className="h-4 w-4" />
                                 </Button>
