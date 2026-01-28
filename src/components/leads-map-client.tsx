@@ -728,6 +728,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
 
     const placesService = new window.google.maps.places.PlacesService(map);
+    
+    // Use the core name for a broader match
+    const coreName = keyword.split(' - ')[0];
+
     const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && results) {
         const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
@@ -739,21 +743,45 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           if (!detailedPlace) return null;
 
           const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
-          const prospectSuburb = getComponent('locality');
-          const prospectPostcode = getComponent('postal_code');
+          const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
+          const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
           
           const isDuplicate = mapData.some(existing => {
-              const similarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
-              const sameSuburb = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase();
-              const samePostcode = existing.address?.zip === prospectPostcode;
-              return similarName && sameSuburb && samePostcode;
+              const existingNameLower = existing.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              
+              const coreNameToMatch = coreName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              if (!existingNameLower.includes(coreNameToMatch)) {
+                  return false;
+              }
+
+              const existingCity = ((existing.address as Address)?.city || '').trim().toLowerCase();
+              const existingZip = ((existing.address as Address)?.zip || '').trim().toLowerCase();
+              
+              if (!existingCity || !existingZip) return false;
+
+              const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+              const isPostcodeMatch = existingZip === prospectPostcode;
+
+              return isSuburbMatch && isPostcodeMatch;
           });
 
           if (isDuplicate) {
-              return null;
+             const existingLead = mapData.find(l => {
+                  const existingNameLower = l.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+                  if (!existingNameLower.includes(coreName.toLowerCase().replace(/[^a-z0-9]/gi, ''))) return false;
+                  
+                  const existingCity = ((l.address as Address)?.city || '').trim().toLowerCase();
+                  const existingZip = ((l.address as Address)?.zip || '').trim().toLowerCase();
+                  
+                   if (!existingCity || !existingZip) return false;
+
+                   const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+                   const isPostcodeMatch = existingZip === prospectPostcode;
+
+                   return isSuburbMatch && isPostcodeMatch;
+             });
+             return { place: detailedPlace, existingLead: existingLead, classification: 'B2B', description: 'Existing lead/customer.' };
           }
-          
-          const existingLead = mapData.find(l => l.companyName.toLowerCase() === detailedPlace.name?.toLowerCase());
 
           let description = 'No website to analyze.';
           if (detailedPlace.website) {
@@ -772,7 +800,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
           const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
           const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
           
-          return { place: detailedPlace, existingLead, classification, description };
+          return { place: detailedPlace, existingLead: undefined, classification, description };
         });
 
         const resolvedProspects = (await Promise.all(detailedProspectsPromises))
@@ -1621,6 +1649,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                     </Button>
                                                 </p>
                                                 <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                                <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-1">
+                                                    <Briefcase className="h-3 w-3" />
+                                                    {lead.industryCategory || 'N/A'}
+                                                </p>
                                             </div>
                                         </div>
                                     </Card>
@@ -1939,7 +1971,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         {prospectInfo.classification}
                                     </Badge>
                                     {prospectInfo.existingLead ? (
-                                        <Button size="sm" variant="outline" onClick={() => window.open(`/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                        <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
                                             <Eye className="mr-2 h-4 w-4" /> View
                                         </Button>
                                     ) : (
