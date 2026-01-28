@@ -22,7 +22,7 @@ import { Button } from './ui/button'
 import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
@@ -254,6 +254,8 @@ export default function LeadsMapClient() {
   const { toast } = useToast()
   const { userProfile, loading: authLoading, savedRoutes } = useAuth();
   const isMobile = useIsMobile();
+  const searchParams = useSearchParams();
+  const routeIdToLoad = searchParams.get('routeId');
 
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
 
@@ -514,17 +516,35 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }, [isLoaded, mapData, toast]);
 
      useEffect(() => {
-        if (loadingData || !isLoaded || localSavedRoutes.length === 0) return;
-
         const activeRouteId = localStorage.getItem('activeRouteId');
-        if (activeRouteId) {
-            const routeToLoad = localSavedRoutes.find(r => r.id === activeRouteId);
-            if (routeToLoad) {
-                handleLoadRoute(routeToLoad);
+        
+        if (loadingData || !isLoaded || (!activeRouteId && !routeIdToLoad)) return;
+        
+        const routeId = routeIdToLoad || activeRouteId;
+        if (!routeId) return;
+
+        const allAvailableRoutes = [...allSystemRoutes, ...localSavedRoutes];
+        const uniqueRoutes = Array.from(new Set(allAvailableRoutes.map(r => r.id))).map(id => allAvailableRoutes.find(r => r.id === id)!);
+        
+        const routeToLoad = uniqueRoutes.find(r => r.id === routeId);
+
+        if (routeToLoad) {
+            handleLoadRoute(routeToLoad);
+            if (activeRouteId) {
                 setIsRouteActive(true);
             }
+            if (routeIdToLoad) {
+                // Clear the query param from URL after loading
+                router.replace('/leads/map', { scroll: false });
+            }
+        } else if (routeIdToLoad) {
+            toast({
+                variant: 'destructive',
+                title: 'Route Not Found',
+                description: "The specified route could not be found.",
+            });
         }
-    }, [localSavedRoutes, isLoaded, loadingData, handleLoadRoute]);
+    }, [allSystemRoutes, localSavedRoutes, isLoaded, loadingData, handleLoadRoute, routeIdToLoad, toast, router]);
 
   
     const filteredData = useMemo(() => {
@@ -1355,8 +1375,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         }
 
         return filtered.sort((a, b) => {
-            const addressA = (a.address?.street || '').toLowerCase();
-            const addressB = (b.address?.street || '').toLowerCase();
+            const addressA = ((a.address as Address)?.street || '').toLowerCase();
+            const addressB = ((b.address as Address)?.street || '').toLowerCase();
             if (addressA.localeCompare(addressB) !== 0) {
                 return addressA.localeCompare(addressB);
             }
