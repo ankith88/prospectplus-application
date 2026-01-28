@@ -46,6 +46,7 @@ import {
   MoreVertical,
   ClipboardEdit,
   Trash2,
+  CheckSquare,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
@@ -701,38 +702,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       </div>
     );
   }
-
-  const fullAddress = lead.address
-    ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
-    : 'No address available';
-
-  const primaryContact = contacts && contacts.length > 0 ? contacts[0] : null;
   
-  const callHistory = useMemo(() => {
-    return (activities || []).filter(a => a.type === 'Call' && a.callId);
-  }, [activities]);
-  
-  const contactAttempts = useMemo(() => {
-    return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
-  }, [activities]);
-
-  const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
-    if (!address) return 'Address not available';
-    if (typeof address === 'string') return address;
-    return [
-        address.street,
-        address.city,
-        address.state,
-    ].filter(Boolean).join(', ');
-  }
-
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
     const isFieldSales = userProfile?.role === 'Field Sales';
-    const isNormalUser = !isAdmin && !isFieldSales;
+    const isFieldSalesAdmin = userProfile?.role === 'Field Sales Admin';
+    const isNormalUser = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+
+    const canCheckIn = isAdmin || isFieldSales || isFieldSalesAdmin;
+
+    const checkInButton = (
+      <Button variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
+        <CheckSquare className="mr-2 h-4 w-4" />
+        Check In
+      </Button>
+    );
 
     const signupButton = (
-      <Button variant={isFieldSales ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
+      <Button variant={(isFieldSales || isFieldSalesAdmin) ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
         <Briefcase className="mr-2 h-4 w-4" />
         Signup
       </Button>
@@ -741,7 +728,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const freeTrialButton = (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={isFieldSales ? "default" : "outline"}>
+              <Button variant={(isFieldSales || isFieldSalesAdmin) ? "default" : "outline"}>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Free Trial
               </Button>
@@ -762,8 +749,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
     
     const logOutcomeButton = (
-        <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
-            <PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}
+        <Button variant={(isFieldSales || isFieldSalesAdmin) ? "secondary" : "outline"} onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
+            <PhoneCall className="mr-2 h-4 w-4" />{(isFieldSales || isFieldSalesAdmin) ? 'Log Outcome' : 'Log a Call'}
         </Button>
     );
 
@@ -791,8 +778,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
 
-    if (isFieldSales) {
-        return <div className="flex flex-wrap items-center gap-2">{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
+    if (isFieldSales || isFieldSalesAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
     }
     
     if (isNormalUser) {
@@ -804,7 +791,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-muted-foreground mr-2">Field Sales Actions:</p>
-                    {signupButton}{freeTrialButton}{logOutcomeButton}
+                    {checkInButton}{signupButton}{freeTrialButton}{logOutcomeButton}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-muted-foreground mr-2">Dialer Actions:</p>
@@ -820,6 +807,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     return null;
   };
+
+
+  const fullAddress = lead.address
+    ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
+    : 'No address available';
+
+  const primaryContact = contacts && contacts.length > 0 ? contacts[0] : null;
+  
+  const callHistory = useMemo(() => {
+    return (activities || []).filter(a => a.type === 'Call' && a.callId);
+  }, [activities]);
+  
+  const contactAttempts = useMemo(() => {
+    return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
+  }, [activities]);
+
+  const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
+    if (!address) return 'Address not available';
+    if (typeof address === 'string') return address;
+    return [
+        address.street,
+        address.city,
+        address.state,
+    ].filter(Boolean).join(', ');
+  }
 
   return (
     <>
