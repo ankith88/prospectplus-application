@@ -58,6 +58,7 @@ const center = {
 
 export default function SavedRoutesPage() {
     const [scriptLoaded, setScriptLoaded] = useState(false);
+    const [pageDataLoading, setPageDataLoading] = useState(true);
     const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [totalDistance, setTotalDistance] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export default function SavedRoutesPage() {
     useEffect(() => {
         const fetchData = async () => {
           if (scriptLoaded && userProfile) {
-            setLoadingData(true);
+            setPageDataLoading(true);
             try {
               const promises: [Promise<SavedRoute[]>, Promise<UserProfile[]>, Promise<Lead[]>] = [
                 (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? getAllUserRoutes() : getUserRoutes(userProfile.uid),
@@ -126,7 +127,7 @@ export default function SavedRoutesPage() {
               console.error("Failed to fetch page data:", error);
               toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
             } finally {
-              setLoadingData(false);
+              setPageDataLoading(false);
             }
           }
         };
@@ -134,7 +135,7 @@ export default function SavedRoutesPage() {
     }, [scriptLoaded, userProfile, toast]);
 
     useEffect(() => {
-        if (loadingData || !scriptLoaded || allRoutes.length === 0) return;
+        if (loadingData || pageDataLoading || !scriptLoaded || allRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         if (activeRouteId) {
@@ -144,7 +145,7 @@ export default function SavedRoutesPage() {
                 setIsRouteActive(true);
             }
         }
-    }, [allRoutes, scriptLoaded, loadingData, handleLoadRoute]);
+    }, [allRoutes, scriptLoaded, loadingData, pageDataLoading, handleLoadRoute]);
     
     const sortedRouteLegs = useMemo(() => {
         if (!directions || !loadedRoute?.leads.length) return [];
@@ -258,7 +259,7 @@ export default function SavedRoutesPage() {
         });
     }, [allRoutes, routeNameFilter, routeDateFilter, routeUserFilter]);
 
-    if (loadingData) {
+    if (loadingData || pageDataLoading) {
         return (
             <div className="flex h-full items-center justify-center">
                 <Loader />
