@@ -23,7 +23,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone, Satellite } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -204,6 +204,7 @@ export default function LeadsMapClient() {
   const [routeAssignee, setRouteAssignee] = useState<string>('');
   const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
   const [allCheckInActivities, setAllCheckInActivities] = useState<Activity[]>([]);
+  const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
 
   
   const geoSearchAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -1491,6 +1492,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     </div>
                     <div className="flex items-center gap-2">
                         <Button onClick={handleShowMyLocation} variant="outline" size="sm"><Locate className="mr-2 h-4 w-4" /> My Location</Button>
+                         <Button onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')} variant="outline" size="sm">
+                            <Satellite className="mr-2 h-4 w-4" />
+                            {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                        </Button>
                         <CollapsibleTrigger asChild>
                             <Button variant="ghost" size="sm">
                                 <SlidersHorizontal className="h-4 w-4" />
@@ -1797,6 +1802,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         mapTypeControl: false,
                         clickableIcons: false,
                     }}
+                    mapTypeId={mapTypeId}
                 >
                     {isDrawing && window.google && (
                         <DrawingManagerF
