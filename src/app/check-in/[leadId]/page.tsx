@@ -118,7 +118,17 @@ export default function CheckInPage() {
 
     const methods = useForm<FormValues>({
         resolver: zodResolver(checkinSchema),
-        defaultValues: {},
+        defaultValues: {
+            ausPostRelationship: undefined,
+            ausPostUsage: '',
+            ausPostDropoff: [],
+            ausPostServicePayment: undefined,
+            otherCouriers: undefined,
+            usedCouriers: [],
+            localDeliveries: undefined,
+            peopleLeaveOffice: undefined,
+            reasonsToLeave: [],
+        },
     });
 
     const newContactForm = useForm({
@@ -201,7 +211,12 @@ export default function CheckInPage() {
         try {
             await saveCheckinProgress();
             toast({ title: "Progress Saved", description: "Your answers have been saved to the database." });
-            setCurrentStep(prev => prev + 1);
+            if (currentStep < TOTAL_STEPS) {
+               setCurrentStep(prev => prev + 1);
+            } else {
+                // This is the finish step logic
+                setCurrentStep(TOTAL_STEPS);
+            }
         } catch (error) {
             console.error("Failed to save checkin data:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save progress." });
@@ -435,7 +450,7 @@ const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
     return (
         <StepWrapper title="Australia Post" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {ausPostRelationship === 'Yes' && (<>
                     <FormField control={control} name="ausPostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                     
@@ -467,7 +482,7 @@ const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
                         </FormItem>
                     )} />
 
-                    <FormField control={control} name="ausPostServicePayment" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={control} name="ausPostServicePayment" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 </>)}
             </div>
         </StepWrapper>
@@ -481,7 +496,7 @@ const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
     return (
         <StepWrapper title="Other Couriers" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {otherCouriers === 'Yes' && (<>
                     <FormField control={control} name="usedCouriers" render={() => (
                         <FormItem>
@@ -510,7 +525,7 @@ const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
                             <FormMessage />
                         </FormItem>
                     )} />
-                    <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 </>)}
             </div>
         </StepWrapper>
@@ -525,7 +540,7 @@ const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBa
     return (
         <StepWrapper title="Office Errands" onNext={onNext} onBack={onBack} isSaving={isSaving} isFinish={true} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {peopleLeave === 'Yes' && (
                     <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>Reasons People Leave</FormLabel><div className="space-y-2">{reasons.map(r => (<FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /></FormControl><FormLabel className="font-normal">{r}</FormLabel></FormItem>)} />))}</div><FormMessage /></FormItem>)} />
                 )}
