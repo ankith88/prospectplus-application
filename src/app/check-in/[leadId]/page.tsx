@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, updateLeadDetails } from '@/services/firebase';
 import type { Lead, Contact, Address, CheckinQuestion, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/use-auth';
+import { calculateCheckinScore } from '@/lib/checkin-scoring';
+import { ScoreIndicator } from '@/components/score-indicator';
 
 const checkinSchema = z.object({
   ausPostRelationship: z.enum(['Yes', 'No']).optional(),
@@ -108,6 +110,7 @@ export default function CheckInPage() {
     const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
     const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
     const [isFindingNearby, setIsFindingNearby] = useState(false);
+    const [checkinScore, setCheckinScore] = useState<{ score: number; reason: string } | null>(null);
 
     const params = useParams();
     const router = useRouter();
@@ -181,8 +184,8 @@ export default function CheckInPage() {
         fetchLeadData();
     }, [leadId, router, toast, methods]);
 
-    const saveCheckinProgress = async () => {
-        if (!lead) return;
+    const saveCheckinProgress = async (): Promise<CheckinQuestion[]> => {
+        if (!lead) return [];
         
         const formData = methods.getValues();
         const checkinQuestions: CheckinQuestion[] = [
@@ -204,6 +207,7 @@ export default function CheckInPage() {
         ];
 
         await updateLeadCheckinQuestions(lead.id, checkinQuestions);
+        return checkinQuestions;
     };
 
     const handleNext = async () => {
@@ -214,7 +218,6 @@ export default function CheckInPage() {
             if (currentStep < TOTAL_STEPS) {
                setCurrentStep(prev => prev + 1);
             } else {
-                // This is the finish step logic
                 setCurrentStep(TOTAL_STEPS);
             }
         } catch (error) {
@@ -228,12 +231,21 @@ export default function CheckInPage() {
     const handleFinish = async () => {
         setIsSaving(true);
         try {
-            await saveCheckinProgress();
-            toast({ title: "Success", description: "Check-in data has been saved." });
+            const checkinQuestions = await saveCheckinProgress();
+            const { score, scoringReason } = calculateCheckinScore(checkinQuestions);
+            setCheckinScore({ score, reason: scoringReason });
+
+            if (lead) {
+                await updateLeadDetails(lead.id, lead, {
+                    checkinScore: score,
+                    checkinScoringReason: scoringReason,
+                });
+            }
+            toast({ title: "Success", description: "Check-in data has been saved and scored." });
             setCurrentStep(TOTAL_STEPS);
         } catch (error) {
-            console.error("Failed to save checkin data:", error);
-            toast({ variant: "destructive", title: "Save Error", description: "Could not save check-in data." });
+            console.error("Failed to save and score checkin data:", error);
+            toast({ variant: "destructive", title: "Save Error", description: "Could not save and score check-in data." });
         } finally {
             setIsSaving(false);
         }
@@ -309,7 +321,7 @@ export default function CheckInPage() {
             case 3: return <Step3 {...stepProps} onNext={handleNext} />;
             case 4: return <Step4 {...stepProps} onNext={handleNext} />;
             case 5: return <Step5 onNext={handleFinish} isFinish={true} {...stepProps} />;
-            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} />;
+            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} scoreData={checkinScore} />;
             default: return null;
         }
     };
@@ -452,7 +464,7 @@ const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
             <div className="space-y-8">
                 <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value ?? ''} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {ausPostRelationship === 'Yes' && (<>
-                    <FormField control={control} name="ausPostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={control} name="ausPostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                     
                     <FormField control={control} name="ausPostDropoff" render={() => (
                         <FormItem>
@@ -549,13 +561,29 @@ const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBa
     );
 };
 
-const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile, onOpenLogNote }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; onOpenLogNote: () => void; }) => {
+const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile, onOpenLogNote, scoreData }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; onOpenLogNote: () => void; scoreData: { score: number; reason: string } | null; }) => {
     const router = useRouter();
     const canShowSpecialButtons = userProfile?.role === 'admin' || userProfile?.uid === 'R1skvdcPUGdXEmJDS9Yh1Wbv77K2';
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2"><h2 className="text-2xl font-bold">Finish & Actions</h2><p className="text-muted-foreground">The check-in is complete. Choose your next action.</p></div>
+
+            {scoreData && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Check-in Score</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center gap-4">
+                        <ScoreIndicator score={scoreData.score} size="lg" />
+                        <p className="text-sm text-muted-foreground text-center">{scoreData.reason}</p>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
+                 <CardHeader>
+                    <CardTitle>Next Actions</CardTitle>
+                </CardHeader>
                 <CardContent className="p-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
@@ -580,3 +608,4 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 
 
   
+

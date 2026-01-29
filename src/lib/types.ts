@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -173,6 +174,8 @@ export interface Lead {
   invoices?: Invoice[]
   services?: ServiceSelection[];
   checkinQuestions?: CheckinQuestion[];
+  checkinScore?: number;
+  checkinScoringReason?: string;
   contactCount?: number
   address?: Address
   latitude?: number;

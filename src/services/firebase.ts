@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -1144,7 +1145,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 async function updateLeadDetails(
   leadId: string,
   oldLead: Lead,
-  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected'>>
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason'>>
 ): Promise<void> {
     try {
         const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
@@ -1160,6 +1161,9 @@ async function updateLeadDetails(
         }
         if (newLeadData.address) {
             changes.push('Address updated.');
+        }
+        if (newLeadData.checkinScore !== undefined) {
+            changes.push(`Check-in score updated to ${newLeadData.checkinScore}.`);
         }
 
         for (const collectionName of collectionsToUpdate) {
@@ -1182,6 +1186,13 @@ async function updateLeadDetails(
                 
                 if (newLeadData.lastProspected) {
                     updatePayload.lastProspected = newLeadData.lastProspected;
+                }
+
+                if (newLeadData.checkinScore !== undefined) {
+                    updatePayload.checkinScore = newLeadData.checkinScore;
+                }
+                if (newLeadData.checkinScoringReason !== undefined) {
+                    updatePayload.checkinScoringReason = newLeadData.checkinScoringReason;
                 }
 
                 if (Object.keys(updatePayload).length > 0) {
@@ -2046,5 +2057,6 @@ export {
 
 
     
+
 
 
