@@ -213,8 +213,14 @@ export default function DoorToDoorDashboard() {
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+        const isFieldSalesUser = userProfile?.role === 'Field Sales';
+
+        const leadsPromise = isFieldSalesUser
+          ? getLeadsFromFirebase({ summary: true, dialerAssigned: userProfile.displayName })
+          : getLeadsFromFirebase({ summary: true });
+
         const [leads, users, routes, appointments, activities] = await Promise.all([
-            getLeadsFromFirebase({ summary: true }),
+            leadsPromise,
             getAllUsers(),
             (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
             getAllAppointments(),
@@ -259,17 +265,18 @@ export default function DoorToDoorDashboard() {
     if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
     
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const activitiesThisWeek = allActivities.filter(a => new Date(a.date) >= weekStart);
+    const userActivitiesThisWeek = allActivities.filter(a => 
+        a.author === userProfile.displayName && new Date(a.date) >= weekStart
+    );
 
-    const checkInActivities = activitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
+    const checkInActivities = userActivitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
     const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
     
-    const leadsThisWeek = allLeads.filter(l => {
-        return checkInActivities.some(a => a.leadId === l.id);
-    });
+    const checkInLeadIds = new Set(checkInActivities.map(a => a.leadId));
+    const leadsThisWeek = allLeads.filter(l => checkInLeadIds.has(l.id));
     
-    const signedUpLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Won');
-    const trialingLeads = leadsThisWeek.filter(l => l.dialerAssigned === userProfile.displayName && l.status === 'Trialing ShipMate');
+    const signedUpLeads = leadsThisWeek.filter(l => l.status === 'Won');
+    const trialingLeads = leadsThisWeek.filter(l => l.status === 'Trialing ShipMate');
     
     const totalSignups = signedUpLeads.length;
     const totalTrials = trialingLeads.length;
@@ -1133,3 +1140,4 @@ export default function DoorToDoorDashboard() {
     
 
     
+
