@@ -55,6 +55,10 @@ const center = {
   lng: 133.7751,
 };
 
+const formatAddress = (address?: Address) => {
+    if (!address) return 'N/A';
+    return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+}
 
 export default function SavedRoutesPage() {
     const [scriptLoaded, setScriptLoaded] = useState(false);
@@ -78,6 +82,9 @@ export default function SavedRoutesPage() {
     const [routeNameFilter, setRouteNameFilter] = useState('');
     const [routeDateFilter, setRouteDateFilter] = useState<Date | undefined>();
     const [routeUserFilter, setRouteUserFilter] = useState<string[]>([]);
+    
+    const [stopNameFilter, setStopNameFilter] = useState('');
+    const [stopAddressFilter, setStopAddressFilter] = useState('');
 
 
     const { userProfile, loading: authLoading } = useAuth();
@@ -173,6 +180,16 @@ export default function SavedRoutesPage() {
         });
     }, [directions, loadedRoute]);
     
+    const filteredSortedRouteLegs = useMemo(() => {
+        if (!sortedRouteLegs.length) return [];
+        return sortedRouteLegs.filter(({ lead }) => {
+            if (!lead) return false;
+            const nameMatch = stopNameFilter ? lead.companyName.toLowerCase().includes(stopNameFilter.toLowerCase()) : true;
+            const addressMatch = stopAddressFilter ? formatAddress(lead.address as Address).toLowerCase().includes(stopAddressFilter.toLowerCase()) : true;
+            return nameMatch && addressMatch;
+        });
+    }, [sortedRouteLegs, stopNameFilter, stopAddressFilter]);
+    
     const handleStartRoute = () => {
         if (!directions || !directions.routes || directions.routes.length === 0 || !loadedRoute) {
             toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route available.' });
@@ -200,14 +217,14 @@ export default function SavedRoutesPage() {
 
         const directionsData = route.directions as any;
     
-        const origin = route.startPoint || `${getLat(directionsData.routes[0].legs[0].start_location)},${getLng(directionsData.routes[0].legs[0].start_location)}`;
-        const destination = route.endPoint || `${getLat(directionsData.routes[0].legs.slice(-1)[0].end_location)},${getLng(directionsData.routes[0].legs.slice(-1)[0].end_location)}`;
+        const origin = route.startPoint ? `place_id:${route.startPoint}` : `${getLat(directionsData.routes[0].legs[0].start_location)},${getLng(directionsData.routes[0].legs[0].start_location)}`;
+        const destination = route.endPoint ? `place_id:${route.endPoint}`: `${getLat(directionsData.routes[0].legs.slice(-1)[0].end_location)},${getLng(directionsData.routes[0].legs.slice(-1)[0].end_location)}`;
         const waypoints = directionsData.routes[0].legs
             .slice(0, -1)
             .map((leg: any) => `${getLat(leg.end_location)},${getLng(leg.end_location)}`)
             .join('|');
     
-        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
+        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
         
         window.open(mapsUrl, '_blank');
     };
@@ -221,11 +238,6 @@ export default function SavedRoutesPage() {
         setTotalDuration(null);
         toast({ title: 'Route Cleared', description: 'Active route has been cleared. Select another route to load.' });
     };
-
-     const formatAddress = (address?: Address) => {
-        if (!address) return 'N/A';
-        return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
-    }
     
     const handleFindNearbyCompanies = useCallback(async (lead: MapLead) => {
         if (!lead?.latitude || !lead?.longitude || !window.google?.maps?.geometry) {
@@ -338,10 +350,23 @@ export default function SavedRoutesPage() {
                         </CardHeader>
                         
                         <TabsContent value="stops" className="flex-grow overflow-hidden flex flex-col">
-                            <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                             <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                                <div className="flex-shrink-0 p-1 space-y-2 border-b mb-2">
+                                    <h4 className="font-semibold flex items-center gap-2"><Filter className="h-4 w-4" /> Filter Stops</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <Input placeholder="Filter by name..." value={stopNameFilter} onChange={e => setStopNameFilter(e.target.value)} />
+                                        <Input placeholder="Filter by address..." value={stopAddressFilter} onChange={e => setStopAddressFilter(e.target.value)} />
+                                    </div>
+                                    {(stopNameFilter || stopAddressFilter) && (
+                                        <Button variant="ghost" size="sm" onClick={() => {
+                                            setStopNameFilter('');
+                                            setStopAddressFilter('');
+                                        }}><X className="mr-2 h-4 w-4" /> Clear Filters</Button>
+                                    )}
+                                </div>
                                 <ScrollArea className="flex-grow">
                                     <div className="space-y-2">
-                                        {loadedRoute && sortedRouteLegs.length > 0 ? sortedRouteLegs.map(({ lead, leg, stopNumber }) => {
+                                        {loadedRoute && filteredSortedRouteLegs.length > 0 ? filteredSortedRouteLegs.map(({ lead, leg, stopNumber }) => {
                                             if (!lead) return null;
                                             return (
                                                 <div key={lead.id}>
@@ -355,12 +380,12 @@ export default function SavedRoutesPage() {
                                                                 </Button>
                                                             </p>
                                                             <div className="flex items-center">
-                                                                <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                                                <p className="text-xs text-muted-foreground">{formatAddress(lead.address as Address)}</p>
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     className="h-6 w-6 ml-1"
-                                                                    onClick={() => handleCopy(formatAddress(lead.address), "Address")}
+                                                                    onClick={() => handleCopy(formatAddress(lead.address as Address), "Address")}
                                                                 >
                                                                     <Clipboard className="h-3 w-3" />
                                                                 </Button>
@@ -386,7 +411,7 @@ export default function SavedRoutesPage() {
                                                 </div>
                                             )
                                         }) : (
-                                            <div className="text-center text-muted-foreground pt-10">No stops in this route, or no route loaded.</div>
+                                            <div className="text-center text-muted-foreground pt-10">{loadedRoute ? 'No stops match your filters.' : 'No stops in this route, or no route loaded.'}</div>
                                         )}
                                     </div>
                                 </ScrollArea>
@@ -489,7 +514,7 @@ export default function SavedRoutesPage() {
                         mapContainerStyle={containerStyle}
                         center={center}
                         zoom={4}
-                        onLoad={setMap}
+                        onLoad={(map) => setMap(map)}
                     >
                          {directions && (
                             <DirectionsRenderer
@@ -563,4 +588,3 @@ export default function SavedRoutesPage() {
 }
 
     
-
