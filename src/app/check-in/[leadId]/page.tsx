@@ -21,7 +21,7 @@ import { PostCallOutcomeDialog } from '@/components/post-call-outcome-dialog';
 import { LogNoteDialog } from '@/components/log-note-dialog';
 import { RevisitDialog } from '@/components/revisit-dialog';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -132,16 +132,6 @@ export default function CheckInPage() {
             peopleLeaveOffice: undefined,
             reasonsToLeave: [],
         },
-    });
-
-    const newContactForm = useForm({
-        resolver: zodResolver(z.object({
-            name: z.string().min(1, "Name is required."),
-            title: z.string().min(1, "Title is required."),
-            email: z.string().email("A valid email is required."),
-            phone: z.string().min(1, "Phone number is required."),
-        })),
-        defaultValues: { name: '', title: '', email: '', phone: '' }
     });
 
     useEffect(() => {
@@ -608,4 +598,5 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 
 
   
+
 
