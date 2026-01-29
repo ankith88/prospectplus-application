@@ -9,7 +9,7 @@ import {
   InfoWindowF,
   DirectionsRenderer,
 } from '@react-google-maps/api';
-import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile } from '@/lib/types';
+import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Lead } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,14 +20,29 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getAllUserRoutes, getUserRoutes, getAllUsers } from '@/services/firebase';
+import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
-
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const containerStyle = {
   width: '100%',
@@ -52,6 +67,11 @@ export default function SavedRoutesPage() {
     const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     const [activeTab, setActiveTab] = useState('stops');
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+    const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
+    const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+    const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
+    const [isFindingNearby, setIsFindingNearby] = useState(false);
+    const [findingNearbyFor, setFindingNearbyFor] = useState<MapLead | null>(null);
 
     const [routeNameFilter, setRouteNameFilter] = useState('');
     const [routeDateFilter, setRouteDateFilter] = useState<Date | undefined>();
@@ -87,24 +107,31 @@ export default function SavedRoutesPage() {
     }, [scriptLoaded, toast]);
 
     useEffect(() => {
-        const fetchAllRoutesAndUsers = async () => {
-          if (userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')) {
-            const [routes, users] = await Promise.all([
-              getAllUserRoutes(),
-              getAllUsers()
-            ]);
-            setAllRoutes(routes);
-            setAllUsers(users);
-          } else if (userProfile) {
-            const routes = await getUserRoutes(userProfile.uid);
-            setAllRoutes(routes);
+        const fetchData = async () => {
+          if (scriptLoaded && userProfile) {
+            setLoadingData(true);
+            try {
+              const promises: [Promise<SavedRoute[]>, Promise<UserProfile[]>, Promise<Lead[]>] = [
+                (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? getAllUserRoutes() : getUserRoutes(userProfile.uid),
+                getAllUsers(),
+                getCompaniesFromFirebase()
+              ];
+              
+              const [routes, users, companies] = await Promise.all(promises);
+              
+              setAllRoutes(routes);
+              setAllUsers(users);
+              setAllCompanies(companies);
+            } catch (error) {
+              console.error("Failed to fetch page data:", error);
+              toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
+            } finally {
+              setLoadingData(false);
+            }
           }
         };
-
-        if (scriptLoaded && userProfile) {
-          fetchAllRoutesAndUsers();
-        }
-    }, [scriptLoaded, userProfile]);
+        fetchData();
+    }, [scriptLoaded, userProfile, toast]);
 
     useEffect(() => {
         if (loadingData || !scriptLoaded || allRoutes.length === 0) return;
@@ -161,15 +188,44 @@ export default function SavedRoutesPage() {
         toast({ title: 'Route Cleared', description: 'Active route has been cleared. Select another route to load.' });
     };
 
-     const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
-        if (!address) return 'Address not available';
-        if (typeof address === 'string') return address;
-        return [
-            address.street,
-            address.city,
-            address.state,
-        ].filter(Boolean).join(', ');
+     const formatAddress = (address?: Address) => {
+        if (!address) return 'N/A';
+        return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
     }
+    
+    const handleFindNearbyCompanies = useCallback(async (lead: MapLead) => {
+        if (!lead?.latitude || !lead?.longitude || !window.google?.maps?.geometry) {
+            toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
+            return;
+        }
+
+        setIsFindingNearby(true);
+        setFindingNearbyFor(lead);
+        try {
+            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+            
+            const nearby = allCompanies.filter(company => {
+            if (!company.latitude || !company.longitude || company.id === lead.id) {
+                return false;
+            }
+            const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+            return distance <= 1000; // 1km radius
+            });
+
+            setNearbyCompanies(nearby);
+            setIsNearbyCompaniesDialogOpen(true);
+            if(nearby.length === 0) {
+                toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 1km radius.' });
+            }
+        } catch (error) {
+            console.error("Error finding nearby companies:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch nearby companies.' });
+        } finally {
+            setIsFindingNearby(false);
+            setFindingNearbyFor(null);
+        }
+    }, [allCompanies, toast]);
 
     const userOptionsForFilter = useMemo(() => {
         if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') {
@@ -271,10 +327,15 @@ export default function SavedRoutesPage() {
                                                         <p className="text-xs text-muted-foreground">
                                                             {leg?.duration?.text} • {leg?.distance?.text}
                                                         </p>
-                                                        <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
-                                                            <CheckSquare className="mr-2 h-4 w-4" />
-                                                            Check In
-                                                        </Button>
+                                                        <div className="flex gap-1">
+                                                          <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
+                                                              <CheckSquare className="mr-2 h-4 w-4" />
+                                                              Check In
+                                                          </Button>
+                                                          <Button size="sm" variant="outline" onClick={() => handleFindNearbyCompanies(lead)} disabled={isFindingNearby && findingNearbyFor?.id === lead.id}>
+                                                            {isFindingNearby && findingNearbyFor?.id === lead.id ? <Loader /> : <Building className="h-4 w-4" />}
+                                                          </Button>
+                                                        </div>
                                                         </div>
                                                     </div>
                                                     </Card>
@@ -408,6 +469,47 @@ export default function SavedRoutesPage() {
                     </GoogleMap>
                 </div>
             </div>
+            <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Nearby Signed Customers</DialogTitle>
+                        <DialogDescription>
+                            Found {nearbyCompanies.length} signed customer(s) within a 1km radius.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[60vh]">
+                        {nearbyCompanies.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Company Name</TableHead>
+                                        <TableHead>Address</TableHead>
+                                        <TableHead>Industry</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {nearbyCompanies.map(company => (
+                                        <TableRow key={company.id}>
+                                            <TableCell className="font-semibold whitespace-normal">
+                                                <Button variant="link" asChild className="p-0 h-auto text-left whitespace-normal">
+                                                    <Link href={`/companies/${company.id}`} target="_blank">{company.companyName}</Link>
+                                                </Button>
+                                            </TableCell>
+                                            <TableCell className="whitespace-normal">{formatAddress(company.address as Address)}</TableCell>
+                                            <TableCell className="whitespace-normal">{company.industryCategory || 'N/A'}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                        )}
+                    </ScrollArea>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
