@@ -58,6 +58,7 @@ const center = {
 
 export default function SavedRoutesPage() {
     const [scriptLoaded, setScriptLoaded] = useState(false);
+    const [map, setMap] = useState<google.maps.Map | null>(null);
     const [pageDataLoading, setPageDataLoading] = useState(true);
     const [loadedRoute, setLoadedRoute] = useState<SavedRoute | null>(null);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -440,7 +441,7 @@ export default function SavedRoutesPage() {
                                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                                 <div>
                                                     <p className="font-semibold">{route.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                    <p className="text-xs text-muted-foreground">{route.leads.length} stops • Created on {new Date(route.createdAt).toLocaleDateString()}</p>
                                                     {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
                                                         <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as any).userName}</p>
                                                     )}
@@ -538,3 +539,5 @@ export default function SavedRoutesPage() {
         </div>
     );
 }
+
+    
