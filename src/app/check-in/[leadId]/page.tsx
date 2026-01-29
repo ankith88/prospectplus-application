@@ -95,6 +95,7 @@ export default function CheckInPage() {
     const [isSaving, setIsSaving] = useState(false);
     
     const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
+    const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
     const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
 
@@ -426,8 +427,8 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/field-sales')}><Route className="mr-2"/> Back to Route</Button>
                         {canShowSpecialButtons && <>
-                            <Button size="lg" className="h-auto py-4" onClick={() => {}}><Briefcase className="mr-2"/> Signup</Button>
-                            <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => {}}><Star className="mr-2"/> Free Trial</Button>
+                            <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${(useParams().leadId as string)}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
+                            <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => router.push(`/check-in/${(useParams().leadId as string)}/select-services?mode=service-trial`)}><Star className="mr-2"/> Free Trial</Button>
                         </>}
                     </div>
                 </CardContent>
