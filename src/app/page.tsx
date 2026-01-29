@@ -1,5 +1,4 @@
-
-"use client"
+'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -11,22 +10,38 @@ export default function HomePage() {
   const { user, userProfile, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        if (userProfile?.role === 'admin') {
-            router.replace('/admin/dashboard');
-        } else if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
-            router.replace('/field-sales');
-        } else if (userProfile?.role === 'Lead Gen Admin') {
-            router.replace('/signed-customers');
-        } else if (userProfile?.role === 'Lead Gen') {
-            router.replace('/leads/new');
-        } else {
-            router.replace('/leads');
-        }
-      } else {
-        router.replace('/signin');
+    if (loading) {
+      return; // Wait until authentication state is loaded
+    }
+
+    if (!user) {
+      router.replace('/signin');
+      return;
+    }
+
+    if (userProfile) {
+      switch (userProfile.role) {
+        case 'admin':
+          router.replace('/admin/dashboard');
+          break;
+        case 'Field Sales':
+        case 'Field Sales Admin':
+          router.replace('/field-sales');
+          break;
+        case 'Lead Gen Admin':
+          router.replace('/signed-customers');
+          break;
+        case 'Lead Gen':
+          router.replace('/leads/new');
+          break;
+        default:
+          router.replace('/leads');
+          break;
       }
+    } else {
+      // If user is logged in but profile is not loaded for some reason,
+      // go to a safe default. This can be a temporary state.
+      router.replace('/leads');
     }
   }, [user, userProfile, loading, router]);
 
