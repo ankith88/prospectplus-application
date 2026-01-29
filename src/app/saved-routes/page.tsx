@@ -46,6 +46,7 @@ export default function SavedRoutesPage() {
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isRouteActive, setIsRouteActive] = useState(false);
     const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
+    const [activeTab, setActiveTab] = useState('stops');
 
 
     const { userProfile, loading: authLoading } = useAuth();
@@ -73,6 +74,7 @@ export default function SavedRoutesPage() {
             setIsRouteActive(true);
             toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
         }
+        setActiveTab('stops');
     }, [scriptLoaded, toast]);
 
     useEffect(() => {
@@ -172,7 +174,7 @@ export default function SavedRoutesPage() {
             </header>
             <div className="flex-grow flex flex-col md:flex-row-reverse gap-4">
                  <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
-                    <Tabs defaultValue="stops" className="flex flex-col h-full">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                          <CardHeader className="pb-2 flex-shrink-0">
                             <div className="flex items-center justify-between">
                                 <CardTitle>
@@ -331,4 +333,3 @@ export default function SavedRoutesPage() {
         </div>
     );
 }
-
