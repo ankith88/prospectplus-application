@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -17,12 +16,14 @@ import { Button } from '@/components/ui/button';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getAllUserRoutes, getUserRoutes } from '@/services/firebase';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 const containerStyle = {
   width: '100%',
@@ -66,10 +67,16 @@ export default function SavedRoutesPage() {
         setLoadedRoute(route);
         setTotalDistance(route.totalDistance || null);
         setTotalDuration(route.totalDuration || null);
-    }, [scriptLoaded]);
+
+        if (route.id) {
+            localStorage.setItem('activeRouteId', route.id);
+            setIsRouteActive(true);
+            toast({ title: 'Route Loaded', description: `Route "${route.name}" is now active.` });
+        }
+    }, [scriptLoaded, toast]);
 
     useEffect(() => {
-        const fetchAllRoutesForAdmin = async () => {
+        const fetchAllRoutesForUser = async () => {
           if (userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')) {
             const routes = await getAllUserRoutes();
             setAllRoutes(routes);
@@ -80,7 +87,7 @@ export default function SavedRoutesPage() {
         };
 
         if (scriptLoaded && userProfile) {
-          fetchAllRoutesForAdmin();
+          fetchAllRoutesForUser();
         }
     }, [scriptLoaded, userProfile]);
 
@@ -134,8 +141,9 @@ export default function SavedRoutesPage() {
         setDirections(null);
         setLoadedRoute(null);
         localStorage.removeItem('activeRouteId');
-        toast({ title: 'Route Stopped', description: 'Active route has been cleared.' });
-        router.push('/field-sales');
+        setTotalDistance(null);
+        setTotalDuration(null);
+        toast({ title: 'Route Cleared', description: 'Active route has been cleared. Select another route to load.' });
     };
 
      const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
@@ -160,81 +168,133 @@ export default function SavedRoutesPage() {
         <div className="flex flex-col h-full gap-4">
             <header>
                 <h1 className="text-3xl font-bold tracking-tight">Saved Route</h1>
-                <p className="text-muted-foreground">{loadedRoute ? loadedRoute.name : 'No active route loaded.'}</p>
+                <p className="text-muted-foreground">{loadedRoute ? `Viewing route: ${loadedRoute.name}` : 'No active route loaded. Select a route from the list.'}</p>
             </header>
             <div className="flex-grow flex flex-col md:flex-row-reverse gap-4">
                  <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
-                    <CardHeader className="pb-2 flex-shrink-0">
-                        <CardTitle className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                                <Route className="h-5 w-5" /> Selected Stops ({loadedRoute?.leads.length || 0})
-                                {isRouteActive && <Badge variant="destructive">Active</Badge>}
-                            </span>
-                             <Button variant="ghost" size="icon" onClick={handleStopRoute}>
-                                <XCircle className="h-4 w-4" />
-                            </Button>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
-                         <ScrollArea className="flex-grow">
-                            <div className="space-y-2">
-                                {sortedRouteLegs.map(({ lead, leg, stopNumber }) => {
-                                    if (!lead) return null;
-                                    return (
-                                        <div key={lead.id}>
-                                            <Card className="p-3 flex items-center gap-2">
-                                            <div className="flex-grow">
-                                                <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-bold">
-                                                        <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                            <Link href={`/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
+                    <Tabs defaultValue="stops" className="flex flex-col h-full">
+                         <CardHeader className="pb-2 flex-shrink-0">
+                            <div className="flex items-center justify-between">
+                                <CardTitle>
+                                    {isRouteActive && loadedRoute ? loadedRoute.name : 'Routes'}
+                                </CardTitle>
+                                {isRouteActive && (
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="destructive">Active</Badge>
+                                        <Button variant="ghost" size="icon" onClick={handleStopRoute}>
+                                            <XCircle className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                            <TabsList className="grid w-full grid-cols-2 mt-2">
+                                <TabsTrigger value="stops">
+                                    <span className="flex items-center gap-2">
+                                        <Route className="h-4 w-4" /> Stops ({loadedRoute?.leads.length || 0})
+                                    </span>
+                                </TabsTrigger>
+                                <TabsTrigger value="routes">
+                                    <span className="flex items-center gap-2">
+                                        <Save className="h-4 w-4" /> All Routes ({allRoutes.length})
+                                    </span>
+                                </TabsTrigger>
+                            </TabsList>
+                        </CardHeader>
+                        
+                        <TabsContent value="stops" className="flex-grow overflow-hidden flex flex-col">
+                            <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                                <ScrollArea className="flex-grow">
+                                    <div className="space-y-2">
+                                        {loadedRoute && sortedRouteLegs.length > 0 ? sortedRouteLegs.map(({ lead, leg, stopNumber }) => {
+                                            if (!lead) return null;
+                                            return (
+                                                <div key={lead.id}>
+                                                    <Card className="p-3 flex items-center gap-2">
+                                                    <div className="flex-grow">
+                                                        <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <p className="font-bold">
+                                                                <Button variant="link" className="p-0 h-auto text-left" asChild>
+                                                                    <Link href={`/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
+                                                                </Button>
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                                        </div>
+                                                        </div>
+                                                        <div className="flex items-center justify-between mt-2">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {leg?.duration?.text} • {leg?.distance?.text}
+                                                        </p>
+                                                        <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
+                                                            <CheckSquare className="mr-2 h-4 w-4" />
+                                                            Check In
                                                         </Button>
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                                        </div>
+                                                    </div>
+                                                    </Card>
                                                 </div>
-                                                </div>
-                                                <div className="flex items-center justify-between mt-2">
-                                                <p className="text-xs text-muted-foreground">
-                                                    {leg?.duration?.text} • {leg?.distance?.text}
-                                                </p>
-                                                <Button size="sm" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
-                                                    <CheckSquare className="mr-2 h-4 w-4" />
-                                                    Check In
-                                                </Button>
+                                            )
+                                        }) : (
+                                            <div className="text-center text-muted-foreground pt-10">No stops in this route, or no route loaded.</div>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </CardContent>
+                            {loadedRoute && (
+                                <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
+                                    {totalDistance && totalDuration && (
+                                        <div className="flex justify-around w-full text-center text-sm p-2 bg-muted rounded-md">
+                                            <div className="flex items-center gap-2">
+                                                <Milestone className="h-4 w-4 text-muted-foreground"/>
+                                                <div>
+                                                    <p className="font-semibold">{totalDistance}</p>
+                                                    <p className="text-xs text-muted-foreground">Total Distance</p>
                                                 </div>
                                             </div>
-                                            </Card>
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="h-4 w-4 text-muted-foreground"/>
+                                                <div>
+                                                    <p className="font-semibold">{totalDuration}</p>
+                                                    <p className="text-xs text-muted-foreground">Total Time</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                })}
-                            </div>
-                         </ScrollArea>
-                    </CardContent>
-                     <CardFooter className="flex flex-col gap-2 pt-4 border-t flex-shrink-0">
-                        {totalDistance && totalDuration && (
-                            <div className="flex justify-around w-full text-center text-sm p-2 bg-muted rounded-md">
-                                <div className="flex items-center gap-2">
-                                    <Milestone className="h-4 w-4 text-muted-foreground"/>
-                                    <div>
-                                        <p className="font-semibold">{totalDistance}</p>
-                                        <p className="text-xs text-muted-foreground">Total Distance</p>
+                                    )}
+                                    <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700" disabled={!directions}>
+                                        <Play className="mr-2 h-4 w-4" />
+                                        Start Route
+                                    </Button>
+                                </CardFooter>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="routes" className="flex-grow overflow-hidden">
+                            <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                                <ScrollArea className="flex-grow">
+                                {allRoutes.length > 0 ? (
+                                    <div className="space-y-2">
+                                    {allRoutes.map(route => (
+                                        <Card key={route.id} className="p-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                <div>
+                                                    <p className="font-semibold">{route.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
+                                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                                        <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as any).userName}</p>
+                                                    )}
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load Route</Button>
+                                            </div>
+                                        </Card>
+                                    ))}
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-muted-foreground"/>
-                                    <div>
-                                        <p className="font-semibold">{totalDuration}</p>
-                                        <p className="text-xs text-muted-foreground">Total Time</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                         <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700" disabled={!directions}>
-                            <Play className="mr-2 h-4 w-4" />
-                            Start Route
-                        </Button>
-                     </CardFooter>
+                                ) : (
+                                    <p className="text-center text-muted-foreground pt-10">No saved routes found.</p>
+                                )}
+                                </ScrollArea>
+                            </CardContent>
+                        </TabsContent>
+                    </Tabs>
                 </Card>
                 <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
                     <GoogleMap
