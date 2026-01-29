@@ -179,6 +179,26 @@ export default function SavedRoutesPage() {
         setIsRouteActive(true);
     };
 
+    const handleStartRouteFromList = (route: SavedRoute) => {
+        if (!route.directions || !route.directions.routes || route.directions.routes.length === 0) {
+            toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No directions available for this route.' });
+            return;
+        }
+
+        const directionsData = route.directions;
+    
+        const origin = route.startPoint || `${''}${directionsData.routes[0].legs[0].start_location.lat()},${''}${directionsData.routes[0].legs[0].start_location.lng()}`;
+        const destination = route.endPoint || `${''}${directionsData.routes[0].legs.slice(-1)[0].end_location.lat()},${''}${directionsData.routes[0].legs.slice(-1)[0].end_location.lng()}`;
+        const waypoints = directionsData.routes[0].legs
+            .slice(0, -1)
+            .map((leg: any) => leg.end_address)
+            .join('|');
+    
+        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
+        
+        window.open(mapsUrl, '_blank');
+    };
+
     const handleStopRoute = () => {
         setIsRouteActive(false);
         setDirections(null);
@@ -425,7 +445,10 @@ export default function SavedRoutesPage() {
                                                         <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as any).userName}</p>
                                                     )}
                                                 </div>
-                                                <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load Route</Button>
+                                                <div className="flex items-center gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load Route</Button>
+                                                    <Button size="sm" variant="default" onClick={() => handleStartRouteFromList(route)}>Start</Button>
+                                                </div>
                                             </div>
                                         </Card>
                                     ))}
@@ -443,6 +466,7 @@ export default function SavedRoutesPage() {
                         mapContainerStyle={containerStyle}
                         center={center}
                         zoom={4}
+                        onLoad={setMap}
                     >
                          {directions && (
                             <DirectionsRenderer
