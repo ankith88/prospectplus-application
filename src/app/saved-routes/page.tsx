@@ -13,16 +13,20 @@ import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity,
 import { Loader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getAllUserRoutes, getUserRoutes } from '@/services/firebase';
+import { getAllUserRoutes, getUserRoutes, getAllUsers } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 
 
 const containerStyle = {
@@ -47,6 +51,11 @@ export default function SavedRoutesPage() {
     const [isRouteActive, setIsRouteActive] = useState(false);
     const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     const [activeTab, setActiveTab] = useState('stops');
+    const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+    const [routeNameFilter, setRouteNameFilter] = useState('');
+    const [routeDateFilter, setRouteDateFilter] = useState<Date | undefined>();
+    const [routeUserFilter, setRouteUserFilter] = useState<string[]>([]);
 
 
     const { userProfile, loading: authLoading } = useAuth();
@@ -78,10 +87,14 @@ export default function SavedRoutesPage() {
     }, [scriptLoaded, toast]);
 
     useEffect(() => {
-        const fetchAllRoutesForUser = async () => {
+        const fetchAllRoutesAndUsers = async () => {
           if (userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')) {
-            const routes = await getAllUserRoutes();
+            const [routes, users] = await Promise.all([
+              getAllUserRoutes(),
+              getAllUsers()
+            ]);
             setAllRoutes(routes);
+            setAllUsers(users);
           } else if (userProfile) {
             const routes = await getUserRoutes(userProfile.uid);
             setAllRoutes(routes);
@@ -89,7 +102,7 @@ export default function SavedRoutesPage() {
         };
 
         if (scriptLoaded && userProfile) {
-          fetchAllRoutesForUser();
+          fetchAllRoutesAndUsers();
         }
     }, [scriptLoaded, userProfile]);
 
@@ -157,6 +170,37 @@ export default function SavedRoutesPage() {
             address.state,
         ].filter(Boolean).join(', ');
     }
+
+    const userOptionsForFilter = useMemo(() => {
+        if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') {
+            return [];
+        }
+        const usersWithRoutes = new Set(allRoutes.map(r => (r as any).userName));
+        return Array.from(usersWithRoutes).map(name => ({ value: name, label: name }));
+    }, [allRoutes, userProfile]);
+
+    const filteredAllRoutes = useMemo(() => {
+        return allRoutes.filter(route => {
+            const nameMatch = routeNameFilter ? route.name.toLowerCase().includes(routeNameFilter.toLowerCase()) : true;
+            
+            let dateMatch = true;
+            if (routeDateFilter) {
+                if (!route.scheduledDate) {
+                    dateMatch = false;
+                } else {
+                    const routeDate = new Date(route.scheduledDate);
+                    const filterDate = new Date(routeDateFilter);
+                    dateMatch = routeDate.getFullYear() === filterDate.getFullYear() &&
+                                routeDate.getMonth() === filterDate.getMonth() &&
+                                routeDate.getDate() === filterDate.getDate();
+                }
+            }
+            
+            const userMatch = routeUserFilter.length === 0 || routeUserFilter.includes((route as any).userName);
+
+            return nameMatch && dateMatch && userMatch;
+        });
+    }, [allRoutes, routeNameFilter, routeDateFilter, routeUserFilter]);
 
     if (loadingData) {
         return (
@@ -270,12 +314,46 @@ export default function SavedRoutesPage() {
                             )}
                         </TabsContent>
 
-                        <TabsContent value="routes" className="flex-grow overflow-hidden">
+                        <TabsContent value="routes" className="flex-grow overflow-hidden flex flex-col">
                             <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                                <div className="flex-shrink-0 p-1 space-y-2 border-b mb-2">
+                                    <h4 className="font-semibold flex items-center gap-2"><Filter className="h-4 w-4" /> Filters</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <Input placeholder="Filter by route name..." value={routeNameFilter} onChange={e => setRouteNameFilter(e.target.value)} />
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {routeDateFilter ? format(routeDateFilter, "PPP") : <span>Filter by date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0 z-[51]">
+                                                <Calendar mode="single" selected={routeDateFilter} onSelect={setRouteDateFilter} initialFocus />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                        <div className="pt-2">
+                                            <MultiSelectCombobox
+                                                options={userOptionsForFilter}
+                                                selected={routeUserFilter}
+                                                onSelectedChange={setRouteUserFilter}
+                                                placeholder="Filter by user..."
+                                            />
+                                        </div>
+                                    )}
+                                    {(routeNameFilter || routeDateFilter || routeUserFilter.length > 0) && (
+                                        <Button variant="ghost" size="sm" onClick={() => {
+                                            setRouteNameFilter('');
+                                            setRouteDateFilter(undefined);
+                                            setRouteUserFilter([]);
+                                        }}><X className="mr-2 h-4 w-4" /> Clear Filters</Button>
+                                    )}
+                                </div>
                                 <ScrollArea className="flex-grow">
-                                {allRoutes.length > 0 ? (
+                                {filteredAllRoutes.length > 0 ? (
                                     <div className="space-y-2">
-                                    {allRoutes.map(route => (
+                                    {filteredAllRoutes.map(route => (
                                         <Card key={route.id} className="p-3">
                                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                                 <div>
@@ -291,7 +369,7 @@ export default function SavedRoutesPage() {
                                     ))}
                                     </div>
                                 ) : (
-                                    <p className="text-center text-muted-foreground pt-10">No saved routes found.</p>
+                                    <p className="text-center text-muted-foreground pt-10">No saved routes match filters.</p>
                                 )}
                                 </ScrollArea>
                             </CardContent>
