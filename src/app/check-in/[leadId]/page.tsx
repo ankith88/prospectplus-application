@@ -171,33 +171,51 @@ export default function CheckInPage() {
         fetchLeadData();
     }, [leadId, router, toast, methods]);
 
-    const handleFinish = async () => {
+    const saveCheckinProgress = async () => {
         if (!lead) return;
+        
+        const formData = methods.getValues();
+        const checkinQuestions: CheckinQuestion[] = [
+            { question: "Do you have a relationship with Australia Post?", answer: formData.ausPostRelationship || 'N/A' },
+            ...(formData.ausPostRelationship === 'Yes' ? [
+                { question: "What do you use them for?", answer: formData.ausPostUsage || 'N/A' },
+                { question: "Do you drop it off or do they come here?", answer: formData.ausPostDropoff || [] },
+                { question: "Do you pay for the service?", answer: formData.ausPostServicePayment || 'N/A' },
+            ] : []),
+            { question: "Do you use any other couriers?", answer: formData.otherCouriers || 'N/A' },
+            ...(formData.otherCouriers === 'Yes' ? [
+                { question: "Which Courier do you use?", answer: formData.usedCouriers || [] },
+                { question: "Do you have any need for local same-day deliveries?", answer: formData.localDeliveries || 'N/A' },
+            ] : []),
+            { question: "Do people leave the office during the day?", answer: formData.peopleLeaveOffice || 'N/A' },
+            ...(formData.peopleLeaveOffice === 'Yes' ? [
+                { question: "Reasons People Leave", answer: formData.reasonsToLeave || [] },
+            ] : []),
+        ];
+
+        await updateLeadCheckinQuestions(lead.id, checkinQuestions);
+    };
+
+    const handleNext = async () => {
         setIsSaving(true);
         try {
-            const formData = methods.getValues();
-            const checkinQuestions: CheckinQuestion[] = [
-                { question: "Do you have a relationship with Australia Post?", answer: formData.ausPostRelationship || 'N/A' },
-                ...(formData.ausPostRelationship === 'Yes' ? [
-                    { question: "What do you use them for?", answer: formData.ausPostUsage || 'N/A' },
-                    { question: "Do you drop it off or do they come here?", answer: formData.ausPostDropoff || [] },
-                    { question: "Do you pay for the service?", answer: formData.ausPostServicePayment || 'N/A' },
-                ] : []),
-                { question: "Do you use any other couriers?", answer: formData.otherCouriers || 'N/A' },
-                ...(formData.otherCouriers === 'Yes' ? [
-                    { question: "Which Courier do you use?", answer: formData.usedCouriers || [] },
-                    { question: "Do you have any need for local same-day deliveries?", answer: formData.localDeliveries || 'N/A' },
-                ] : []),
-                { question: "Do people leave the office during the day?", answer: formData.peopleLeaveOffice || 'N/A' },
-                ...(formData.peopleLeaveOffice === 'Yes' ? [
-                    { question: "Reasons People Leave", answer: formData.reasonsToLeave || [] },
-                ] : []),
-            ];
-
-            await updateLeadCheckinQuestions(lead.id, checkinQuestions);
+            await saveCheckinProgress();
+            toast({ title: "Progress Saved", description: "Your answers have been saved to the database." });
+            setCurrentStep(prev => prev + 1);
+        } catch (error) {
+            console.error("Failed to save checkin data:", error);
+            toast({ variant: "destructive", title: "Save Error", description: "Could not save progress." });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const handleFinish = async () => {
+        setIsSaving(true);
+        try {
+            await saveCheckinProgress();
             toast({ title: "Success", description: "Check-in data has been saved." });
             setCurrentStep(TOTAL_STEPS);
-
         } catch (error) {
             console.error("Failed to save checkin data:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save check-in data." });
@@ -206,7 +224,6 @@ export default function CheckInPage() {
         }
     };
     
-    const handleNext = () => setCurrentStep(prev => prev + 1);
     const handleBack = () => setCurrentStep(prev => prev - 1);
     const handleStepClick = (step: number) => setCurrentStep(step);
 
@@ -545,3 +562,6 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 
     
 
+
+
+  
