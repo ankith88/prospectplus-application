@@ -240,6 +240,7 @@ export default function LeadsMapClient() {
   const [routeAddressFilter, setRouteAddressFilter] = useState('');
 
   const [filters, setFilters] = useState({
+    companyName: '',
     franchisee: [] as string[],
     status: [] as string[],
     state: [] as string[],
@@ -549,82 +550,78 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   
     const filteredData = useMemo(() => {
-        if (!userProfile) return [];
+    if (!userProfile) return [];
 
-        let dataToFilter = mapData;
+    let dataToFilter = mapData;
 
-        // Role-based filtering
-        const displayName = userProfile.displayName;
-        if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
-            dataToFilter = dataToFilter.filter(item => {
-                return item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
-            });
-        } else if (userProfile.role === 'user') {
-            dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
+    // Role-based filtering
+    const displayName = userProfile.displayName;
+    if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
+      dataToFilter = dataToFilter.filter(item => {
+        return item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
+      });
+    } else if (userProfile.role === 'user') {
+      dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
+    }
+
+    const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
+
+    return dataToFilter.filter(item => {
+      const companyNameMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+      const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
+      const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+      const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+      const statusMatch = filters.status.length > 0 ? filters.status.includes(item.status) : true;
+
+      let campaignMatch = true;
+      if (filters.campaign && filters.campaign !== 'all') {
+        const leadCampaign = (item as Lead).campaign;
+        if (filters.campaign === 'D2D') {
+          campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
+        } else {
+          campaignMatch = leadCampaign === filters.campaign;
         }
+      }
 
-        const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
+      if (item.isCompany) {
+        return companyNameMatch && dialerMatch && franchiseeMatch && stateMatch && statusMatch && campaignMatch;
+      }
 
-        // Filters that apply to all items (leads and companies)
-        const universalFilters = (item: MapLead) => {
-            const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
-            const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-            const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-            const statusMatch = filters.status.length === 0 || filters.status.includes(item.status);
-            
-            let campaignMatch = true;
-            if (filters.campaign && filters.campaign !== 'all') {
-                const leadCampaign = (item as Lead).campaign;
-                if (filters.campaign === 'D2D') {
-                    campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
-                } else {
-                    campaignMatch = leadCampaign === filters.campaign;
-                }
-            }
-            return franchiseeMatch && stateMatch && statusMatch && campaignMatch && dialerMatch;
-        };
+      const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
+      const checkInStatusMatch = filters.checkInStatus === 'all' ||
+        (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
+        (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
 
-        // Filters that apply only to leads
-        const leadSpecificFilters = (item: MapLead) => {
-            if (item.isCompany) return true; // Always pass companies through lead-specific filters
+      let checkInDateMatch = true;
+      if (filters.checkInDate?.from) {
+        if (!hasBeenCheckedIn) {
+          checkInDateMatch = false;
+        } else {
+          const fromDate = startOfDay(filters.checkInDate.from);
+          const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
+          const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
+          if (checkInActivity) {
+            const checkInDate = new Date(checkInActivity.date);
+            checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+          } else {
+            checkInDateMatch = false;
+          }
+        }
+      }
 
-            const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
-            const checkInStatusMatch = filters.checkInStatus === 'all' ||
-                                        (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
-                                        (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
+      const isInRoute = leadToRouteMap.has(item.id);
+      const routeStatusMatch = filters.routeStatus === 'all' ||
+        (filters.routeStatus === 'in-route' && isInRoute) ||
+        (filters.routeStatus === 'not-in-route' && !isInRoute);
 
-            let checkInDateMatch = true;
-            if (filters.checkInDate?.from) {
-                if (!hasBeenCheckedIn) {
-                    checkInDateMatch = false;
-                } else {
-                    const fromDate = startOfDay(filters.checkInDate.from);
-                    const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
-                    const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id); // Assuming only latest check-in is stored or relevant
-                    if (checkInActivity) {
-                        const checkInDate = new Date(checkInActivity.date);
-                        checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
-                    } else {
-                        checkInDateMatch = false;
-                    }
-                }
-            }
+      const fieldSalesMatch = filters.fieldSales === 'all' ||
+        (filters.fieldSales === 'yes' && item.fieldSales === true) ||
+        (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
 
-            const isInRoute = leadToRouteMap.has(item.id);
-            const routeStatusMatch = filters.routeStatus === 'all' ||
-                                        (filters.routeStatus === 'in-route' && isInRoute) ||
-                                        (filters.routeStatus === 'not-in-route' && !isInRoute);
+      return companyNameMatch && dialerMatch && franchiseeMatch && stateMatch && statusMatch && campaignMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
+    });
 
-            const fieldSalesMatch = filters.fieldSales === 'all' ||
-                                    (filters.fieldSales === 'yes' && item.fieldSales === true) ||
-                                    (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
-
-            return checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
-        };
-        
-        return dataToFilter.filter(item => universalFilters(item) && leadSpecificFilters(item));
-
-    }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
+  }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
     
     const { leadsCount, signedCustomersCount } = useMemo(() => {
         let leads = 0;
@@ -1463,6 +1460,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         )
     }
     
+    const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || filters.status.length > 0 || filters.state.length > 0 || filters.checkInStatus !== 'all' || !!filters.checkInDate || filters.routeStatus !== 'all' || filters.campaign !== 'all' || filters.fieldSales !== 'all' || filters.dialerAssigned.length > 0;
+
     const MapLegend = () => (
       <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
         <h4 className="font-bold text-center">Legend</h4>
@@ -1514,6 +1513,10 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </CardContent>
                         <TabsContent value="filters">
                              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Company Name</Label>
+                                    <Input placeholder="Filter by company name..." value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                                </div>
                                 <div className="space-y-2">
                                     <Label>Dialer Assigned</Label>
                                     <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
