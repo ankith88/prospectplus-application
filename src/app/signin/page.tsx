@@ -1,6 +1,5 @@
 
-
-"use client"
+'use client'
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -42,7 +41,7 @@ export default function SignInPage() {
   
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace('/leads');
+      router.replace('/');
     }
   }, [user, authLoading, router]);
 
@@ -50,7 +49,7 @@ export default function SignInPage() {
     e.preventDefault();
     try {
       await signIn(email, password);
-      // The redirect is handled by the useEffect in useAuth
+      // The redirect is handled by the useEffect above
     } catch (error: any) {
       console.error("Sign in failed:", error);
       let errorMessage = "An unexpected error occurred. Please check your credentials.";
