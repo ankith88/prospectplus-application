@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
@@ -34,13 +35,15 @@ import { useAuth } from '@/hooks/use-auth';
 const checkinSchema = z.object({
   ausPostRelationship: z.enum(['Yes', 'No']).optional(),
   ausPostUsage: z.string().optional(),
-  ausPostDropoff: z.enum(['Drop-off', 'They collect']).optional(),
+  ausPostDropoff: z.array(z.string()).optional(),
+  ausPostServicePayment: z.enum(['Yes', 'No']).optional(),
   otherCouriers: z.enum(['Yes', 'No']).optional(),
   usedCouriers: z.array(z.string()).optional(),
   localDeliveries: z.enum(['Yes', 'No']).optional(),
   peopleLeaveOffice: z.enum(['Yes', 'No']).optional(),
   reasonsToLeave: z.array(z.string()).optional(),
 });
+
 
 type FormValues = z.infer<typeof checkinSchema>;
 
@@ -140,18 +143,18 @@ export default function CheckInPage() {
                     setLead(leadData);
                     setContacts(leadData.contacts || []);
                     if (leadData.checkinQuestions) {
-                        const restoredData = leadData.checkinQuestions.reduce((acc, q) => {
-                            const key = q.question.toLowerCase().replace(/[^a-z0-9]/gi, '_'); // simple key generation
-                             if (key.includes('auspost_relationship')) acc.ausPostRelationship = q.answer as 'Yes' | 'No';
-                            if (key.includes('auspost_usage')) acc.ausPostUsage = q.answer as string;
-                            if (key.includes('auspost_dropoff')) acc.ausPostDropoff = q.answer as 'Drop-off' | 'They collect';
-                            if (key.includes('other_couriers')) acc.otherCouriers = q.answer as 'Yes' | 'No';
-                            if (key.includes('which_courier')) acc.usedCouriers = q.answer as string[];
-                            if (key.includes('local_deliveries')) acc.localDeliveries = q.answer as 'Yes' | 'No';
-                            if (key.includes('people_leave_office')) acc.peopleLeaveOffice = q.answer as 'Yes' | 'No';
-                            if (key.includes('reasons_to_leave')) acc.reasonsToLeave = q.answer as string[];
-                            return acc;
-                        }, {} as Partial<FormValues>);
+                        const restoredData: Partial<FormValues> = {};
+                        for (const q of leadData.checkinQuestions) {
+                            if (q.question === "Do you have a relationship with Australia Post?") restoredData.ausPostRelationship = q.answer as 'Yes' | 'No';
+                            if (q.question === "What do you use them for?") restoredData.ausPostUsage = q.answer as string;
+                            if (q.question === "Do you drop it off or do they come here?") restoredData.ausPostDropoff = Array.isArray(q.answer) ? q.answer as string[] : [];
+                            if (q.question === "Do you pay for the service?") restoredData.ausPostServicePayment = q.answer as 'Yes' | 'No';
+                            if (q.question === "Do you use any other couriers?") restoredData.otherCouriers = q.answer as 'Yes' | 'No';
+                            if (q.question === "Which Courier do you use?") restoredData.usedCouriers = Array.isArray(q.answer) ? q.answer as string[] : [];
+                            if (q.question === "Do you have any need for local same-day deliveries?") restoredData.localDeliveries = q.answer as 'Yes' | 'No';
+                            if (q.question === "Do people leave the office during the day?") restoredData.peopleLeaveOffice = q.answer as 'Yes' | 'No';
+                            if (q.question === "Reasons People Leave") restoredData.reasonsToLeave = Array.isArray(q.answer) ? q.answer as string[] : [];
+                        }
                         methods.reset(restoredData);
                     }
                 } else {
@@ -177,12 +180,13 @@ export default function CheckInPage() {
                 { question: "Do you have a relationship with Australia Post?", answer: formData.ausPostRelationship || 'N/A' },
                 ...(formData.ausPostRelationship === 'Yes' ? [
                     { question: "What do you use them for?", answer: formData.ausPostUsage || 'N/A' },
-                    { question: "Do you drop it off or do they come here?", answer: formData.ausPostDropoff || 'N/A' },
+                    { question: "Do you drop it off or do they come here?", answer: formData.ausPostDropoff || [] },
+                    { question: "Do you pay for the service?", answer: formData.ausPostServicePayment || 'N/A' },
                 ] : []),
                 { question: "Do you use any other couriers?", answer: formData.otherCouriers || 'N/A' },
                 ...(formData.otherCouriers === 'Yes' ? [
                     { question: "Which Courier do you use?", answer: formData.usedCouriers || [] },
-                    { question: "Do you have any need for local deliveries?", answer: formData.localDeliveries || 'N/A' },
+                    { question: "Do you have any need for local same-day deliveries?", answer: formData.localDeliveries || 'N/A' },
                 ] : []),
                 { question: "Do people leave the office during the day?", answer: formData.peopleLeaveOffice || 'N/A' },
                 ...(formData.peopleLeaveOffice === 'Yes' ? [
@@ -205,7 +209,6 @@ export default function CheckInPage() {
     const handleNext = () => setCurrentStep(prev => prev + 1);
     const handleBack = () => setCurrentStep(prev => prev - 1);
     const handleStepClick = (step: number) => setCurrentStep(step);
-    const handleCourierSelect = () => setIsScheduleAppointmentOpen(true);
 
     const handleAddContact = async (values: { name: string; title: string; email: string; phone: string; }) => {
         if (!lead) return;
@@ -264,6 +267,7 @@ export default function CheckInPage() {
             onOpenScheduleAppointment: () => setIsScheduleAppointmentOpen(true),
             onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
             onOpenRevisitDialog: () => setIsRevisitDialogOpen(true),
+            onOpenLogNote: () => setIsLogNoteOpen(true),
             isSaving: isSaving,
         };
         
@@ -271,9 +275,9 @@ export default function CheckInPage() {
             case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} {...stepProps} onBack={undefined} />;
             case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
             case 3: return <Step3 {...stepProps} />;
-            case 4: return <Step4 {...stepProps} onCourierSelect={handleCourierSelect} />;
+            case 4: return <Step4 {...stepProps} />;
             case 5: return <Step5 onNext={handleFinish} isFinish={true} {...stepProps} />;
-            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} />;
+            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} />;
             default: return null;
         }
     };
@@ -333,7 +337,7 @@ export default function CheckInPage() {
     );
 }
 
-const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog }: { onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; }) => {
+const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote }: { onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; }) => {
     const router = useRouter();
     return (
         <DropdownMenu>
@@ -344,13 +348,14 @@ const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisi
                 <DropdownMenuItem onSelect={onOpenScheduleAppointment}><Calendar className="mr-2 h-4 w-4"/> Schedule Appointment</DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenRevisitDialog}><History className="mr-2 h-4 w-4"/> Schedule Revisit</DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
+                <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/field-sales')}><Route className="mr-2 h-4 w-4"/> Back to Route</DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     )
 }
 
-const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; }) => (
+const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; }) => (
     <div className="space-y-6">
         <div className="text-left space-y-2"><h2 className="text-2xl font-bold">{title}</h2></div>
         <Card>
@@ -364,6 +369,7 @@ const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = fal
                             onOpenScheduleAppointment={onOpenScheduleAppointment}
                             onOpenLogOutcome={onOpenLogOutcome}
                             onOpenRevisitDialog={onOpenRevisitDialog}
+                            onOpenLogNote={onOpenLogNote}
                         />
                         {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : isFinish ? 'Finish' : 'Continue'}</Button>}
                      </div>
@@ -373,7 +379,7 @@ const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = fal
     </div>
 );
 
-const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...rest }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean, onBack?: () => void, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...rest }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean, onBack?: () => void, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     return (
         <StepWrapper title="Company Details" onNext={onNext} {...rest}>
             <div className="space-y-4">
@@ -385,7 +391,7 @@ const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...re
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     return (
         <StepWrapper title="Contact Details" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-4">
@@ -399,16 +405,45 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
     );
 };
 
-const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     const { control, watch } = useFormContext<FormValues>();
     const ausPostRelationship = watch('ausPostRelationship');
     return (
         <StepWrapper title="Australia Post" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {ausPostRelationship === 'Yes' && (<>
                     <FormField control={control} name="ausPostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={control} name="ausPostDropoff" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you drop it off or do they come here?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel>Drop-off</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="They collect" /></FormControl><FormLabel>They collect</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                    
+                    <FormField control={control} name="ausPostDropoff" render={() => (
+                        <FormItem>
+                            <FormLabel>Do you drop it off or do they come here?</FormLabel>
+                            <div className="flex gap-4">
+                                {['Drop-off', 'They collect'].map(item => (
+                                    <FormField key={item} control={control} name="ausPostDropoff" render={({ field }) => {
+                                        return (
+                                            <FormItem className="flex items-center space-x-2">
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(item)}
+                                                        onCheckedChange={(checked) => {
+                                                            return checked
+                                                                ? field.onChange([...(field.value || []), item])
+                                                                : field.onChange(field.value?.filter((value) => value !== item))
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">{item}</FormLabel>
+                                            </FormItem>
+                                        )
+                                    }}/>
+                                ))}
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+
+                    <FormField control={control} name="ausPostServicePayment" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 </>)}
             </div>
         </StepWrapper>
@@ -416,30 +451,57 @@ const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
 };
 
 const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
-const Step4 = ({ onNext, onBack, onCourierSelect, ...rest }: { onNext: () => void; onBack: () => void; onCourierSelect: (courier: string) => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
-    const { control, watch, setValue } = useFormContext<FormValues>();
+const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+    const { control, watch } = useFormContext<FormValues>();
     const otherCouriers = watch('otherCouriers');
     return (
         <StepWrapper title="Other Couriers" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {otherCouriers === 'Yes' && (<>
-                    <FormField control={control} name="usedCouriers" render={() => (<FormItem><FormLabel>Which Courier do you use?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <Button key={c} type="button" variant="outline" onClick={() => onCourierSelect(c)}>{c}</Button>)}</div><FormMessage /></FormItem>)} />
-                    <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have any need for local deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={control} name="usedCouriers" render={() => (
+                        <FormItem>
+                            <FormLabel>Which Courier do you use?</FormLabel>
+                            <div className="grid grid-cols-2 gap-2">
+                                {couriers.map(item => (
+                                    <FormField key={item} control={control} name="usedCouriers" render={({ field }) => {
+                                        return (
+                                            <FormItem className="flex items-center space-x-2">
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(item)}
+                                                        onCheckedChange={(checked) => {
+                                                            return checked
+                                                                ? field.onChange([...(field.value || []), item])
+                                                                : field.onChange(field.value?.filter((value) => value !== item))
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">{item}</FormLabel>
+                                            </FormItem>
+                                        )
+                                    }}/>
+                                ))}
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                    <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 </>)}
             </div>
         </StepWrapper>
     );
 };
 
+
 const reasons = ["Banking", "Local Same Day"];
-const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isFinish?: boolean }) => {
+const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isFinish?: boolean }) => {
     const { control, watch } = useFormContext<FormValues>();
     const peopleLeave = watch('peopleLeaveOffice');
     return (
         <StepWrapper title="Office Errands" onNext={onNext} onBack={onBack} isSaving={isSaving} isFinish={true} {...rest}>
             <div className="space-y-8">
-                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className='font-normal'>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className='font-normal'>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {peopleLeave === 'Yes' && (
                     <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>Reasons People Leave</FormLabel><div className="space-y-2">{reasons.map(r => (<FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-3"><FormControl><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /></FormControl><FormLabel className="font-normal">{r}</FormLabel></FormItem>)} />))}</div><FormMessage /></FormItem>)} />
                 )}
@@ -448,7 +510,7 @@ const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBa
     );
 };
 
-const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; }) => {
+const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile, onOpenLogNote }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; onOpenLogNote: () => void; }) => {
     const router = useRouter();
     const canShowSpecialButtons = userProfile?.role === 'admin' || userProfile?.uid === 'R1skvdcPUGdXEmJDS9Yh1Wbv77K2';
     return (
@@ -460,6 +522,7 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
+                        <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/field-sales')}><Route className="mr-2"/> Back to Route</Button>
                         {canShowSpecialButtons && <>
                             <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${(useParams().leadId as string)}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
