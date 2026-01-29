@@ -539,13 +539,13 @@ export default function CheckInPage() {
                                   <TableBody>
                                       {nearbyCompanies.map(company => (
                                           <TableRow key={company.id}>
-                                              <TableCell>
-                                                  <Button variant="link" asChild className="p-0 h-auto font-semibold">
-                                                      <Link href={`/companies/${company.id}`} target="_blank">{company.companyName}</Link>
-                                                  </Button>
-                                              </TableCell>
-                                              <TableCell>{formatAddress(company.address as Address)}</TableCell>
-                                              <TableCell>{company.industryCategory || 'N/A'}</TableCell>
+                                                <TableCell className="font-semibold whitespace-normal">
+                                                    <Button variant="link" asChild className="p-0 h-auto text-left whitespace-normal">
+                                                        <Link href={`/companies/${company.id}`} target="_blank">{company.companyName}</Link>
+                                                    </Button>
+                                                </TableCell>
+                                                <TableCell className="whitespace-normal">{formatAddress(company.address as Address)}</TableCell>
+                                                <TableCell className="whitespace-normal">{company.industryCategory || 'N/A'}</TableCell>
                                           </TableRow>
                                       ))}
                                   </TableBody>
@@ -953,5 +953,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
 
 
 
+
+    
 
     
