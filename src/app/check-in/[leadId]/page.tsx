@@ -2,9 +2,9 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, Fragment, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useForm, FormProvider, useFormContext } from 'react-hook-form';
+import { useForm, FormProvider, useFormContext, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, updateLeadDetails } from '@/services/firebase';
@@ -48,6 +48,13 @@ const checkinSchema = z.object({
 
 
 type FormValues = z.infer<typeof checkinSchema>;
+
+const newContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  title: z.string().min(1, "Title is required"),
+});
 
 const TOTAL_STEPS = 6;
 const stepLabels = ["Company", "Contact", "AusPost", "Couriers", "Errands", "Finish"];
@@ -118,6 +125,16 @@ export default function CheckInPage() {
     const { userProfile } = useAuth();
     
     const leadId = params.leadId as string;
+
+    const newContactForm = useForm<z.infer<typeof newContactSchema>>({
+        resolver: zodResolver(newContactSchema),
+        defaultValues: {
+            name: "",
+            email: "",
+            phone: "",
+            title: "",
+        },
+    });
 
     const methods = useForm<FormValues>({
         resolver: zodResolver(checkinSchema),
@@ -244,12 +261,12 @@ export default function CheckInPage() {
     const handleBack = () => setCurrentStep(prev => prev - 1);
     const handleStepClick = (step: number) => setCurrentStep(step);
 
-    const handleAddContact = async (values: { name: string; title: string; email: string; phone: string; }) => {
+    const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
         if (!lead) return;
         setIsAddingContact(true);
         try {
-            const newContactId = await addContactToLead(lead.id, values);
-            const newContact: Contact = { ...values, id: newContactId };
+            const newContactId = await addContactToLead(lead.id, { ...values, phone: values.phone || '' });
+            const newContact: Contact = { ...values, id: newContactId, phone: values.phone || '' };
             setContacts(prev => [...prev, newContact]);
             newContactForm.reset();
             toast({ title: "Success", description: "New contact added." });
@@ -432,7 +449,7 @@ const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...re
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: z.infer<typeof newContactSchema>) => void, form: UseFormReturn<z.infer<typeof newContactSchema>>, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     return (
         <StepWrapper title="Contact Details" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-4">
@@ -598,5 +615,6 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 
 
   
+
 
 
