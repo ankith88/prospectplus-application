@@ -7,10 +7,10 @@ import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase } from '@/services/firebase';
-import type { Lead, Contact, Address, CheckinQuestion } from '@/lib/types';
+import type { Lead, Contact, Address, CheckinQuestion, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route, Calendar } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,7 +47,7 @@ type FormValues = z.infer<typeof checkinSchema>;
 const TOTAL_STEPS = 6;
 const stepLabels = ["Company", "Contact", "AusPost", "Couriers", "Errands", "Finish"];
 
-const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: string[] }) => {
+const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
         <div className="flex items-center w-full" aria-label={`Step ${currentStep} of ${totalSteps}`}>
             {labels.map((label, index) => {
@@ -57,7 +57,7 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: 
 
                 return (
                     <React.Fragment key={step}>
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center cursor-pointer" onClick={() => onStepClick(step)}>
                             <div
                                 className={cn(
                                     "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
@@ -204,6 +204,7 @@ export default function CheckInPage() {
     
     const handleNext = () => setCurrentStep(prev => prev + 1);
     const handleBack = () => setCurrentStep(prev => prev - 1);
+    const handleStepClick = (step: number) => setCurrentStep(step);
     const handleCourierSelect = () => setIsScheduleAppointmentOpen(true);
 
     const handleAddContact = async (values: { name: string; title: string; email: string; phone: string; }) => {
@@ -257,12 +258,21 @@ export default function CheckInPage() {
     const formatAddress = (address?: Address) => !address ? 'N/A' : [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
 
     const renderStep = () => {
+        const stepProps = {
+            onNext: handleNext,
+            onBack: handleBack,
+            onOpenScheduleAppointment: () => setIsScheduleAppointmentOpen(true),
+            onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
+            onOpenRevisitDialog: () => setIsRevisitDialogOpen(true),
+            isSaving: isSaving,
+        };
+        
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep onNext={handleNext} lead={lead!} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} />;
-            case 2: return <ContactDetailsStep onNext={handleNext} onBack={handleBack} contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} />;
-            case 3: return <Step3 onNext={handleNext} onBack={handleBack} />;
-            case 4: return <Step4 onNext={handleNext} onBack={handleBack} onCourierSelect={handleCourierSelect} />;
-            case 5: return <Step5 onNext={handleFinish} onBack={handleBack} isSaving={isSaving} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} {...stepProps} onBack={undefined} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
+            case 3: return <Step3 {...stepProps} />;
+            case 4: return <Step4 {...stepProps} onCourierSelect={handleCourierSelect} />;
+            case 5: return <Step5 onNext={handleFinish} isFinish={true} {...stepProps} />;
             case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} />;
             default: return null;
         }
@@ -286,7 +296,7 @@ export default function CheckInPage() {
                         </div>
                     </header>
                     <div className="my-4 flex-shrink-0">
-                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={stepLabels} />
+                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={stepLabels} onStepClick={handleStepClick} />
                     </div>
                 </div>
                 <main className="flex-grow overflow-y-auto px-4 pb-4">{renderStep()}</main>
@@ -323,7 +333,24 @@ export default function CheckInPage() {
     );
 }
 
-const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean }) => (
+const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog }: { onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; }) => {
+    const router = useRouter();
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline"><MoreVertical className="mr-2 h-4 w-4"/>Actions</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+                <DropdownMenuItem onSelect={onOpenScheduleAppointment}><Calendar className="mr-2 h-4 w-4"/> Schedule Appointment</DropdownMenuItem>
+                <DropdownMenuItem onSelect={onOpenRevisitDialog}><History className="mr-2 h-4 w-4"/> Schedule Revisit</DropdownMenuItem>
+                <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => router.push('/field-sales')}><Route className="mr-2 h-4 w-4"/> Back to Route</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; }) => (
     <div className="space-y-6">
         <div className="text-left space-y-2"><h2 className="text-2xl font-bold">{title}</h2></div>
         <Card>
@@ -331,16 +358,24 @@ const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = fal
             {(onNext || onBack) && (
                 <CardFooter className="flex justify-between items-center gap-2">
                      {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
-                     {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : isFinish ? 'Finish' : 'Continue'}</Button>}
+                     <div className="flex-grow" />
+                     <div className="flex items-center gap-2">
+                        <StepActions 
+                            onOpenScheduleAppointment={onOpenScheduleAppointment}
+                            onOpenLogOutcome={onOpenLogOutcome}
+                            onOpenRevisitDialog={onOpenRevisitDialog}
+                        />
+                        {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : isFinish ? 'Finish' : 'Continue'}</Button>}
+                     </div>
                 </CardFooter>
             )}
         </Card>
     </div>
 );
 
-const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean }) => {
+const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...rest }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean, onBack?: () => void, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     return (
-        <StepWrapper title="Company Details" onNext={onNext}>
+        <StepWrapper title="Company Details" onNext={onNext} {...rest}>
             <div className="space-y-4">
                  <div className="space-y-2"><Label>Business name</Label><Input readOnly value={lead.companyName} /></div>
                 <div className="space-y-2"><Label>Address</Label><Input readOnly value={[lead.address?.address1, lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ')} /></div>
@@ -350,9 +385,9 @@ const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby }: { l
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     return (
-        <StepWrapper title="Contact Details" onNext={onNext} onBack={onBack}>
+        <StepWrapper title="Contact Details" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-4">
                 <h4 className="font-semibold text-lg">Existing Contacts</h4>
                  {contacts.length > 0 ? <div className="space-y-3">{contacts.map(contact => (<Card key={contact.id} className="p-3 bg-secondary/30"><CardContent className="p-0 space-y-3"><p className="font-semibold">{contact.name}</p><div className="text-sm text-muted-foreground mt-1 space-y-1"><p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p><p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p></div></CardContent></Card>))}</div> : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
@@ -364,11 +399,11 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
     );
 };
 
-const Step3 = ({ onNext, onBack }: { onNext: () => void; onBack: () => void; }) => {
+const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     const { control, watch } = useFormContext<FormValues>();
     const ausPostRelationship = watch('ausPostRelationship');
     return (
-        <StepWrapper title="Australia Post" onNext={onNext} onBack={onBack}>
+        <StepWrapper title="Australia Post" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
                 <FormField control={control} name="ausPostRelationship" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {ausPostRelationship === 'Yes' && (<>
@@ -381,11 +416,11 @@ const Step3 = ({ onNext, onBack }: { onNext: () => void; onBack: () => void; }) 
 };
 
 const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
-const Step4 = ({ onNext, onBack, onCourierSelect }: { onNext: () => void; onBack: () => void; onCourierSelect: (courier: string) => void }) => {
+const Step4 = ({ onNext, onBack, onCourierSelect, ...rest }: { onNext: () => void; onBack: () => void; onCourierSelect: (courier: string) => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
     const { control, watch, setValue } = useFormContext<FormValues>();
     const otherCouriers = watch('otherCouriers');
     return (
-        <StepWrapper title="Other Couriers" onNext={onNext} onBack={onBack}>
+        <StepWrapper title="Other Couriers" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-8">
                 <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {otherCouriers === 'Yes' && (<>
@@ -398,11 +433,11 @@ const Step4 = ({ onNext, onBack, onCourierSelect }: { onNext: () => void; onBack
 };
 
 const reasons = ["Banking", "Local Same Day"];
-const Step5 = ({ onNext, onBack, isSaving }: { onNext: () => void; onBack: () => void; isSaving?: boolean }) => {
+const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; isFinish?: boolean }) => {
     const { control, watch } = useFormContext<FormValues>();
     const peopleLeave = watch('peopleLeaveOffice');
     return (
-        <StepWrapper title="Office Errands" onNext={onNext} onBack={onBack} isSaving={isSaving} isFinish={true}>
+        <StepWrapper title="Office Errands" onNext={onNext} onBack={onBack} isSaving={isSaving} isFinish={true} {...rest}>
             <div className="space-y-8">
                 <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel>Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel>No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)} />
                 {peopleLeave === 'Yes' && (
@@ -437,3 +472,5 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
         </div>
     );
 };
+
+    
