@@ -1,12 +1,11 @@
 
-
 'use server';
 
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from './netsuite';
 
@@ -196,6 +195,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource,
+          checkinQuestions: data.checkinQuestions || [],
         };
 
         if (includeSubCollections) {
@@ -1428,6 +1428,19 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
   }
 }
 
+async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQuestion[]): Promise<void> {
+  try {
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, { checkinQuestions: questions });
+    await logActivity(leadId, { type: 'Update', notes: 'Check-in questions completed.' });
+    console.log(`Check-in questions for lead ${leadId} updated.`);
+  } catch (error) {
+    console.error(`Failed to update check-in questions for lead ${leadId}:`, error);
+    throw new Error('Failed to update check-in questions in Firebase');
+  }
+}
+
+
 async function addScorecard(leadId: string, data: any): Promise<any> {
     try {
         const scorecardsRef = collection(firestore, 'leads', leadId, 'scorecards');
@@ -1997,6 +2010,7 @@ export {
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
+    updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,
     getAllUsers,
@@ -2032,4 +2046,5 @@ export {
 
 
     
+
 

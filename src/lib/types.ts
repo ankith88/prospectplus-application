@@ -19,6 +19,11 @@ export type LeadStatus =
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 
+export interface CheckinQuestion {
+  question: string;
+  answer: string | string[];
+}
+
 export interface Review {
   id: string;
   reviewer: string;
@@ -167,6 +172,7 @@ export interface Lead {
   appointments?: Appointment[]
   invoices?: Invoice[]
   services?: ServiceSelection[];
+  checkinQuestions?: CheckinQuestion[];
   contactCount?: number
   address?: Address
   latitude?: number;

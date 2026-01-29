@@ -49,7 +49,7 @@ import {
   CheckSquare,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -864,7 +864,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                            <Card key={company.id} className="p-3">
                               <div className="flex flex-col space-y-1">
                                   <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                  <p className="text-sm text-muted-foreground">{formatAddress(company.address)}</p>
+                                  <p className="text-sm text-muted-foreground">{formatAddress(company.address as Address)}</p>
                                   <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
                                   {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
                                   {company.websiteUrl && (
@@ -1331,10 +1331,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <CardContent>
                 <Tabs defaultValue="notes">
                     <TabsList>
+                        <TabsTrigger value="checkin">Check-in Data</TabsTrigger>
                         <TabsTrigger value="notes">Notes</TabsTrigger>
                         <TabsTrigger value="calls">Call History</TabsTrigger>
                         <TabsTrigger value="activity">Activity History</TabsTrigger>
                     </TabsList>
+                     <TabsContent value="checkin">
+                        {lead.checkinQuestions && lead.checkinQuestions.length > 0 ? (
+                            <div className="space-y-4 mt-4">
+                            {lead.checkinQuestions.map((q, index) => (
+                                <div key={index} className="text-sm border-l-2 pl-4">
+                                    <p className="font-semibold">{q.question}</p>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">
+                                        {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
+                                    </p>
+                                </div>
+                            ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">No check-in data recorded for this lead.</p>
+                        )}
+                    </TabsContent>
                     <TabsContent value="notes">
                         {notes.length > 0 ? (
                             <div className="space-y-4 mt-4">

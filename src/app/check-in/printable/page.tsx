@@ -1,12 +1,11 @@
+
 'use client';
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
 
-const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
-const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
+const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
+const reasonsToLeave = ["Banking", "Local Same Day"];
 
 const QuestionSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <div className="p-4 border border-gray-300 rounded-md mb-4" style={{ breakInside: 'avoid' }}>
@@ -42,87 +41,51 @@ export default function PrintableCheckInPage() {
     return (
         <div className="p-8 bg-white text-black w-[210mm] min-h-[297mm] mx-auto">
             <div className="flex justify-between items-center mb-6 print:hidden">
-                <h1 className="text-2xl font-bold text-center">Check-in Discovery Questions</h1>
+                <h1 className="text-2xl font-bold text-center">Check-in Questions</h1>
                 <Button onClick={() => window.print()}>Print / Save as PDF</Button>
             </div>
              <div className="hidden print:block text-center mb-6">
-                <h1 className="text-2xl font-bold">Check-in Discovery Questions</h1>
+                <h1 className="text-2xl font-bold">Check-in Questions</h1>
             </div>
 
             <div className="space-y-6">
-                <QuestionSection title="Company Details">
+                <QuestionSection title="Company Details (Step 1)">
                     <TextInputLine label="Company Name" />
                     <TextInputLine label="Address" />
                 </QuestionSection>
 
-                <QuestionSection title="Contacts">
-                    <ContactInputSet />
+                <QuestionSection title="Contacts (Step 2)">
                     <ContactInputSet />
                     <ContactInputSet />
                 </QuestionSection>
 
-                <QuestionSection title="Relevance Check (Question 1/8)">
-                    <p className="font-semibold">Do people leave the office during the day?</p>
+                <QuestionSection title="Australia Post (Step 3)">
+                    <p className="font-semibold">Do you have a relationship with Australia Post?</p>
+                    <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
+                    <p className="font-semibold mt-4">If Yes, what do you use them for?</p>
+                    <div className="border-b border-black h-8 w-full mt-2"></div>
+                    <p className="font-semibold mt-4">If Yes, do you drop it off or do they come here?</p>
+                    <div className="flex gap-8 mt-2"><CheckBox label="Drop-off" /> <CheckBox label="They collect" /></div>
+                </QuestionSection>
+
+                <QuestionSection title="Other Couriers (Step 4)">
+                    <p className="font-semibold">Do you use any other couriers?</p>
+                    <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
+                    <p className="font-semibold mt-4">If Yes, which Courier do you use?</p>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
+                        {couriers.map(courier => <CheckBox key={courier} label={courier} />)}
+                    </div>
+                    <p className="font-semibold mt-4">If Yes, do you have any need for local deliveries?</p>
                     <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
                 </QuestionSection>
 
-                <QuestionSection title="Reasons People Leave (Question 2/8)">
-                    <p className="font-semibold">What are some of the things people have to leave the office for?</p>
+                <QuestionSection title="Office Errands (Step 5)">
+                    <p className="font-semibold">Do people leave the office during the day?</p>
+                    <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
+                    <p className="font-semibold mt-4">If Yes, what are the reasons?</p>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
                         {reasonsToLeave.map(reason => <CheckBox key={reason} label={reason} />)}
                     </div>
-                </QuestionSection>
-
-                <QuestionSection title="Discovery: Logistics (Question 3/8)">
-                    <p className="font-semibold">Do you have a relationship with Australia Post?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="Yes - Driver" /> <CheckBox label="Yes - Post Office walk up" /> <CheckBox label="No" /></div>
-                    <p className="font-semibold mt-4">How do you lodge items?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="Drop-off" /> <CheckBox label="Routine collection" /> <CheckBox label="Ad-hoc" /></div>
-                    <p className="font-semibold mt-4">If using collection: Do you pay for this service?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
-                </QuestionSection>
-
-                <QuestionSection title="Discovery: Shipping Profile (Question 4/8)">
-                    <p className="font-semibold">How many items per week?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="<5" /> <CheckBox label="<20" /> <CheckBox label="20-100" /> <CheckBox label="100+" /></div>
-                    <p className="font-semibold mt-4">What % of your shipping is Express vs Standard?</p>
-                     <div className="flex flex-col gap-2 mt-2">
-                        <CheckBox label="Mostly Standard (>=80%)" />
-                        <CheckBox label="Balanced Mix (20-79% Express)" />
-                        <CheckBox label="Mostly Express (>=80%)" />
-                    </div>
-                    <p className="font-semibold mt-4">What is typical size/weight?</p>
-                    <div className="grid grid-cols-3 gap-x-8 gap-y-2 mt-2">
-                        {packageTypes.map(item => <CheckBox key={item.id} label={item.label} />)}
-                    </div>
-                </QuestionSection>
-
-                <QuestionSection title="Discovery: Providers & Tech (Question 5/8)">
-                    <p className="font-semibold">Who do you use for shipping?</p>
-                    <div className="grid grid-cols-3 gap-x-8 gap-y-2 mt-2">
-                        {currentProviders.map(item => <CheckBox key={item.id} label={item.label} />)}
-                    </div>
-                    <TextInputLine label="Other Provider" />
-                    <p className="font-semibold mt-4">What platform do you use for labels?</p>
-                     <div className="grid grid-cols-3 gap-x-8 gap-y-2 mt-2">
-                        {eCommerceTechs.map(item => <CheckBox key={item.id} label={item.label} />)}
-                    </div>
-                    <TextInputLine label="Other Platform" />
-                </QuestionSection>
-
-                <QuestionSection title="Discovery: Business Needs (Question 6/8)">
-                    <p className="font-semibold">Do you use same-day couriers?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="Yes" /> <CheckBox label="Occasional" /> <CheckBox label="Never" /></div>
-                </QuestionSection>
-
-                 <QuestionSection title="Discovery: Decision Maker (Question 7/8)">
-                    <p className="font-semibold mt-4">Who decides shipping?</p>
-                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-2"><CheckBox label="Owner" /> <CheckBox label="Influencer" /> <CheckBox label="Gatekeeper" /></div>
-                 </QuestionSection>
-
-                 <QuestionSection title="Discovery: Pain Points (Question 8/8)">
-                    <p className="font-semibold mt-4">Pain Points:</p>
-                    <div className="border-b border-black h-24 w-full mt-2"></div>
                 </QuestionSection>
             </div>
         </div>
