@@ -7,9 +7,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, getCompaniesFromFirebase } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
-import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
+import type { Lead, DiscoveryData, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, Download } from 'lucide-react';
@@ -34,6 +34,10 @@ import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import Link from 'next/link';
 
 
 const discoverySchema = z.object({
@@ -134,6 +138,9 @@ export default function CheckInPage() {
     
     const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
     const [isProspecting, setIsProspecting] = useState(false);
+    const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
+    const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+    const [isFindingNearby, setIsFindingNearby] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -364,6 +371,40 @@ export default function CheckInPage() {
         }
     };
 
+    const handleFindNearbyCompanies = useCallback(async () => {
+        if (!lead?.latitude || !lead?.longitude || !window.google?.maps?.geometry) {
+            toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
+            return;
+        }
+
+        setIsFindingNearby(true);
+        try {
+            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+            
+            const allCompanies = await getCompaniesFromFirebase();
+            
+            const nearby = allCompanies.filter(company => {
+              if (!company.latitude || !company.longitude || company.id === lead.id) {
+                return false;
+              }
+              const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+              const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
+              return distance <= 1000; // 1km radius
+            });
+
+            setNearbyCompanies(nearby);
+            setIsNearbyCompaniesDialogOpen(true);
+            if(nearby.length === 0) {
+                toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 1km radius.' });
+            }
+        } catch (error) {
+            console.error("Error finding nearby companies:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch nearby companies.' });
+        } finally {
+            setIsFindingNearby(false);
+        }
+    }, [lead, toast]);
+
     const handleNoteLogged = () => {
       setIsLogNoteOpen(false);
     };
@@ -388,9 +429,14 @@ export default function CheckInPage() {
         }
     }
 
+    const formatAddress = (address?: Address) => {
+        if (!address) return 'N/A';
+        return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+    }
+
     const renderStep = () => {
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} />;
             case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 3: return <DiscoveryStep0 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
             case 4: return <DiscoveryStep1 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
@@ -471,6 +517,48 @@ export default function CheckInPage() {
                         lead={lead}
                     />
                  )}
+
+                <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+                  <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                          <DialogTitle>Nearby Signed Customers</DialogTitle>
+                          <DialogDescription>
+                              Found {nearbyCompanies.length} signed customer(s) within a 1km radius of {lead?.companyName}.
+                          </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="max-h-[60vh]">
+                          {nearbyCompanies.length > 0 ? (
+                              <Table>
+                                  <TableHeader>
+                                      <TableRow>
+                                          <TableHead>Company Name</TableHead>
+                                          <TableHead>Address</TableHead>
+                                          <TableHead>Industry</TableHead>
+                                      </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                      {nearbyCompanies.map(company => (
+                                          <TableRow key={company.id}>
+                                              <TableCell>
+                                                  <Button variant="link" asChild className="p-0 h-auto font-semibold">
+                                                      <Link href={`/companies/${company.id}`} target="_blank">{company.companyName}</Link>
+                                                  </Button>
+                                              </TableCell>
+                                              <TableCell>{formatAddress(company.address as Address)}</TableCell>
+                                              <TableCell>{company.industryCategory || 'N/A'}</TableCell>
+                                          </TableRow>
+                                      ))}
+                                  </TableBody>
+                              </Table>
+                          ) : (
+                              <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
+                          )}
+                      </ScrollArea>
+                      <DialogFooter>
+                          <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+                      </DialogFooter>
+                  </DialogContent>
+                </Dialog>
             </div>
         </FormProvider>
     );
@@ -511,7 +599,7 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
     );
 };
 
-const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving, onFindNearby, isFindingNearby }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; onFindNearby: () => void; isFindingNearby: boolean; }) => {
     return (
         <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
             <div className="space-y-4">
@@ -531,9 +619,14 @@ const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLog
                         </div>
                     </div>
                 </div>
-                 <Button variant="outline" size="sm" onClick={onProspect} disabled={isProspecting || !lead.websiteUrl} className="w-full">
-                    {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Button variant="outline" size="sm" onClick={onProspect} disabled={isProspecting || !lead.websiteUrl} className="w-full">
+                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onFindNearby} disabled={isFindingNearby} className="w-full">
+                        {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /><span>Nearby Customers</span></>}
+                    </Button>
+                </div>
             </div>
         </StepWrapper>
     );
@@ -834,7 +927,14 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/saved-routes')}><Route className="mr-2"/> Back to Route</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => {
+                        const activeRouteId = localStorage.getItem('activeRouteId');
+                        if (activeRouteId) {
+                            router.push('/saved-routes');
+                        } else {
+                            router.push('/field-sales');
+                        }
+                    }}><Route className="mr-2"/> Back to Route</Button>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-start">
@@ -844,6 +944,7 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
     </div>
   )
 };
+
 
 
 
