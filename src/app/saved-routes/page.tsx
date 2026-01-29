@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -92,6 +92,18 @@ export default function SavedRoutesPage() {
 
     const loadingData = !scriptLoaded || !userProfile || authLoading;
 
+    const handleCopy = (text: string | null | undefined, fieldName: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        toast({
+            title: "Copied to clipboard",
+            description: `${fieldName} copied successfully.`,
+        });
+    };
+
+    const getLat = (loc: any) => (typeof loc.lat === 'function' ? loc.lat() : loc.lat);
+    const getLng = (loc: any) => (typeof loc.lng === 'function' ? loc.lng() : loc.lng);
+
     const handleLoadRoute = useCallback((route: SavedRoute) => {
         if (!scriptLoaded) return;
         
@@ -166,12 +178,12 @@ export default function SavedRoutesPage() {
             toast({ variant: 'destructive', title: 'Cannot Start Route', description: 'No active route available.' });
             return;
         }
-    
-        const origin = loadedRoute.startPoint || `${''}${directions.routes[0].legs[0].start_location.lat()},${''}${directions.routes[0].legs[0].start_location.lng()}`;
-        const destination = loadedRoute.endPoint || `${''}${directions.routes[0].legs.slice(-1)[0].end_location.lat()},${''}${directions.routes[0].legs.slice(-1)[0].end_location.lng()}`;
+
+        const origin = loadedRoute.startPoint || `${getLat(directions.routes[0].legs[0].start_location)},${getLng(directions.routes[0].legs[0].start_location)}`;
+        const destination = loadedRoute.endPoint || `${getLat(directions.routes[0].legs.slice(-1)[0].end_location)},${getLng(directions.routes[0].legs.slice(-1)[0].end_location)}`;
         const waypoints = directions.routes[0].legs
             .slice(0, -1)
-            .map((leg: any) => leg.end_address)
+            .map((leg: any) => `${getLat(leg.end_location)},${getLng(leg.end_location)}`)
             .join('|');
     
         const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${loadedRoute.travelMode?.toLowerCase()}`;
@@ -186,13 +198,13 @@ export default function SavedRoutesPage() {
             return;
         }
 
-        const directionsData = route.directions;
+        const directionsData = route.directions as any;
     
-        const origin = route.startPoint || `${''}${directionsData.routes[0].legs[0].start_location.lat()},${''}${directionsData.routes[0].legs[0].start_location.lng()}`;
-        const destination = route.endPoint || `${''}${directionsData.routes[0].legs.slice(-1)[0].end_location.lat()},${''}${directionsData.routes[0].legs.slice(-1)[0].end_location.lng()}`;
+        const origin = route.startPoint || `${getLat(directionsData.routes[0].legs[0].start_location)},${getLng(directionsData.routes[0].legs[0].start_location)}`;
+        const destination = route.endPoint || `${getLat(directionsData.routes[0].legs.slice(-1)[0].end_location)},${getLng(directionsData.routes[0].legs.slice(-1)[0].end_location)}`;
         const waypoints = directionsData.routes[0].legs
             .slice(0, -1)
-            .map((leg: any) => leg.end_address)
+            .map((leg: any) => `${getLat(leg.end_location)},${getLng(leg.end_location)}`)
             .join('|');
     
         const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=${route.travelMode?.toLowerCase()}`;
@@ -342,7 +354,17 @@ export default function SavedRoutesPage() {
                                                                     <Link href={`/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
                                                                 </Button>
                                                             </p>
-                                                            <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                                            <div className="flex items-center">
+                                                                <p className="text-xs text-muted-foreground">{formatAddress(lead.address)}</p>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-6 w-6 ml-1"
+                                                                    onClick={() => handleCopy(formatAddress(lead.address), "Address")}
+                                                                >
+                                                                    <Clipboard className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
                                                         </div>
                                                         </div>
                                                         <div className="flex items-center justify-between mt-2">
@@ -541,3 +563,4 @@ export default function SavedRoutesPage() {
 }
 
     
+
