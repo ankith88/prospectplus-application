@@ -11,7 +11,7 @@ import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, upda
 import type { Lead, Contact, Address, CheckinQuestion, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route, Calendar } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route, Calendar, Download } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -272,10 +272,10 @@ export default function CheckInPage() {
         };
         
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} {...stepProps} onBack={undefined} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
-            case 3: return <Step3 {...stepProps} />;
-            case 4: return <Step4 {...stepProps} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCompanies} isFindingNearby={isFindingNearby} {...stepProps} onBack={undefined} onNext={handleNext} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} onNext={handleNext} />;
+            case 3: return <Step3 {...stepProps} onNext={handleNext} />;
+            case 4: return <Step4 {...stepProps} onNext={handleNext} />;
             case 5: return <Step5 onNext={handleFinish} isFinish={true} {...stepProps} />;
             case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} />;
             default: return null;
@@ -290,7 +290,14 @@ export default function CheckInPage() {
             <div className="flex flex-col bg-background max-w-2xl mx-auto w-full h-svh">
                 <div className='p-4'>
                     <header className="flex-shrink-0 flex items-center justify-between">
-                        <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                        <div className="flex items-center gap-2">
+                           <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft /></Button>
+                            <Button variant="ghost" size="icon" asChild>
+                                <Link href="/check-in/printable" target="_blank">
+                                    <Download />
+                                </Link>
+                            </Button>
+                        </div>
                         <div className="flex flex-col items-center">
                             <h1 className="text-lg font-bold">{lead.companyName}</h1>
                             <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
@@ -537,3 +544,4 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 };
 
     
+

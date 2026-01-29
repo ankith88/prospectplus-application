@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -66,6 +67,8 @@ export default function PrintableCheckInPage() {
                     <div className="border-b border-black h-8 w-full mt-2"></div>
                     <p className="font-semibold mt-4">If Yes, do you drop it off or do they come here?</p>
                     <div className="flex gap-8 mt-2"><CheckBox label="Drop-off" /> <CheckBox label="They collect" /></div>
+                    <p className="font-semibold mt-4">If Yes, do you pay for the service?</p>
+                    <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
                 </QuestionSection>
 
                 <QuestionSection title="Other Couriers (Step 4)">
@@ -75,7 +78,7 @@ export default function PrintableCheckInPage() {
                     <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
                         {couriers.map(courier => <CheckBox key={courier} label={courier} />)}
                     </div>
-                    <p className="font-semibold mt-4">If Yes, do you have any need for local deliveries?</p>
+                    <p className="font-semibold mt-4">If Yes, do you have any need for local same-day deliveries?</p>
                     <div className="flex gap-8 mt-2"><CheckBox label="Yes" /> <CheckBox label="No" /></div>
                 </QuestionSection>
 
