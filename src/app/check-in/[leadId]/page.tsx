@@ -34,7 +34,7 @@ import { RevisitDialog } from '@/components/revisit-dialog';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
@@ -952,3 +952,6 @@ const FinalActionsStep = ({ lead, discoveryData, onBack, onOpenLogOutcome, onOpe
 
 
 
+
+
+    
