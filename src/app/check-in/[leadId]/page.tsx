@@ -7,11 +7,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, updateLeadDetails } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, updateLeadDetails, moveLeadToBucket } from '@/services/firebase';
 import type { Lead, Contact, Address, CheckinQuestion, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route, Calendar, Download } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Check, MoreVertical, History, PhoneCall, ClipboardEdit, Star, Briefcase, Route, Calendar, Download, Move } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,6 +26,16 @@ import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
@@ -118,6 +128,9 @@ export default function CheckInPage() {
     const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
     const [isFindingNearby, setIsFindingNearby] = useState(false);
     const [checkinScore, setCheckinScore] = useState<{ score: number; reason: string } | null>(null);
+
+    const [isMoveToOutboundDialogOpen, setIsMoveToOutboundDialogOpen] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
 
     const params = useParams();
     const router = useRouter();
@@ -306,6 +319,41 @@ export default function CheckInPage() {
         }
     }, [lead, toast]);
 
+    const handleConfirmMoveToOutbound = async () => {
+        if (!lead) return;
+
+        setIsMoving(true);
+        const outboundReps = ['Lachlan Ball', 'Grant Leddy'];
+        const randomRep = outboundReps[Math.floor(Math.random() * outboundReps.length)];
+
+        try {
+            await moveLeadToBucket({
+                leadId: lead.id,
+                fieldSales: false,
+                assigneeDisplayName: randomRep,
+            });
+
+            await logActivity(lead.id, {
+                type: 'Update',
+                notes: 'Moved to Outbound'
+            });
+
+            toast({
+                title: 'Lead Moved',
+                description: `${lead.companyName} has been moved to Outbound and assigned to ${randomRep}.`
+            });
+            
+            setIsMoveToOutboundDialogOpen(false);
+            router.push('/field-sales');
+
+        } catch (error) {
+            console.error("Failed to move lead to outbound:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not move the lead." });
+        } finally {
+            setIsMoving(false);
+        }
+    }
+
     const handleNoteLogged = () => setIsLogNoteOpen(false);
     const handleRevisitScheduled = () => { setIsRevisitDialogOpen(false); router.push('/field-sales'); };
     const handleOutcomeLogged = () => { setIsLogOutcomeOpen(false); router.push('/field-sales'); };
@@ -319,6 +367,7 @@ export default function CheckInPage() {
             onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
             onOpenRevisitDialog: () => setIsRevisitDialogOpen(true),
             onOpenLogNote: () => setIsLogNoteOpen(true),
+            onMoveToOutbound: () => setIsMoveToOutboundDialogOpen(true),
             isSaving: isSaving,
         };
         
@@ -328,7 +377,7 @@ export default function CheckInPage() {
             case 3: return <Step3 {...stepProps} onNext={handleNext} />;
             case 4: return <Step4 {...stepProps} onNext={handleNext} />;
             case 5: return <Step5 onNext={handleFinish} isFinish={true} {...stepProps} />;
-            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} scoreData={checkinScore} />;
+            case 6: return <FinishStep onBack={handleBack} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} onOpenLogNote={() => setIsLogNoteOpen(true)} scoreData={checkinScore} onMoveToOutbound={() => setIsMoveToOutboundDialogOpen(true)} />;
             default: return null;
         }
     };
@@ -390,12 +439,28 @@ export default function CheckInPage() {
                       <DialogFooter><Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button></DialogFooter>
                   </DialogContent>
                 </Dialog>
+                <AlertDialog open={isMoveToOutboundDialogOpen} onOpenChange={setIsMoveToOutboundDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Move to Outbound?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will move the lead to the Outbound bucket and randomly assign it to either Lachlan Ball or Grant Leddy. This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isMoving}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleConfirmMoveToOutbound} disabled={isMoving}>
+                                {isMoving ? <Loader /> : 'Confirm'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </FormProvider>
     );
 }
 
-const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote }: { onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; }) => {
+const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote, onMoveToOutbound }: { onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; onMoveToOutbound: () => void; }) => {
     const router = useRouter();
     return (
         <DropdownMenu>
@@ -407,13 +472,14 @@ const StepActions = ({ onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisi
                 <DropdownMenuItem onSelect={onOpenRevisitDialog}><History className="mr-2 h-4 w-4"/> Schedule Revisit</DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
                 <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={onMoveToOutbound}><Move className="mr-2 h-4 w-4"/> Move to Outbound</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/field-sales')}><Route className="mr-2 h-4 w-4"/> Back to Route</DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     )
 }
 
-const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; }) => (
+const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = false, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onOpenLogNote, onMoveToOutbound }: { title: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; isSaving?: boolean, isFinish?: boolean, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onOpenLogNote: () => void; onMoveToOutbound: () => void; }) => (
     <div className="space-y-6">
         <div className="text-left space-y-2"><h2 className="text-2xl font-bold">{title}</h2></div>
         <Card>
@@ -428,6 +494,7 @@ const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = fal
                             onOpenLogOutcome={onOpenLogOutcome}
                             onOpenRevisitDialog={onOpenRevisitDialog}
                             onOpenLogNote={onOpenLogNote}
+                            onMoveToOutbound={onMoveToOutbound}
                         />
                         {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : isFinish ? 'Finish' : 'Continue'}</Button>}
                      </div>
@@ -437,7 +504,7 @@ const StepWrapper = ({ title, children, onNext, onBack, isSaving, isFinish = fal
     </div>
 );
 
-const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...rest }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean, onBack?: () => void, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...rest }: { lead: Lead, onNext: () => void, onFindNearby: () => void, isFindingNearby: boolean, onBack?: () => void, onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isSaving?: boolean; }) => {
     return (
         <StepWrapper title="Company Details" onNext={onNext} {...rest}>
             <div className="space-y-4">
@@ -449,7 +516,7 @@ const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isFindingNearby, ...re
     );
 };
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: z.infer<typeof newContactSchema>) => void, form: UseFormReturn<z.infer<typeof newContactSchema>>, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, ...rest }: { contacts: Contact[], onAddContact: (values: z.infer<typeof newContactSchema>) => void, form: UseFormReturn<z.infer<typeof newContactSchema>>, isAddingContact: boolean, onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isSaving?: boolean; }) => {
     return (
         <StepWrapper title="Contact Details" onNext={onNext} onBack={onBack} {...rest}>
             <div className="space-y-4">
@@ -463,7 +530,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
     );
 };
 
-const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isSaving?: boolean; }) => {
     const { control, watch } = useFormContext<FormValues>();
     const ausPostRelationship = watch('ausPostRelationship');
     return (
@@ -509,7 +576,7 @@ const Step3 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
 };
 
 const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
-const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean; }) => {
+const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isSaving?: boolean; }) => {
     const { control, watch } = useFormContext<FormValues>();
     const otherCouriers = watch('otherCouriers');
     return (
@@ -553,7 +620,7 @@ const Step4 = ({ onNext, onBack, ...rest }: { onNext: () => void; onBack: () => 
 
 
 const reasons = ["Banking", "Local Same Day"];
-const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isFinish?: boolean }) => {
+const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isFinish?: boolean }) => {
     const { control, watch } = useFormContext<FormValues>();
     const peopleLeave = watch('peopleLeaveOffice');
     return (
@@ -568,7 +635,7 @@ const Step5 = ({ onNext, onBack, isSaving, ...rest }: { onNext: () => void; onBa
     );
 };
 
-const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile, onOpenLogNote, scoreData }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; onOpenLogNote: () => void; scoreData: { score: number; reason: string } | null; }) => {
+const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile, onOpenLogNote, scoreData, onMoveToOutbound }: { onBack: () => void; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: UserProfile | null; onOpenLogNote: () => void; scoreData: { score: number; reason: string } | null; onMoveToOutbound: () => void; }) => {
     const router = useRouter();
     const canShowSpecialButtons = userProfile?.role === 'admin' || userProfile?.uid === 'R1skvdcPUGdXEmJDS9Yh1Wbv77K2';
     return (
@@ -597,6 +664,7 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogNote}><ClipboardEdit className="mr-2"/> Log Note</Button>
+                        <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onMoveToOutbound}><Move className="mr-2"/> Move to Outbound</Button>
                         <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/field-sales')}><Route className="mr-2"/> Back to Route</Button>
                         {canShowSpecialButtons && <>
                             <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${(useParams().leadId as string)}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
@@ -615,6 +683,7 @@ const FinishStep = ({ onBack, onOpenScheduleAppointment, onOpenLogOutcome, onOpe
 
 
   
+
 
 
 
