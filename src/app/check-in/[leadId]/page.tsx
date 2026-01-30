@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getLeadFromFirebase, updateLeadCheckinQuestions } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, updateLeadDetails } from '@/services/firebase';
 import type { Lead, CheckinQuestion } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { analyzeCheckin, type CheckinAnalysis } from '@/ai/flows/analyze-checkin-flow';
-import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 export default function VoiceCheckInPage() {
     const [lead, setLead] = useState<Lead | null>(null);
@@ -128,6 +129,7 @@ export default function VoiceCheckInPage() {
         setIsAnalyzing(true); // Re-use the analyzing loader for saving
         try {
             await updateLeadCheckinQuestions(lead.id, analysisResult.checkinQuestions as CheckinQuestion[]);
+            await updateLeadDetails(lead.id, { id: lead.id } as Lead, { companyDescription: analysisResult.summary });
             toast({ title: "Success", description: "Check-in analysis has been saved." });
             router.push('/field-sales');
         } catch (error) {
