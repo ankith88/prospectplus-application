@@ -548,83 +548,88 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         }
     }, [allSystemRoutes, localSavedRoutes, isLoaded, loadingData, handleLoadRoute, routeIdToLoad, toast, router]);
 
-  
-    const filteredData = useMemo(() => {
+    const visibleData = useMemo(() => {
       if (!userProfile) return [];
-  
       const displayName = userProfile.displayName;
-      const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
-  
+      
       return mapData.filter(item => {
-        let isVisibleByRole = false;
-        if (userProfile.role === 'admin') {
-          isVisibleByRole = true;
-        } else if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
-          isVisibleByRole = item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
-        } else if (userProfile.role === 'user' || userProfile.role === 'Lead Gen' || userProfile.role === 'Lead Gen Admin') {
-          isVisibleByRole = !item.isCompany && item.dialerAssigned === displayName;
-        }
-  
-        if (!isVisibleByRole) return false;
-  
-        const companyNameMatch = filters.companyName ? item.companyName?.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
-        const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-        const statusMatch = filters.status.length > 0 ? filters.status.includes(item.status) : true;
-  
-        let campaignMatch = true;
-        if (filters.campaign && filters.campaign !== 'all') {
-          const leadCampaign = (item as Lead).campaign;
-          if (filters.campaign === 'D2D') {
-            campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
-          } else {
-            campaignMatch = leadCampaign === filters.campaign;
-          }
-        }
-  
-        if (!companyNameMatch || !dialerMatch || !franchiseeMatch || !stateMatch || !statusMatch || !campaignMatch) {
-          return false;
-        }
-  
-        if (item.isCompany) {
+        if (userProfile.role === 'admin' || userProfile.role === 'Lead Gen Admin') {
           return true;
         }
+        if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
+          return item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
+        }
+        if (userProfile.role === 'user' || userProfile.role === 'Lead Gen') {
+          return !item.isCompany && item.dialerAssigned === displayName;
+        }
+        return false;
+      });
+    }, [mapData, userProfile]);
   
-        const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
-        const checkInStatusMatch = filters.checkInStatus === 'all' ||
-          (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
-          (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
-  
-        let checkInDateMatch = true;
-        if (filters.checkInDate?.from) {
-          if (!hasBeenCheckedIn) {
-            checkInDateMatch = false;
-          } else {
-            const fromDate = startOfDay(filters.checkInDate.from);
-            const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
-            const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
-            if (checkInActivity) {
-              const checkInDate = new Date(checkInActivity.date);
-              checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+    const filteredData = useMemo(() => {
+        if (!userProfile) return [];
+    
+        const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
+    
+        return visibleData.filter(item => {
+          const companyNameMatch = filters.companyName ? item.companyName?.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+          const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
+          const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+          const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+          const statusMatch = filters.status.length > 0 ? filters.status.includes(item.status) : true;
+    
+          let campaignMatch = true;
+          if (filters.campaign && filters.campaign !== 'all') {
+            const leadCampaign = (item as Lead).campaign;
+            if (filters.campaign === 'D2D') {
+              campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
             } else {
-              checkInDateMatch = false;
+              campaignMatch = leadCampaign === filters.campaign;
             }
           }
-        }
-  
-        const isInRoute = leadToRouteMap.has(item.id);
-        const routeStatusMatch = filters.routeStatus === 'all' ||
-          (filters.routeStatus === 'in-route' && isInRoute) ||
-          (filters.routeStatus === 'not-in-route' && !isInRoute);
-  
-        const fieldSalesMatch = filters.fieldSales === 'all' ||
-          (filters.fieldSales === 'yes' && item.fieldSales === true) ||
-          (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
-  
-        return checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
-      });
-  }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
+    
+          if (!companyNameMatch || !dialerMatch || !franchiseeMatch || !stateMatch || !statusMatch || !campaignMatch) {
+            return false;
+          }
+    
+          if (item.isCompany) {
+            return true;
+          }
+    
+          const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
+          const checkInStatusMatch = filters.checkInStatus === 'all' ||
+            (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
+            (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
+    
+          let checkInDateMatch = true;
+          if (filters.checkInDate?.from) {
+            if (!hasBeenCheckedIn) {
+              checkInDateMatch = false;
+            } else {
+              const fromDate = startOfDay(filters.checkInDate.from);
+              const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
+              const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
+              if (checkInActivity) {
+                const checkInDate = new Date(checkInActivity.date);
+                checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+              } else {
+                checkInDateMatch = false;
+              }
+            }
+          }
+    
+          const isInRoute = leadToRouteMap.has(item.id);
+          const routeStatusMatch = filters.routeStatus === 'all' ||
+            (filters.routeStatus === 'in-route' && isInRoute) ||
+            (filters.routeStatus === 'not-in-route' && !isInRoute);
+    
+          const fieldSalesMatch = filters.fieldSales === 'all' ||
+            (filters.fieldSales === 'yes' && item.fieldSales === true) ||
+            (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
+    
+          return checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
+        });
+    }, [visibleData, filters, allCheckInActivities, leadToRouteMap, userProfile]);
     
     const { leadsCount, signedCustomersCount } = useMemo(() => {
         let leads = 0;
@@ -785,8 +790,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                   return false;
               }
 
-              const existingCity = ((existing.address as Address)?.city || '').trim().toLowerCase();
-              const existingZip = ((existing.address as Address)?.zip || '').trim().toLowerCase();
+              const existingCity = ((existing as any).city || '').trim().toLowerCase();
+              const existingZip = ((existing as any).zip || '').trim().toLowerCase();
               
               if (!existingCity || !existingZip) return false;
 
@@ -801,8 +806,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                   const existingNameLower = l.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
                   if (!existingNameLower.includes(coreName.toLowerCase().replace(/[^a-z0-9]/gi, ''))) return false;
                   
-                  const existingCity = ((l.address as Address)?.city || '').trim().toLowerCase();
-                  const existingZip = ((l.address as Address)?.zip || '').trim().toLowerCase();
+                  const existingCity = ((l as any).city || '').trim().toLowerCase();
+                  const existingZip = ((l as any).zip || '').trim().toLowerCase();
                   
                    if (!existingCity || !existingZip) return false;
 
@@ -2221,4 +2226,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
