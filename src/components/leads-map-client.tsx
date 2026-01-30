@@ -1455,6 +1455,28 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       }
     }, [initAutocomplete]);
 
+  const handleFindNearbyLeads = useCallback(() => {
+    if (!selectedLead || !selectedLead.latitude || !selectedLead.longitude || !window.google?.maps?.geometry) return;
+    const centerLatLng = new google.maps.LatLng(selectedLead.latitude, selectedLead.longitude);
+    
+    const nearby = mapData
+      .filter(item => {
+        if (item.isCompany || !item.latitude || !item.longitude) return false;
+        const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
+        const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, itemLatLng);
+        return distance <= 500;
+      })
+      .map(lead => ({ place: { name: lead.companyName, vicinity: (lead.address as any)?.street, place_id: lead.id }, existingLead: lead, classification: 'B2B' as const }));
+
+    setProspects(nearby);
+    if (nearby.length > 0) {
+      setIsProspectsDialogOpen(true);
+    } else {
+      toast({ title: 'No Nearby Leads', description: 'No leads found within a 500m radius.' });
+    }
+    setSelectedLead(null);
+  }, [selectedLead, mapData, toast]);
+
     if (authLoading || loadingData || !isLoaded) {
         return (
             <div className="flex h-full items-center justify-center">
@@ -1947,7 +1969,19 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             </Button>
                                         )}
                                     </div>
-                                    {!selectedLead.isCompany && (
+                                     {selectedLead.isCompany ? (
+                                        <div className="flex flex-col gap-2">
+                                            <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
+                                                <Search className="mr-2 h-4 w-4" /> Nearby Leads
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                                {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar</span></>}
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
+                                                <Building className="mr-2 h-4 w-4" /> Find Multi-sites
+                                            </Button>
+                                        </div>
+                                    ) : (
                                         <div className="flex gap-2">
                                             <Button size="sm" variant="secondary" className="flex-1 whitespace-normal h-auto" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
                                                 <Building className="mr-2 h-4 w-4" />
@@ -2187,3 +2221,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
