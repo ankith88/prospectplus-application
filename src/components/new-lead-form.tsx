@@ -84,6 +84,8 @@ export function NewLeadForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
@@ -262,6 +264,75 @@ export function NewLeadForm() {
         handleAiProspect(websiteUrl);
     }
   }, [searchParams, form, handleAiProspect]);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-AU';
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        const currentNotes = form.getValues('initialNotes') || '';
+        form.setValue('initialNotes', (currentNotes + ' ' + finalTranscript).trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+        let errorMessage = `An unknown error occurred: ${event.error}`;
+        switch (event.error) {
+            case 'no-speech':
+                errorMessage = "No speech was detected. Please try again.";
+                break;
+            case 'audio-capture':
+                errorMessage = "Audio capture failed. Please ensure your microphone is working.";
+                break;
+            case 'not-allowed':
+                errorMessage = "Microphone access was denied. Please enable it in your browser settings.";
+                break;
+            case 'network':
+                errorMessage = "A network error occurred. Please check your internet connection.";
+                break;
+        }
+        toast({ variant: 'destructive', title: 'Speech Recognition Error', description: errorMessage });
+        setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [form, toast]);
+
+  const handleToggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+       if (recognitionRef.current) {
+         recognitionRef.current.start();
+       } else {
+         toast({ variant: 'destructive', title: 'Not Supported', description: 'Speech recognition is not supported in this browser.' });
+       }
+    }
+    setIsListening(!isListening);
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
@@ -477,10 +548,23 @@ export function NewLeadForm() {
                     render={({ field }) => (
                         <FormItem>
                         <FormControl>
-                            <Textarea
-                                placeholder="Add any initial notes or comments about this lead..."
-                                {...field}
-                            />
+                            <div className="relative">
+                                <Textarea
+                                    placeholder="Add any initial notes or comments about this lead... or use the mic to dictate."
+                                    {...field}
+                                    rows={5}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute bottom-2 right-2"
+                                    onClick={handleToggleListening}
+                                >
+                                    {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
+                                    <span className="sr-only">{isListening ? 'Stop listening' : 'Start listening'}</span>
+                                </Button>
+                            </div>
                         </FormControl>
                         <FormMessage />
                         </FormItem>
