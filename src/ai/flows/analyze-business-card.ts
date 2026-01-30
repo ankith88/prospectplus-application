@@ -6,12 +6,12 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const BusinessCardAnalysisInputSchema = z.object({
+const BusinessCardAnalysisInputSchema = z.object({
   imageDataUri: z.string().describe("A photo of a business card as a data URI."),
 });
 export type BusinessCardAnalysisInput = z.infer<typeof BusinessCardAnalysisInputSchema>;
 
-export const BusinessCardAnalysisOutputSchema = z.object({
+const BusinessCardAnalysisOutputSchema = z.object({
   companyName: z.string().optional().describe("The name of the company on the business card."),
   personName: z.string().optional().describe("The name of the person on the business card."),
   jobTitle: z.string().optional().describe("The job title of the person."),
@@ -44,7 +44,7 @@ const analyzeBusinessCardPrompt = ai.definePrompt({
     `,
 });
 
-export const analyzeBusinessCardFlow = ai.defineFlow(
+const analyzeBusinessCardFlow = ai.defineFlow(
     {
         name: 'analyzeBusinessCardFlow',
         inputSchema: BusinessCardAnalysisInputSchema,
