@@ -143,13 +143,12 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             campaign: userProfile.role?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound'
         } as any);
 
-        if (result.success && result.leadId) {
+        if (result.success) {
             toast({
-                title: 'Lead Created',
-                description: `${companyName} has been successfully added.`,
+                title: 'Lead Sent to NetSuite',
+                description: `${companyName} has been successfully sent for creation.`,
             });
             onOpenChange(false);
-            router.push(`/leads/${result.leadId}`);
         } else {
             throw new Error(result.message || 'Failed to create lead in NetSuite.');
         }
