@@ -587,7 +587,7 @@ interface NewLeadData {
   dialerAssigned?: string;
 }
 
-export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string }> {
+export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
     const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
@@ -633,7 +633,6 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     const url = `${baseUrl}?${params.toString()}`;
 
     console.log(`[NetSuite New Lead Service] Sending new lead "${companyName}" to NetSuite...`);
-    console.log(`[NetSuite New Lead Service] URL: ${url}`);
 
     try {
         const controller = new AbortController();

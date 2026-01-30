@@ -40,7 +40,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
 import { industryCategories } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
@@ -108,6 +108,12 @@ export function NewLeadForm() {
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<google.maps.places.PlaceResult[]>([]);
+  const recognitionRef = useRef<any>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -175,25 +181,14 @@ export function NewLeadForm() {
     }
   }, [form, toast]);
 
-  const setupAutocomplete = useCallback(() => {
-    if (!window.google || !autocompleteInputRef.current) return;
-
-    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-        types: ['establishment'],
-        componentRestrictions: { country: 'au' },
-    });
-
-    autocomplete.addListener('place_changed', async () => {
-        const place = autocomplete.getPlace();
-        if (!place.address_components) return;
-
+    const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
         const companyName = place.name || '';
         const phoneNumber = place.formatted_phone_number || '';
         const websiteUrl = place.website || '';
         const email = `info@${(websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`;
-        
+
         const duplicateId = await checkForDuplicateLead(
-            companyName, 
+            companyName,
             websiteUrl,
             email,
             {
@@ -212,7 +207,7 @@ export function NewLeadForm() {
 
         form.setValue('companyName', companyName);
         form.setValue('websiteUrl', websiteUrl);
-        if(phoneNumber) form.setValue('customerPhone', phoneNumber);
+        if (phoneNumber) form.setValue('customerPhone', phoneNumber);
 
         const getAddressComponent = (type: string, useShortName = false) => {
             const component = place.address_components?.find(c => c.types.includes(type));
@@ -228,8 +223,8 @@ export function NewLeadForm() {
         form.setValue('address.zip', getAddressComponent('postal_code'));
         form.setValue('address.country', getAddressComponent('country', true));
         if (place.geometry?.location) {
-          form.setValue('address.lat', place.geometry.location.lat());
-          form.setValue('address.lng', place.geometry.location.lng());
+            form.setValue('address.lat', place.geometry.location.lat());
+            form.setValue('address.lng', place.geometry.location.lng());
         }
 
         form.setValue('contact.lastName', place.name || '');
@@ -240,11 +235,28 @@ export function NewLeadForm() {
             form.setValue('customerServiceEmail', email);
         }
 
+        setSearchResults([]);
+        setTranscript('');
+
         if (websiteUrl) {
             handleAiProspect(websiteUrl);
         }
-    });
   }, [form, handleAiProspect]);
+
+  const setupAutocomplete = useCallback(() => {
+    if (!window.google || !autocompleteInputRef.current) return;
+
+    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        types: ['establishment'],
+        componentRestrictions: { country: 'au' },
+    });
+
+    autocomplete.addListener('place_changed', async () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+        fillFormWithPlace(place);
+    });
+  }, [fillFormWithPlace]);
 
   useEffect(() => {
     setupAutocomplete();
@@ -281,6 +293,86 @@ export function NewLeadForm() {
         handleAiProspect(websiteUrl);
     }
   }, [searchParams, form, handleAiProspect]);
+
+    const handleToggleListening = () => {
+    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      toast({ variant: 'destructive', title: 'Unsupported Browser', description: 'Your browser does not support voice recognition.' });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-AU';
+
+      recognitionRef.current.onstart = () => {
+        setIsListening(true);
+        setTranscript('');
+        setSearchResults([]);
+      };
+
+      recognitionRef.current.onresult = (event: any) => {
+        const currentTranscript = event.results[0][0].transcript;
+        setTranscript(currentTranscript);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        toast({ variant: 'destructive', title: 'Recognition Error', description: `Error: ${event.error}` });
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+        if (recognitionRef.current.transcript) {
+            handleVoiceSearch(recognitionRef.current.transcript);
+        }
+      };
+
+      recognitionRef.current.start();
+    }
+  };
+
+  const handleVoiceSearch = async (query: string) => {
+    if (!query) return;
+    setIsSearching(true);
+    setSearchResults([]);
+
+    const placesService = new google.maps.places.PlacesService(document.createElement('div'));
+    placesService.textSearch({
+      query: query,
+      region: 'AU',
+    }, (results, status) => {
+      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        setSearchResults(results);
+      } else {
+        toast({ variant: 'destructive', title: 'Search Failed', description: 'No businesses found matching your query.' });
+      }
+      setIsSearching(false);
+    });
+  };
+
+  const handleSelectPlace = async (placeId: string) => {
+        setIsSearching(true);
+        const placesService = new google.maps.places.PlacesService(document.createElement('div'));
+        placesService.getDetails({ 
+            placeId,
+            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id']
+        }, async (place, status) => {
+             if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                 await fillFormWithPlace(place);
+             } else {
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch details for the selected place.' });
+             }
+             setIsSearching(false);
+        });
+  };
+
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
@@ -363,6 +455,47 @@ export function NewLeadForm() {
     </AlertDialog>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Mic className="w-5 h-5" /> Create with Voice</CardTitle>
+              <CardDescription>
+                Speak the name of a business to automatically find and fill its details.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <Button type="button" onClick={handleToggleListening} className={`h-16 w-16 rounded-full transition-all duration-300 ${isListening ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-primary'}`}>
+                  {isListening ? <MicOff className="h-8 w-8"/> : <Mic className="h-8 w-8" />}
+                </Button>
+                <div className="flex-1 w-full p-3 border rounded-md bg-muted min-h-[4rem] text-muted-foreground italic">
+                  {transcript ? `"${transcript}"` : 'Your transcribed text will appear here...'}
+                </div>
+                <Button type="button" onClick={() => handleVoiceSearch(transcript)} disabled={!transcript || isSearching}>
+                  {isSearching ? <Loader/> : <Search className="mr-2 h-4 w-4" />}
+                  Search
+                </Button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="space-y-2 pt-4 border-t">
+                  <h4 className="font-semibold">Search Results</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {searchResults.map(place => (
+                      <Card key={place.place_id} className="p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold">{place.name}</p>
+                            <p className="text-sm text-muted-foreground">{place.formatted_address}</p>
+                          </div>
+                          <Button type="button" size="sm" onClick={() => handleSelectPlace(place.place_id!)}>Select</Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
             <div className="space-y-4">
