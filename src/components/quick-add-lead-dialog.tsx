@@ -26,6 +26,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -48,6 +49,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     const route = get('route');
     
     address.street = `${streetNumber || ''} ${route || ''}`.trim();
+    address.address1 = get('subpremise'); // For level, suite, etc.
     address.city = get('locality') || get('postal_town');
     address.state = get('administrative_area_level_1', true);
     address.zip = get('postal_code');
@@ -223,13 +225,13 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             campaign: userProfile.role?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound'
         } as any);
 
-        if (result.success && result.leadId) {
+        if (result.success && result.leadID) {
             toast({
                 title: 'Lead Created',
                 description: `${companyName} has been successfully created.`,
             });
             onOpenChange(false);
-            router.push(`/leads/${result.leadId}`);
+            router.push(`/leads/${result.leadID}`);
         } else {
             throw new Error(result.message || 'Failed to create lead in NetSuite.');
         }
