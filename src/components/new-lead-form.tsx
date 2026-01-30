@@ -294,22 +294,15 @@ export function NewLeadForm() {
 
       if (result.success && result.leadId) {
         toast({
-            title: 'Lead Created',
-            description: `${values.companyName} created. AI prospecting will run in the background.`,
+          title: 'Lead Created in NetSuite',
+          description: `${values.companyName} has been created.`,
         });
-
-        if (values.websiteUrl) {
-           prospectWebsiteTool({ leadId: result.leadId, websiteUrl: values.websiteUrl })
-            .then(() => console.log(`Background AI prospecting initiated for lead ${result.leadId}`))
-            .catch(err => console.error(`Background AI prospecting failed for lead ${result.leadId}:`, err));
-        }
-
         router.push(`/leads/${result.leadId}`);
       } else {
         toast({
             variant: 'destructive',
             title: 'Creation Failed',
-            description: result.message || 'Failed to create lead.',
+            description: result.message || 'Failed to create lead in NetSuite.',
         });
       }
     } catch (error: any) {
