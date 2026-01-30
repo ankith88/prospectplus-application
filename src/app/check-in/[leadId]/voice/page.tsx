@@ -112,7 +112,7 @@ export default function VoiceCheckInPage() {
         if (!lead) return;
         setIsAnalyzing(true);
         try {
-            const leadProfile = \`Company: \${lead.companyName}, Industry: \${lead.industryCategory || 'N/A'}, Address: \${lead.address?.city || 'N/A'}\`;
+            const leadProfile = `Company: ${lead.companyName}, Industry: ${lead.industryCategory || 'N/A'}, Address: ${lead.address?.city || 'N/A'}`;
             const result = await analyzeCheckin({ leadId: lead.id, audioDataUri, leadProfile });
             setAnalysisResult(result);
             setTranscript(result.transcript);
@@ -131,7 +131,7 @@ export default function VoiceCheckInPage() {
             await updateLeadCheckinQuestions(lead.id, analysisResult.checkinQuestions as CheckinQuestion[]);
             await updateLeadDetails(lead.id, { id: lead.id } as Lead, { companyDescription: analysisResult.summary });
             toast({ title: "Success", description: "Check-in analysis has been saved." });
-            router.push('/field-sales');
+            router.push(`/check-in/${lead.id}/manual`);
         } catch (error) {
             console.error("Failed to save check-in analysis:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save the analysis." });
@@ -185,7 +185,7 @@ export default function VoiceCheckInPage() {
                             ) : (
                                 <Button
                                     size="lg"
-                                    className={\`h-20 w-20 rounded-full transition-all duration-300 \${isRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-primary'}\`}
+                                    className={`h-20 w-20 rounded-full transition-all duration-300 ${isRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-primary'}`}
                                     onClick={isRecording ? stopRecording : startRecording}
                                     disabled={hasMicPermission === false}
                                 >
@@ -247,10 +247,12 @@ export default function VoiceCheckInPage() {
             {analysisResult && (
                  <footer className="flex-shrink-0 pt-4 border-t flex justify-end">
                      <Button onClick={handleSave} disabled={isAnalyzing}>
-                         {isAnalyzing ? <Loader /> : 'Save & Finish'}
+                         {isAnalyzing ? <Loader /> : 'Save & Continue'}
                      </Button>
                  </footer>
             )}
         </div>
     );
 }
+
+    

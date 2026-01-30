@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -8,7 +7,7 @@
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
-import { sendNewLeadToNetSuite } from './netsuite';
+import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 
 async function logActivity(
   leadId: string,
@@ -1145,7 +1144,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 async function updateLeadDetails(
   leadId: string,
   oldLead: Lead,
-  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason'>>
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason' | 'companyDescription'>>
 ): Promise<void> {
     try {
         const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
@@ -1193,6 +1192,10 @@ async function updateLeadDetails(
                 }
                 if (newLeadData.checkinScoringReason !== undefined) {
                     updatePayload.checkinScoringReason = newLeadData.checkinScoringReason;
+                }
+                
+                 if (newLeadData.companyDescription !== undefined) {
+                    updatePayload.companyDescription = newLeadData.companyDescription;
                 }
 
                 if (Object.keys(updatePayload).length > 0) {
@@ -1646,7 +1649,7 @@ interface NewLeadData {
   abn?: string;
 }
 
-async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message?: string; }> {
+async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadID?: string; message?: string; }> {
   const nsResult = await sendNewLeadToNetSuite(data);
   return nsResult;
 }
@@ -2051,12 +2054,4 @@ export {
     getUserActivitiesForPeriod,
 };
 
-
-
-
-
-
     
-
-
-
