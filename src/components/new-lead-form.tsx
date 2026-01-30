@@ -322,8 +322,19 @@ export function NewLeadForm() {
       };
 
       recognitionRef.current.onerror = (event: any) => {
+        let errorMessage = `Error: ${event.error}`;
+        if (event.error === 'network') {
+            errorMessage = "A network error occurred. Please check your internet connection and try again.";
+        } else if (event.error === 'no-speech') {
+            errorMessage = "No speech was detected. Please try again.";
+        } else if (event.error === 'audio-capture') {
+            errorMessage = "There was an issue capturing audio. Please check your microphone.";
+        } else if (event.error === 'not-allowed') {
+            errorMessage = "Microphone access was denied. Please enable it in your browser settings.";
+        }
+        
         console.error('Speech recognition error', event.error);
-        toast({ variant: 'destructive', title: 'Recognition Error', description: `Error: ${event.error}` });
+        toast({ variant: 'destructive', title: 'Recognition Error', description: errorMessage });
         setIsListening(false);
       };
 
