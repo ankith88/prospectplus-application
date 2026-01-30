@@ -45,90 +45,89 @@ export function UniversalSearch() {
     return () => document.removeEventListener('keydown', down)
   }, [])
 
-  const fetchData = useCallback(async () => {
-    if (allLeads.length > 0) return
-    setLoading(true)
-    try {
-      const leads = await getLeadsFromFirebase({ summary: false }) // Fetch full data
-      setAllLeads(leads)
-    } catch (error) {
-      console.error('Failed to fetch search data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [allLeads])
-
   useEffect(() => {
     if (open && allLeads.length === 0) {
-      fetchData()
+      setLoading(true)
+      getLeadsFromFirebase({ summary: false })
+        .then((leads) => {
+          setAllLeads(leads)
+        })
+        .catch((error) => {
+          console.error('Failed to fetch search data:', error)
+        })
+        .finally(() => {
+          setLoading(false)
+        })
     }
-  }, [open, allLeads, fetchData])
+  }, [open, allLeads.length])
 
-  const performSearch = (searchQuery: string) => {
-    if (!searchQuery) {
+  useEffect(() => {
+    if (!query) {
       setResults([])
       return
     }
 
-    const lowerCaseQuery = searchQuery.toLowerCase()
-    const searchResults: SearchResult[] = []
+    if (allLeads.length > 0) {
+      const lowerCaseQuery = query.toLowerCase()
+      const searchResults: SearchResult[] = []
 
-    allLeads.forEach((lead) => {
-      // Search by lead name
-      if (lead.companyName.toLowerCase().includes(lowerCaseQuery)) {
-        searchResults.push({
-          type: 'lead',
-          id: lead.id,
-          title: lead.companyName,
-          description: `Lead • ${lead.industryCategory || 'N/A'}`,
-          leadId: lead.id,
-          icon: <Briefcase className="mr-2 h-4 w-4" />,
-        })
-      }
-
-      // Search by contact phone number
-      lead.contacts?.forEach((contact) => {
-        if (contact.phone && contact.phone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
-          searchResults.push({
-            type: 'contact',
-            id: contact.id,
-            title: `${contact.name} (${contact.phone})`,
-            description: `Contact at ${lead.companyName}`,
-            leadId: lead.id,
-            icon: <Phone className="mr-2 h-4 w-4" />,
-          })
-        }
-      })
-      
-      // Search by lead phone number
-      if (lead.customerPhone && lead.customerPhone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
+      allLeads.forEach((lead) => {
+        // Search by lead name
+        if (lead.companyName.toLowerCase().includes(lowerCaseQuery)) {
           searchResults.push({
             type: 'lead',
-            id: `${lead.id}-phone`,
-            title: `${lead.companyName} (${lead.customerPhone})`,
-            description: 'Lead Phone Number',
+            id: lead.id,
+            title: lead.companyName,
+            description: `Lead • ${lead.industryCategory || 'N/A'}`,
             leadId: lead.id,
-            icon: <Phone className="mr-2 h-4 w-4" />,
-          })
-      }
-
-      // Search by AirCall Call ID
-      lead.activity?.forEach((activity) => {
-        if (activity.type === 'Call' && activity.callId && activity.callId.includes(lowerCaseQuery)) {
-          searchResults.push({
-            type: 'call',
-            id: activity.id,
-            title: `Call ID: ${activity.callId}`,
-            description: `Call with ${lead.companyName}`,
-            leadId: lead.id,
-            icon: <Hash className="mr-2 h-4 w-4" />,
+            icon: <Briefcase className="mr-2 h-4 w-4" />,
           })
         }
-      })
-    })
 
-    setResults(searchResults)
-  }
+        // Search by contact phone number
+        lead.contacts?.forEach((contact) => {
+          if (contact.phone && contact.phone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
+            searchResults.push({
+              type: 'contact',
+              id: contact.id,
+              title: `${contact.name} (${contact.phone})`,
+              description: `Contact at ${lead.companyName}`,
+              leadId: lead.id,
+              icon: <Phone className="mr-2 h-4 w-4" />,
+            })
+          }
+        })
+        
+        // Search by lead phone number
+        if (lead.customerPhone && lead.customerPhone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
+            searchResults.push({
+              type: 'lead',
+              id: `${lead.id}-phone`,
+              title: `${lead.companyName} (${lead.customerPhone})`,
+              description: 'Lead Phone Number',
+              leadId: lead.id,
+              icon: <Phone className="mr-2 h-4 w-4" />,
+            })
+        }
+
+        // Search by AirCall Call ID
+        lead.activity?.forEach((activity) => {
+          if (activity.type === 'Call' && activity.callId && activity.callId.includes(lowerCaseQuery)) {
+            searchResults.push({
+              type: 'call',
+              id: activity.id,
+              title: `Call ID: ${activity.callId}`,
+              description: `Call with ${lead.companyName}`,
+              leadId: lead.id,
+              icon: <Hash className="mr-2 h-4 w-4" />,
+            })
+          }
+        })
+      })
+      setResults(searchResults)
+    }
+  }, [query, allLeads])
+
 
   const handleSelect = (leadId: string) => {
     router.push(`/leads/${leadId}`)
@@ -150,15 +149,12 @@ export function UniversalSearch() {
         <CommandInput
           placeholder="Search by lead name, phone, or call ID..."
           value={query}
-          onValueChange={(value) => {
-            setQuery(value)
-            performSearch(value)
-          }}
-          disabled={loading}
+          onValueChange={setQuery}
         />
         <CommandList>
           {loading && <div className="p-4 text-sm text-center">Loading data...</div>}
-          {!loading && <CommandEmpty>No results found.</CommandEmpty>}
+          {!loading && query && results.length === 0 && <CommandEmpty>No results found.</CommandEmpty>}
+          {!loading && !query && <CommandEmpty>Type to search...</CommandEmpty>}
           <CommandGroup heading="Results">
             {results.map((result) => (
               <CommandItem
