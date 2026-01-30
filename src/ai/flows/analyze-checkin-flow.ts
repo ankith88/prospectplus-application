@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI flow to analyze a recorded sales check-in conversation.
@@ -8,14 +9,14 @@ import { updateLeadCheckinQuestions, updateLeadDetails } from '@/services/fireba
 import type { CheckinQuestion, Lead } from '@/lib/types';
 
 
-export const CheckinAnalysisInputSchema = z.object({
+const CheckinAnalysisInputSchema = z.object({
   leadId: z.string(),
   audioDataUri: z.string().describe("The recorded check-in conversation as a data URI."),
   leadProfile: z.string().describe("A summary of the lead's profile."),
 });
 export type CheckinAnalysisInput = z.infer<typeof CheckinAnalysisInputSchema>;
 
-export const CheckinAnalysisSchema = z.object({
+const CheckinAnalysisSchema = z.object({
   summary: z.string().describe("A concise summary of the entire conversation."),
   painPoints: z.array(z.string()).describe("A list of pain points or challenges mentioned by the lead."),
   actionItems: z.array(z.string()).describe("A list of clear, actionable next steps for the sales representative based on the conversation."),
@@ -64,7 +65,7 @@ const analyzeCheckinPrompt = ai.definePrompt({
     `,
 });
 
-export const analyzeCheckinFlow = ai.defineFlow(
+const analyzeCheckinFlow = ai.defineFlow(
     {
         name: 'analyzeCheckinFlow',
         inputSchema: CheckinAnalysisInputSchema,
