@@ -32,13 +32,13 @@ export type CheckinAnalysis = z.infer<typeof CheckinAnalysisSchema>;
 const checkinQuestionsList = [
     "Do you have a relationship with Australia Post?",
     "What do you use them for?",
-    "Do you drop it off or do they come here? (Answer should be 'Drop-off', 'They collect', or both)",
     "Do you pay for the service?",
+    "Do you drop it off or do they come here? (Answer should be 'Drop-off', 'They collect', or both)",
     "Do you use any other couriers?",
     "Which Courier do you use? (List them)",
     "Do you have any need for local same-day deliveries?",
     "Do people leave the office during the day?",
-    "What are the reasons people leave the office? (e.g., Banking, Post office)",
+    "What are the reasons people leave the office? (e.g., Banking, Local Same Day)",
 ];
 
 const analyzeCheckinPrompt = ai.definePrompt({

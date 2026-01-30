@@ -3,15 +3,14 @@
 
 import { useEffect, useState, useMemo, Fragment, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useForm, FormProvider, useFormContext } from 'react-hook-form';
+import { useForm, FormProvider, useFormContext, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus } from '@/services/firebase';
-import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
-import type { Lead, DiscoveryData, Contact, LeadStatus } from '@/lib/types';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase } from '@/services/firebase';
+import type { Lead, CheckinQuestion, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,44 +18,29 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { PostCallOutcomeDialog } from '@/components/post-call-outcome-dialog';
-import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { LogNoteDialog } from '@/components/log-note-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
-import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
-import { Badge } from '@/components/ui/badge';
-import { ScoreIndicator } from '@/components/score-indicator';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { LocalMileAccessDialog } from '@/components/localmile-access-dialog';
 import { RevisitDialog } from '@/components/revisit-dialog';
-import { doc, updateDoc } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
-import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
 import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dialog';
-import { ShipMateAccessDialog } from '@/components/shipmate-access-dialog';
+import { useAuth } from '@/hooks/use-auth';
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogHeader } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-
-const discoverySchema = z.object({
-  relevanceCheck: z.enum(['Yes', 'No'], { required_error: "This field is required." }),
+const checkinSchema = z.object({
+  auspostRelationship: z.enum(['Yes', 'No']).optional(),
+  auspostUsage: z.string().optional(),
+  auspostPaidService: z.enum(['Yes', 'No']).optional(),
+  auspostLodge: z.array(z.string()).optional(),
+  otherCouriers: z.enum(['Yes', 'No']).optional(),
+  otherCouriersList: z.array(z.string()).optional(),
+  localDeliveries: z.enum(['Yes', 'No']).optional(),
+  peopleLeaveOffice: z.enum(['Yes', 'No']).optional(),
   reasonsToLeave: z.array(z.string()).optional(),
-  postOfficeRelationship: z.enum(['Yes-Driver', 'Yes-Post Office walk up', 'No'], { required_error: "This field is required." }),
-  logisticsSetup: z.enum(['Drop-off', 'Routine collection', 'Ad-hoc'], { required_error: "This field is required." }),
-  servicePayment: z.enum(['Yes', 'No']).optional(),
-  shippingVolume: z.enum(['<5', '<20', '20-100', '100+'], { required_error: "This field is required." }),
-  expressVsStandard: z.enum(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'], { required_error: "This field is required." }),
-  packageType: z.array(z.string()).min(1, "Please select at least one package type."),
-  currentProvider: z.array(z.string()).min(1, "Please select at least one provider."),
-  otherProvider: z.string().optional(),
-  eCommerceTech: z.array(z.string()).min(1, "Please select at least one platform."),
-  otherECommerceTech: z.string().optional(),
-  sameDayCourier: z.enum(['Yes', 'Occasional', 'Never'], { required_error: "This field is required." }),
-  decisionMaker: z.enum(['Owner', 'Influencer', 'Gatekeeper'], { required_error: "This field is required." }),
-  painPoints: z.string().optional(),
-  checkInCompleted: z.boolean().default(true),
 });
 
 const newContactSchema = z.object({
@@ -66,63 +50,29 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 8;
-const stepLabels = [
-    "Company",
-    "Contact",
-    "Relevance",
-    "Reasons",
-    "Logistics",
-    "Shipping",
-    "Providers",
-    "Needs",
-    "Finish"
-];
+const TOTAL_STEPS = 6;
+const stepLabels = ["Company", "Contact", "AusPost", "Couriers", "Errands", "Finish"];
 
-const salesReps = [
-    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
-    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
-    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
-];
-
-const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[], onStepClick: (step: number) => void; }) => {
-    const isCompleted = currentStep >= totalSteps;
-
+const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: string[] }) => {
     return (
         <div className="flex items-center w-full" aria-label={"Step " + currentStep + " of " + totalSteps}>
             {labels.map((label, index) => {
                 const step = index + 1;
-                const isStepCompleted = currentStep > step;
+                const isCompleted = currentStep > step;
                 const isCurrent = currentStep === step;
 
                 return (
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center">
-                            <button
-                                onClick={() => isCompleted && onStepClick(step)}
-                                disabled={!isCompleted}
-                                className={cn(
-                                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
-                                    isStepCompleted ? "bg-primary text-primary-foreground" :
-                                    isCurrent ? "border-2 border-primary bg-primary/10 text-primary" :
-                                    "bg-muted text-muted-foreground",
-                                    isCompleted && "cursor-pointer hover:ring-2 hover:ring-primary"
-                                )}
-                            >
-                                {isStepCompleted ? <Check className="w-5 h-5" /> : step}
-                            </button>
-                            <p className={cn(
-                                "text-xs mt-1 text-center hidden md:block",
-                                isCurrent ? "font-bold text-primary" : "text-muted-foreground"
-                            )}>
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300", isCompleted ? "bg-primary text-primary-foreground" : isCurrent ? "border-2 border-primary bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                                {isCompleted ? <Check className="w-5 h-5" /> : step}
+                            </div>
+                            <p className={cn("text-xs mt-1 text-center hidden md:block", isCurrent ? "font-bold text-primary" : "text-muted-foreground")}>
                                 {label}
                             </p>
                         </div>
                         {step < labels.length && (
-                            <div className={cn(
-                                "flex-1 h-0.5 transition-all duration-300",
-                                currentStep > step ? "bg-primary" : "bg-muted"
-                            )} />
+                            <div className={cn("flex-1 h-0.5 transition-all duration-300", currentStep > step ? "bg-primary" : "bg-muted")} />
                         )}
                     </React.Fragment>
                 );
@@ -138,30 +88,24 @@ export default function ManualCheckinPage() {
     const [isSaving, setIsSaving] = useState(false);
     
     const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
-    const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-    const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
-    const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
-    const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
     const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
 
-
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
-    
-    const [finalDiscoveryData, setFinalDiscoveryData] = useState<DiscoveryData | null>(null);
-    const [isProspecting, setIsProspecting] = useState(false);
 
+    const [isNearbyCustomersOpen, setIsNearbyCustomersOpen] = useState(false);
+    const [nearbyCustomers, setNearbyCustomers] = useState<Lead[]>([]);
+    const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
+    
+    const { userProfile } = useAuth();
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
 
-    const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
-        resolver: zodResolver(discoverySchema.partial()),
-        defaultValues: {
-            checkInCompleted: true
-        }
+    const methods = useForm<Partial<z.infer<typeof checkinSchema>>>({
+        resolver: zodResolver(checkinSchema.partial()),
     });
     
     const newContactForm = useForm<z.infer<typeof newContactSchema>>({
@@ -170,25 +114,42 @@ export default function ManualCheckinPage() {
     });
 
     useEffect(() => {
-        const fetchLeadData = async () => {
+        const fetchInitialData = async () => {
             const leadId = params.leadId as string;
             if (!leadId) {
                 router.push('/field-sales');
                 return;
             }
             try {
-                const leadData = await getLeadFromFirebase(leadId, true);
+                const [leadData, companiesData] = await Promise.all([
+                    getLeadFromFirebase(leadId, true),
+                    getCompaniesFromFirebase()
+                ]);
+
                 if (leadData) {
                     setLead(leadData);
                     setContacts(leadData.contacts || []);
-                    if (leadData.discoveryData) {
-                        methods.reset(leadData.discoveryData);
+                    if (leadData.checkinQuestions) {
+                        const formData: Partial<z.infer<typeof checkinSchema>> = {};
+                        leadData.checkinQuestions.forEach(q => {
+                           if (q.question === "Do you have a relationship with Australia Post?") formData.auspostRelationship = q.answer as 'Yes' | 'No';
+                           if (q.question === "What do you use them for?") formData.auspostUsage = q.answer as string;
+                           if (q.question === "Do you pay for the service?") formData.auspostPaidService = q.answer as 'Yes' | 'No';
+                           if (q.question === "Do you drop it off or do they come here?") formData.auspostLodge = q.answer as string[];
+                           if (q.question === "Do you use any other couriers?") formData.otherCouriers = q.answer as 'Yes' | 'No';
+                           if (q.question === "Which Courier do you use?") formData.otherCouriersList = q.answer as string[];
+                           if (q.question === "Do you have any need for local deliveries?") formData.localDeliveries = q.answer as 'Yes' | 'No';
+                           if (q.question === "Do people leave the office during the day?") formData.peopleLeaveOffice = q.answer as 'Yes' | 'No';
+                           if (q.question === "What are the reasons people leave the office?") formData.reasonsToLeave = q.answer as string[];
+                        });
+                        methods.reset(formData);
                     }
                     await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Lead not found.' });
                     router.push('/field-sales');
                 }
+                setAllCompanies(companiesData);
             } catch (error) {
                 console.error(error);
                 toast({ variant: 'destructive', title: 'Error', description: 'Failed to load lead data.' });
@@ -196,68 +157,52 @@ export default function ManualCheckinPage() {
                 setLoading(false);
             }
         };
-        fetchLeadData();
+        fetchInitialData();
     }, [params.leadId, router, toast, methods]);
 
-    const handleNext = async () => {
+    const handleSaveAndNext = async () => {
         setIsSaving(true);
-        try {
-            let isValid = true;
-            if (currentStep === 3) {
-                 isValid = await methods.trigger(['relevanceCheck']);
-                 if (!isValid) {
-                    toast({ variant: "destructive", title: "Missing Information", description: "Please answer the relevance question before proceeding." });
-                    setIsSaving(false);
-                    return;
-                 }
+        const formValues = methods.getValues();
+        const questionsToSave: CheckinQuestion[] = [];
+        
+        Object.entries(formValues).forEach(([key, value]) => {
+            if(value === undefined || value === null) return;
+            let question = "";
+            switch(key) {
+                case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
+                case 'auspostUsage': question = "What do you use them for?"; break;
+                case 'auspostPaidService': question = "Do you pay for the service?"; break;
+                case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
+                case 'otherCouriers': question = "Do you use any other couriers?"; break;
+                case 'otherCouriersList': question = "Which Courier do you use?"; break;
+                case 'localDeliveries': question = "Do you have any need for local deliveries?"; break;
+                case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
+                case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
             }
-            
-            const currentData = { ...methods.getValues() };
-            
-            // Sanitize undefined values before saving to Firestore
-            for (const key in currentData) {
-                if (currentData[key as keyof typeof currentData] === undefined) {
-                    delete currentData[key as keyof typeof currentData];
-                }
+            if(question) {
+                questionsToSave.push({ question, answer: value as string | string[]});
             }
+        });
 
-            if(lead?.id && Object.keys(currentData).length > 0) {
-                const leadRef = doc(firestore, 'leads', lead.id);
-                await updateDoc(leadRef, { discoveryData: currentData });
+        try {
+            if(lead?.id && questionsToSave.length > 0) {
+                const existingQuestions = lead.checkinQuestions || [];
+                const newQuestions = questionsToSave.map(q => q.question);
+                const updatedQuestions = existingQuestions.filter(q => !newQuestions.includes(q.question)).concat(questionsToSave);
+                await updateLeadCheckinQuestions(lead.id, updatedQuestions);
             }
-            
-            if (currentStep === TOTAL_STEPS) { // If it's the last data entry step
-                const discoveryData = calculateScoreAndRouting(methods.getValues());
-                setFinalDiscoveryData(discoveryData);
-                await updateLeadDiscoveryData(lead!.id, discoveryData);
-                await logActivity(lead!.id, { type: 'Update', notes: 'Discovery questions form was completed.' });
-                setCurrentStep(prev => prev + 1); // Go to final actions step
-            } else if (currentStep === 3 && methods.getValues('relevanceCheck') === 'No') {
-                    setCurrentStep(prev => prev + 2); // Skip step 4
-            } else {
-                setCurrentStep(prev => prev + 1);
+            if (currentStep === TOTAL_STEPS) {
+                 await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
             }
-        } catch (error: any) {
-            console.error("Failed to save discovery data:", error);
-            toast({ variant: "destructive", title: "Save Error", description: `Could not save progress. Please try again. Error: ${error.message}` });
+            setCurrentStep(prev => prev + 1);
+        } catch (error) {
+             toast({ variant: "destructive", title: "Save Error", description: "Could not save progress." });
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleBack = () => {
-         if (currentStep === 5 && methods.getValues('relevanceCheck') === 'No') {
-            setCurrentStep(prev => prev - 2); // Go back to step 3
-        } else {
-            setCurrentStep(prev => prev - 1);
-        }
-    };
-    
-    const handleStepClick = (step: number) => {
-        if (currentStep >= TOTAL_STEPS + 1) {
-            setCurrentStep(step);
-        }
-    };
+    const handleBack = () => setCurrentStep(prev => prev - 1);
     
     const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
         if (!lead) return;
@@ -269,82 +214,42 @@ export default function ManualCheckinPage() {
             newContactForm.reset();
             toast({ title: "Success", description: "New contact added." });
         } catch (error) {
-            console.error(error);
             toast({ variant: "destructive", title: "Error", description: "Failed to add contact." });
         } finally {
             setIsAddingContact(false);
         }
     };
     
-     const handleContactTitleUpdate = async (contactId: string, newTitle: string) => {
-        if (!lead) return;
-        try {
-            await updateContactInLead(lead.id, contactId, { title: newTitle });
-            setContacts(prev => prev.map(c => c.id === contactId ? { ...c, title: newTitle } : c));
-            toast({ title: 'Success', description: 'Contact title updated.' });
-        } catch (error) {
-            console.error('Failed to update contact title:', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update contact title.' });
-        }
-    };
-    
-     const handleProspectWebsite = async () => {
-        if (!lead || !lead.websiteUrl) {
-            toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
-            return;
-        }
-        setIsProspecting(true);
-        try {
-            const result = await prospectWebsiteTool({ leadId: lead.id, websiteUrl: lead.websiteUrl });
-
-            if (result.logoUrl) {
-                await updateLeadAvatar(lead.id, result.logoUrl);
-                setLead(prev => prev ? { ...prev, avatarUrl: result.logoUrl! } : null);
-                toast({ title: "Logo Found!", description: "Company logo has been updated." });
-            }
-            if (result.companyDescription) {
-                setLead(prev => prev ? { ...prev, companyDescription: result.companyDescription! } : null);
-                toast({ title: "Description Generated", description: "Company description has been updated." });
-            }
-            if (result.contacts && result.contacts.length > 0) {
-                setContacts(prev => [...prev, ...result.contacts!]);
-                toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
-            } else {
-                toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
-            }
-        } catch (error) {
-            console.error("Failed to prospect website:", error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
-        } finally {
-            setIsProspecting(false);
-        }
-    };
-
-    const handleNoteLogged = () => {
-      // Re-fetch or optimistically update lead data if necessary.
-      // For now, just closes the dialog.
-      setIsLogNoteOpen(false);
-    };
+     const handleNoteLogged = () => setIsLogNoteOpen(false);
 
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
         router.push('/field-sales');
     };
     
+    const handleFindNearbyCustomers = () => {
+        if (!lead?.latitude || !lead.longitude || !window.google?.maps?.geometry) {
+            toast({ variant: 'destructive', title: 'Location Missing', description: 'Lead has no coordinates.' });
+            return;
+        }
+        const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+        const nearby = allCompanies.filter(company => {
+            if (!company.latitude || !company.longitude) return false;
+            const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+            return window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, companyLatLng) <= 1000;
+        });
+        setNearbyCustomers(nearby);
+        setIsNearbyCustomersOpen(true);
+    };
+
     const renderStep = () => {
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleNext} onProspect={handleProspectWebsite} isProspecting={isProspecting} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onTitleUpdate={handleContactTitleUpdate} onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 3: return <DiscoveryStep0 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 4: return <DiscoveryStep1 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 5: return <DiscoveryStep2 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 6: return <DiscoveryStep3 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 7: return <DiscoveryStep4 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 8: return <DiscoveryStep5 onNext={handleNext} onBack={handleBack} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} isSaving={isSaving} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 9: return <FinalActionsStep onBack={handleBack} lead={lead!} discoveryData={finalDiscoveryData} onOpenDialog={(type) => {
-                setServiceSelectionMode(type === 'free-trial' ? 'Free Trial' : 'Signup');
-                router.push(`/check-in/${lead.id}/select-services?mode=${type}`);
-            }} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onOpenLocalMileDialog={() => setIsLocalMileDialogOpen(true)} onOpenShipMateDialog={() => setIsShipMateDialogOpen(true)} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleSaveAndNext} onFindNearby={handleFindNearbyCustomers} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 3: return <AusPostStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 4: return <OtherCouriersStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 5: return <OfficeErrandsStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 6: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} userProfile={userProfile} />;
             default: return null;
         }
     };
@@ -367,75 +272,38 @@ export default function ManualCheckinPage() {
                             <h1 className="text-lg font-bold">{lead.companyName}</h1>
                             <p className="text-sm text-muted-foreground">{lead.address?.city || ''}</p>
                         </div>
-                        <div className="w-20 text-center">
-                            <div className="border border-border rounded-full px-2 py-1 text-xs">
-                                Step {Math.min(currentStep, TOTAL_STEPS + 1)}/{TOTAL_STEPS + 1}
-                            </div>
-                        </div>
+                        <div className="w-20 text-center"><div className="border border-border rounded-full px-2 py-1 text-xs">Step {currentStep}/{TOTAL_STEPS}</div></div>
                     </header>
-
-                    <div className="my-4 flex-shrink-0">
-                      <ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS + 1} labels={stepLabels} onStepClick={handleStepClick} />
-                    </div>
+                    <div className="my-4 flex-shrink-0"><ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={stepLabels} /></div>
                 </div>
                 
-                <main className="flex-grow overflow-y-auto px-4 pb-4">
-                    {renderStep()}
-                </main>
+                <main className="flex-grow overflow-y-auto px-4 pb-4">{renderStep()}</main>
                  
-                {/* Dialogs for Actions */}
-                <PostCallOutcomeDialog 
-                    isOpen={isLogOutcomeOpen} 
-                    onClose={() => setIsLogOutcomeOpen(false)}
-                    lead={lead}
-                    onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }}
-                />
-                
-                 <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}>
-                    {/* This is just a holder, the dialog is controlled by isOpen state */}
-                    <div/>
-                 </LogNoteDialog>
-
-                 {isRevisitDialogOpen && (
-                    <RevisitDialog 
-                        isOpen={isRevisitDialogOpen}
-                        onOpenChange={setIsRevisitDialogOpen}
-                        lead={lead}
-                        onRevisitScheduled={handleRevisitScheduled}
-                    />
-                 )}
-                 {isScheduleAppointmentOpen && (
-                    <ScheduleAppointmentDialog
-                        isOpen={isScheduleAppointmentOpen}
-                        onOpenChange={setIsScheduleAppointmentOpen}
-                        lead={lead}
-                    />
-                 )}
+                <PostCallOutcomeDialog isOpen={isLogOutcomeOpen} onClose={() => setIsLogOutcomeOpen(false)} lead={lead} onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }} />
+                <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}><div/></LogNoteDialog>
+                {isRevisitDialogOpen && <RevisitDialog isOpen={isRevisitDialogOpen} onOpenChange={setIsRevisitDialogOpen} lead={lead} onRevisitScheduled={handleRevisitScheduled} />}
+                {isScheduleAppointmentOpen && <ScheduleAppointmentDialog isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} lead={lead} />}
+                <NearbyCustomersDialog isOpen={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen} customers={nearbyCustomers} />
             </div>
         </FormProvider>
     );
 }
 
-const StepWrapper = ({ title, description, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, description: string, script?: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const StepWrapper = ({ title, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, script?: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
                 <h2 className="text-2xl font-bold">{title}</h2>
-                <p className="text-muted-foreground">{description}</p>
                 {script && <p className="text-sm italic text-primary p-2 bg-primary/10 border-l-4 border-primary rounded-r-md">"{script}"</p>}
             </div>
             <Card>
-                <CardContent className="p-6">
-                    {children}
-                </CardContent>
+                <CardContent className="p-6">{children}</CardContent>
                 {(onNext || onBack) && (
                     <CardFooter className="flex justify-between items-center gap-2">
                          {onBack && <Button variant="outline" onClick={onBack} disabled={isSaving}>Back</Button>}
                          <div className="flex items-center gap-2">
                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline"><MoreVertical className="mr-2 h-4 w-4"/>Actions</Button>
-                                </DropdownMenuTrigger>
+                                <DropdownMenuTrigger asChild><Button variant="outline"><MoreVertical className="mr-2 h-4 w-4"/>Actions</Button></DropdownMenuTrigger>
                                 <DropdownMenuContent>
                                     <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
                                     <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
@@ -451,340 +319,129 @@ const StepWrapper = ({ title, description, script, children, onNext, onBack, onO
     );
 };
 
-const CompanyDetailsStep = ({ lead, onNext, onProspect, isProspecting, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { lead: Lead; onNext: () => void; onProspect: () => void; isProspecting: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    return (
-        <StepWrapper title="Company Details" description="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-4">
-                 <div className="space-y-2">
-                    <Label htmlFor="businessName">Business name</Label>
-                    <Input id="businessName" readOnly value={lead.companyName} />
-                </div>
-                <div className="space-y-2">
-                    <Label>Address</Label>
-                    <div className="grid grid-cols-1 gap-2 border p-3 rounded-md bg-secondary/30">
-                        <Input readOnly value={lead.address?.address1 || ''} placeholder="Address 1" />
-                        <Input readOnly value={lead.address?.street || ''} placeholder="Street" />
-                        <div className="grid grid-cols-3 gap-2">
-                            <Input readOnly value={lead.address?.city || ''} placeholder="Suburb" />
-                            <Input readOnly value={lead.address?.state || ''} placeholder="State" />
-                            <Input readOnly value={lead.address?.zip || ''} placeholder="Postcode" />
-                        </div>
-                    </div>
-                </div>
-                 <Button variant="outline" size="sm" onClick={onProspect} disabled={isProspecting || !lead.websiteUrl} className="w-full">
-                    {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
-                </Button>
-            </div>
-        </StepWrapper>
-    );
-};
-
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onTitleUpdate, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onTitleUpdate: (contactId: string, newTitle: string) => void, onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const [editingTitle, setEditingTitle] = useState<{ [key: string]: string }>({});
-
-    const handleTitleChange = (contactId: string, value: string) => {
-        setEditingTitle(prev => ({ ...prev, [contactId]: value }));
-    };
-
-    return (
-        <StepWrapper title="Contact Details" description="Confirm you're speaking to the right person or add a new contact." script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-4">
-                <h4 className="font-semibold text-lg">Existing Contacts</h4>
-                <p className="text-sm text-muted-foreground">Select the title of the person you are speaking with.</p>
-                 {contacts.length > 0 ? (
-                    <div className="space-y-3">
-                    {contacts.map(contact => (
-                        <Card key={contact.id} className="p-3 bg-secondary/30">
-                            <CardContent className="p-0 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="font-semibold">{contact.name}</p>
-                                    <div className="w-1/2">
-                                        <Select
-                                            value={editingTitle[contact.id] ?? contact.title}
-                                            onValueChange={(value) => {
-                                                handleTitleChange(contact.id, value);
-                                                onTitleUpdate(contact.id, value);
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select title..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Owner">Owner</SelectItem>
-                                                <SelectItem value="Influencer">Influencer</SelectItem>
-                                                <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1 space-y-1">
-                                    <p className="flex items-center gap-2"><Mail className="h-4 w-4"/>{contact.email}</p>
-                                    <p className="flex items-center gap-2"><Phone className="h-4 w-4"/>{contact.phone}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                    </div>
-                ) : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
-                
-                <hr className="my-4 border-border" />
-
-                <h4 className="font-semibold">Add New Contact</h4>
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4">
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={form.control} name="name" render={({ field }) => (
-                                <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} placeholder="John Doe" /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                            <FormField control={form.control} name="title" render={({ field }) => (
-                                <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} placeholder="Manager" /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                            <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                            <FormField control={form.control} name="phone" render={({ field }) => (
-                                <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                         </div>
-                        <Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button>
-                    </form>
-                </Form>
-            </div>
-        </StepWrapper>
-    );
-};
-
-const DiscoveryStep0 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
-    return (
-        <StepWrapper title="Relevance Check" description="Hard stop: if nobody leaves the business, we don't force a sale." script="Do people here ever leave the office during the day to get things done?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-             <FormField control={control} name="relevanceCheck" render={({ field }) => (
-                <FormItem className="space-y-3"><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col gap-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes, people do leave the office.</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No, they rarely/never leave.</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-            )}/>
-        </StepWrapper>
-    )
-};
-
-const reasonsToLeave = ['Post office', 'Banking / deposits', 'Local deliveries', 'Supplier drop-offs', 'Admin / errands', 'Other'];
-const DiscoveryStep1 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
-    return (
-        <StepWrapper title="Reasons People Leave" description="Select all that apply. This is the primary segmentation key." script="What are some of the things people have to leave the office for?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <FormField
-                control={control}
-                name="reasonsToLeave"
-                render={() => (
-                    <FormItem>
-                        <div className="grid grid-cols-2 gap-4">
-                            {reasonsToLeave.map((item) => (
-                                <FormField
-                                    key={item}
-                                    control={control}
-                                    name="reasonsToLeave"
-                                    render={({ field }) => (
-                                        <FormItem className="flex items-center space-x-3 space-y-0">
-                                            <FormControl>
-                                                <Checkbox
-                                                    checked={field.value?.includes(item)}
-                                                    onCheckedChange={(checked) => {
-                                                        const newValue = checked
-                                                            ? [...(field.value || []), item]
-                                                            : field.value?.filter((value) => value !== item);
-                                                        field.onChange(newValue);
-                                                    }}
-                                                />
-                                            </FormControl>
-                                            <FormLabel className="font-normal">{item}</FormLabel>
-                                        </FormItem>
-                                    )}
-                                />
-                            ))}
-                        </div>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-        </StepWrapper>
-    );
-};
-
-
-const DiscoveryStep2 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control, watch } = useFormContext();
-    const watchLogisticsSetup = watch('logisticsSetup');
-    return (
-        <StepWrapper title="Discovery: Logistics" description="Understand their current postage process." script="How do you currently manage your post and parcels? Do you go to the post office, or does someone pick it up?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-8">
-                <FormField control={control} name="postOfficeRelationship" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Driver" /></FormControl><FormLabel className="font-normal">Yes - Driver</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes-Post Office walk up" /></FormControl><FormLabel className="font-normal">Yes - Post Office walk up</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={control} name="logisticsSetup" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>How do you lodge items?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Drop-off" /></FormControl><FormLabel className="font-normal">Drop-off</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Routine collection" /></FormControl><FormLabel className="font-normal">Routine collection</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                {watchLogisticsSetup === 'Routine collection' && <FormField control={control} name="servicePayment" render={({ field }) => (
-                    <FormItem className="space-y-3 ml-6"><FormLabel>If using collection: Do you pay for this service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4"><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="No" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>}
-            </div>
-        </StepWrapper>
-    )
-};
-
-const packageTypes = [ { id: '500g', label: '<500g' }, { id: '1-3kg', label: '1-3kg' }, { id: '5kg+', label: '5kg+' }, { id: '10kg+', label: '10kg+' }, { id: '20kg+', label: '20kg+' } ] as const;
-const DiscoveryStep3 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
-    return (
-        <StepWrapper title="Discovery: Shipping Profile" description="What and how much are they shipping?" script="Roughly how many parcels would you send a week? And what's the typical size and weight?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-8">
-                <FormField control={control} name="shippingVolume" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>How many items per week?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['<5', '<20', '20-100', '100+'] as const).map(val => (<FormItem key={`volume-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={control} name="expressVsStandard" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>What % of your shipping is Express vs Standard?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Mostly Standard (>=80%)', 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)'] as const).map(val => (<FormItem key={`express-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={control} name="packageType" render={() => (
-                    <FormItem><div className="mb-4"><FormLabel className="text-base">What is typical size/weight?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{packageTypes.map((item) => (<FormField key={item.id} control={control} name="packageType" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormMessage /></FormItem>
-                )}/>
-            </div>
-        </StepWrapper>
-    )
-};
-
-const currentProviders = [ { id: 'multiple', label: 'Multiple' }, { id: 'auspost', label: 'AusPost' }, { id: 'couriersplease', label: 'CouriersPlease' }, { id: 'aramex', label: 'Aramex' }, { id: 'startrack', label: 'StarTrack' }, { id: 'tge', label: 'TGE' }, { id: 'fedex', label: 'FedEx/TNT' }, { id: 'allied', label: 'Allied' }, { id: 'other', label: 'Other' } ] as const;
-const eCommerceTechs = [ { id: 'mypost', label: 'MyPost' }, { id: 'shopify', label: 'Shopify' }, { id: 'woo', label: 'Woo' }, { id: 'sendle', label: 'Sendle' }, { id: 'other', label: 'Other' }, { id: 'none', label: 'None' } ] as const;
-const DiscoveryStep4 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
-    return (
-         <StepWrapper title="Discovery: Providers & Tech" description="Who are they using and what tech do they have?" script="Which shipping carriers do you use at the moment? And what software do you use to manage labels?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-8">
-                <FormField
-                    control={control}
-                    name="currentProvider"
-                    render={() => (
-                        <FormItem>
-                            <FormLabel className="text-base">Who do you use for shipping?</FormLabel>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
-                                {currentProviders.map((item) => (
-                                    <FormField
-                                        key={item.id}
-                                        control={control}
-                                        name="currentProvider"
-                                        render={({ field }) => (
-                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                                <FormControl>
-                                                    <Checkbox
-                                                        checked={field.value?.includes(item.label)}
-                                                        onCheckedChange={(checked) => {
-                                                            const newValue = checked
-                                                                ? [...(field.value || []), item.label]
-                                                                : field.value?.filter((value) => value !== item.label);
-                                                            field.onChange(newValue);
-                                                        }}
-                                                    />
-                                                </FormControl>
-                                                <FormLabel className="font-normal">{item.label}</FormLabel>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))}
-                            </div>
-                            <FormField control={control} name="otherProvider" render={({ field }) => (
-                                <FormItem className="mt-2">
-                                    <FormLabel className="sr-only">Other Shipping Provider</FormLabel>
-                                    <FormControl><Input {...field} placeholder="Other provider..." /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}/>
-                            <FormMessage />
-                        </FormItem>
-                )}/>
-                <FormField control={control} name="eCommerceTech" render={() => (
-                    <FormItem><div className="mb-4"><FormLabel className="text-base">What platform do you use for labels?</FormLabel></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{eCommerceTechs.map((item) => (<FormField key={item.id} control={control} name="eCommerceTech" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(item.label)} onCheckedChange={(checked) => { return checked ? field.onChange([...(field.value || []), item.label]) : field.onChange(field.value?.filter((value) => value !== item.label)) }}/></FormControl><FormLabel className="font-normal">{item.label}</FormLabel></FormItem>)}/>))}</div><FormField control={control} name="otherECommerceTech" render={({ field }) => (<FormItem className="mt-2"><FormLabel className="sr-only">Other E-commerce Tech</FormLabel><FormControl><Input {...field} placeholder="Other platform..." /></FormControl><FormMessage /></FormItem>)}/><FormMessage /></FormItem>
-                )}/>
-            </div>
-        </StepWrapper>
-    )
-};
-
-const DiscoveryStep5 = ({ onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { onNext: () => void; onBack: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
-    const { control } = useFormContext();
-    return (
-        <StepWrapper title="Discovery: Business Needs" description="Final questions to qualify the lead and identify pain points." script="Last couple of questions - do you ever use same-day couriers? And who in the business makes the final call on shipping partners?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
-            <div className="space-y-8">
-                <FormField control={control} name="sameDayCourier" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>Do you use same-day couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Yes', 'Occasional', 'Never'] as const).map(val => (<FormItem key={`sameday-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={control} name="decisionMaker" render={({ field }) => (
-                    <FormItem className="space-y-3"><FormLabel>Who decides shipping?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-wrap gap-x-4 gap-y-2">{(['Owner', 'Influencer', 'Gatekeeper'] as const).map(val => (<FormItem key={`decision-${val}`} className="flex items-center space-x-2"><FormControl><RadioGroupItem value={val} /></FormControl><FormLabel className="font-normal">{val}</FormLabel></FormItem>))}</RadioGroup></FormControl><FormMessage /></FormItem>
-                )}/>
-                <FormField control={control} name="painPoints" render={({ field }) => (
-                    <FormItem><FormLabel>Pain Points</FormLabel><FormControl><Textarea placeholder="Describe any pain points the lead is experiencing..." {...field} /></FormControl><FormMessage /></FormItem>
-                )}/>
-            </div>
-        </StepWrapper>
-    )
-};
-
-const FinalActionsStep = ({ onOpenDialog, lead, discoveryData, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onOpenLocalMileDialog, onOpenShipMateDialog, onOpenScheduleAppointment }: { onOpenDialog: (type: 'signup') => void, lead: Lead, discoveryData: DiscoveryData | null, onBack: () => void, onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onOpenLocalMileDialog: () => void; onOpenShipMateDialog: () => void; onOpenScheduleAppointment: () => void; }) => {
-    const router = useRouter();
-
-  return (
-    <div className="space-y-6">
-        <div className="text-left space-y-2">
-            <h2 className="text-2xl font-bold">Next Steps & Analysis</h2>
-            <p className="text-muted-foreground">The discovery phase is complete. Review the analysis and choose the next action for this lead.</p>
+const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: { lead: Lead; onNext: () => void; onFindNearby: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; }) => (
+    <StepWrapper title="Company Details" script="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <div className="space-y-4">
+             <div className="space-y-2"><Label>Business name</Label><Input readOnly value={lead.companyName} /></div>
+             <div className="space-y-2"><Label>Address</Label><Input readOnly value={[lead.address?.address1, lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ')} /></div>
+             <Button variant="outline" onClick={onFindNearby} className="w-full"><Building className="mr-2 h-4 w-4" />Nearby Signed Customers</Button>
         </div>
-        <Card>
-            <CardContent className="p-6">
-                 {discoveryData ? (
-                    <div className="space-y-4">
-                            <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Score</p>
-                                    <p className="text-3xl font-bold">{discoveryData.score}</p>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                    <Badge variant="outline" className="text-lg mt-1"><Route className="h-4 w-4 mr-2"/>{discoveryData.routingTag}</Badge>
-                                </div>
-                            </div>
-                            <DiscoveryRadarChart discoveryData={discoveryData} />
-                            {discoveryData.scoringReason && (
-                                <div className="text-xs text-muted-foreground p-2 border-t">
-                                    <strong>Scoring Rationale:</strong> {discoveryData.scoringReason}
-                                </div>
-                            )}
+    </StepWrapper>
+);
+
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; }) => (
+    <StepWrapper title="Contact Details" script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <div className="space-y-4">
+            <h4 className="font-semibold text-lg">Existing Contacts</h4>
+            {contacts.length > 0 ? <div className="space-y-3">{contacts.map(c => <div key={c.id} className="p-3 border rounded-md"><p className="font-semibold">{c.name} ({c.title})</p><p className="text-sm text-muted-foreground">{c.email}</p><p className="text-sm text-muted-foreground">{c.phone}</p></div>)}</div> : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
+            <hr className="my-4" />
+            <h4 className="font-semibold">Add New Contact</h4>
+            <Form {...form}><form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)}/></div><Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button></form></Form>
+        </div>
+    </StepWrapper>
+);
+
+const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+    const { control, watch } = useFormContext();
+    const auspostRelationship = watch('auspostRelationship');
+    return (
+        <StepWrapper title="Australia Post" script="How do you handle your post? Do you have a relationship with AusPost?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+            <div className="space-y-6">
+                <FormField control={control} name="auspostRelationship" render={({ field }) => (<FormItem><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                {auspostRelationship === 'Yes' && (
+                    <div className="space-y-4 pl-4 border-l-2">
+                        <FormField control={control} name="auspostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="auspostPaidService" render={({ field }) => (<FormItem><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>Do you drop it off or do they come here?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter(v => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter(v => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
                     </div>
-                ) : (
-                    <div className="text-center py-10 text-muted-foreground">Could not generate discovery analysis.</div>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4">
-                    <Button size="lg" className="h-auto py-4" onClick={() => onOpenDialog('signup')}><Briefcase className="mr-2"/> Signup</Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700">
-                          <Star className="mr-2"/> Free Trial
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}>Service</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=shipmate-trial`)}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=localmile-trial`)}>LocalMile</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            </div>
+        </StepWrapper>
+    );
+};
+
+const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+    const { control, watch } = useFormContext();
+    const otherCouriers = watch('otherCouriers');
+    const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
+    return (
+        <StepWrapper title="Other Couriers" script="Do you use any other couriers for your shipping needs?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+            <div className="space-y-6">
+                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                {otherCouriers === 'Yes' && (
+                    <div className="space-y-4 pl-4 border-l-2">
+                        <FormField control={control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which Courier do you use?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter(v => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                    </div>
+                )}
+            </div>
+        </StepWrapper>
+    );
+};
+
+const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+    const { control, watch } = useFormContext();
+    const peopleLeaveOffice = watch('peopleLeaveOffice');
+    const reasons = ["Banking", "Local Same Day"];
+    return (
+        <StepWrapper title="Office Errands" script="Do people leave the office during the day for errands like banking or local deliveries?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+            <div className="space-y-6">
+                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                {peopleLeaveOffice === 'Yes' && (
+                    <div className="space-y-4 pl-4 border-l-2">
+                        <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What are the reasons people leave?</FormLabel><div className="grid grid-cols-2 gap-2">{reasons.map(r => <FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                    </div>
+                )}
+            </div>
+        </StepWrapper>
+    );
+};
+
+const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, userProfile }: { onBack: () => void; lead: Lead; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; userProfile: any; }) => {
+    const router = useRouter();
+    const canShowSpecialButtons = userProfile?.role === 'admin' || userProfile?.uid === 'R1skvdcPUGdXEmJDS9Yh1Wbv77K2';
+    
+    return (
+        <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog}>
+            <div className="text-center space-y-4">
+                <h3 className="text-xl font-semibold">Check-in Complete!</h3>
+                <p className="text-muted-foreground">You have finished the manual check-in process for {lead.companyName}. Choose your next action.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                    {canShowSpecialButtons && <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>}
+                    {canShowSpecialButtons && <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}><Star className="mr-2"/> Free Trial</Button>}
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenScheduleAppointment}><Calendar className="mr-2"/> Schedule Appointment</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenRevisitDialog}><History className="mr-2"/> Schedule Revisit</Button>
                     <Button size="lg" className="h-auto py-4" variant="secondary" onClick={onOpenLogOutcome}><PhoneCall className="mr-2"/> Log Outcome</Button>
-                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/leads/map')}><Route className="mr-2"/> Back to Route</Button>
+                    <Button size="lg" className="h-auto py-4" variant="secondary" onClick={() => router.push('/saved-routes')}><Route className="mr-2"/> Back to Route</Button>
                 </div>
-            </CardContent>
-            <CardFooter className="flex justify-start">
-                 <Button variant="outline" onClick={onBack}>Back</Button>
-            </CardFooter>
-        </Card>
-    </div>
-  )
+            </div>
+        </StepWrapper>
+    );
 };
 
-    
-
-    
+const NearbyCustomersDialog = ({ isOpen, onOpenChange, customers }: { isOpen: boolean, onOpenChange: (open: boolean) => void, customers: Lead[] }) => (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Nearby Signed Customers</DialogTitle>
+                <DialogDescription>Found {customers.length} customer(s) within a 1km radius.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto">
+                {customers.length > 0 ? (
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company Name</TableHead><TableHead>Address</TableHead><TableHead>Industry</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {customers.map(c => (
+                                <TableRow key={c.id}>
+                                    <TableCell><Button asChild variant="link" className="p-0 h-auto"><Link href={`/companies/${c.id}`} target="_blank">{c.companyName}</Link></Button></TableCell>
+                                    <TableCell>{[c.address?.street, c.address?.city].filter(Boolean).join(', ')}</TableCell>
+                                    <TableCell>{c.industryCategory || 'N/A'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : <p className="text-center py-8 text-muted-foreground">No nearby customers found.</p>}
+            </div>
+        </DialogContent>
+    </Dialog>
+);

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React from 'react';
@@ -50,13 +49,9 @@ export default function PrintableCheckInPage() {
             </div>
 
             <div className="space-y-6">
-                <QuestionSection title="Company Details (Step 1)">
+                <QuestionSection title="Company & Contact Details (Steps 1 & 2)">
                     <TextInputLine label="Company Name" />
                     <TextInputLine label="Address" />
-                </QuestionSection>
-
-                <QuestionSection title="Contacts (Step 2)">
-                    <ContactInputSet />
                     <ContactInputSet />
                 </QuestionSection>
 
