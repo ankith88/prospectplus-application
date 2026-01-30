@@ -164,9 +164,20 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
       .then(result => {
         if (result.companyName) {
           if (autocompleteInputRef.current) {
-            autocompleteInputRef.current.value = result.companyName;
-            const event = new Event('input', { bubbles: true });
+            let searchQuery = result.companyName;
+            if (result.address) {
+              searchQuery += `, ${result.address}`;
+            }
+            autocompleteInputRef.current.value = searchQuery;
+            autocompleteInputRef.current.focus();
+
+            const event = new Event('input', { bubbles: true, cancelable: true });
             autocompleteInputRef.current.dispatchEvent(event);
+
+            toast({
+              title: 'Card Analyzed',
+              description: 'Business details populated. Please select from the dropdown to confirm.',
+            });
           }
         } else {
           toast({ variant: 'destructive', title: 'Analysis Failed', description: 'Could not find a company name on the card.' });
