@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -75,29 +76,6 @@ const formSchema = z.object({
   }),
 });
 
-function parseAddress(fullAddress: string): Partial<Address> {
-    if (!fullAddress) return {};
-    const parts = fullAddress.split(',').map(p => p.trim());
-    const address: Partial<Address> = {};
-
-    if (parts.length > 0) {
-        address.street = parts[0];
-    }
-    if (parts.length > 1) {
-        const lastPart = parts[parts.length - 1];
-        const stateZipMatch = lastPart.match(/([A-Z]{2,3})\s+(\d{4})$/);
-        if (stateZipMatch) {
-            address.state = stateZipMatch[1];
-            address.zip = stateZipMatch[2];
-            address.city = parts[parts.length - 2] || '';
-        } else {
-             address.city = lastPart;
-        }
-    }
-    return address;
-}
-
-
 export function NewLeadForm() {
   const { toast } = useToast();
   const router = useRouter();
@@ -108,12 +86,6 @@ export function NewLeadForm() {
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<google.maps.places.PlaceResult[]>([]);
-  const recognitionRef = useRef<any>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -235,9 +207,6 @@ export function NewLeadForm() {
             form.setValue('customerServiceEmail', email);
         }
 
-        setSearchResults([]);
-        setTranscript('');
-
         if (websiteUrl) {
             handleAiProspect(websiteUrl);
         }
@@ -294,97 +263,6 @@ export function NewLeadForm() {
     }
   }, [searchParams, form, handleAiProspect]);
 
-    const handleToggleListening = () => {
-    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-      toast({ variant: 'destructive', title: 'Unsupported Browser', description: 'Your browser does not support voice recognition.' });
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    } else {
-      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-AU';
-
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-        setTranscript('');
-        setSearchResults([]);
-      };
-
-      recognitionRef.current.onresult = (event: any) => {
-        const currentTranscript = event.results[0][0].transcript;
-        setTranscript(currentTranscript);
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        let errorMessage = `Error: ${event.error}`;
-        if (event.error === 'network') {
-            errorMessage = "A network error occurred. Please check your internet connection and try again.";
-        } else if (event.error === 'no-speech') {
-            errorMessage = "No speech was detected. Please try again.";
-        } else if (event.error === 'audio-capture') {
-            errorMessage = "There was an issue capturing audio. Please check your microphone.";
-        } else if (event.error === 'not-allowed') {
-            errorMessage = "Microphone access was denied. Please enable it in your browser settings.";
-        }
-        
-        console.error('Speech recognition error', event.error);
-        toast({ variant: 'destructive', title: 'Recognition Error', description: errorMessage });
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-        if (recognitionRef.current.transcript) {
-            handleVoiceSearch(recognitionRef.current.transcript);
-        }
-      };
-
-      recognitionRef.current.start();
-    }
-  };
-
-  const handleVoiceSearch = async (query: string) => {
-    if (!query) return;
-    setIsSearching(true);
-    setSearchResults([]);
-
-    const placesService = new google.maps.places.PlacesService(document.createElement('div'));
-    placesService.textSearch({
-      query: query,
-      region: 'AU',
-    }, (results, status) => {
-      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-        setSearchResults(results);
-      } else {
-        toast({ variant: 'destructive', title: 'Search Failed', description: 'No businesses found matching your query.' });
-      }
-      setIsSearching(false);
-    });
-  };
-
-  const handleSelectPlace = async (placeId: string) => {
-        setIsSearching(true);
-        const placesService = new google.maps.places.PlacesService(document.createElement('div'));
-        placesService.getDetails({ 
-            placeId,
-            fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id']
-        }, async (place, status) => {
-             if (status === google.maps.places.PlacesServiceStatus.OK && place) {
-                 await fillFormWithPlace(place);
-             } else {
-                toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch details for the selected place.' });
-             }
-             setIsSearching(false);
-        });
-  };
-
-  
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
     let finalValues = { ...values };
@@ -451,14 +329,18 @@ export function NewLeadForm() {
     <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate Lead Found</AlertDialogTitle>
+                <AlertDialogTitle>Duplicate Found</AlertDialogTitle>
                 <AlertDialogDescription>
-                    A lead with this name or phone number already exists in the system.
+                    A lead with this name or other details already exists in the system.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => window.open(`/leads/${duplicateLeadId}`, '_blank')}>
+                <AlertDialogAction onClick={() => {
+                    if(duplicateLeadId) {
+                        router.push(`/leads/${duplicateLeadId}`);
+                    }
+                }}>
                     View Existing Lead
                 </AlertDialogAction>
             </AlertDialogFooter>
@@ -466,47 +348,6 @@ export function NewLeadForm() {
     </AlertDialog>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Mic className="w-5 h-5" /> Create with Voice</CardTitle>
-              <CardDescription>
-                Speak the name of a business to automatically find and fill its details.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <Button type="button" onClick={handleToggleListening} className={`h-16 w-16 rounded-full transition-all duration-300 ${isListening ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-primary'}`}>
-                  {isListening ? <MicOff className="h-8 w-8"/> : <Mic className="h-8 w-8" />}
-                </Button>
-                <div className="flex-1 w-full p-3 border rounded-md bg-muted min-h-[4rem] text-muted-foreground italic">
-                  {transcript ? `"${transcript}"` : 'Your transcribed text will appear here...'}
-                </div>
-                <Button type="button" onClick={() => handleVoiceSearch(transcript)} disabled={!transcript || isSearching}>
-                  {isSearching ? <Loader/> : <Search className="mr-2 h-4 w-4" />}
-                  Search
-                </Button>
-              </div>
-              {searchResults.length > 0 && (
-                <div className="space-y-2 pt-4 border-t">
-                  <h4 className="font-semibold">Search Results</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {searchResults.map(place => (
-                      <Card key={place.place_id} className="p-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{place.name}</p>
-                            <p className="text-sm text-muted-foreground">{place.formatted_address}</p>
-                          </div>
-                          <Button type="button" size="sm" onClick={() => handleSelectPlace(place.place_id!)}>Select</Button>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
             <div className="space-y-4">

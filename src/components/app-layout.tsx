@@ -32,16 +32,19 @@ import {
 import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
+import { QuickAddLeadDialog } from "./quick-add-lead-dialog"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+
   const isActive = (path: string) => {
     if (path === '/leads') {
         return pathname === '/leads';
@@ -125,6 +128,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
 
   return (
     <>
@@ -188,7 +192,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role)) && (
+            {canCreateLead && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
                   <Link href="/leads/new">
@@ -374,6 +378,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+           {canCreateLead && (
+             <Button variant="ghost" size="sm" onClick={() => setIsQuickAddOpen(true)} className="text-sidebar-accent hover:text-sidebar-hover-foreground">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Quick Add
+             </Button>
+            )}
            <UniversalSearch />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -413,6 +423,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {new Date().getFullYear()} MailPlus Pty. Ltd. All rights reserved.
         </footer>
       </SidebarInset>
+      <QuickAddLeadDialog isOpen={isQuickAddOpen} onOpenChange={setIsQuickAddOpen} />
     </>
   )
 }
