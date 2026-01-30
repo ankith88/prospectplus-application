@@ -1546,8 +1546,8 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     }
 }
 
-async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string }): Promise<void> {
-    const { leadIds, fieldSales, assigneeDisplayName } = payload;
+async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string; activityNote?: string; author?: string; }): Promise<void> {
+    const { leadIds, fieldSales, assigneeDisplayName, activityNote, author } = payload;
     if (leadIds.length === 0) {
         throw new Error("No leads selected to move.");
     }
@@ -1564,10 +1564,12 @@ async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: b
 
             const activityRef = collection(leadRef, 'activity');
             const newActivityRef = doc(activityRef);
+            const note = activityNote || `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`;
             batch.set(newActivityRef, {
                 type: 'Update',
                 date: new Date().toISOString(),
-                notes: `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`
+                notes: note,
+                author: author || 'System'
             });
         });
 

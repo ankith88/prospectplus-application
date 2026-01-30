@@ -6,11 +6,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus } from '@/services/firebase';
 import type { Lead, CheckinQuestion, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink, Move } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,6 +30,8 @@ import { ScheduleAppointmentDialog } from '@/components/schedule-appointment-dia
 import { useAuth } from '@/hooks/use-auth';
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogHeader } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
 
 const checkinSchema = z.object({
   auspostRelationship: z.enum(['Yes', 'No']).optional(),
@@ -53,7 +55,7 @@ const newContactSchema = z.object({
 const TOTAL_STEPS = 6;
 const stepLabels = ["Company", "Contact", "AusPost", "Couriers", "Errands", "Finish"];
 
-const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: string[] }) => {
+const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
         <div className="flex items-center w-full" aria-label={"Step " + currentStep + " of " + totalSteps}>
             {labels.map((label, index) => {
@@ -63,14 +65,21 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels }: { currentStep: 
 
                 return (
                     <React.Fragment key={step}>
-                        <div className="flex flex-col items-center">
-                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300", isCompleted ? "bg-primary text-primary-foreground" : isCurrent ? "border-2 border-primary bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                        <button
+                            type="button"
+                            onClick={() => onStepClick(step)}
+                            className="flex flex-col items-center text-center cursor-pointer disabled:cursor-not-allowed group"
+                        >
+                            <div className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 group-hover:ring-2 group-hover:ring-primary/50",
+                                isCompleted ? "bg-primary text-primary-foreground" : isCurrent ? "border-2 border-primary bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                            )}>
                                 {isCompleted ? <Check className="w-5 h-5" /> : step}
                             </div>
-                            <p className={cn("text-xs mt-1 text-center hidden md:block", isCurrent ? "font-bold text-primary" : "text-muted-foreground")}>
+                            <p className={cn("text-xs mt-1 hidden md:block", isCurrent ? "font-bold text-primary" : "text-muted-foreground")}>
                                 {label}
                             </p>
-                        </div>
+                        </button>
                         {step < labels.length && (
                             <div className={cn("flex-1 h-0.5 transition-all duration-300", currentStep > step ? "bg-primary" : "bg-muted")} />
                         )}
@@ -91,6 +100,8 @@ export default function ManualCheckinPage() {
     const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
     const [isRevisitDialogOpen, setIsRevisitDialogOpen] = useState(false);
     const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
+    const [isMoveToOutboundOpen, setIsMoveToOutboundOpen] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
 
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -203,6 +214,37 @@ export default function ManualCheckinPage() {
     };
 
     const handleBack = () => setCurrentStep(prev => prev - 1);
+    const handleStepClick = (step: number) => setCurrentStep(step);
+    
+    const handleMoveToOutbound = async () => {
+        if (!lead) return;
+        setIsMoving(true);
+        
+        const assignees = ['Lachlan Ball', 'Grant Leddy'];
+        const assignee = assignees[Math.floor(Math.random() * assignees.length)];
+    
+        try {
+            await bulkMoveLeadsToBucket({
+                leadIds: [lead.id],
+                fieldSales: false,
+                assigneeDisplayName: assignee,
+                activityNote: 'Moved to Outbound',
+                author: userProfile?.displayName
+            });
+            
+            await updateLeadStatus(lead.id, 'New');
+    
+            toast({ title: "Success", description: `Lead moved to Outbound bucket and assigned to ${assignee}.` });
+            router.push('/field-sales');
+    
+        } catch (error) {
+            console.error("Failed to move lead to outbound:", error);
+            toast({ variant: 'destructive', title: "Error", description: "Could not move lead." });
+        } finally {
+            setIsMoving(false);
+            setIsMoveToOutboundOpen(false);
+        }
+    }
     
     const handleAddContact = async (values: z.infer<typeof newContactSchema>) => {
         if (!lead) return;
@@ -243,13 +285,22 @@ export default function ManualCheckinPage() {
     };
 
     const renderStep = () => {
+        const stepProps = {
+            onNext: handleSaveAndNext,
+            onBack: handleBack,
+            isSaving: isSaving,
+            onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
+            onOpenLogNote: () => setIsLogNoteOpen(true),
+            onOpenRevisitDialog: () => setIsRevisitDialogOpen(true),
+            onMoveToOutbound: () => setIsMoveToOutboundOpen(true)
+        };
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={handleSaveAndNext} onFindNearby={handleFindNearbyCustomers} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 3: return <AusPostStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 4: return <OtherCouriersStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 5: return <OfficeErrandsStep onNext={handleSaveAndNext} onBack={handleBack} isSaving={isSaving} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenLogNote={() => setIsLogNoteOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
-            case 6: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
+            case 3: return <AusPostStep {...stepProps} />;
+            case 4: return <OtherCouriersStep {...stepProps} />;
+            case 5: return <OfficeErrandsStep {...stepProps} />;
+            case 6: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} />;
             default: return null;
         }
     };
@@ -274,7 +325,7 @@ export default function ManualCheckinPage() {
                         </div>
                         <div className="w-20 text-center"><div className="border border-border rounded-full px-2 py-1 text-xs">Step {currentStep}/{TOTAL_STEPS}</div></div>
                     </header>
-                    <div className="my-4 flex-shrink-0"><ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={stepLabels} /></div>
+                    <div className="my-4 flex-shrink-0"><ResponsiveProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={stepLabels} onStepClick={handleStepClick} /></div>
                 </div>
                 
                 <main className="flex-grow overflow-y-auto px-4 pb-4">{renderStep()}</main>
@@ -284,12 +335,28 @@ export default function ManualCheckinPage() {
                 {isRevisitDialogOpen && <RevisitDialog isOpen={isRevisitDialogOpen} onOpenChange={setIsRevisitDialogOpen} lead={lead} onRevisitScheduled={handleRevisitScheduled} />}
                 {isScheduleAppointmentOpen && <ScheduleAppointmentDialog isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} lead={lead} />}
                 <NearbyCustomersDialog isOpen={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen} customers={nearbyCustomers} />
+                 <AlertDialog open={isMoveToOutboundOpen} onOpenChange={setIsMoveToOutboundOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Move Lead to Outbound?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will move the lead to the outbound bucket and randomly assign it to an available dialer. This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isMoving}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleMoveToOutbound} disabled={isMoving}>
+                                {isMoving ? <Loader /> : 'Confirm & Move'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </FormProvider>
     );
 }
 
-const StepWrapper = ({ title, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, isSaving }: { title: string, script?: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; isSaving?: boolean }) => {
+const StepWrapper = ({ title, script, children, onNext, onBack, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound, isSaving }: { title: string, script?: string, children: React.ReactNode, onNext?: () => void; onBack?: () => void; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; isSaving?: boolean }) => {
     return (
         <div className="space-y-6">
             <div className="text-left space-y-2">
@@ -308,6 +375,7 @@ const StepWrapper = ({ title, script, children, onNext, onBack, onOpenLogOutcome
                                     <DropdownMenuItem onSelect={onOpenLogOutcome}><PhoneCall className="mr-2 h-4 w-4"/>Log Outcome</DropdownMenuItem>
                                     <DropdownMenuItem onSelect={onOpenLogNote}><ClipboardEdit className="mr-2 h-4 w-4"/>Log Note</DropdownMenuItem>
                                     <DropdownMenuItem onSelect={onOpenRevisitDialog}><History className="mr-2 h-4 w-4"/>Schedule Revisit</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={onMoveToOutbound}><Move className="mr-2 h-4 w-4"/>Move to Outbound</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             {onNext && <Button onClick={onNext} disabled={isSaving}>{isSaving ? <Loader /> : 'Continue'}</Button>}
@@ -319,8 +387,8 @@ const StepWrapper = ({ title, script, children, onNext, onBack, onOpenLogOutcome
     );
 };
 
-const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: { lead: Lead; onNext: () => void; onFindNearby: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; }) => (
-    <StepWrapper title="Company Details" script="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: { lead: Lead; onNext: () => void; onFindNearby: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; }) => (
+    <StepWrapper title="Company Details" script="Confirm you're at the right place." onNext={onNext} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
         <div className="space-y-4">
              <div className="space-y-2"><Label>Business name</Label><Input readOnly value={lead.companyName} /></div>
              <div className="space-y-2"><Label>Address</Label><Input readOnly value={[lead.address?.address1, lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ')} /></div>
@@ -329,8 +397,8 @@ const CompanyDetailsStep = ({ lead, onNext, onFindNearby, isSaving, onOpenLogOut
     </StepWrapper>
 );
 
-const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; }) => (
-    <StepWrapper title="Contact Details" script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: { contacts: Contact[], onAddContact: (values: any) => void, form: any, isAddingContact: boolean, onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; }) => (
+    <StepWrapper title="Contact Details" script='"Hi there, I was hoping to speak to the person in charge of your postage and deliveries?"' onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
         <div className="space-y-4">
             <h4 className="font-semibold text-lg">Existing Contacts</h4>
             {contacts.length > 0 ? <div className="space-y-3">{contacts.map(c => <div key={c.id} className="p-3 border rounded-md"><p className="font-semibold">{c.name} ({c.title})</p><p className="text-sm text-muted-foreground">{c.email}</p><p className="text-sm text-muted-foreground">{c.phone}</p></div>)}</div> : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
@@ -341,11 +409,11 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
     </StepWrapper>
 );
 
-const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
     const { control, watch } = useFormContext();
     const auspostRelationship = watch('auspostRelationship');
     return (
-        <StepWrapper title="Australia Post" script="How do you handle your post? Do you have a relationship with AusPost?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <StepWrapper title="Australia Post" script="How do you handle your post? Do you have a relationship with AusPost?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
             <div className="space-y-6">
                 <FormField control={control} name="auspostRelationship" render={({ field }) => (<FormItem><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                 {auspostRelationship === 'Yes' && (
@@ -360,12 +428,12 @@ const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote
     );
 };
 
-const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
     const { control, watch } = useFormContext();
     const otherCouriers = watch('otherCouriers');
     const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
     return (
-        <StepWrapper title="Other Couriers" script="Do you use any other couriers for your shipping needs?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <StepWrapper title="Other Couriers" script="Do you use any other couriers for your shipping needs?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
             <div className="space-y-6">
                 <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                 {otherCouriers === 'Yes' && (
@@ -379,12 +447,12 @@ const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenL
     );
 };
 
-const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog }: any) => {
+const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
     const { control, watch } = useFormContext();
     const peopleLeaveOffice = watch('peopleLeaveOffice');
     const reasons = ["Banking", "Local Same Day"];
     return (
-        <StepWrapper title="Office Errands" script="Do people leave the office during the day for errands like banking or local deliveries?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} isSaving={isSaving}>
+        <StepWrapper title="Office Errands" script="Do people leave the office during the day for errands like banking or local deliveries?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
             <div className="space-y-6">
                 <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                 {peopleLeaveOffice === 'Yes' && (
@@ -397,11 +465,11 @@ const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenL
     );
 };
 
-const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog }: { onBack: () => void; lead: Lead; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; }) => {
+const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome, onOpenRevisitDialog, onMoveToOutbound }: { onBack: () => void; lead: Lead; onOpenScheduleAppointment: () => void; onOpenLogOutcome: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; }) => {
     const router = useRouter();
     
     return (
-        <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog}>
+        <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound}>
             <div className="text-center space-y-4">
                 <h3 className="text-xl font-semibold">Check-in Complete!</h3>
                 <p className="text-muted-foreground">You have finished the manual check-in process for {lead.companyName}. Choose your next action.</p>
