@@ -550,77 +550,80 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   
     const filteredData = useMemo(() => {
-    if (!userProfile) return [];
-
-    let dataToFilter = mapData;
-
-    // Role-based filtering
-    const displayName = userProfile.displayName;
-    if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
-      dataToFilter = dataToFilter.filter(item => {
-        return item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
-      });
-    } else if (userProfile.role === 'user') {
-      dataToFilter = dataToFilter.filter(item => !item.isCompany && item.dialerAssigned === displayName);
-    }
-
-    const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
-
-    return dataToFilter.filter(item => {
-      const companyNameMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
-      const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
-      const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
-      const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
-      const statusMatch = filters.status.length > 0 ? filters.status.includes(item.status) : true;
-
-      let campaignMatch = true;
-      if (filters.campaign && filters.campaign !== 'all') {
-        const leadCampaign = (item as Lead).campaign;
-        if (filters.campaign === 'D2D') {
-          campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
-        } else {
-          campaignMatch = leadCampaign === filters.campaign;
+      if (!userProfile) return [];
+  
+      const displayName = userProfile.displayName;
+      const checkedInLeadIds = new Set(allCheckInActivities.map(a => a.leadId));
+  
+      return mapData.filter(item => {
+        let isVisibleByRole = false;
+        if (userProfile.role === 'admin') {
+          isVisibleByRole = true;
+        } else if (userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin') {
+          isVisibleByRole = item.isCompany || (item.fieldSales === true && (userProfile.role === 'Field Sales' ? item.dialerAssigned === displayName : true));
+        } else if (userProfile.role === 'user' || userProfile.role === 'Lead Gen' || userProfile.role === 'Lead Gen Admin') {
+          isVisibleByRole = !item.isCompany && item.dialerAssigned === displayName;
         }
-      }
-
-      if (item.isCompany) {
-        return companyNameMatch && dialerMatch && franchiseeMatch && stateMatch && statusMatch && campaignMatch;
-      }
-
-      const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
-      const checkInStatusMatch = filters.checkInStatus === 'all' ||
-        (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
-        (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
-
-      let checkInDateMatch = true;
-      if (filters.checkInDate?.from) {
-        if (!hasBeenCheckedIn) {
-          checkInDateMatch = false;
-        } else {
-          const fromDate = startOfDay(filters.checkInDate.from);
-          const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
-          const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
-          if (checkInActivity) {
-            const checkInDate = new Date(checkInActivity.date);
-            checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+  
+        if (!isVisibleByRole) return false;
+  
+        const companyNameMatch = filters.companyName ? item.companyName?.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const dialerMatch = filters.dialerAssigned.length === 0 || (item.dialerAssigned && filters.dialerAssigned.includes(item.dialerAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
+        const stateMatch = filters.state.length === 0 || (item.address?.state && filters.state.includes(item.address.state));
+        const statusMatch = filters.status.length > 0 ? filters.status.includes(item.status) : true;
+  
+        let campaignMatch = true;
+        if (filters.campaign && filters.campaign !== 'all') {
+          const leadCampaign = (item as Lead).campaign;
+          if (filters.campaign === 'D2D') {
+            campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
           } else {
-            checkInDateMatch = false;
+            campaignMatch = leadCampaign === filters.campaign;
           }
         }
-      }
-
-      const isInRoute = leadToRouteMap.has(item.id);
-      const routeStatusMatch = filters.routeStatus === 'all' ||
-        (filters.routeStatus === 'in-route' && isInRoute) ||
-        (filters.routeStatus === 'not-in-route' && !isInRoute);
-
-      const fieldSalesMatch = filters.fieldSales === 'all' ||
-        (filters.fieldSales === 'yes' && item.fieldSales === true) ||
-        (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
-
-      return companyNameMatch && dialerMatch && franchiseeMatch && stateMatch && statusMatch && campaignMatch && checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
-    });
-
+  
+        if (!companyNameMatch || !dialerMatch || !franchiseeMatch || !stateMatch || !statusMatch || !campaignMatch) {
+          return false;
+        }
+  
+        if (item.isCompany) {
+          return true;
+        }
+  
+        const hasBeenCheckedIn = checkedInLeadIds.has(item.id);
+        const checkInStatusMatch = filters.checkInStatus === 'all' ||
+          (filters.checkInStatus === 'checked-in' && hasBeenCheckedIn) ||
+          (filters.checkInStatus === 'not-checked-in' && !hasBeenCheckedIn);
+  
+        let checkInDateMatch = true;
+        if (filters.checkInDate?.from) {
+          if (!hasBeenCheckedIn) {
+            checkInDateMatch = false;
+          } else {
+            const fromDate = startOfDay(filters.checkInDate.from);
+            const toDate = filters.checkInDate.to ? endOfDay(filters.checkInDate.to) : endOfDay(filters.checkInDate.from);
+            const checkInActivity = allCheckInActivities.find(a => a.leadId === item.id);
+            if (checkInActivity) {
+              const checkInDate = new Date(checkInActivity.date);
+              checkInDateMatch = checkInDate >= fromDate && checkInDate <= toDate;
+            } else {
+              checkInDateMatch = false;
+            }
+          }
+        }
+  
+        const isInRoute = leadToRouteMap.has(item.id);
+        const routeStatusMatch = filters.routeStatus === 'all' ||
+          (filters.routeStatus === 'in-route' && isInRoute) ||
+          (filters.routeStatus === 'not-in-route' && !isInRoute);
+  
+        const fieldSalesMatch = filters.fieldSales === 'all' ||
+          (filters.fieldSales === 'yes' && item.fieldSales === true) ||
+          (filters.fieldSales === 'no' && (item.fieldSales === false || item.fieldSales === undefined));
+  
+        return checkInStatusMatch && checkInDateMatch && routeStatusMatch && fieldSalesMatch;
+      });
   }, [mapData, filters, userProfile, allCheckInActivities, leadToRouteMap]);
     
     const { leadsCount, signedCustomersCount } = useMemo(() => {
@@ -2024,6 +2027,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         </Button>
                                     )}
                                 </div>
+                                 {prospectInfo.place.website && (
+                                    <Button asChild variant="outline" size="sm" className="mt-2 w-full">
+                                        <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer">
+                                            <Globe className="mr-2 h-4 w-4" />
+                                            Visit Website
+                                        </a>
+                                    </Button>
+                                )}
                             </Card>
                         ))}
                     </div>
