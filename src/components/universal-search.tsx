@@ -13,16 +13,16 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { Button } from './ui/button'
-import { Search, Briefcase, Phone, Hash } from 'lucide-react'
-import { getLeadsFromFirebase } from '@/services/firebase'
-import type { Lead, Contact, Activity } from '@/lib/types'
+import { Search, Briefcase, Star } from 'lucide-react'
+import { getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase'
+import type { Lead } from '@/lib/types'
 
+// Updated SearchResult type
 type SearchResult = {
-  type: 'lead' | 'call' | 'contact'
+  type: 'lead' | 'company'
   id: string
   title: string
   description: string
-  leadId: string
   icon: React.ReactNode
 }
 
@@ -31,7 +31,7 @@ export function UniversalSearch() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [allLeads, setAllLeads] = useState<Lead[]>([])
+  const [searchData, setSearchData] = useState<(Lead & { resultType: 'lead' | 'company' })[]>([]) // Combined data source
   const router = useRouter()
 
   useEffect(() => {
@@ -46,11 +46,18 @@ export function UniversalSearch() {
   }, [])
 
   useEffect(() => {
-    if (open && allLeads.length === 0) {
+    if (open && searchData.length === 0) {
       setLoading(true)
-      getLeadsFromFirebase({ summary: false })
-        .then((leads) => {
-          setAllLeads(leads)
+      Promise.all([
+        getLeadsFromFirebase({ summary: true }),
+        getCompaniesFromFirebase(),
+      ])
+        .then(([leads, companies]) => {
+          const combinedData = [
+            ...leads.map(lead => ({ ...lead, resultType: 'lead' as const })),
+            ...companies.map(company => ({ ...company, resultType: 'company' as const })),
+          ];
+          setSearchData(combinedData)
         })
         .catch((error) => {
           console.error('Failed to fetch search data:', error)
@@ -59,7 +66,7 @@ export function UniversalSearch() {
           setLoading(false)
         })
     }
-  }, [open, allLeads.length])
+  }, [open, searchData.length])
 
   useEffect(() => {
     if (!query) {
@@ -67,70 +74,40 @@ export function UniversalSearch() {
       return
     }
 
-    if (allLeads.length > 0) {
+    if (searchData.length > 0) {
       const lowerCaseQuery = query.toLowerCase()
-      const searchResults: SearchResult[] = []
-
-      allLeads.forEach((lead) => {
-        // Search by lead name
-        if (lead.companyName.toLowerCase().includes(lowerCaseQuery)) {
-          searchResults.push({
-            type: 'lead',
-            id: lead.id,
-            title: lead.companyName,
-            description: `Lead • ${lead.industryCategory || 'N/A'}`,
-            leadId: lead.id,
-            icon: <Briefcase className="mr-2 h-4 w-4" />,
-          })
-        }
-
-        // Search by contact phone number
-        lead.contacts?.forEach((contact) => {
-          if (contact.phone && contact.phone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
-            searchResults.push({
-              type: 'contact',
-              id: contact.id,
-              title: `${contact.name} (${contact.phone})`,
-              description: `Contact at ${lead.companyName}`,
-              leadId: lead.id,
-              icon: <Phone className="mr-2 h-4 w-4" />,
-            })
-          }
-        })
-        
-        // Search by lead phone number
-        if (lead.customerPhone && lead.customerPhone.replace(/\D/g, '').includes(lowerCaseQuery.replace(/\D/g, ''))) {
-            searchResults.push({
+      const searchResults: SearchResult[] = searchData
+        .filter(item => item.companyName.toLowerCase().includes(lowerCaseQuery))
+        .map(item => {
+          if (item.resultType === 'lead') {
+            return {
               type: 'lead',
-              id: `${lead.id}-phone`,
-              title: `${lead.companyName} (${lead.customerPhone})`,
-              description: 'Lead Phone Number',
-              leadId: lead.id,
-              icon: <Phone className="mr-2 h-4 w-4" />,
-            })
-        }
-
-        // Search by AirCall Call ID
-        lead.activity?.forEach((activity) => {
-          if (activity.type === 'Call' && activity.callId && activity.callId.includes(lowerCaseQuery)) {
-            searchResults.push({
-              type: 'call',
-              id: activity.id,
-              title: `Call ID: ${activity.callId}`,
-              description: `Call with ${lead.companyName}`,
-              leadId: lead.id,
-              icon: <Hash className="mr-2 h-4 w-4" />,
-            })
+              id: item.id,
+              title: item.companyName,
+              description: `Lead • ${item.status}`,
+              icon: <Briefcase className="mr-2 h-4 w-4" />,
+            }
+          } else { // company
+            return {
+              type: 'company',
+              id: item.id,
+              title: item.companyName,
+              description: 'Signed Customer',
+              icon: <Star className="mr-2 h-4 w-4" />,
+            }
           }
-        })
-      })
+        });
       setResults(searchResults)
     }
-  }, [query, allLeads])
+  }, [query, searchData])
 
 
-  const handleSelect = (leadId: string) => {
-    router.push(`/leads/${leadId}`)
+  const handleSelect = (result: SearchResult) => {
+    if (result.type === 'lead') {
+      router.push(`/leads/${result.id}`)
+    } else if (result.type === 'company') {
+      router.push(`/companies/${result.id}`)
+    }
     setOpen(false)
   }
 
@@ -147,7 +124,7 @@ export function UniversalSearch() {
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search by lead name, phone, or call ID..."
+          placeholder="Search by company name..."
           value={query}
           onValueChange={setQuery}
         />
@@ -160,7 +137,7 @@ export function UniversalSearch() {
               <CommandItem
                 key={`${result.type}-${result.id}`}
                 value={`${result.title} ${result.description}`}
-                onSelect={() => handleSelect(result.leadId)}
+                onSelect={() => handleSelect(result)}
               >
                 {result.icon}
                 <div>
