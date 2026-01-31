@@ -7,7 +7,8 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const BusinessCardAnalysisInputSchema = z.object({
-  imageDataUri: z.string().describe("A photo of a business card as a data URI."),
+  frontImageDataUri: z.string().optional().describe("A photo of the front of a business card as a data URI."),
+  backImageDataUri: z.string().optional().describe("A photo of the back of a business card as a data URI."),
 });
 export type BusinessCardAnalysisInput = z.infer<typeof BusinessCardAnalysisInputSchema>;
 
@@ -26,10 +27,17 @@ const analyzeBusinessCardPrompt = ai.definePrompt({
     name: 'analyzeBusinessCardPrompt',
     input: { schema: BusinessCardAnalysisInputSchema },
     output: { schema: BusinessCardAnalysisOutputSchema },
-    prompt: `You are an expert business card reader. Analyze the following image of a business card and extract the key information.
+    prompt: `You are an expert business card reader. Analyze the following image(s) of a business card and extract the key information. One image is the front and the other is the back. Combine information from both sides to get the complete details.
 
-    Business Card Image:
-    {{media url=imageDataUri}}
+    {{#if frontImageDataUri}}
+    Front of Card:
+    {{media url=frontImageDataUri}}
+    {{/if}}
+
+    {{#if backImageDataUri}}
+    Back of Card:
+    {{media url=backImageDataUri}}
+    {{/if}}
 
     Your Tasks:
     1.  Extract the company name.
@@ -51,6 +59,9 @@ const analyzeBusinessCardFlow = ai.defineFlow(
         outputSchema: BusinessCardAnalysisOutputSchema,
     },
     async (input) => {
+        if (!input.frontImageDataUri && !input.backImageDataUri) {
+            throw new Error("At least one image of the business card must be provided.");
+        }
         const { output } = await analyzeBusinessCardPrompt(input);
         if (!output) {
             throw new Error("AI failed to analyze the business card.");

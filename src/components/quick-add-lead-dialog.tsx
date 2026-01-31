@@ -77,21 +77,28 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   const [showCamera, setShowCamera] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [frontImage, setFrontImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const resetCameraState = () => {
+    setShowCamera(false);
+    setFrontImage(null);
+    if (videoRef.current && videoRef.current.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+    }
+  };
   
   useEffect(() => {
     if (isOpen && window.google && !autocompleteService.current) {
         autocompleteService.current = new window.google.maps.places.AutocompleteService();
         placesService.current = new window.google.maps.places.PlacesService(document.createElement('div'));
     }
-  }, [isOpen]);
-
-  useEffect(() => {
     if (!isOpen) {
         setSelectedPlace(null);
         setSearchQuery('');
         setPredictions([]);
+        resetCameraState();
     }
   }, [isOpen]);
 
@@ -158,10 +165,10 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   };
 
 
-  const handleCaptureAndAnalyze = () => {
-    if (!videoRef.current) return;
+  const handleCapture = () => {
+    if (!videoRef.current) return null;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -169,15 +176,20 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
     const context = canvas.getContext('2d');
     context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
-    const imageDataUri = canvas.toDataURL('image/jpeg');
-    
-    if (videoRef.current.srcObject) {
-      (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+    return canvas.toDataURL('image/jpeg');
+  };
+
+  const handleCaptureFront = () => {
+    const image = handleCapture();
+    if (image) {
+      setFrontImage(image);
     }
-    setShowCamera(false);
-    
+  };
+
+  const handleAnalyze = (front: string | null, back: string | null) => {
+    resetCameraState();
     setIsAnalyzing(true);
-    analyzeBusinessCard({ imageDataUri })
+    analyzeBusinessCard({ frontImageDataUri: front || undefined, backImageDataUri: back || undefined })
       .then(result => {
         if (result.companyName) {
             let fullSearchQuery = result.companyName;
@@ -199,7 +211,20 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
         console.error("Analysis failed:", err);
         toast({ variant: 'destructive', title: 'Analysis Error', description: 'Could not analyze the business card.' });
       })
-      .finally(() => setIsAnalyzing(false));
+      .finally(() => {
+        setIsAnalyzing(false);
+      });
+  };
+
+  const handleCaptureBackAndAnalyze = () => {
+    const image = handleCapture();
+    if (image) {
+      handleAnalyze(frontImage, image);
+    }
+  };
+
+  const handleSkipAndAnalyze = () => {
+    handleAnalyze(frontImage, null);
   };
   
   const handlePredictionSelect = (prediction: google.maps.places.AutocompletePrediction) => {
@@ -306,7 +331,16 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
 
         {showCamera ? (
             <div className="space-y-4">
-                <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
+                <div className="relative">
+                    <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
+                    {frontImage && (
+                        <img 
+                            src={frontImage} 
+                            alt="Front of business card" 
+                            className="absolute top-2 left-2 w-1/4 rounded-md border-2 border-white shadow-lg"
+                        />
+                    )}
+                </div>
                 {hasCameraPermission === false && (
                     <Alert variant="destructive">
                         <AlertTitle>Camera Access Required</AlertTitle>
@@ -315,10 +349,20 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                         </AlertDescription>
                     </Alert>
                 )}
-                <div className="flex gap-2">
-                    <Button onClick={handleCaptureAndAnalyze} className="w-full" disabled={!hasCameraPermission}>Capture and Analyze</Button>
-                    <Button variant="outline" onClick={() => setShowCamera(false)}>Cancel</Button>
-                </div>
+                {!frontImage ? (
+                    <div className="flex gap-2">
+                        <Button onClick={handleCaptureFront} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
+                        <Button variant="outline" onClick={resetCameraState}>Cancel</Button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <div className="flex gap-2">
+                            <Button onClick={handleCaptureBackAndAnalyze} className="w-full" disabled={!hasCameraPermission}>Capture Back & Analyze</Button>
+                            <Button variant="outline" onClick={() => setFrontImage(null)}>Retake Front</Button>
+                        </div>
+                        <Button variant="secondary" className="w-full" onClick={handleSkipAndAnalyze}>Skip & Analyze Front Only</Button>
+                    </div>
+                )}
             </div>
         ) : (
             <>
