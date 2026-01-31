@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface QuickAddLeadDialogProps {
   isOpen: boolean;
@@ -62,7 +63,13 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
-  const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+  const placesService = useRef<google.maps.places.PlacesService | null>(null);
+  
   const { toast } = useToast();
   const { userProfile } = useAuth();
   const router = useRouter();
@@ -72,36 +79,21 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const setupAutocomplete = useCallback(() => {
-    if (!window.google || !autocompleteInputRef.current) return;
-
-    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-        types: ['establishment'],
-        componentRestrictions: { country: 'au' },
-    });
-    
-    autocomplete.setFields(['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id']);
-
-    autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (place.address_components) {
-            setSelectedPlace(place);
-        }
-    });
-  }, []);
+  
+  useEffect(() => {
+    if (isOpen && window.google && !autocompleteService.current) {
+        autocompleteService.current = new window.google.maps.places.AutocompleteService();
+        placesService.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+    }
+  }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-        // We need a slight delay to ensure the input is rendered before setting up autocomplete
-        setTimeout(setupAutocomplete, 100);
-    } else {
+    if (!isOpen) {
         setSelectedPlace(null);
-        if (autocompleteInputRef.current) {
-            autocompleteInputRef.current.value = '';
-        }
+        setSearchQuery('');
+        setPredictions([]);
     }
-  }, [isOpen, setupAutocomplete]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!showCamera) {
@@ -141,6 +133,31 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   }, [showCamera, toast]);
 
 
+  const fetchPredictions = useCallback((input: string) => {
+    if (autocompleteService.current && input) {
+        autocompleteService.current.getPlacePredictions(
+            { input, componentRestrictions: { country: 'au' } },
+            (preds, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
+                    setPredictions(preds);
+                } else {
+                    setPredictions([]);
+                }
+            }
+        );
+    } else {
+        setPredictions([]);
+    }
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchQuery(value);
+      setSelectedPlace(null);
+      fetchPredictions(value);
+  };
+
+
   const handleCaptureAndAnalyze = () => {
     if (!videoRef.current) return;
     const canvas = canvasRef.current;
@@ -163,22 +180,17 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
     analyzeBusinessCard({ imageDataUri })
       .then(result => {
         if (result.companyName) {
-          if (autocompleteInputRef.current) {
-            let searchQuery = result.companyName;
+            let fullSearchQuery = result.companyName;
             if (result.address) {
-              searchQuery += `, ${result.address}`;
+              fullSearchQuery += `, ${result.address}`;
             }
-            autocompleteInputRef.current.value = searchQuery;
-            autocompleteInputRef.current.focus();
-
-            const event = new Event('input', { bubbles: true, cancelable: true });
-            autocompleteInputRef.current.dispatchEvent(event);
+            setSearchQuery(fullSearchQuery);
+            fetchPredictions(fullSearchQuery);
 
             toast({
               title: 'Card Analyzed',
               description: 'Business details populated. Please select from the dropdown to confirm.',
             });
-          }
         } else {
           toast({ variant: 'destructive', title: 'Analysis Failed', description: 'Could not find a company name on the card.' });
         }
@@ -188,6 +200,22 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
         toast({ variant: 'destructive', title: 'Analysis Error', description: 'Could not analyze the business card.' });
       })
       .finally(() => setIsAnalyzing(false));
+  };
+  
+  const handlePredictionSelect = (prediction: google.maps.places.AutocompletePrediction) => {
+    placesService.current?.getDetails(
+      {
+        placeId: prediction.place_id,
+        fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id'],
+      },
+      (place, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+          setSelectedPlace(place);
+          setSearchQuery(place.name || '');
+          setPredictions([]);
+        }
+      }
+    );
   };
 
 
@@ -295,12 +323,32 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
         ) : (
             <>
                 <div className="py-4 space-y-4">
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
                         <Label htmlFor="quick-add-search">Search Business Name or Address</Label>
                          <div className="flex gap-2">
-                            <Input id="quick-add-search" ref={autocompleteInputRef} placeholder="Start typing..."/>
+                            <Input 
+                                id="quick-add-search" 
+                                placeholder="Start typing..."
+                                value={searchQuery}
+                                onChange={handleInputChange}
+                            />
                             <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
                         </div>
+                        {predictions.length > 0 && (
+                            <Card className="absolute z-50 w-full mt-1">
+                                <CardContent className="p-1">
+                                    {predictions.map((prediction) => (
+                                        <div
+                                            key={prediction.place_id}
+                                            className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
+                                            onClick={() => handlePredictionSelect(prediction)}
+                                        >
+                                            {prediction.description}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                     {selectedPlace && (
                         <div className="p-3 border rounded-md bg-secondary/50 text-sm">
