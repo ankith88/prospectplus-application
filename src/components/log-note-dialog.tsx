@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -29,7 +29,7 @@ import { useToast } from '@/hooks/use-toast'
 import type { Lead, Note } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Mic, MicOff } from 'lucide-react'
 import { logNoteActivity } from '@/services/firebase'
 
 const formSchema = z.object({
@@ -49,6 +49,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
   const [isOpen, setIsOpen] = useState(false)
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   const { toast } = useToast()
   const { user } = useAuth();
@@ -69,8 +71,87 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         form.reset();
         setSubmissionState('idle');
         setTotalDuration(null);
+        if (recognitionRef.current && isListening) {
+            recognitionRef.current.stop();
+        }
+        setIsListening(false);
     }
-  }, [isOpen, form]);
+  }, [isOpen, form, isListening]);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('Speech recognition not supported in this browser.');
+      return;
+    }
+
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-AU';
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        const currentNotes = form.getValues('content') || '';
+        form.setValue('content', (currentNotes + ' ' + finalTranscript).trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+        let errorMessage = `An unknown error occurred: ${event.error}`;
+        switch (event.error) {
+            case 'no-speech':
+                errorMessage = "No speech was detected. Please try again.";
+                break;
+            case 'audio-capture':
+                errorMessage = "Audio capture failed. Please ensure your microphone is working.";
+                break;
+            case 'not-allowed':
+                errorMessage = "Microphone access was denied. Please enable it in your browser settings.";
+                break;
+            case 'network':
+                errorMessage = "A network error occurred. Please check your internet connection.";
+                break;
+        }
+        toast({ variant: 'destructive', title: 'Speech Recognition Error', description: errorMessage });
+        setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [form, toast]);
+
+  const handleToggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+       if (recognitionRef.current) {
+         try {
+           recognitionRef.current.start();
+           setIsListening(true);
+         } catch(e) {
+            console.error("Could not start recognition:", e);
+            toast({ variant: 'destructive', title: 'Recognition Error', description: 'Could not start voice recognition. Please try again.' });
+         }
+       } else {
+         toast({ variant: 'destructive', title: 'Not Supported', description: 'Speech recognition is not supported in this browser.' });
+       }
+    }
+  };
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -144,7 +225,19 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
                       <FormItem>
                         <FormLabel>Note</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Enter your note here..." {...field} rows={5}/>
+                           <div className="relative">
+                                <Textarea placeholder="Enter your note here, or use the mic to dictate." {...field} rows={5}/>
+                                 <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute bottom-2 right-2"
+                                    onClick={handleToggleListening}
+                                  >
+                                    {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
+                                    <span className="sr-only">{isListening ? 'Stop listening' : 'Start listening'}</span>
+                                  </Button>
+                              </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
