@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef, Fragment, useCallback } from 'react';
@@ -6,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, type Note } from '@/services/firebase';
 import type { Lead, CheckinQuestion, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -248,7 +247,10 @@ export default function UnifiedCheckinPage() {
 
         try {
             if(lead?.id && questionsToSave.length > 0) {
-                await updateLeadCheckinQuestions(lead.id, questionsToSave);
+                const existingQuestions = lead.checkinQuestions || [];
+                const newQuestions = questionsToSave.map(q => q.question);
+                const updatedQuestions = existingQuestions.filter(q => !newQuestions.includes(q.question)).concat(questionsToSave);
+                await updateLeadCheckinQuestions(lead.id, updatedQuestions);
             }
             if (currentStep === TOTAL_STEPS) {
                  await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
@@ -335,7 +337,7 @@ export default function UnifiedCheckinPage() {
                 author: userProfile?.displayName
             });
             
-            await updateLeadStatus(lead.id, 'Priority Field Lead');
+            await updateLeadStatus(lead.id, 'Priority Lead');
     
             toast({ title: "Success", description: `Lead moved to Outbound bucket and assigned to ${assignee}.` });
             router.push('/field-sales');
@@ -365,7 +367,10 @@ export default function UnifiedCheckinPage() {
         }
     };
     
-    const handleNoteLogged = () => setIsLogNoteOpen(false);
+    const handleNoteLogged = (newNote: Note) => {
+        setLead(prev => prev ? { ...prev, notes: [newNote, ...(prev.notes || [])] } : null);
+        setIsLogNoteOpen(false);
+    };
 
     const handleRevisitScheduled = () => {
         setIsRevisitDialogOpen(false);
@@ -469,7 +474,7 @@ export default function UnifiedCheckinPage() {
                 </main>
                  
                 <PostCallOutcomeDialog isOpen={isLogOutcomeOpen} onClose={() => setIsLogOutcomeOpen(false)} lead={lead} onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }} />
-                <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}><div/></LogNoteDialog>
+                <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
                 {isRevisitDialogOpen && <RevisitDialog isOpen={isRevisitDialogOpen} onOpenChange={setIsRevisitDialogOpen} lead={lead} onRevisitScheduled={handleRevisitScheduled} />}
                 {isScheduleAppointmentOpen && <ScheduleAppointmentDialog isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} lead={lead} />}
                 <NearbyCustomersDialog isOpen={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen} customers={nearbyCustomers} />
@@ -652,3 +657,4 @@ const NearbyCustomersDialog = ({ isOpen, onOpenChange, customers }: { isOpen: bo
 );
 
     
+

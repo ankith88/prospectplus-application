@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -261,6 +260,7 @@ export const salesReps = [
 ];
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
+  const [lead, setLead] = useState<Lead>(initialLead);
   const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
@@ -289,6 +289,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+  const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
 
 
   const router = useRouter();
@@ -296,7 +297,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
   
-  const lead = initialLead;
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [], invoices = [] } = lead;
 
@@ -329,14 +329,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
-    // This function is complex and might need adjustment based on how you want to update the lead state.
-    // For now, let's assume we need to re-fetch the lead data or optimistically update it.
-    // A full re-fetch might be the simplest to ensure data consistency.
-    // To do that, we would need to pass a re-fetch function down from the page level.
-    // Optimistically:
     if (newStatus) {
-       // This part is tricky because `setLead` isn't defined here anymore.
-       // The parent page would need to handle this update.
+       setLead(prev => ({...prev!, status: newStatus}));
     }
     
     if (isSessionActive) {
@@ -364,8 +358,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (scoring.scoredLeads.length > 0) {
             const result = scoring.scoredLeads[0];
             setScoringResult(result);
-            // This would also need a way to update the parent state.
-            // setLead(prev => ({ ...prev, aiScore: result.score, aiReason: result.reason }));
+            setLead(prev => ({ ...prev!, aiScore: result.score, aiReason: result.reason }));
         }
     } catch (error) {
         console.error("Failed to calculate score:", error);
@@ -389,20 +382,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         
         if (result.logoUrl) {
           await updateLeadAvatar(lead.id, result.logoUrl);
-          // Optimistic update would require a state setter from the parent
-          // setLead(prev => ({ ...prev, avatarUrl: result.logoUrl! }));
+          setLead(prev => ({ ...prev!, avatarUrl: result.logoUrl! }));
           toast({ title: "Logo Found!", description: "Company logo has been updated." });
         }
         
         if (result.companyDescription) {
-            // Optimistic update
-            // setLead(prev => ({...prev, companyDescription: result.companyDescription! }));
+            setLead(prev => ({...prev!, companyDescription: result.companyDescription! }));
             toast({ title: "Description Generated", description: "Company description has been updated." });
         }
         
         if (result.contacts && result.contacts.length > 0) {
-            // Optimistic update
-            // setLead(prev => ({...prev, contacts: [...(prev.contacts || []), ...result.contacts!]}));
+            setLead(prev => ({...prev!, contacts: [...(prev!.contacts || []), ...result.contacts!]}));
             toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
         } else {
             toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
@@ -419,13 +409,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const addActivity = async (newActivity: Omit<Activity, 'id' | 'date'>) => {
     if (lead) {
         const newActivityId = await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
-        // Optimistic update would require state setter from parent
-        // setLead(prev => ({...prev, activity: [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...(prev.activity || [])] as Activity[] }));
+        setLead(prev => ({...prev!, activity: [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...(prev!.activity || [])] as Activity[] }));
     }
   };
 
   const handleNoteLogged = (newNote: Note) => {
-    // setLead(prev => ({...prev, notes: [newNote, ...(prev.notes || [])]}));
+    setLead(prev => ({...prev!, notes: [newNote, ...(prev!.notes || [])]}));
+    setIsLogNoteOpen(false);
   };
   
   const handleContactAdded = (newContactData: any) => {
@@ -436,7 +426,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         email: newContactData.email,
         phone: newContactData.phone,
     };
-    // setLead(prev => ({...prev, contacts: [newContact, ...(prev.contacts || [])]}));
+    setLead(prev => ({...prev!, contacts: [newContact, ...(prev!.contacts || [])]}));
   };
 
   const handleContactUpdated = (updatedContact: Contact) => {
@@ -445,11 +435,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         notes: `Contact ${updatedContact.name} updated.`,
         author: user?.displayName,
      });
-     // setLead(prev => ({...prev, contacts: (prev.contacts || []).map(c => c.id === updatedContact.id ? updatedContact : c)}));
+     setLead(prev => ({...prev!, contacts: (prev!.contacts || []).map(c => c.id === updatedContact.id ? updatedContact : c)}));
   };
 
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
-    // setLead(prev => ({ ...prev, ...updatedLeadData }));
+    setLead(prev => ({ ...prev!, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
   }
 
@@ -457,7 +447,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
-      // setLead(prev => ({...prev, contacts: (prev.contacts || []).filter(c => c.id !== contact.id)}));
+      setLead(prev => ({...prev!, contacts: (prev!.contacts || []).filter(c => c.id !== contact.id)}));
       toast({ title: "Success", description: "Contact deleted successfully." });
     } catch (error) {
       console.error("Failed to delete contact:", error);
@@ -516,7 +506,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           content: '{"utterances":[]}', // Placeholder
           author: lead.dialerAssigned
         };
-        // setLead(prev => ({...prev, transcripts: [newTranscript, ...(prev.transcripts || [])]}));
+        setLead(prev => ({...prev!, transcripts: [newTranscript, ...(prev!.transcripts || [])]}));
       } else {
         toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
       }
@@ -540,7 +530,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             dueDate: newTaskDueDate.toISOString(),
             author: user.displayName,
         });
-        // setLead(prev => ({...prev, tasks: [newTask, ...(prev.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
+        setLead(prev => ({...prev!, tasks: [newTask, ...(prev!.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
         toast({ title: 'Success', description: 'Task added successfully.' });
@@ -554,7 +544,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
-          // setLead(prev => ({...prev, tasks: (prev.tasks || []).map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t)}));
+          setLead(prev => ({...prev!, tasks: (prev!.tasks || []).map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t)}));
           toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
           console.error("Failed to update task:", error);
@@ -566,7 +556,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       if (!lead) return;
       try {
           await deleteTaskFromLead(lead.id, taskId);
-          // setLead(prev => ({...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId)}));
+          setLead(prev => ({...prev!, tasks: (prev!.tasks || []).filter(t => t.id !== taskId)}));
           toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
           console.error("Failed to delete task:", error);
@@ -578,7 +568,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await updateLeadDiscoveryData(lead.id, discoveryData);
-      // setLead(prev => ({ ...prev, discoveryData: discoveryData }));
+      setLead(prev => ({ ...prev!, discoveryData: discoveryData }));
       toast({ title: 'Success', description: 'Discovery questions saved.' });
       setIsDiscoveryQuestionsOpen(false);
     } catch (error: any) {
@@ -595,7 +585,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await updateLeadDetails(lead.id, lead, { address: newAddress });
-      // setLead(prev => ({ ...prev, address: newAddress }));
+      setLead(prev => ({ ...prev!, address: newAddress }));
       toast({ title: "Success", description: "Address updated successfully." });
     } catch (error) {
       console.error("Failed to update address:", error);
@@ -648,7 +638,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleRepSelection = (repName: string, repUrl: string) => {
     if (!lead) return;
     
-    // setLead(prev => ({ ...prev, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
+    setLead(prev => ({ ...prev!, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
     toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
 
     updateLeadSalesRep(lead.id, repName, repUrl)
@@ -755,9 +745,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
     const logNoteButton = (
-        <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged}>
-            <Button variant="outline"><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>
-        </LogNoteDialog>
+        <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+            <ClipboardEdit className="mr-2 h-4 w-4" />
+            Log a Note
+        </Button>
     );
     
     const viewScriptButton = (
@@ -1472,7 +1463,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         leadName={lead.companyName} 
                         leadId={lead.id}
                         onAnalysisComplete={(analysis) => {
-                          // setLead(prev => ({...prev, transcripts: (prev.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)}));
+                          setLead(prev => ({...prev!, transcripts: (prev!.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)}));
                         }}
                       />
                   )}
@@ -1565,6 +1556,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onClose={() => setSelectedAddress(null)}
         address={selectedAddress || ''}
       />
+      <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
     </>
   )
 }

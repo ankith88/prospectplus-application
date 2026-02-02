@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
@@ -13,8 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Form,
@@ -38,15 +35,15 @@ const formSchema = z.object({
 
 interface LogNoteDialogProps {
   lead: Lead
-  children: React.ReactNode
   onNoteLogged: (newNote: Note) => void;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 type SubmissionStatus = 'idle' | 'saving_firebase' | 'complete' | 'error';
 
 
-export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogNoteDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -63,7 +60,7 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
   })
   
   const resetAndClose = () => {
-    setIsOpen(false);
+    onOpenChange(false);
   };
   
   useEffect(() => {
@@ -200,9 +197,8 @@ export function LogNoteDialog({ lead, children, onNoteLogged }: LogNoteDialogPro
         if (submissionState === 'saving_firebase' && !open) {
              return;
         }
-        setIsOpen(open);
+        onOpenChange(open);
     }}>
-        <DialogTrigger asChild>{children}</DialogTrigger>
         <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => {
              if (submissionState === 'saving_firebase') {
                 e.preventDefault();

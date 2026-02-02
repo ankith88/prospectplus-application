@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -61,6 +60,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
+  const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -96,6 +96,11 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     
     fetchInvoices();
   }, [company.id, toast]);
+
+  const handleNoteLoggedAndClose = (newNote: Note) => {
+    onNoteLogged(newNote);
+    setIsLogNoteOpen(false);
+  };
 
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
@@ -145,12 +150,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           </div>
         </div>
          <div className="flex flex-wrap items-center gap-2">
-            <LogNoteDialog lead={company} onNoteLogged={onNoteLogged}>
-              <Button variant="outline">
+            <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                 <ClipboardEdit className="mr-2 h-4 w-4" />
                 Log a Note
-              </Button>
-            </LogNoteDialog>
+            </Button>
         </div>
       </header>
 
@@ -421,7 +424,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                                 <TableCell>{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}</TableCell>
                                                 <TableCell className="font-medium">{invoice.invoiceDocumentID || invoice.documentId}</TableCell>
                                                 <TableCell>{!invoice.invoiceType || invoice.invoiceType === '- None -' ? 'Service' : invoice.invoiceType}</TableCell>
-                                                <TableCell className="text-right">${Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">${' '}{Number(invoice.invoiceTotal).toFixed(2)}</TableCell>
                                                 <TableCell className="text-right">
                                                     {invoice.invoiceURL && (
                                                         <Button asChild variant="outline" size="sm">
@@ -517,6 +520,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         onClose={() => setSelectedAddress(null)}
         address={selectedAddress || ''}
       />
+    <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
     </>
   )
 }
