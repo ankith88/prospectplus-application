@@ -23,6 +23,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     'Reschedule': 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-800',
     'LocalMile Pending': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'Priority Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
+    'Priority Field Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
   }[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
 
 

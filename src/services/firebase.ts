@@ -69,7 +69,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -1443,15 +1443,36 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
 }
 
 async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQuestion[]): Promise<void> {
-  try {
-    const leadRef = doc(firestore, 'leads', leadId);
-    await updateDoc(leadRef, { checkinQuestions: questions });
-    await logActivity(leadId, { type: 'Update', notes: 'Check-in questions completed.' });
-    console.log(`Check-in questions for lead ${leadId} updated.`);
-  } catch (error) {
-    console.error(`Failed to update check-in questions for lead ${leadId}:`, error);
-    throw new Error('Failed to update check-in questions in Firebase');
-  }
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        
+        // Fetch existing questions first to merge correctly
+        const leadSnap = await getDoc(leadRef);
+        const existingData = leadSnap.data();
+        const existingQuestions: CheckinQuestion[] = existingData?.checkinQuestions || [];
+
+        const questionMap = new Map<string, string | string[]>();
+
+        // Populate map with existing answers
+        existingQuestions.forEach(q => {
+            questionMap.set(q.question, q.answer);
+        });
+
+        // Overwrite or add new answers
+        questions.forEach(q => {
+            questionMap.set(q.question, q.answer);
+        });
+
+        // Convert map back to array
+        const mergedQuestions: CheckinQuestion[] = Array.from(questionMap, ([question, answer]) => ({ question, answer }));
+        
+        await updateDoc(leadRef, { checkinQuestions: mergedQuestions });
+        await logActivity(leadId, { type: 'Update', notes: 'Check-in questions were updated.' });
+        console.log(`Check-in questions for lead ${leadId} merged and updated.`);
+    } catch (error) {
+        console.error(`Failed to update check-in questions for lead ${leadId}:`, error);
+        throw new Error('Failed to update check-in questions in Firebase');
+    }
 }
 
 
@@ -2055,5 +2076,3 @@ export {
     updateContactSendEmail,
     getUserActivitiesForPeriod,
 };
-
-    

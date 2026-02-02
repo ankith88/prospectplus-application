@@ -165,7 +165,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
 
 export default function LeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);

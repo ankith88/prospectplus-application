@@ -248,10 +248,7 @@ export default function UnifiedCheckinPage() {
 
         try {
             if(lead?.id && questionsToSave.length > 0) {
-                const existingQuestions = lead.checkinQuestions || [];
-                const newQuestions = questionsToSave.map(q => q.question);
-                const updatedQuestions = existingQuestions.filter(q => !newQuestions.includes(q.question)).concat(questionsToSave);
-                await updateLeadCheckinQuestions(lead.id, updatedQuestions);
+                await updateLeadCheckinQuestions(lead.id, questionsToSave);
             }
             if (currentStep === TOTAL_STEPS) {
                  await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
@@ -338,7 +335,7 @@ export default function UnifiedCheckinPage() {
                 author: userProfile?.displayName
             });
             
-            await updateLeadStatus(lead.id, 'Priority Lead');
+            await updateLeadStatus(lead.id, 'Priority Field Lead');
     
             toast({ title: "Success", description: `Lead moved to Outbound bucket and assigned to ${assignee}.` });
             router.push('/field-sales');
@@ -392,7 +389,7 @@ export default function UnifiedCheckinPage() {
 
     const renderStep = () => {
         const stepProps = {
-            onNext: handleSaveAndNext,
+            onNext: currentStep < 3 ? () => setCurrentStep(prev => prev + 1) : handleSaveAndNext,
             onBack: handleBack,
             isSaving: isSaving,
             onOpenLogOutcome: () => setIsLogOutcomeOpen(true),

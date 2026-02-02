@@ -14,6 +14,7 @@ export type LeadStatus =
   | 'Trialing ShipMate'
   | 'Reschedule'
   | 'Priority Lead'
+  | 'Priority Field Lead'
   | 'LocalMile Pending'
   | 'Free Trial'
 

@@ -41,7 +41,8 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'LPO Review': '#A855F7', // Violet
   'Trialing ShipMate': '#EC4899', // Pink
   'Reschedule': '#FBBF24', // Amber 500
-  'Priority Lead': '#F97316', // Orange 500
+  'Priority Lead': '#F97316', // Orange 500,
+  'Priority Field Lead': '#F97316',
 };
 
 const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
@@ -54,7 +55,7 @@ const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: strin
 
 
 const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
-const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo', 'Reschedule', 'Trialing ShipMate'];
+const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
@@ -85,7 +86,7 @@ export default function ReportsClientPage() {
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
-    appointmentAssignedTo: [] as string[],
+    appointmentAssignedTo: [],
   });
 
   const allFranchiseesOptions: Option[] = useMemo(() => {
