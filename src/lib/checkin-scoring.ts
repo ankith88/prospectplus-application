@@ -1,5 +1,4 @@
 
-'use client';
 import type { CheckinQuestion } from './types';
 
 export function calculateCheckinScore(questions: CheckinQuestion[]): { score: number; routingTag: string; scoringReason: string } {
@@ -17,6 +16,16 @@ export function calculateCheckinScore(questions: CheckinQuestion[]): { score: nu
     
     let isService = false;
     let isProduct = false;
+
+    if (usesOtherCouriers) {
+        isProduct = true;
+        score += 10;
+        reasonParts.push('+10 for using other couriers.');
+        if (getAnswer("Do you have any need for local same-day deliveries?") === 'Yes') {
+            score += 20;
+            reasonParts.push('+20 for needing local same-day delivery.');
+        }
+    }
 
     if (hasAuspostRelationship) {
         score += 10;
@@ -42,16 +51,6 @@ export function calculateCheckinScore(questions: CheckinQuestion[]): { score: nu
         isService = true;
         score += 15;
         reasonParts.push('+15 for needing banking services.');
-    }
-
-    if (usesOtherCouriers) {
-        isProduct = true;
-        score += 10;
-        reasonParts.push('+10 for using other couriers.');
-        if (getAnswer("Do you have any need for local deliveries?") === 'Yes') {
-            score += 20;
-            reasonParts.push('+20 for needing local same-day delivery.');
-        }
     }
     
     if (Array.isArray(getAnswer("What are the reasons people leave the office?")) && (getAnswer("What are the reasons people leave the office?") as string[]).includes('Local Same Day')) {
