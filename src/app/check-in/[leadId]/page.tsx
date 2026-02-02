@@ -210,10 +210,10 @@ export default function UnifiedCheckinPage() {
         const getMicPermission = async () => {
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
-                setHasCameraPermission(true);
+                setHasMicPermission(true);
             } catch (error) {
                 console.error("Microphone permission denied:", error);
-                setHasCameraPermission(false);
+                setHasMicPermission(false);
                 toast({ variant: 'destructive', title: 'Microphone Required', description: 'Please enable microphone access to use the voice feature.' });
             }
         };
