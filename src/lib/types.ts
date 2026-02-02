@@ -176,6 +176,7 @@ export interface Lead {
   checkinQuestions?: CheckinQuestion[];
   checkinScore?: number;
   checkinScoringReason?: string;
+  checkinRoutingTag?: string;
   contactCount?: number
   address?: Address
   latitude?: number;

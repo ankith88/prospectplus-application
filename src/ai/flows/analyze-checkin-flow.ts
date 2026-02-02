@@ -25,6 +25,9 @@ const CheckinAnalysisSchema = z.object({
       answer: z.union([z.string(), z.array(z.string())]),
   })).describe("An array of answers to the standard check-in questions, extracted from the conversation."),
   transcript: z.string().describe("The full transcript of the conversation."),
+  checkinScore: z.number().optional(),
+  checkinRoutingTag: z.string().optional(),
+  checkinScoringReason: z.string().optional(),
 });
 export type CheckinAnalysis = z.infer<typeof CheckinAnalysisSchema>;
 
@@ -72,17 +75,24 @@ const analyzeCheckinFlow = ai.defineFlow(
         outputSchema: CheckinAnalysisSchema,
     },
     async ({ leadId, audioDataUri, leadProfile }) => {
-        const { output } = await analyzeCheckinPrompt({ audioDataUri, leadProfile });
+        const { output: aiOutput } = await analyzeCheckinPrompt({ audioDataUri, leadProfile });
 
-        if (!output) {
+        if (!aiOutput) {
             throw new Error("AI failed to generate check-in analysis.");
         }
 
-        // Save the analysis to Firebase
-        await updateLeadCheckinQuestions(leadId, output.checkinQuestions as CheckinQuestion[]);
-        await updateLeadDetails(leadId, { id: leadId } as Lead, { companyDescription: output.summary });
+        // Save questions and get back scoring data
+        const { scoreData } = await updateLeadCheckinQuestions(leadId, aiOutput.checkinQuestions as CheckinQuestion[]);
+        
+        // Update summary separately
+        await updateLeadDetails(leadId, { id: leadId } as Lead, { companyDescription: aiOutput.summary });
 
-        return output;
+        return {
+            ...aiOutput,
+            checkinScore: scoreData?.checkinScore,
+            checkinRoutingTag: scoreData?.checkinRoutingTag,
+            checkinScoringReason: scoreData?.checkinScoringReason,
+        };
     }
 );
 

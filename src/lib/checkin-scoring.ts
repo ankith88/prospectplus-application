@@ -2,26 +2,35 @@
 'use client';
 import type { CheckinQuestion } from './types';
 
-export function calculateCheckinScore(questions: CheckinQuestion[]): { score: number, scoringReason: string } {
+export function calculateCheckinScore(questions: CheckinQuestion[]): { score: number; routingTag: string; scoringReason: string } {
     let score = 0;
     const reasonParts: string[] = [];
 
-    const getAnswer = (question: string): string | string[] | undefined => {
-        return questions.find(q => q.question === question)?.answer;
+    const getAnswer = (questionText: string): string | string[] | undefined => {
+        return questions.find(q => q.question === questionText)?.answer;
     }
 
-    if (getAnswer("Do you have a relationship with Australia Post?") === 'Yes') {
-        const dropoff = getAnswer("Do you drop it off or do they come here?");
-        if (Array.isArray(dropoff) && dropoff.includes('Drop-off')) {
-            score += 20;
-            reasonParts.push('+20 for dropping off at AusPost.');
-        }
+    const hasAuspostRelationship = getAnswer("Do you have a relationship with Australia Post?") === 'Yes';
+    const usesDropOff = (getAnswer("Do you drop it off or do they come here?") as string[])?.includes('Drop-off');
+    const usesBanking = (getAnswer("What are the reasons people leave the office?") as string[])?.includes('Banking');
+    const usesOtherCouriers = getAnswer("Do you use any other couriers?") === 'Yes';
+    
+    let isService = false;
+    let isProduct = false;
 
+    if (hasAuspostRelationship) {
+        score += 10;
+        reasonParts.push('+10 for AusPost relationship.');
+        isService = true;
+
+        if (usesDropOff) {
+            score += 20;
+            reasonParts.push('+20 for using Post Office drop-off.');
+        }
         if (getAnswer("Do you pay for the service?") === 'Yes') {
             score += 10;
-            reasonParts.push('+10 for paying for existing service.');
+            reasonParts.push('+10 for paying for existing collection.');
         }
-        
         const usage = getAnswer("What do you use them for?");
         if (typeof usage === 'string' && (usage.toLowerCase().includes('parcel') || usage.toLowerCase().includes('shipping'))) {
             score += 10;
@@ -29,33 +38,35 @@ export function calculateCheckinScore(questions: CheckinQuestion[]): { score: nu
         }
     }
 
-    if (getAnswer("Do you use any other couriers?") === 'Yes') {
-        const couriers = getAnswer("Which Courier do you use?");
-        if (Array.isArray(couriers) && couriers.length > 0) {
-            score += 10;
-            reasonParts.push('+10 for using other couriers.');
-        }
+    if (usesBanking) {
+        isService = true;
+        score += 15;
+        reasonParts.push('+15 for needing banking services.');
+    }
+
+    if (usesOtherCouriers) {
+        isProduct = true;
+        score += 10;
+        reasonParts.push('+10 for using other couriers.');
         if (getAnswer("Do you have any need for local same-day deliveries?") === 'Yes') {
             score += 20;
             reasonParts.push('+20 for needing local same-day delivery.');
         }
     }
-
-    if (getAnswer("Do people leave the office during the day?") === 'Yes') {
-        const reasons = getAnswer("Reasons People Leave");
-        if (Array.isArray(reasons)) {
-            if (reasons.includes('Banking')) {
-                score += 15;
-                reasonParts.push('+15 for needing banking services.');
-            }
-            if (reasons.includes('Local Same Day')) {
-                score += 15;
-                reasonParts.push('+15 for needing local same-day errands.');
-            }
-        }
+    
+    if ((getAnswer("What are the reasons people leave the office?") as string[])?.includes('Local Same Day')) {
+        score += 15;
+        reasonParts.push('+15 for needing local same-day errands.');
     }
     
+    let routingTag = 'Service'; // Default
+    if (isService && isProduct) {
+        routingTag = 'Service & Product';
+    } else if (isProduct) {
+        routingTag = 'Product';
+    }
+
     const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'No specific scoring criteria met.';
 
-    return { score: Math.min(score, 100), scoringReason };
+    return { score: Math.min(score, 100), routingTag, scoringReason };
 }

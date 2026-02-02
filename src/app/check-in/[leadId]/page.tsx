@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, Fragment, useCallback } from 'react';
@@ -32,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { analyzeCheckin, type CheckinAnalysis } from '@/ai/flows/analyze-checkin-flow';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 
 
 const checkinSchema = z.object({
@@ -208,10 +210,10 @@ export default function UnifiedCheckinPage() {
         const getMicPermission = async () => {
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
-                setHasMicPermission(true);
+                setHasCameraPermission(true);
             } catch (error) {
                 console.error("Microphone permission denied:", error);
-                setHasMicPermission(false);
+                setHasCameraPermission(false);
                 toast({ variant: 'destructive', title: 'Microphone Required', description: 'Please enable microphone access to use the voice feature.' });
             }
         };
@@ -222,45 +224,47 @@ export default function UnifiedCheckinPage() {
     
 
     const handleSaveAndNext = async () => {
-        setIsSaving(true);
-        const formValues = methods.getValues();
-        const questionsToSave: CheckinQuestion[] = [];
-        
-        Object.entries(formValues).forEach(([key, value]) => {
-            if(value === undefined || value === null) return;
-            let question = "";
-            switch(key) {
-                case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
-                case 'auspostUsage': question = "What do you use them for?"; break;
-                case 'auspostPaidService': question = "Do you pay for the service?"; break;
-                case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
-                case 'otherCouriers': question = "Do you use any other couriers?"; break;
-                case 'otherCouriersList': question = "Which Courier do you use?"; break;
-                case 'localDeliveries': question = "Do you have any need for local deliveries?"; break;
-                case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
-                case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
-            }
-            if(question) {
-                questionsToSave.push({ question, answer: value as string | string[]});
-            }
-        });
+        if (currentStep > 1 && currentStep < 6) {
+            setIsSaving(true);
+            const formValues = methods.getValues();
+            const questionsToSave: CheckinQuestion[] = [];
+            
+            Object.entries(formValues).forEach(([key, value]) => {
+                if(value === undefined || value === null) return;
+                let question = "";
+                switch(key) {
+                    case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
+                    case 'auspostUsage': question = "What do you use them for?"; break;
+                    case 'auspostPaidService': question = "Do you pay for the service?"; break;
+                    case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
+                    case 'otherCouriers': question = "Do you use any other couriers?"; break;
+                    case 'otherCouriersList': question = "Which Courier do you use?"; break;
+                    case 'localDeliveries': question = "Do you have any need for local deliveries?"; break;
+                    case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
+                    case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
+                }
+                if(question) {
+                    questionsToSave.push({ question, answer: value as string | string[]});
+                }
+            });
 
-        try {
-            if(lead?.id && questionsToSave.length > 0) {
-                const existingQuestions = lead.checkinQuestions || [];
-                const newQuestions = questionsToSave.map(q => q.question);
-                const updatedQuestions = existingQuestions.filter(q => !newQuestions.includes(q.question)).concat(questionsToSave);
-                await updateLeadCheckinQuestions(lead.id, updatedQuestions);
+            try {
+                if(lead?.id) {
+                    const { updatedQuestions, scoreData } = await updateLeadCheckinQuestions(lead.id, questionsToSave);
+                    setLead(prev => prev ? { ...prev, checkinQuestions: updatedQuestions, ...scoreData } : null);
+                }
+                if (currentStep === 5) {
+                    await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
+                }
+            } catch (error) {
+                 toast({ variant: "destructive", title: "Save Error", description: "Could not save progress." });
+                 setIsSaving(false);
+                 return;
+            } finally {
+                setIsSaving(false);
             }
-            if (currentStep === TOTAL_STEPS) {
-                 await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
-            }
-            setCurrentStep(prev => prev + 1);
-        } catch (error) {
-             toast({ variant: "destructive", title: "Save Error", description: "Could not save progress." });
-        } finally {
-            setIsSaving(false);
         }
+        setCurrentStep(prev => prev + 1);
     };
     
     // Voice Check-in Functions
@@ -308,6 +312,7 @@ export default function UnifiedCheckinPage() {
             const leadProfile = `Company: ${lead.companyName}, Industry: ${lead.industryCategory || 'N/A'}, Address: ${lead.address?.city || 'N/A'}`;
             const result = await analyzeCheckin({ leadId: lead.id, audioDataUri, leadProfile });
             setAnalysisResult(result);
+            setLead(prev => prev ? { ...prev, ...result } : null);
             toast({ title: 'Analysis Complete', description: 'The form below has been populated with the AI analysis.' });
         } catch (error: any) {
             console.error("Analysis failed:", error);
@@ -337,7 +342,7 @@ export default function UnifiedCheckinPage() {
                 author: userProfile?.displayName
             });
             
-            await updateLeadStatus(lead.id, 'Priority Lead');
+            await updateLeadStatus(lead.id, 'Priority Field Lead');
     
             toast({ title: "Success", description: `Lead moved to Outbound bucket and assigned to ${assignee}.` });
             router.push('/field-sales');
@@ -394,7 +399,7 @@ export default function UnifiedCheckinPage() {
 
     const renderStep = () => {
         const stepProps = {
-            onNext: currentStep < 3 ? () => setCurrentStep(prev => prev + 1) : handleSaveAndNext,
+            onNext: handleSaveAndNext,
             onBack: handleBack,
             isSaving: isSaving,
             onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
@@ -403,8 +408,8 @@ export default function UnifiedCheckinPage() {
             onMoveToOutbound: () => setIsMoveToOutboundOpen(true)
         };
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onNext={() => setCurrentStep(2)} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onNext={() => setCurrentStep(3)} {...stepProps} />;
             case 3: return <AusPostStep {...stepProps} />;
             case 4: return <OtherCouriersStep {...stepProps} />;
             case 5: return <OfficeErrandsStep {...stepProps} />;
@@ -614,8 +619,31 @@ const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome,
     return (
         <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound}>
             <div className="text-center space-y-4">
-                <h3 className="text-xl font-semibold">Check-in Complete!</h3>
-                <p className="text-muted-foreground">You have finished the manual check-in process for {lead.companyName}. Choose your next action.</p>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Check-in Analysis</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-center space-y-4">
+                        <p className="text-muted-foreground">Based on the answers provided, here is the lead analysis:</p>
+                        <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Score</p>
+                                <p className="text-3xl font-bold">{lead.checkinScore ?? 'N/A'}</p>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                <Badge variant="outline" className="text-lg mt-1">{lead.checkinRoutingTag ?? 'N/A'}</Badge>
+                            </div>
+                        </div>
+                        {lead.checkinScoringReason && (
+                             <p className="text-xs text-muted-foreground p-2 border-t">
+                                <strong>Scoring Rationale:</strong> {lead.checkinScoringReason}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <h3 className="text-xl font-semibold">Check-in Complete! Choose your next action.</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                     <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
                     <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}><Star className="mr-2"/> Free Trial</Button>
@@ -655,6 +683,3 @@ const NearbyCustomersDialog = ({ isOpen, onOpenChange, customers }: { isOpen: bo
         </DialogContent>
     </Dialog>
 );
-
-    
-

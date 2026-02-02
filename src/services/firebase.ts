@@ -8,6 +8,7 @@ import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
+import { calculateCheckinScore } from '@/lib/checkin-scoring';
 
 async function logActivity(
   leadId: string,
@@ -196,6 +197,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource,
           checkinQuestions: data.checkinQuestions || [],
+          checkinScore: data.checkinScore,
+          checkinScoringReason: data.checkinScoringReason,
+          checkinRoutingTag: data.checkinRoutingTag,
         };
 
         if (includeSubCollections) {
@@ -1144,7 +1148,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 async function updateLeadDetails(
   leadId: string,
   oldLead: Lead,
-  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason' | 'companyDescription'>>
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason' | 'checkinRoutingTag' | 'companyDescription'>>
 ): Promise<void> {
     try {
         const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
@@ -1187,12 +1191,9 @@ async function updateLeadDetails(
                     updatePayload.lastProspected = newLeadData.lastProspected;
                 }
 
-                if (newLeadData.checkinScore !== undefined) {
-                    updatePayload.checkinScore = newLeadData.checkinScore;
-                }
-                if (newLeadData.checkinScoringReason !== undefined) {
-                    updatePayload.checkinScoringReason = newLeadData.checkinScoringReason;
-                }
+                if (newLeadData.checkinScore !== undefined) updatePayload.checkinScore = newLeadData.checkinScore;
+                if (newLeadData.checkinScoringReason !== undefined) updatePayload.checkinScoringReason = newLeadData.checkinScoringReason;
+                if (newLeadData.checkinRoutingTag !== undefined) updatePayload.checkinRoutingTag = newLeadData.checkinRoutingTag;
                 
                  if (newLeadData.companyDescription !== undefined) {
                     updatePayload.companyDescription = newLeadData.companyDescription;
@@ -1442,37 +1443,39 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
   }
 }
 
-async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQuestion[]): Promise<void> {
-    try {
-        const leadRef = doc(firestore, 'leads', leadId);
-        
-        // Fetch existing questions first to merge correctly
-        const leadSnap = await getDoc(leadRef);
-        const existingData = leadSnap.data();
-        const existingQuestions: CheckinQuestion[] = existingData?.checkinQuestions || [];
-
-        const questionMap = new Map<string, string | string[]>();
-
-        // Populate map with existing answers
-        existingQuestions.forEach(q => {
-            questionMap.set(q.question, q.answer);
-        });
-
-        // Overwrite or add new answers
-        questions.forEach(q => {
-            questionMap.set(q.question, q.answer);
-        });
-
-        // Convert map back to array
-        const mergedQuestions: CheckinQuestion[] = Array.from(questionMap, ([question, answer]) => ({ question, answer }));
-        
-        await updateDoc(leadRef, { checkinQuestions: mergedQuestions });
-        await logActivity(leadId, { type: 'Update', notes: 'Check-in questions were updated.' });
-        console.log(`Check-in questions for lead ${leadId} merged and updated.`);
-    } catch (error) {
-        console.error(`Failed to update check-in questions for lead ${leadId}:`, error);
-        throw new Error('Failed to update check-in questions in Firebase');
+async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQuestion[]): Promise<{updatedQuestions: CheckinQuestion[], scoreData: {checkinScore: number, checkinScoringReason: string, checkinRoutingTag: string}}> {
+    const leadRef = doc(firestore, 'leads', leadId);
+    
+    const leadSnap = await getDoc(leadRef);
+    if (!leadSnap.exists()) {
+        throw new Error(`Lead with ID ${leadId} not found.`);
     }
+    const existingData = leadSnap.data();
+    const existingQuestions: CheckinQuestion[] = existingData?.checkinQuestions || [];
+
+    const questionMap = new Map<string, string | string[]>();
+    existingQuestions.forEach(q => questionMap.set(q.question, q.answer));
+    questions.forEach(q => questionMap.set(q.question, q.answer));
+
+    const mergedQuestions: CheckinQuestion[] = Array.from(questionMap, ([question, answer]) => ({ question, answer }));
+    
+    const { score, routingTag, scoringReason } = calculateCheckinScore(mergedQuestions);
+
+    const scoreData = {
+        checkinScore: score,
+        checkinRoutingTag: routingTag,
+        checkinScoringReason: scoringReason,
+    };
+
+    await updateDoc(leadRef, { 
+        checkinQuestions: mergedQuestions,
+        ...scoreData
+    });
+
+    await logActivity(leadId, { type: 'Update', notes: 'Check-in questions were updated.' });
+    console.log(`Check-in data for lead ${leadId} updated.`);
+
+    return { updatedQuestions: mergedQuestions, scoreData };
 }
 
 
