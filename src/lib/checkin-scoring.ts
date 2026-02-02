@@ -11,8 +11,8 @@ export function calculateCheckinScore(questions: CheckinQuestion[]): { score: nu
     }
 
     const hasAuspostRelationship = getAnswer("Do you have a relationship with Australia Post?") === 'Yes';
-    const usesDropOff = (getAnswer("Do you drop it off or do they come here?") as string[])?.includes('Drop-off');
-    const usesBanking = (getAnswer("What are the reasons people leave the office?") as string[])?.includes('Banking');
+    const usesDropOff = Array.isArray(getAnswer("Do you drop it off or do they come here?")) && (getAnswer("Do you drop it off or do they come here?") as string[]).includes('Drop-off');
+    const usesBanking = Array.isArray(getAnswer("What are the reasons people leave the office?")) && (getAnswer("What are the reasons people leave the office?") as string[]).includes('Banking');
     const usesOtherCouriers = getAnswer("Do you use any other couriers?") === 'Yes';
     
     let isService = false;
@@ -48,13 +48,13 @@ export function calculateCheckinScore(questions: CheckinQuestion[]): { score: nu
         isProduct = true;
         score += 10;
         reasonParts.push('+10 for using other couriers.');
-        if (getAnswer("Do you have any need for local same-day deliveries?") === 'Yes') {
+        if (getAnswer("Do you have any need for local deliveries?") === 'Yes') {
             score += 20;
             reasonParts.push('+20 for needing local same-day delivery.');
         }
     }
     
-    if ((getAnswer("What are the reasons people leave the office?") as string[])?.includes('Local Same Day')) {
+    if (Array.isArray(getAnswer("What are the reasons people leave the office?")) && (getAnswer("What are the reasons people leave the office?") as string[]).includes('Local Same Day')) {
         score += 15;
         reasonParts.push('+15 for needing local same-day errands.');
     }
