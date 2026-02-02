@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, Fragment, useCallback } from 'react';
@@ -337,7 +338,7 @@ export default function UnifiedCheckinPage() {
                 author: userProfile?.displayName
             });
             
-            await updateLeadStatus(lead.id, 'New');
+            await updateLeadStatus(lead.id, 'Priority Lead');
     
             toast({ title: "Success", description: `Lead moved to Outbound bucket and assigned to ${assignee}.` });
             router.push('/field-sales');
