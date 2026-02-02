@@ -7,3 +7,4 @@ import '@/ai/flows/get-user-call-transcripts-flow.ts';
 import '@/ai/flows/analyze-transcript-flow.ts';
 import '@/ai/flows/analyze-checkin-flow.ts';
 import '@/ai/flows/analyze-business-card.ts';
+import '@/ai/flows/analyze-visit-note.ts';

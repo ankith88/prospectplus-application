@@ -29,7 +29,7 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2 } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect, useState } from "react"
@@ -37,6 +37,8 @@ import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
 import { QuickAddLeadDialog } from "./quick-add-lead-dialog"
+import { VisitNoteDialog } from "./visit-note-dialog"
+
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -44,6 +46,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isVisitNoteDialogOpen, setIsVisitNoteDialogOpen] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/leads') {
@@ -129,6 +132,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
+  const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role);
+
 
   return (
     <>
@@ -202,6 +208,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+             {canProcessVisits && (
+                <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/visit-notes")} tooltip="Visit Notes">
+                    <Link href="/visit-notes">
+                        <ClipboardCheck />
+                        <span>Visit Notes</span>
+                    </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            )}
             {(userProfile?.role && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
@@ -240,6 +256,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <Link href="/door-to-door-reporting">
                         <BarChart3 />
                         <span>D2D Reporting</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                      <Link href="/field-activity-report">
+                        <BarChart3 />
+                        <span>Field Activity</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -384,6 +408,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 Quick Add
              </Button>
             )}
+            {canCaptureVisit && (
+             <Button variant="ghost" size="sm" onClick={() => setIsVisitNoteDialogOpen(true)} className="text-sidebar-accent hover:text-sidebar-hover-foreground">
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+                Capture Visit
+             </Button>
+            )}
            <UniversalSearch />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -424,6 +454,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </footer>
       </SidebarInset>
       <QuickAddLeadDialog isOpen={isQuickAddOpen} onOpenChange={setIsQuickAddOpen} />
+      <VisitNoteDialog isOpen={isVisitNoteDialogOpen} onOpenChange={setIsVisitNoteDialogOpen} />
     </>
   )
 }

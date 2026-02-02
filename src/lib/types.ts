@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -155,6 +156,24 @@ export interface ServiceSelection {
     trialStartDate?: string;
     trialEndDate?: string;
     startDate?: string;
+}
+
+export interface VisitNote {
+  id: string;
+  content: string;
+  capturedBy: string;
+  capturedByUid: string;
+  createdAt: string;
+  status: 'New' | 'In Progress' | 'Converted' | 'Rejected';
+  leadId?: string; // ID of the lead created from this note
+  analyzedData?: {
+    companyName?: string;
+    address?: string;
+    contactName?: string;
+    contactDetails?: string;
+    outcome?: string;
+    actionItems?: string[];
+  };
 }
 
 export interface Lead {
