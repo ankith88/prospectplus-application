@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import Image from 'next/image';
-import type { Address } from '@/lib/types';
+import type { Address, CheckinQuestion } from '@/lib/types';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { useRouter } from 'next/navigation';
@@ -53,9 +53,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ScrollArea } from './ui/scroll-area';
+import { analyzeVisitNote, VisitNoteAnalysis } from '@/ai/flows/analyze-visit-note';
+import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
+
 
 const formSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
+});
+
+const checkinSchema = z.object({
+  auspostRelationship: z.enum(['Yes', 'No']).optional(),
+  auspostUsage: z.string().optional(),
+  auspostPaidService: z.enum(['Yes', 'No']).optional(),
+  auspostLodge: z.array(z.string()).optional(),
+  otherCouriers: z.enum(['Yes', 'No']).optional(),
+  otherCouriersList: z.array(z.string()).optional(),
+  localDeliveries: z.enum(['Yes', 'No']).optional(),
+  peopleLeaveOffice: z.enum(['Yes', 'No']).optional(),
+  reasonsToLeave: z.array(z.string()).optional(),
 });
 
 interface VisitNoteDialogProps {
@@ -69,6 +85,9 @@ const salesReps = [
     { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
 ];
 const services = ["Pick up and Delivery from PO", "Outgoing Mail Lodgement", "Express Banking"];
+
+const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
+const reasonsToLeave = ["Banking", "Local Same Day"];
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
     const address: Partial<Address> = { country: 'Australia' };
@@ -88,7 +107,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 
 
 export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) {
-  const [step, setStep] = useState<'search' | 'capture' | 'outcome' | 'camera'>('search');
+  const [step, setStep] = useState<'search' | 'checkin' | 'capture' | 'outcome' | 'camera'>('search');
   const [noteContent, setNoteContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -124,13 +143,18 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
   const { userProfile } = useAuth();
   const router = useRouter();
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const captureForm = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: { content: '' },
   });
 
+  const checkinForm = useForm<Partial<z.infer<typeof checkinSchema>>>({
+    resolver: zodResolver(checkinSchema.partial()),
+  });
+
   const resetState = () => {
-    form.reset();
+    captureForm.reset();
+    checkinForm.reset();
     setStep('search');
     setNoteContent('');
     setIsSubmitting(false);
@@ -220,7 +244,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
         if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
       }
       if (finalTranscript) {
-        form.setValue('content', (form.getValues('content') + ' ' + finalTranscript).trim());
+        captureForm.setValue('content', (captureForm.getValues('content') + ' ' + finalTranscript).trim());
       }
     };
     recognition.onerror = (event: any) => {
@@ -229,7 +253,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     };
     recognition.onend = () => setIsListening(false);
     return () => recognitionRef.current?.stop();
-  }, [form, toast]);
+  }, [captureForm, toast]);
 
   const handleToggleListening = () => {
     if (isListening) {
@@ -334,7 +358,27 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
             addressData.lng = selectedPlace.geometry.location.lng();
         }
     }
-
+    
+    const checkinFormValues = checkinForm.getValues();
+    const checkinQuestionsToSave: CheckinQuestion[] = [];
+    Object.entries(checkinFormValues).forEach(([key, value]) => {
+        if(value === undefined || value === null) return;
+        let question = "";
+        switch(key) {
+            case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
+            case 'auspostUsage': question = "What do you use them for?"; break;
+            case 'auspostPaidService': question = "Do you pay for the service?"; break;
+            case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
+            case 'otherCouriers': question = "Do you use any other couriers?"; break;
+            case 'otherCouriersList': question = "Which Courier do you use?"; break;
+            case 'localDeliveries': question = "Do you have any need for local same-day deliveries?"; break;
+            case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
+            case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
+        }
+        if(question) {
+            checkinQuestionsToSave.push({ question, answer: value as string | string[]});
+        }
+    });
 
     try {
       await addVisitNote({
@@ -350,6 +394,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
           type: outcomeType,
           details: detailsObject,
         },
+        checkinQuestions: checkinQuestionsToSave,
       });
       toast({ title: 'Success', description: 'Your visit note has been submitted.' });
       
@@ -365,106 +410,152 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <div className="flex items-center gap-4">
-               {step !== 'search' && (
-                  <Button variant="ghost" size="icon" onClick={() => setStep(step === 'capture' ? 'search' : 'capture')} className="shrink-0">
-                      <ChevronLeft />
-                  </Button>
-              )}
-              <div className="flex-grow">
-                  <DialogTitle>
-                      {step === 'search' ? 'Find Business'
-                       : step === 'capture' ? 'Capture Visit Note'
-                       : step === 'camera' ? 'Scan Business Card'
-                       : 'Select Visit Outcome'}
-                  </DialogTitle>
-                  <DialogDescription>
-                      {step === 'search'
-                      ? 'Search for the business you visited.'
-                      : step === 'capture'
-                      ? 'Record the details of your visit for the Lead Gen team.'
-                      : step === 'camera'
-                      ? 'Take a photo of the front and back of the business card.'
-                      : 'Choose the final outcome of your visit.'}
-                  </DialogDescription>
+      <FormProvider {...checkinForm}>
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <div className="flex items-center gap-4">
+                 {(step !== 'search') && (
+                    <Button variant="ghost" size="icon" onClick={() => setStep(step === 'checkin' ? 'search' : 'checkin')} className="shrink-0">
+                        <ChevronLeft />
+                    </Button>
+                )}
+                <div className="flex-grow">
+                    <DialogTitle>
+                        {step === 'search' ? 'Find Business'
+                         : step === 'checkin' ? 'Check-in Questions'
+                         : step === 'capture' ? 'Capture Visit Note'
+                         : step === 'camera' ? 'Scan Business Card'
+                         : 'Select Visit Outcome'}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {step === 'search'
+                        ? 'Search for the business you visited.'
+                        : step === 'checkin'
+                        ? 'Answer a few quick questions about the business.'
+                        : step === 'capture'
+                        ? 'Record the details of your visit for the Lead Gen team.'
+                        : step === 'camera'
+                        ? 'Take a photo of the front and back of the business card.'
+                        : 'Choose the final outcome of your visit.'}
+                    </DialogDescription>
+                </div>
               </div>
-            </div>
-          </DialogHeader>
-          
-          {step === 'search' ? (
-            <div className="py-4 space-y-4">
-              <div className="space-y-2 relative">
-                  <Label htmlFor="visit-note-search">Search Business Name or Address</Label>
-                   <div className="flex gap-2">
-                      <Input 
-                          id="visit-note-search" 
-                          placeholder="Start typing..."
-                          value={searchQuery}
-                          onChange={handleInputChange}
-                      />
-                  </div>
-                  {predictions.length > 0 && (
-                      <Card className="absolute z-50 w-full mt-1">
-                          <CardContent className="p-1">
-                              {predictions.map((prediction) => (
-                                  <div
-                                      key={prediction.place_id}
-                                      className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
-                                      onClick={() => handlePredictionSelect(prediction)}
-                                  >
-                                      {prediction.description}
-                                  </div>
-                              ))}
-                          </CardContent>
-                      </Card>
-                  )}
-              </div>
-               <DialogFooter>
-                  <Button onClick={() => setStep('capture')} disabled={!selectedPlace}>Next</Button>
-              </DialogFooter>
-            </div>
-          ) : step === 'capture' ? (
-              <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleCaptureSubmit)} className="space-y-4">
-                   {selectedPlace && (
+            </DialogHeader>
+            
+            {step === 'search' ? (
+              <div className="py-4 space-y-4">
+                <div className="space-y-2 relative">
+                    <Label htmlFor="visit-note-search">Search Business Name or Address</Label>
+                     <div className="flex gap-2">
+                        <Input 
+                            id="visit-note-search" 
+                            placeholder="Start typing..."
+                            value={searchQuery}
+                            onChange={handleInputChange}
+                        />
+                    </div>
+                    {predictions.length > 0 && (
+                        <Card className="absolute z-50 w-full mt-1">
+                            <CardContent className="p-1">
+                                {predictions.map((prediction) => (
+                                    <div
+                                        key={prediction.place_id}
+                                        className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
+                                        onClick={() => handlePredictionSelect(prediction)}
+                                    >
+                                        {prediction.description}
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+                 {selectedPlace && (
                       <div className="p-3 border rounded-md bg-secondary/50 text-sm">
                           <p className="font-semibold">{selectedPlace.name}</p>
                           <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
                       </div>
                   )}
-                  <p className="text-sm text-muted-foreground p-2 bg-secondary rounded-md">
-                      <b>Prompt:</b> Why did the lead qualify for an appointment or why were they interested?
-                  </p>
-                  <FormField
-                  control={form.control}
-                  name="content"
-                  render={({ field }) => (
-                      <FormItem>
-                      <FormControl>
-                          <div className="relative">
-                          <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
-                           <div className="absolute bottom-2 right-2 flex gap-1">
-                              <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
-                              <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
-                                  {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
-                                  <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
-                              </Button>
+                 <DialogFooter>
+                    <Button onClick={() => setStep('checkin')} disabled={!selectedPlace}>Next</Button>
+                </DialogFooter>
+              </div>
+            ) : step === 'checkin' ? (
+                <form onSubmit={checkinForm.handleSubmit(() => setStep('capture'))}>
+                    <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                        <div className="py-4 space-y-4">
+                            <Accordion type="single" collapsible defaultValue="auspost" className="w-full">
+                                <AccordionItem value="auspost">
+                                    <AccordionTrigger>Australia Post</AccordionTrigger>
+                                    <AccordionContent className="space-y-6 pt-4">
+                                         <FormField control={checkinForm.control} name="auspostRelationship" render={({ field }) => (<FormItem><FormLabel>Relationship with AusPost?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                                         <FormField control={checkinForm.control} name="auspostPaidService" render={({ field }) => (<FormItem><FormLabel>Do they pay for service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                                         <FormField control={checkinForm.control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>How do they lodge?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter(v => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter(v => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
+                                    </AccordionContent>
+                                </AccordionItem>
+                                 <AccordionItem value="couriers">
+                                    <AccordionTrigger>Other Couriers</AccordionTrigger>
+                                    <AccordionContent className="space-y-6 pt-4">
+                                        <FormField control={checkinForm.control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Use other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                                        <FormField control={checkinForm.control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which ones?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={checkinForm.control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter(v => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                                        <FormField control={checkinForm.control} name="localDeliveries" render={({ field }) => (<FormItem><FormLabel>Need local same-day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                                    </AccordionContent>
+                                </AccordionItem>
+                                <AccordionItem value="errands">
+                                    <AccordionTrigger>Office Errands</AccordionTrigger>
+                                    <AccordionContent className="space-y-6 pt-4">
+                                         <FormField control={checkinForm.control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
+                                         <FormField control={checkinForm.control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What for?</FormLabel><div className="grid grid-cols-2 gap-2">{reasonsToLeave.map(r => <FormField key={r} control={checkinForm.control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        </div>
+                    </ScrollArea>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setStep('search')}>Back</Button>
+                        <Button type="submit">Next</Button>
+                    </DialogFooter>
+                </form>
+            ) : step === 'capture' ? (
+              <FormProvider {...captureForm}>
+                <form onSubmit={captureForm.handleSubmit(handleCaptureSubmit)} className="space-y-4">
+                     {selectedPlace && (
+                        <div className="p-3 border rounded-md bg-secondary/50 text-sm">
+                            <p className="font-semibold">{selectedPlace.name}</p>
+                            <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
+                        </div>
+                    )}
+                    <p className="text-sm text-muted-foreground p-2 bg-secondary rounded-md">
+                        <b>Prompt:</b> Why did the lead qualify for an appointment or why were they interested?
+                    </p>
+                    <FormField
+                    control={captureForm.control}
+                    name="content"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormControl>
+                            <div className="relative">
+                            <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
+                             <div className="absolute bottom-2 right-2 flex gap-1">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
+                                    {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
+                                    <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                      </FormControl>
-                      <FormMessage />
-                      </FormItem>
-                  )}
-                  />
-                  <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                      <Button type="submit">Next</Button>
-                  </DialogFooter>
-              </form>
-              </Form>
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setStep('checkin')}>Back</Button>
+                        <Button type="submit">Next</Button>
+                    </DialogFooter>
+                </form>
+              </FormProvider>
           ) : step === 'camera' ? (
                <div className="space-y-4">
                   <div className="relative">
@@ -577,8 +668,9 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
               </DialogFooter>
           </div>
           )}
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      </FormProvider>
       <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
           <AlertDialogContent>
               <AlertDialogHeader>

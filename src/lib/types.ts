@@ -1,5 +1,4 @@
 
-
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -187,6 +186,7 @@ export interface VisitNote {
   analyzedData?: VisitNoteAnalysis;
   frontImageDataUri?: string;
   backImageDataUri?: string;
+  checkinQuestions?: CheckinQuestion[];
 }
 
 export interface Lead {

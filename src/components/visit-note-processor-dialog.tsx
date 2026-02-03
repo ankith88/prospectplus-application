@@ -131,92 +131,94 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Process Visit Note</DialogTitle>
-          <DialogDescription>
-            For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
-            <br />
-            Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Process Visit Note</DialogTitle>
+            <DialogDescription>
+              For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
+              <br />
+              Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-          <div className="space-y-4">
-             <div>
-                <h4 className="font-semibold mb-2">Original Note</h4>
-                <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
-                <p className="whitespace-pre-wrap text-sm">{note.content}</p>
-                </ScrollArea>
-             </div>
-             {(note.frontImageDataUri || note.backImageDataUri) && (
-                 <div>
-                    <h4 className="font-semibold mb-2">Attached Images</h4>
-                     <div className="flex gap-4">
-                        {note.frontImageDataUri && <Image src={note.frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>}
-                        {note.backImageDataUri && <Image src={note.backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>}
-                    </div>
-                 </div>
-             )}
-          </div>
-          <div className="space-y-2">
-            <h4 className="font-semibold">AI Analysis</h4>
-            <div className="h-full rounded-md border p-4">
-              {isAnalyzing ? (
-                <div className="flex items-center justify-center h-full"><Loader /></div>
-              ) : analysis ? (
-                <ScrollArea className="h-48">
-                    <ul className="space-y-2 text-sm">
-                    <li><strong>Company:</strong> {analysis.companyName || 'N/A'}</li>
-                    <li><strong>Address:</strong> {analysis.address || 'N/A'}</li>
-                    <li><strong>Contact:</strong> {analysis.contactName || 'N/A'}</li>
-                    <li><strong>Title:</strong> {analysis.contactTitle || 'N/A'}</li>
-                    <li><strong>Email:</strong> {analysis.contactEmail || 'N/A'}</li>
-                    <li><strong>Phone:</strong> {analysis.contactPhone || 'N/A'}</li>
-                    <li><strong>Outcome:</strong> {analysis.outcome || 'N/A'}</li>
-                    <li><strong>Actions:</strong> {analysis.actionItems?.join(', ') || 'N/A'}</li>
-                    </ul>
-                </ScrollArea>
-              ) : (
-                <div className="flex items-center justify-center h-full text-center text-muted-foreground">
-                  Click "Analyze" to extract details.
-                </div>
-              )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+            <div className="space-y-4">
+               <div>
+                  <h4 className="font-semibold mb-2">Original Note</h4>
+                  <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
+                  <p className="whitespace-pre-wrap text-sm">{note.content}</p>
+                  </ScrollArea>
+               </div>
+               {(note.frontImageDataUri || note.backImageDataUri) && (
+                   <div>
+                      <h4 className="font-semibold mb-2">Attached Images</h4>
+                       <div className="flex gap-4">
+                          {note.frontImageDataUri && <Image src={note.frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>}
+                          {note.backImageDataUri && <Image src={note.backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>}
+                      </div>
+                   </div>
+               )}
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold">AI Analysis</h4>
+              <div className="h-full rounded-md border p-4">
+                {isAnalyzing ? (
+                  <div className="flex items-center justify-center h-full"><Loader /></div>
+                ) : analysis ? (
+                  <ScrollArea className="h-48">
+                      <ul className="space-y-2 text-sm">
+                      <li><strong>Company:</strong> {analysis.companyName || 'N/A'}</li>
+                      <li><strong>Address:</strong> {analysis.address || 'N/A'}</li>
+                      <li><strong>Contact:</strong> {analysis.contactName || 'N/A'}</li>
+                      <li><strong>Title:</strong> {analysis.contactTitle || 'N/A'}</li>
+                      <li><strong>Email:</strong> {analysis.contactEmail || 'N/A'}</li>
+                      <li><strong>Phone:</strong> {analysis.contactPhone || 'N/A'}</li>
+                      <li><strong>Outcome:</strong> {analysis.outcome || 'N/A'}</li>
+                      <li><strong>Actions:</strong> {analysis.actionItems?.join(', ') || 'N/A'}</li>
+                      </ul>
+                  </ScrollArea>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+                    Click "Analyze" to extract details.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={isRejecting || isCreating}>
-                    {isRejecting ? <Loader /> : 'Reject Note'}
-                </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This will mark the note as rejected and remove it from the active queue.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleReject}>Confirm Rejection</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          
-          <Button variant="outline" onClick={handleAnalyze} disabled={isAnalyzing}>
-            {isAnalyzing ? <Loader /> : 'Analyze with AI'}
-          </Button>
-          
-          <Button onClick={handleCreateLead} disabled={!note.companyName && !analysis || isCreating}>
-            {isCreating ? <Loader /> : 'Create Lead'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={isRejecting || isCreating}>
+                      {isRejecting ? <Loader /> : 'Reject Note'}
+                  </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          This will mark the note as rejected and remove it from the active queue.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleReject}>Confirm Rejection</AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            <Button variant="outline" onClick={handleAnalyze} disabled={isAnalyzing}>
+              {isAnalyzing ? <Loader /> : 'Analyze with AI'}
+            </Button>
+            
+            <Button onClick={handleCreateLead} disabled={!note.companyName && !analysis || isCreating}>
+              {isCreating ? <Loader /> : 'Create Lead'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
