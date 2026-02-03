@@ -570,7 +570,31 @@ export function NewLeadForm() {
                     )}/>
                 </div>
             </div>
-             <hr/>
+            
+            <hr/>
+
+            {checkinQuestions && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
+                <Card>
+                  <CardContent className="p-4 space-y-3 text-sm">
+                    <ul className="list-disc pl-5 space-y-2">
+                      {checkinQuestions.map((q, index) => (
+                        <li key={index}>
+                          <span className="font-semibold">{q.question}:</span>{' '}
+                          <span className="text-muted-foreground">
+                            {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+            
+            {checkinQuestions && <hr />}
+
              <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center gap-2"><StickyNote className="w-5 h-5" />Initial Notes</h3>
                  <FormField
@@ -602,28 +626,6 @@ export function NewLeadForm() {
                     )}
                 />
              </div>
-            {checkinQuestions && (
-              <>
-                <hr/>
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
-                  <Card>
-                    <CardContent className="p-4 space-y-3 text-sm">
-                      <ul className="list-disc pl-5 space-y-2">
-                        {checkinQuestions.map((q, index) => (
-                          <li key={index}>
-                            <span className="font-semibold">{q.question}:</span>{' '}
-                            <span className="text-muted-foreground">
-                              {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </>
-            )}
           </CardContent>
         </Card>
 
