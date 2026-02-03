@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -295,7 +294,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
             <Form {...form}>
             <form onSubmit={form.handleSubmit(handleCaptureSubmit)} className="space-y-4">
                 <p className="text-sm text-muted-foreground p-2 bg-secondary rounded-md">
-                    <b>Prompt:</b> Include Company Name, Address, Contact Person, and why they might be a good fit (e.g. qualified for appointment, interested).
+                    <b>Prompt:</b> Include Company Name, Address, Contact Person, and why they might be a good fit (e.g. qualified for appointment, interested). Why did the lead qualify for an appointment or why were they interested?
                 </p>
                 <FormField
                 control={form.control}

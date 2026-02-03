@@ -94,6 +94,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     
     // Pass note ID to link back after creation
     params.set('fromVisitNote', note.id);
+    params.set('initialNotes', note.content);
 
     router.push(`/leads/new?${params.toString()}`);
     onOpenChange(false);

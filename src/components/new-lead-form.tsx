@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -241,6 +240,7 @@ export function NewLeadForm() {
     const websiteUrl = searchParams.get('websiteUrl');
     const industryCategory = searchParams.get('industryCategory');
     const phone = searchParams.get('phone');
+    const initialNotes = searchParams.get('initialNotes');
 
     if (companyName) form.setValue('companyName', companyName);
     if (street) form.setValue('address.street', street);
@@ -254,6 +254,9 @@ export function NewLeadForm() {
     if (phone) {
         form.setValue('contact.phone', phone);
         form.setValue('customerPhone', phone);
+    }
+    if (initialNotes) {
+      form.setValue('initialNotes', initialNotes);
     }
   }, [searchParams, form]);
 
@@ -316,14 +319,14 @@ export function NewLeadForm() {
   const handleToggleListening = () => {
     if (isListening) {
       recognitionRef.current?.stop();
-    } else {
-       if (recognitionRef.current) {
-         recognitionRef.current.start();
-       } else {
-         toast({ variant: 'destructive', title: 'Not Supported', description: 'Speech recognition is not supported in this browser.' });
-       }
+    } else if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        toast({ variant: 'destructive', title: 'Recognition Error', description: 'Could not start voice recognition.' });
+      }
     }
-    setIsListening(!isListening);
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
