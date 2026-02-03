@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -40,6 +38,11 @@ interface VisitNoteProcessorDialogProps {
   note: VisitNote;
   onProcessed: (noteId: string, status: 'Converted' | 'Rejected', leadId?: string) => void;
 }
+
+const formatAddressDisplay = (address: Address | undefined) => {
+    if (!address) return 'No address captured.';
+    return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+};
 
 export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcessed }: VisitNoteProcessorDialogProps) {
   const [analysis, setAnalysis] = useState<VisitNoteAnalysis | null>(note.analyzedData || null);
@@ -130,6 +133,8 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         <DialogHeader>
           <DialogTitle>Process Visit Note</DialogTitle>
           <DialogDescription>
+            For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
+            <br />
             Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
           </DialogDescription>
         </DialogHeader>
