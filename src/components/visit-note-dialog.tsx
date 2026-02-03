@@ -316,7 +316,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     const shouldScheduleAppointment =
         checkinValues.auspostPaidService === 'Yes' ||
         (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
-        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => ['TGE (upto 5kg)', 'StarTrack (upto 5kg)', 'TNT (upto 5kg)', 'FedEx/TNT'].includes(c))) ||
+        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => ['TGE (upto 5kg)', 'StarTrack (upto 5kg)', 'TNT (upto 5kg)'].includes(c))) ||
         (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
 
     if (shouldScheduleAppointment) {
@@ -634,10 +634,10 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                             </AccordionContent>
                         </AccordionItem>
                         <AccordionItem value="item-2">
-                            <AccordionTrigger>Move to Outbound</AccordionTrigger>
+                            <AccordionTrigger>Needs Follow-up</AccordionTrigger>
                             <AccordionContent className="space-y-4 pt-2">
-                                <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team (Lachlan or Grant).</p>
-                                <Button className="w-full" disabled={isSubmitting} onClick={() => handleFinalSubmit('Move to Outbound', {})}>
+                                <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up.</p>
+                                <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('Needs Follow-up', {})}>
                                     {isSubmitting ? <Loader /> : 'Confirm & Submit'}
                                 </Button>
                             </AccordionContent>
