@@ -26,6 +26,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { createNewLead, updateVisitNote } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
