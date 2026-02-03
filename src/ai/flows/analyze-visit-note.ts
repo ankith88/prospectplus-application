@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI flow to analyze a sales visit note and extract structured data.
@@ -9,7 +10,9 @@ const VisitNoteAnalysisSchema = z.object({
   companyName: z.string().optional().describe("The name of the company visited."),
   address: z.string().optional().describe("The full address of the company."),
   contactName: z.string().optional().describe("The name of the person spoken with."),
-  contactDetails: z.string().optional().describe("The contact person's title, email, or phone number."),
+  contactTitle: z.string().optional().describe("The contact person's job title."),
+  contactEmail: z.string().email().optional().describe("The contact person's email address."),
+  contactPhone: z.string().optional().describe("The contact person's phone number."),
   outcome: z.string().optional().describe("The summary of the visit's outcome."),
   actionItems: z.array(z.string()).optional().describe("A list of clear, actionable next steps."),
 });
@@ -30,9 +33,11 @@ const analyzeVisitNotePrompt = ai.definePrompt({
     1.  **companyName**: Extract only the company name.
     2.  **address**: Extract only the full street address.
     3.  **contactName**: Extract only the full name of the person they spoke with.
-    4.  **contactDetails**: Extract only the contact person's title, email, or phone number.
-    5.  **outcome**: Briefly summarize the outcome of the visit. Do not repeat company name or contact details here.
-    6.  **actionItems**: List any clear, actionable next steps.
+    4.  **contactTitle**: Extract only the contact person's job title.
+    5.  **contactEmail**: Extract only the contact person's email address. If multiple are present, extract the first one.
+    6.  **contactPhone**: Extract only the contact person's phone number. If multiple are present, extract the first one.
+    7.  **outcome**: Briefly summarize the outcome of the visit. Do not repeat company name or contact details here.
+    8.  **actionItems**: List any clear, actionable next steps.
 
     Provide the output in the specified JSON format. If a piece of information is not present, omit the field. Do not include any information in a field that belongs in another (e.g., don't put the address in the companyName field).
     `,

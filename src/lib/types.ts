@@ -158,6 +158,17 @@ export interface ServiceSelection {
     startDate?: string;
 }
 
+export interface VisitNoteAnalysis {
+  companyName?: string;
+  address?: string;
+  contactName?: string;
+  contactTitle?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  outcome?: string;
+  actionItems?: string[];
+}
+
 export interface VisitNote {
   id: string;
   content: string;
@@ -173,14 +184,7 @@ export interface VisitNote {
     type: string;
     details: Record<string, any>;
   };
-  analyzedData?: {
-    companyName?: string;
-    address?: string;
-    contactName?: string;
-    contactDetails?: string;
-    outcome?: string;
-    actionItems?: string[];
-  };
+  analyzedData?: VisitNoteAnalysis;
   frontImageDataUri?: string;
   backImageDataUri?: string;
 }

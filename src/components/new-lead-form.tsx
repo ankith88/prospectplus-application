@@ -240,6 +240,10 @@ export function NewLeadForm() {
     const websiteUrl = searchParams.get('websiteUrl');
     const industryCategory = searchParams.get('industryCategory');
     const phone = searchParams.get('phone');
+    const email = searchParams.get('email');
+    const contactFirstName = searchParams.get('contactFirstName');
+    const contactLastName = searchParams.get('contactLastName');
+    const contactTitle = searchParams.get('contactTitle');
     const initialNotes = searchParams.get('initialNotes');
 
     if (companyName) form.setValue('companyName', companyName);
@@ -255,6 +259,13 @@ export function NewLeadForm() {
         form.setValue('contact.phone', phone);
         form.setValue('customerPhone', phone);
     }
+    if (email) {
+      form.setValue('contact.email', email);
+      form.setValue('customerServiceEmail', email);
+    }
+    if (contactFirstName) form.setValue('contact.firstName', contactFirstName);
+    if (contactLastName) form.setValue('contact.lastName', contactLastName);
+    if (contactTitle) form.setValue('contact.title', contactTitle);
     if (initialNotes) {
       form.setValue('initialNotes', initialNotes);
     }
@@ -280,8 +291,7 @@ export function NewLeadForm() {
         }
       }
       if (finalTranscript) {
-        const currentNotes = form.getValues('initialNotes') || '';
-        form.setValue('initialNotes', (currentNotes + ' ' + finalTranscript).trim());
+        form.setValue('initialNotes', (form.getValues('initialNotes') + ' ' + finalTranscript).trim());
       }
     };
 

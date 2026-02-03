@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -92,18 +93,20 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     }
 
     if (note.analyzedData) {
-      const { contactName, contactDetails } = note.analyzedData;
+      const { contactName, contactTitle, contactEmail, contactPhone } = note.analyzedData;
       if (contactName) {
         const nameParts = contactName.split(' ');
         params.set('contactFirstName', nameParts[0] || '');
         params.set('contactLastName', nameParts.slice(1).join(' '));
       }
-      if (contactDetails) {
-          const emailMatch = contactDetails.match(/[\w.-]+@[\w.-]+\.\w+/);
-          if (emailMatch) params.set('email', emailMatch[0]);
-
-          const phoneMatch = contactDetails.match(/\b\d{8,12}\b/);
-          if (phoneMatch) params.set('phone', phoneMatch[0]);
+      if(contactTitle) {
+        params.set('contactTitle', contactTitle);
+      }
+      if (contactEmail) {
+        params.set('email', contactEmail);
+      }
+      if (contactPhone) {
+        params.set('phone', contactPhone);
       }
     }
     
@@ -168,7 +171,9 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                     <li><strong>Company:</strong> {analysis.companyName || 'N/A'}</li>
                     <li><strong>Address:</strong> {analysis.address || 'N/A'}</li>
                     <li><strong>Contact:</strong> {analysis.contactName || 'N/A'}</li>
-                    <li><strong>Details:</strong> {analysis.contactDetails || 'N/A'}</li>
+                    <li><strong>Title:</strong> {analysis.contactTitle || 'N/A'}</li>
+                    <li><strong>Email:</strong> {analysis.contactEmail || 'N/A'}</li>
+                    <li><strong>Phone:</strong> {analysis.contactPhone || 'N/A'}</li>
                     <li><strong>Outcome:</strong> {analysis.outcome || 'N/A'}</li>
                     <li><strong>Actions:</strong> {analysis.actionItems?.join(', ') || 'N/A'}</li>
                     </ul>
