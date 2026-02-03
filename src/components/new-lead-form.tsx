@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -247,6 +246,7 @@ export function NewLeadForm() {
     const contactLastName = searchParams.get('contactLastName');
     const contactTitle = searchParams.get('contactTitle');
     const initialNotes = searchParams.get('initialNotes');
+    const salesRepAssigned = searchParams.get('salesRepAssigned');
 
     if (companyName) form.setValue('companyName', companyName);
     if (street) form.setValue('address.street', street);
@@ -270,6 +270,9 @@ export function NewLeadForm() {
     if (contactTitle) form.setValue('contact.title', contactTitle);
     if (initialNotes) {
       form.setValue('initialNotes', initialNotes);
+    }
+    if (salesRepAssigned) {
+      form.setValue('salesRepAssigned', salesRepAssigned);
     }
   }, [searchParams, form]);
 
@@ -492,7 +495,7 @@ export function NewLeadForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Sales Rep Assigned</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select a sales rep" />

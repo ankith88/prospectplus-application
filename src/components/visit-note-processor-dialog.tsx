@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -110,6 +109,10 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
       }
     }
     
+    if (note.outcome?.details?.salesRep) {
+        params.set('salesRepAssigned', note.outcome.details.salesRep);
+    }
+    
     params.set('fromVisitNote', note.id);
     params.set('initialNotes', note.content);
 
@@ -131,7 +134,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   }
 
   return (
-    <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -219,6 +221,5 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
   );
 }
