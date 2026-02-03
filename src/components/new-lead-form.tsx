@@ -37,7 +37,7 @@ import type { Address, CheckinQuestion } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createNewLead, checkForDuplicateLead, getVisitNotes } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead, getVisitNotes, updateLeadStatus } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
@@ -371,8 +371,17 @@ export function NewLeadForm() {
       const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName, checkinQuestions: checkinQuestions || undefined });
 
       if (result.success && result.leadId) {
+        const visitNoteId = searchParams.get('fromVisitNote');
+        if (visitNoteId) {
+            const notes = await getVisitNotes();
+            const note = notes.find(n => n.id === visitNoteId);
+            if (note && note.outcome?.type === 'LPO Referral') {
+                await updateLeadStatus(result.leadId, 'Qualified');
+            }
+        }
+
         toast({
-          title: 'Lead Created in NetSuite',
+          title: 'Lead Created',
           description: `${values.companyName} has been created.`,
         });
         router.push(`/leads/${result.leadId}`);
@@ -380,7 +389,7 @@ export function NewLeadForm() {
         toast({
             variant: 'destructive',
             title: 'Creation Failed',
-            description: result.message || 'Failed to create lead in NetSuite.',
+            description: result.message || 'Failed to create lead.',
         });
       }
     } catch (error: any) {
@@ -639,3 +648,9 @@ export function NewLeadForm() {
     </>
   );
 }
+
+```
+<file-content>
+/home/user/studio/src/components/visit-note-dialog.tsx
+</file-content>
+```
