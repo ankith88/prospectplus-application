@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -248,6 +247,7 @@ export function NewLeadForm() {
     const contactTitle = searchParams.get('contactTitle');
     const initialNotes = searchParams.get('initialNotes');
     const salesRepAssigned = searchParams.get('salesRepAssigned');
+    const fromVisitNote = searchParams.get('fromVisitNote');
 
     if (companyName) form.setValue('companyName', companyName);
     if (street) form.setValue('address.street', street);
@@ -277,6 +277,9 @@ export function NewLeadForm() {
         ? salesRepAssigned.split(':')[1].trim()
         : salesRepAssigned;
       form.setValue('salesRepAssigned', repName);
+    }
+    if (fromVisitNote) {
+      form.setValue('campaign', 'Door-to-Door');
     }
   }, [searchParams, form]);
 
@@ -524,7 +527,7 @@ export function NewLeadForm() {
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Campaign*</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                             <SelectTrigger>
                                 <SelectValue placeholder="Select a campaign" />
