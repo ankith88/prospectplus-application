@@ -5,7 +5,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const VisitNoteAnalysisSchema = z.object({
+const VisitNoteAnalysisSchema = z.object({
   companyName: z.string().optional().describe("The name of the company visited."),
   address: z.string().optional().describe("The full address of the company."),
   contactName: z.string().optional().describe("The name of the person spoken with."),
