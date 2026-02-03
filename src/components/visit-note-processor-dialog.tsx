@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -31,6 +30,7 @@ import {
 import { createNewLead, updateVisitNote } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import Image from 'next/image';
+import { format } from 'date-fns';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
