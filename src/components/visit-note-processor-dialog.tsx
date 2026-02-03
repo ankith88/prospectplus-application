@@ -146,14 +146,16 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
               {isAnalyzing ? (
                 <div className="flex items-center justify-center h-full"><Loader /></div>
               ) : analysis ? (
-                <ul className="space-y-2 text-sm">
-                  <li><strong>Company:</strong> {analysis.companyName || 'N/A'}</li>
-                  <li><strong>Address:</strong> {analysis.address || 'N/A'}</li>
-                  <li><strong>Contact:</strong> {analysis.contactName || 'N/A'}</li>
-                  <li><strong>Details:</strong> {analysis.contactDetails || 'N/A'}</li>
-                  <li><strong>Outcome:</strong> {analysis.outcome || 'N/A'}</li>
-                  <li><strong>Actions:</strong> {analysis.actionItems?.join(', ') || 'N/A'}</li>
-                </ul>
+                <ScrollArea className="h-48">
+                    <ul className="space-y-2 text-sm">
+                    <li><strong>Company:</strong> {analysis.companyName || 'N/A'}</li>
+                    <li><strong>Address:</strong> {analysis.address || 'N/A'}</li>
+                    <li><strong>Contact:</strong> {analysis.contactName || 'N/A'}</li>
+                    <li><strong>Details:</strong> {analysis.contactDetails || 'N/A'}</li>
+                    <li><strong>Outcome:</strong> {analysis.outcome || 'N/A'}</li>
+                    <li><strong>Actions:</strong> {analysis.actionItems?.join(', ') || 'N/A'}</li>
+                    </ul>
+                </ScrollArea>
               ) : (
                 <div className="flex items-center justify-center h-full text-center text-muted-foreground">
                   Click "Analyze" to extract details.
@@ -172,7 +174,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                         This will mark the note as rejected and remove it from the active queue.
                     </AlertDialogDescription>
