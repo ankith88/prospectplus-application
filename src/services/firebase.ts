@@ -1709,7 +1709,6 @@ async function checkForDuplicateLead(
 ): Promise<string | null> {
     const collectionsToSearch = ['leads', 'companies'];
     const websiteDomain = getDomain(website || '');
-    const emailDomain = getDomain(email || '');
     
     for (const collectionName of collectionsToSearch) {
         const collectionRef = collection(firestore, collectionName);
@@ -1731,18 +1730,6 @@ async function checkForDuplicateLead(
                 const data = doc.data();
                 if (data.websiteUrl && getDomain(data.websiteUrl) === websiteDomain) {
                     console.warn(`Duplicate found in '${collectionName}' by website domain: ${websiteDomain}`);
-                    return doc.id;
-                }
-            }
-        }
-
-        // Check by email domain
-        if (emailDomain) {
-            const allDocs = await getDocs(collectionRef);
-            for (const doc of allDocs.docs) {
-                const data = doc.data();
-                if (data.customerServiceEmail && getDomain(data.customerServiceEmail) === emailDomain) {
-                    console.warn(`Duplicate found in '${collectionName}' by email domain: ${emailDomain}`);
                     return doc.id;
                 }
             }
@@ -2117,4 +2104,5 @@ export {
     getVisitNotes,
     updateVisitNote,
 };
+
 
