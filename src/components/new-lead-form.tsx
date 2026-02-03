@@ -37,7 +37,7 @@ import type { Address, CheckinQuestion } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead, getVisitNotes } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
@@ -148,13 +148,14 @@ export function NewLeadForm() {
   }, [defaultValues, form]);
 
   useEffect(() => {
-    const checkinQuestionsParam = searchParams.get('checkinQuestions');
-    if (checkinQuestionsParam) {
-        try {
-            setCheckinQuestions(JSON.parse(checkinQuestionsParam));
-        } catch (e) {
-            console.error("Failed to parse checkin questions from URL", e);
+    const visitNoteId = searchParams.get('fromVisitNote');
+    if (visitNoteId) {
+      getVisitNotes().then(notes => {
+        const note = notes.find(n => n.id === visitNoteId);
+        if (note && note.checkinQuestions) {
+          setCheckinQuestions(note.checkinQuestions);
         }
+      });
     }
   }, [searchParams]);
 

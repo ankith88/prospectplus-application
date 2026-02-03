@@ -101,11 +101,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
       params.set('websiteUrl', note.websiteUrl);
     }
 
-    if (note.checkinQuestions && note.checkinQuestions.length > 0) {
-      params.set('checkinQuestions', JSON.stringify(note.checkinQuestions));
-    }
-
-
     if (note.analyzedData) {
       const { contactName, contactTitle, contactEmail, contactPhone } = note.analyzedData;
       if (contactName) {
@@ -119,7 +114,10 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     }
     
     if (note.outcome?.details?.salesRep) {
-        params.set('salesRepAssigned', `Sales Rep: ${note.outcome.details.salesRep}`);
+        const repName = note.outcome.details.salesRep.includes(':') 
+            ? note.outcome.details.salesRep.split(':')[1].trim()
+            : note.outcome.details.salesRep;
+        params.set('salesRepAssigned', repName);
     }
     
     params.set('fromVisitNote', note.id);
