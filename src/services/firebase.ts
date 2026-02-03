@@ -1,11 +1,12 @@
 
+
 'use server';
 
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -70,7 +71,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -2006,6 +2007,41 @@ async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; 
     }
 }
 
+async function addVisitNote(note: Omit<VisitNote, 'id' | 'createdAt' | 'status'>): Promise<string> {
+    try {
+        const docRef = await addDoc(collection(firestore, 'visitnotes'), {
+            ...note,
+            createdAt: new Date().toISOString(),
+            status: 'New',
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Failed to add visit note:', error);
+        throw new Error('Failed to save visit note to Firebase');
+    }
+}
+
+async function getVisitNotes(): Promise<VisitNote[]> {
+    try {
+        const q = query(collection(firestore, 'visitnotes'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
+    } catch (error) {
+        console.error('Failed to fetch visit notes:', error);
+        return [];
+    }
+}
+
+async function updateVisitNote(noteId: string, data: Partial<VisitNote>): Promise<void> {
+    try {
+        const noteRef = doc(firestore, 'visitnotes', noteId);
+        await updateDoc(noteRef, data);
+    } catch (error) {
+        console.error(`Failed to update visit note ${noteId}:`, error);
+        throw new Error('Failed to update visit note in Firebase');
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -2026,7 +2062,6 @@ export {
     getLeadContacts,
     getLeadActivity,
     getLeadNotes,
-    getLeadAppointments,
     getAllNotes,
     getAllActivities,
     getAllAppointments,
@@ -2078,4 +2113,8 @@ export {
     deleteLeadsByCampaign,
     updateContactSendEmail,
     getUserActivitiesForPeriod,
+    addVisitNote,
+    getVisitNotes,
+    updateVisitNote,
 };
+
