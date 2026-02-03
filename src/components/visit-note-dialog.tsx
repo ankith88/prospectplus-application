@@ -86,7 +86,7 @@ const salesReps = [
 ];
 const services = ["Pick up and Delivery from PO", "Outgoing Mail Lodgement", "Express Banking"];
 
-const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
+const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)", "Couriers Please/Aramex (100+ items/week)"];
 const reasonsToLeave = ["Banking", "Local Same Day"];
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
@@ -113,6 +113,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [forceAppointment, setForceAppointment] = useState(false);
+  const [forceLPOReferral, setForceLPOReferral] = useState(false);
 
   const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,6 +184,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
       (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
     }
     setForceAppointment(false);
+    setForceLPOReferral(false);
   };
   
   useEffect(() => {
@@ -313,14 +315,22 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
   const handleCaptureSubmit = (values: z.infer<typeof formSchema>) => {
     setNoteContent(values.content);
     const checkinValues = checkinForm.getValues();
-    const shouldScheduleAppointment =
-        checkinValues.auspostPaidService === 'Yes' ||
-        (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
-        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => ['TGE (upto 5kg)', 'StarTrack (upto 5kg)', 'TNT (upto 5kg)'].includes(c))) ||
-        (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
 
-    if (shouldScheduleAppointment) {
-        setForceAppointment(true);
+    const isLPOReferral = Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.includes("Couriers Please/Aramex (100+ items/week)");
+
+    if (isLPOReferral) {
+        setForceLPOReferral(true);
+    } else {
+        const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)"];
+        const shouldScheduleAppointment =
+            checkinValues.auspostPaidService === 'Yes' ||
+            (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
+            (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => appointmentQualifyingCouriers.includes(c))) ||
+            (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
+
+        if (shouldScheduleAppointment) {
+            setForceAppointment(true);
+        }
     }
     setStep('outcome');
   };
@@ -596,7 +606,18 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
               </div>
           ) : (
             <div className="space-y-4">
-                {forceAppointment ? (
+                {forceLPOReferral ? (
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">LPO Referral Qualified</h3>
+                        <p className="text-sm text-muted-foreground">This lead qualifies for an LPO Referral based on their high shipping volume with Couriers Please/Aramex.</p>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setStep('capture')}>Back</Button>
+                            <Button className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting} onClick={() => handleFinalSubmit('LPO Referral', {})}>
+                                {isSubmitting ? <Loader /> : 'Submit as LPO Referral'}
+                            </Button>
+                        </DialogFooter>
+                    </div>
+                ) : forceAppointment ? (
                     <div className="space-y-4">
                         <h3 className="text-lg font-semibold">Appointment Qualified</h3>
                         <p className="text-sm text-muted-foreground">This lead qualifies for an appointment based on your check-in answers.</p>
@@ -739,5 +760,3 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     </>
   );
 }
-
-    
