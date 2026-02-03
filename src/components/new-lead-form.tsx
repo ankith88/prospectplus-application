@@ -208,11 +208,7 @@ export function NewLeadForm() {
             form.setValue('contact.email', email);
             form.setValue('customerServiceEmail', email);
         }
-
-        if (websiteUrl) {
-            handleAiProspect(websiteUrl);
-        }
-  }, [form, handleAiProspect]);
+  }, [form]);
 
   const setupAutocomplete = useCallback(() => {
     if (!window.google || !autocompleteInputRef.current) return;
@@ -259,11 +255,7 @@ export function NewLeadForm() {
         form.setValue('contact.phone', phone);
         form.setValue('customerPhone', phone);
     }
-
-    if(websiteUrl) {
-        handleAiProspect(websiteUrl);
-    }
-  }, [searchParams, form, handleAiProspect]);
+  }, [searchParams, form]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
