@@ -38,6 +38,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
+import Image from 'next/image';
 
 const formSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
@@ -219,6 +220,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     }
   };
 
+
   const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
     if (!userProfile) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
@@ -247,12 +249,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
         backImageDataUri: backImage || undefined,
       });
       toast({ title: 'Success', description: 'Your visit note has been submitted.' });
-
-      if (outcomeType === 'Schedule Appointment' && detailsObject.salesRep) {
-        const rep = salesReps.find(r => r.name === detailsObject.salesRep);
-        if (rep) window.open(rep.url, '_blank');
-      }
-
+      
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to submit visit note:', error);
@@ -363,7 +360,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                             ))}
                         </RadioGroup>
                         <Button className="w-full" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Schedule Appointment', { salesRep: appointmentRep })}>
-                           {isSubmitting ? <Loader /> : 'Submit & Open Calendly'}
+                           {isSubmitting ? <Loader /> : 'Submit'}
                         </Button>
                     </AccordionContent>
                 </AccordionItem>
