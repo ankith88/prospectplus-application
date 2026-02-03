@@ -375,7 +375,7 @@ export function NewLeadForm() {
         if (visitNoteId) {
             const notes = await getVisitNotes();
             const note = notes.find(n => n.id === visitNoteId);
-            if (note && note.outcome?.type === 'LPO Referral') {
+            if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified')) {
                 await updateLeadStatus(result.leadId, 'Qualified');
             }
         }
@@ -581,8 +581,8 @@ export function NewLeadForm() {
             </div>
             
             <hr/>
-
-            {checkinQuestions && (
+            
+             {checkinQuestions && (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
                 <Card>
@@ -601,7 +601,7 @@ export function NewLeadForm() {
                 </Card>
               </div>
             )}
-            
+
             {checkinQuestions && <hr />}
 
              <div className="space-y-4">
@@ -648,9 +648,3 @@ export function NewLeadForm() {
     </>
   );
 }
-
-```
-<file-content>
-/home/user/studio/src/components/visit-note-dialog.tsx
-</file-content>
-```
