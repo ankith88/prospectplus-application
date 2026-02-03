@@ -316,7 +316,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     const shouldScheduleAppointment =
         checkinValues.auspostPaidService === 'Yes' ||
         (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
-        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => ['TGE (upto 5kg)', 'StarTrack (upto 5kg)', 'TNT (upto 5kg)'].includes(c))) ||
+        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => ['TGE (upto 5kg)', 'StarTrack (upto 5kg)', 'TNT (upto 5kg)', 'FedEx/TNT'].includes(c))) ||
         (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
 
     if (shouldScheduleAppointment) {
@@ -598,7 +598,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
             <div className="space-y-4">
                 {forceAppointment ? (
                     <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Schedule Appointment</h3>
+                        <h3 className="text-lg font-semibold">Appointment Qualified</h3>
                         <p className="text-sm text-muted-foreground">This lead qualifies for an appointment based on your check-in answers.</p>
                         <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
                             {salesReps.map(rep => (
@@ -610,7 +610,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                         </RadioGroup>
                          <DialogFooter>
                             <Button variant="outline" onClick={() => setStep('capture')}>Back</Button>
-                            <Button className="w-full" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Schedule Appointment', { salesRep: appointmentRep })}>
+                            <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: appointmentRep })}>
                                 {isSubmitting ? <Loader /> : 'Submit'}
                             </Button>
                         </DialogFooter>
@@ -618,7 +618,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                 ) : (
                     <Accordion type="single" collapsible className="w-full">
                         <AccordionItem value="item-1">
-                            <AccordionTrigger>Schedule Appointment</AccordionTrigger>
+                            <AccordionTrigger>Appointment Qualified</AccordionTrigger>
                             <AccordionContent className="space-y-4 pt-2">
                                 <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
                                     {salesReps.map(rep => (
@@ -628,7 +628,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                                         </div>
                                     ))}
                                 </RadioGroup>
-                                <Button className="w-full" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Schedule Appointment', { salesRep: appointmentRep })}>
+                                <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: appointmentRep })}>
                                     {isSubmitting ? <Loader /> : 'Submit'}
                                 </Button>
                             </AccordionContent>
@@ -730,3 +730,5 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     </>
   );
 }
+
+    
