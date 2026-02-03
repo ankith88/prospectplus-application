@@ -19,7 +19,7 @@ const analyzeVisitNotePrompt = ai.definePrompt({
     name: 'analyzeVisitNotePrompt',
     input: { schema: z.object({ noteContent: z.string() }) },
     output: { schema: VisitNoteAnalysisSchema },
-    prompt: `You are an expert data entry assistant. Analyze the following sales visit note and extract the key information.
+    prompt: `You are an expert data entry assistant. Your task is to analyze a sales visit note and extract key information into a structured JSON format. Be concise and extract only the specific information requested for each field.
 
     Note:
     """
@@ -27,14 +27,14 @@ const analyzeVisitNotePrompt = ai.definePrompt({
     """
 
     Your Tasks:
-    1.  Extract the company name.
-    2.  Extract the full address.
-    3.  Extract the name of the person they spoke with.
-    4.  Extract any contact details for that person (title, email, phone).
-    5.  Summarize the outcome of the visit.
-    6.  List any action items.
+    1.  **companyName**: Extract only the company name.
+    2.  **address**: Extract only the full street address.
+    3.  **contactName**: Extract only the full name of the person they spoke with.
+    4.  **contactDetails**: Extract only the contact person's title, email, or phone number.
+    5.  **outcome**: Briefly summarize the outcome of the visit. Do not repeat company name or contact details here.
+    6.  **actionItems**: List any clear, actionable next steps.
 
-    Provide the output in the specified JSON format. If a piece of information is not present, omit the field.
+    Provide the output in the specified JSON format. If a piece of information is not present, omit the field. Do not include any information in a field that belongs in another (e.g., don't put the address in the companyName field).
     `,
 });
 
