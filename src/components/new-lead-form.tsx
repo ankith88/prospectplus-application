@@ -375,7 +375,7 @@ export function NewLeadForm() {
         if (visitNoteId) {
             const notes = await getVisitNotes();
             const note = notes.find(n => n.id === visitNoteId);
-            if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified')) {
+            if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified' || note.outcome?.type === 'Schedule Appointment')) {
                 await updateLeadStatus(result.leadId, 'Qualified');
             }
         }
@@ -580,29 +580,30 @@ export function NewLeadForm() {
                 </div>
             </div>
             
-            <hr/>
-            
-             {checkinQuestions && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
-                <Card>
-                  <CardContent className="p-4 space-y-3 text-sm">
-                    <ul className="list-disc pl-5 space-y-2">
-                      {checkinQuestions.map((q, index) => (
-                        <li key={index}>
-                          <span className="font-semibold">{q.question}:</span>{' '}
-                          <span className="text-muted-foreground">
-                            {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              </div>
+            {checkinQuestions && checkinQuestions.length > 0 && (
+              <>
+                <hr />
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
+                  <Card>
+                    <CardContent className="p-4 space-y-3 text-sm">
+                      <ul className="list-disc pl-5 space-y-2">
+                        {checkinQuestions.map((q, index) => (
+                          <li key={index}>
+                            <span className="font-semibold">{q.question}:</span>{' '}
+                            <span className="text-muted-foreground">
+                              {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
             )}
 
-            {checkinQuestions && <hr />}
+            <hr />
 
              <div className="space-y-4">
                 <h3 className="text-lg font-medium flex items-center gap-2"><StickyNote className="w-5 h-5" />Initial Notes</h3>
@@ -648,3 +649,5 @@ export function NewLeadForm() {
     </>
   );
 }
+
+    
