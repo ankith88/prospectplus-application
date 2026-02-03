@@ -18,7 +18,7 @@ import { AddContactForm } from './add-contact-form';
 import type { Lead, Contact } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { Calendar, UserPlus } from 'lucide-react';
-import { salesReps } from './lead-profile';
+import { salesReps } from '@/lib/constants';
 
 interface ScheduleAppointmentDialogProps {
   isOpen: boolean;

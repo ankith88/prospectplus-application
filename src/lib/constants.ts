@@ -76,3 +76,9 @@ export const industryCategories = [
   "TRANSPORT, POSTAL AND WAREHOUSING",
   "WHOLESALE TRADE",
 ];
+
+export const salesReps = [
+    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
+    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
+    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
+];

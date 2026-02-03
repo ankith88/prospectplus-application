@@ -41,7 +41,7 @@ import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
-import { industryCategories } from '@/lib/constants';
+import { industryCategories, salesReps } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 
@@ -50,10 +50,11 @@ const abnRegex = /^\d{11}$/;
 const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
-  customerPhone: z.string().optional(),
-  customerServiceEmail: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
+  customerPhone: z.string().min(1, 'Company phone is required.'),
+  customerServiceEmail: z.string().email({ message: "Invalid email address." }).min(1, "Company email is required."),
   abn: z.string().regex(abnRegex, 'ABN must be 11 digits.').optional().or(z.literal('')),
   industryCategory: z.string().optional(),
+  salesRepAssigned: z.string().optional(),
   campaign: z.string().optional(),
   initialNotes: z.string().optional(),
   address: z.object({
@@ -219,8 +220,9 @@ export function NewLeadForm() {
 
     autocomplete.addListener('place_changed', async () => {
         const place = autocomplete.getPlace();
-        if (!place.address_components) return;
-        fillFormWithPlace(place);
+        if (place.address_components) {
+            fillFormWithPlace(place);
+        }
     });
   }, [fillFormWithPlace]);
 
@@ -452,10 +454,10 @@ export function NewLeadForm() {
                     <FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://example.com" /></FormControl><FormMessage /></FormItem>
                 )}/>
                 <FormField control={form.control} name="customerPhone" render={({ field }) => (
-                    <FormItem><FormLabel>Company Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Phone*</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="customerServiceEmail" render={({ field }) => (
-                    <FormItem><FormLabel>Company Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Company Email*</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
                  <FormField control={form.control} name="abn" render={({ field }) => (
                     <FormItem><FormLabel>ABN</FormLabel><FormControl><Input {...field} placeholder="11 digits" /></FormControl><FormMessage /></FormItem>
@@ -476,6 +478,30 @@ export function NewLeadForm() {
                           {industryCategories.map((category) => (
                             <SelectItem key={category} value={category}>
                               {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="salesRepAssigned"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sales Rep Assigned</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a sales rep" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {salesReps.map((rep) => (
+                            <SelectItem key={rep.name} value={rep.name}>
+                              {rep.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

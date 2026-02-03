@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -131,6 +132,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import { Label } from './ui/label'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
+import { salesReps } from '@/lib/constants'
 
 
 interface LeadProfileProps {
@@ -252,12 +254,6 @@ function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDia
         </Dialog>
     );
 }
-
-export const salesReps = [
-    { name: 'Lee Russell', url: 'https://calendly.com/lee-russell-mailplus/mailplus-intro-call-lee' },
-    { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina' },
-    { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke' },
-];
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
