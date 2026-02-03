@@ -549,14 +549,14 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                         <FormItem>
                         <FormControl>
                             <div className="relative">
-                            <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
-                             <div className="absolute bottom-2 right-2 flex gap-1">
-                                <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
-                                <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
-                                    {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
-                                    <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
-                                </Button>
-                              </div>
+                                <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
+                                 <div className="absolute bottom-2 right-2 flex gap-1">
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                    <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
+                                        {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
+                                        <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
+                                    </Button>
+                                  </div>
                             </div>
                         </FormControl>
                         <FormMessage />
@@ -638,6 +638,15 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                             <AccordionContent className="space-y-4 pt-2">
                                 <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up.</p>
                                 <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('Needs Follow-up', {})}>
+                                    {isSubmitting ? <Loader /> : 'Confirm & Submit'}
+                                </Button>
+                            </AccordionContent>
+                        </AccordionItem>
+                        <AccordionItem value="item-6">
+                            <AccordionTrigger>No Access/Contact</AccordionTrigger>
+                            <AccordionContent className="space-y-4 pt-2">
+                                <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up due to no access or contact.</p>
+                                <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('No Access/Contact', {})}>
                                     {isSubmitting ? <Loader /> : 'Confirm & Submit'}
                                 </Button>
                             </AccordionContent>
