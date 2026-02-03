@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -272,7 +273,10 @@ export function NewLeadForm() {
       form.setValue('initialNotes', initialNotes);
     }
     if (salesRepAssigned) {
-      form.setValue('salesRepAssigned', salesRepAssigned);
+      const repName = salesRepAssigned.includes(':') 
+        ? salesRepAssigned.split(':')[1].trim()
+        : salesRepAssigned;
+      form.setValue('salesRepAssigned', repName);
     }
   }, [searchParams, form]);
 
