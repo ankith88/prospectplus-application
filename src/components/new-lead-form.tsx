@@ -33,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
-import type { Address } from '@/lib/types';
+import type { Address, CheckinQuestion } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -86,6 +86,7 @@ export function NewLeadForm() {
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const [checkinQuestions, setCheckinQuestions] = useState<CheckinQuestion[] | null>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
@@ -145,6 +146,17 @@ export function NewLeadForm() {
   useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues, form]);
+
+  useEffect(() => {
+    const checkinQuestionsParam = searchParams.get('checkinQuestions');
+    if (checkinQuestionsParam) {
+        try {
+            setCheckinQuestions(JSON.parse(checkinQuestionsParam));
+        } catch (e) {
+            console.error("Failed to parse checkin questions from URL", e);
+        }
+    }
+  }, [searchParams]);
 
 
   const handleAiProspect = useCallback(async (websiteUrl?: string) => {
@@ -355,7 +367,7 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName });
+      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName, checkinQuestions: checkinQuestions || undefined });
 
       if (result.success && result.leadId) {
         toast({
@@ -589,7 +601,28 @@ export function NewLeadForm() {
                     )}
                 />
              </div>
-
+            {checkinQuestions && (
+              <>
+                <hr/>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
+                  <Card>
+                    <CardContent className="p-4 space-y-3 text-sm">
+                      <ul className="list-disc pl-5 space-y-2">
+                        {checkinQuestions.map((q, index) => (
+                          <li key={index}>
+                            <span className="font-semibold">{q.question}:</span>{' '}
+                            <span className="text-muted-foreground">
+                              {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

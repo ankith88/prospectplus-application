@@ -296,7 +296,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     placesService.current?.getDetails(
       {
         placeId: prediction.place_id,
-        fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id'],
+        fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website'],
       },
       (place, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && place) {
@@ -390,6 +390,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
         googlePlaceId: selectedPlace?.place_id,
         companyName: selectedPlace?.name,
         address: addressData,
+        websiteUrl: selectedPlace?.website,
         outcome: {
           type: outcomeType,
           details: detailsObject,

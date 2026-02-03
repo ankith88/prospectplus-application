@@ -186,6 +186,7 @@ export interface VisitNote {
   analyzedData?: VisitNoteAnalysis;
   frontImageDataUri?: string;
   backImageDataUri?: string;
+  websiteUrl?: string;
   checkinQuestions?: CheckinQuestion[];
 }
 

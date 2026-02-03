@@ -1,8 +1,7 @@
 
-
 'use server'
 
-import type { DiscoveryData, Lead, Contact, Note, Activity, Address } from "@/lib/types";
+import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion } from "@/lib/types";
 import fetch from 'node-fetch';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 
@@ -586,10 +585,11 @@ interface NewLeadData {
   initialNotes?: string;
   dialerAssigned?: string;
   salesRepAssigned?: string;
+  checkinQuestions?: CheckinQuestion[];
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, checkinQuestions } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -632,6 +632,12 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (salesRepAssigned) {
         params.append('salesrep', salesRepAssigned);
+    }
+    if (checkinQuestions) {
+        const checkinString = checkinQuestions
+            .map(q => `${q.question}: ${Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}`)
+            .join('\n');
+        params.append('custentity_checkin_questions', checkinString);
     }
 
     const url = `${baseUrl}?${params.toString()}`;

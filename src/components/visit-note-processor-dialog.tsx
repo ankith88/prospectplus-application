@@ -96,6 +96,15 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         if (note.address.lat) params.set('lat', note.address.lat.toString());
         if (note.address.lng) params.set('lng', note.address.lng.toString());
     }
+    
+    if (note.websiteUrl) {
+      params.set('websiteUrl', note.websiteUrl);
+    }
+
+    if (note.checkinQuestions && note.checkinQuestions.length > 0) {
+      params.set('checkinQuestions', JSON.stringify(note.checkinQuestions));
+    }
+
 
     if (note.analyzedData) {
       const { contactName, contactTitle, contactEmail, contactPhone } = note.analyzedData;
