@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,7 +15,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import type { VisitNote, VisitNoteAnalysis } from '@/lib/types';
+import type { VisitNote, VisitNoteAnalysis, Address } from '@/lib/types';
 import { analyzeVisitNote } from '@/ai/flows/analyze-visit-note';
 import { useRouter } from 'next/navigation';
 import {
@@ -72,27 +73,37 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   };
 
   const handleCreateLead = () => {
-    if (!analysis) return;
+    if (!note) return;
     setIsCreating(true);
 
     const params = new URLSearchParams();
-    if (analysis.companyName) params.set('companyName', analysis.companyName);
-    if (analysis.address) params.set('street', analysis.address);
-    if (analysis.contactName) {
-      const nameParts = analysis.contactName.split(' ');
-      params.set('contactFirstName', nameParts[0] || '');
-      params.set('contactLastName', nameParts.slice(1).join(' '));
+    
+    if (note.companyName) params.set('companyName', note.companyName);
+    if (note.address) {
+        if (note.address.street) params.set('street', note.address.street);
+        if (note.address.city) params.set('city', note.address.city);
+        if (note.address.state) params.set('state', note.address.state);
+        if (note.address.zip) params.set('zip', note.address.zip);
+        if (note.address.lat) params.set('lat', note.address.lat.toString());
+        if (note.address.lng) params.set('lng', note.address.lng.toString());
     }
-    if (analysis.contactDetails) {
-        // Simple regex to find potential email or phone
-        const emailMatch = analysis.contactDetails.match(/[\w.-]+@[\w.-]+\.\w+/);
-        if (emailMatch) params.set('email', emailMatch[0]);
 
-        const phoneMatch = analysis.contactDetails.match(/\b\d{8,12}\b/);
-        if (phoneMatch) params.set('phone', phoneMatch[0]);
+    if (note.analyzedData) {
+      const { contactName, contactDetails } = note.analyzedData;
+      if (contactName) {
+        const nameParts = contactName.split(' ');
+        params.set('contactFirstName', nameParts[0] || '');
+        params.set('contactLastName', nameParts.slice(1).join(' '));
+      }
+      if (contactDetails) {
+          const emailMatch = contactDetails.match(/[\w.-]+@[\w.-]+\.\w+/);
+          if (emailMatch) params.set('email', emailMatch[0]);
+
+          const phoneMatch = contactDetails.match(/\b\d{8,12}\b/);
+          if (phoneMatch) params.set('phone', phoneMatch[0]);
+      }
     }
     
-    // Pass note ID to link back after creation
     params.set('fromVisitNote', note.id);
     params.set('initialNotes', note.content);
 
@@ -191,7 +202,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             {isAnalyzing ? <Loader /> : 'Analyze with AI'}
           </Button>
           
-          <Button onClick={handleCreateLead} disabled={!analysis || isCreating}>
+          <Button onClick={handleCreateLead} disabled={!note.companyName && !analysis || isCreating}>
             {isCreating ? <Loader /> : 'Create Lead'}
           </Button>
         </DialogFooter>

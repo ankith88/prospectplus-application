@@ -166,6 +166,13 @@ export interface VisitNote {
   createdAt: string;
   status: 'New' | 'In Progress' | 'Converted' | 'Rejected';
   leadId?: string; // ID of the lead created from this note
+  googlePlaceId?: string;
+  companyName?: string;
+  address?: Address;
+  outcome?: {
+    type: string;
+    details: Record<string, any>;
+  };
   analyzedData?: {
     companyName?: string;
     address?: string;
