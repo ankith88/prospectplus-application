@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,7 +36,7 @@ import { AddressAutocomplete } from './address-autocomplete';
 import type { Address } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
@@ -88,34 +89,63 @@ export function NewLeadForm() {
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      companyName: '',
-      websiteUrl: '',
-      customerPhone: '',
-      customerServiceEmail: '',
+  const defaultValues = useMemo(() => {
+    const getParam = (name: string) => searchParams.get(name);
+    
+    const companyName = getParam('companyName') || '';
+    const websiteUrl = getParam('websiteUrl') || '';
+    const phone = getParam('phone') || '';
+    const email = getParam('email') || '';
+    const salesRepAssignedParam = getParam('salesRepAssigned');
+    const fromVisitNote = getParam('fromVisitNote');
+
+    const repName = salesRepAssignedParam
+      ? (salesRepAssignedParam.includes(':') 
+          ? salesRepAssignedParam.split(':')[1].trim()
+          : salesRepAssignedParam)
+      : '';
+      
+    const campaign = fromVisitNote ? 'Door-to-Door' : '';
+
+    return {
+      companyName,
+      websiteUrl,
+      customerPhone: phone,
+      customerServiceEmail: email,
       abn: '',
-      industryCategory: '',
-      campaign: '',
-      initialNotes: '',
+      industryCategory: getParam('industryCategory') || '',
+      campaign: campaign,
+      initialNotes: getParam('initialNotes') || '',
       address: {
         address1: '',
-        street: '',
-        city: '',
-        state: '',
-        zip: '',
+        street: getParam('street') || '',
+        city: getParam('city') || '',
+        state: getParam('state') || '',
+        zip: getParam('zip') || '',
         country: 'Australia',
+        lat: getParam('lat') ? parseFloat(getParam('lat')!) : undefined,
+        lng: getParam('lng') ? parseFloat(getParam('lng')!) : undefined,
       },
       contact: {
-        firstName: 'Info',
-        lastName: '',
-        title: 'Primary Contact',
-        email: '',
-        phone: '',
+        firstName: getParam('contactFirstName') || 'Info',
+        lastName: getParam('contactLastName') || companyName,
+        title: getParam('contactTitle') || 'Primary Contact',
+        email: email,
+        phone: phone,
       },
-    },
+      salesRepAssigned: repName,
+    };
+  }, [searchParams]);
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: defaultValues,
   });
+
+  useEffect(() => {
+    form.reset(defaultValues);
+  }, [defaultValues, form]);
+
 
   const handleAiProspect = useCallback(async (websiteUrl?: string) => {
     const url = websiteUrl || form.getValues('websiteUrl');
@@ -229,59 +259,6 @@ export function NewLeadForm() {
     setupAutocomplete();
   }, [setupAutocomplete]);
 
-
-  useEffect(() => {
-    const companyName = searchParams.get('companyName');
-    const street = searchParams.get('street');
-    const city = searchParams.get('city');
-    const state = searchParams.get('state');
-    const zip = searchParams.get('zip');
-    const lat = searchParams.get('lat');
-    const lng = searchParams.get('lng');
-    const websiteUrl = searchParams.get('websiteUrl');
-    const industryCategory = searchParams.get('industryCategory');
-    const phone = searchParams.get('phone');
-    const email = searchParams.get('email');
-    const contactFirstName = searchParams.get('contactFirstName');
-    const contactLastName = searchParams.get('contactLastName');
-    const contactTitle = searchParams.get('contactTitle');
-    const initialNotes = searchParams.get('initialNotes');
-    const salesRepAssigned = searchParams.get('salesRepAssigned');
-    const fromVisitNote = searchParams.get('fromVisitNote');
-
-    if (companyName) form.setValue('companyName', companyName);
-    if (street) form.setValue('address.street', street);
-    if (city) form.setValue('address.city', city);
-    if (state) form.setValue('address.state', state);
-    if (zip) form.setValue('address.zip', zip);
-    if (lat) form.setValue('address.lat', parseFloat(lat));
-    if (lng) form.setValue('address.lng', parseFloat(lng));
-    if (websiteUrl) form.setValue('websiteUrl', websiteUrl);
-    if (industryCategory) form.setValue('industryCategory', industryCategory);
-    if (phone) {
-        form.setValue('contact.phone', phone);
-        form.setValue('customerPhone', phone);
-    }
-    if (email) {
-      form.setValue('contact.email', email);
-      form.setValue('customerServiceEmail', email);
-    }
-    if (contactFirstName) form.setValue('contact.firstName', contactFirstName);
-    if (contactLastName) form.setValue('contact.lastName', contactLastName);
-    if (contactTitle) form.setValue('contact.title', contactTitle);
-    if (initialNotes) {
-      form.setValue('initialNotes', initialNotes);
-    }
-    if (salesRepAssigned) {
-      const repName = salesRepAssigned.includes(':') 
-        ? salesRepAssigned.split(':')[1].trim()
-        : salesRepAssigned;
-      form.setValue('salesRepAssigned', repName);
-    }
-    if (fromVisitNote) {
-      form.setValue('campaign', 'Door-to-Door');
-    }
-  }, [searchParams, form]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

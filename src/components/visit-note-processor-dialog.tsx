@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -81,8 +82,13 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
     const params = new URLSearchParams();
     
-    if (note.companyName) params.set('companyName', note.companyName);
-    if (note.address) {
+    // Prefer analyzed data if available, otherwise fall back to note data
+    const companyName = note.analyzedData?.companyName || note.companyName;
+    const address = note.analyzedData?.address ? note.analyzedData.address : formatAddressDisplay(note.address);
+
+    if (companyName) params.set('companyName', companyName);
+    
+    if (note.address) { // Always use the structured address object for coords
         if (note.address.street) params.set('street', note.address.street);
         if (note.address.city) params.set('city', note.address.city);
         if (note.address.state) params.set('state', note.address.state);
@@ -98,19 +104,13 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         params.set('contactFirstName', nameParts[0] || '');
         params.set('contactLastName', nameParts.slice(1).join(' '));
       }
-      if(contactTitle) {
-        params.set('contactTitle', contactTitle);
-      }
-      if (contactEmail) {
-        params.set('email', contactEmail);
-      }
-      if (contactPhone) {
-        params.set('phone', contactPhone);
-      }
+      if(contactTitle) params.set('contactTitle', contactTitle);
+      if (contactEmail) params.set('email', contactEmail);
+      if (contactPhone) params.set('phone', contactPhone);
     }
     
     if (note.outcome?.details?.salesRep) {
-        params.set('salesRepAssigned', note.outcome.details.salesRep);
+        params.set('salesRepAssigned', `Sales Rep: ${note.outcome.details.salesRep}`);
     }
     
     params.set('fromVisitNote', note.id);
@@ -215,7 +215,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
               {isAnalyzing ? <Loader /> : 'Analyze with AI'}
             </Button>
             
-            <Button onClick={handleCreateLead} disabled={!note.companyName && !analysis || isCreating}>
+            <Button onClick={handleCreateLead} disabled={isCreating}>
               {isCreating ? <Loader /> : 'Create Lead'}
             </Button>
           </DialogFooter>
