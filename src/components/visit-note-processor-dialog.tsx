@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { createNewLead, updateVisitNote } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
+import Image from 'next/image';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -111,7 +113,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Process Visit Note</DialogTitle>
           <DialogDescription>
@@ -120,15 +122,26 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-          <div className="space-y-2">
-            <h4 className="font-semibold">Original Note</h4>
-            <ScrollArea className="h-64 rounded-md border p-4 bg-secondary/50">
-              <p className="whitespace-pre-wrap text-sm">{note.content}</p>
-            </ScrollArea>
+          <div className="space-y-4">
+             <div>
+                <h4 className="font-semibold mb-2">Original Note</h4>
+                <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
+                <p className="whitespace-pre-wrap text-sm">{note.content}</p>
+                </ScrollArea>
+             </div>
+             {(note.frontImageDataUri || note.backImageDataUri) && (
+                 <div>
+                    <h4 className="font-semibold mb-2">Attached Images</h4>
+                     <div className="flex gap-4">
+                        {note.frontImageDataUri && <Image src={note.frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>}
+                        {note.backImageDataUri && <Image src={note.backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>}
+                    </div>
+                 </div>
+             )}
           </div>
           <div className="space-y-2">
             <h4 className="font-semibold">AI Analysis</h4>
-            <div className="h-64 rounded-md border p-4">
+            <div className="h-full rounded-md border p-4">
               {isAnalyzing ? (
                 <div className="flex items-center justify-center h-full"><Loader /></div>
               ) : analysis ? (

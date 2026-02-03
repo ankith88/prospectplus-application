@@ -1,3 +1,5 @@
+
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -25,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from './ui/loader';
-import { Mic, MicOff, ChevronLeft } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera } from 'lucide-react';
 import { addVisitNote } from '@/services/firebase';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
@@ -36,6 +38,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 const formSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
@@ -53,15 +56,14 @@ const salesReps = [
 ];
 const services = ["Pick up and Delivery from PO", "Outgoing Mail Lodgement", "Express Banking"];
 
-
 export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) {
-  const [step, setStep] = useState<'capture' | 'outcome'>('capture');
+  const [step, setStep] = useState<'capture' | 'outcome' | 'camera'>('capture');
   const [noteContent, setNoteContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // State for outcome details
+  // Outcome details state
   const [appointmentRep, setAppointmentRep] = useState('');
   const [quoteRep, setQuoteRep] = useState('');
   const [quoteType, setQuoteType] = useState<'Products' | 'Services' | ''>('');
@@ -72,6 +74,13 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
   const [signUpRep, setSignUpRep] = useState('');
   const [signUpShipMate, setSignUpShipMate] = useState(false);
   const [signUpServices, setSignUpServices] = useState<string[]>([]);
+  
+  // Camera state
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [frontImage, setFrontImage] = useState<string | null>(null);
+  const [backImage, setBackImage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { toast } = useToast();
   const { userProfile } = useAuth();
@@ -90,7 +99,6 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
       recognitionRef.current.stop();
     }
     setIsListening(false);
-    // Reset outcome states
     setAppointmentRep('');
     setQuoteRep('');
     setQuoteType('');
@@ -101,13 +109,55 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     setSignUpRep('');
     setSignUpShipMate(false);
     setSignUpServices([]);
+    setFrontImage(null);
+    setBackImage(null);
+    setHasCameraPermission(null);
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+    }
   };
-
+  
   useEffect(() => {
     if (!isOpen) {
       resetState();
     }
   }, [isOpen]);
+
+
+  useEffect(() => {
+    if (step !== 'camera') {
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      }
+      return;
+    }
+
+    const getCameraPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        setHasCameraPermission(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        setStep('capture');
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings to use this feature.',
+        });
+      }
+    };
+    getCameraPermission();
+    return () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+        }
+    };
+  }, [step, toast]);
+
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -152,6 +202,23 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     setNoteContent(values.content);
     setStep('outcome');
   };
+  
+  const handleCaptureImage = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const context = canvas.getContext('2d');
+    context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg');
+
+    if (!frontImage) {
+        setFrontImage(dataUrl);
+    } else {
+        setBackImage(dataUrl);
+        setStep('capture'); // Go back to note after capturing back
+    }
+  };
 
   const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
     if (!userProfile) {
@@ -177,6 +244,8 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
         content: fullNote,
         capturedBy: userProfile.displayName || 'Unknown User',
         capturedByUid: userProfile.uid,
+        frontImageDataUri: frontImage || undefined,
+        backImageDataUri: backImage || undefined,
       });
       toast({ title: 'Success', description: 'Your visit note has been submitted.' });
 
@@ -200,18 +269,22 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-4">
-             {step === 'outcome' && (
+             {step !== 'capture' && (
                 <Button variant="ghost" size="icon" onClick={() => setStep('capture')} className="shrink-0">
                     <ChevronLeft />
                 </Button>
             )}
             <div className="flex-grow">
                 <DialogTitle>
-                    {step === 'capture' ? 'Capture a Visit Note' : 'Select Visit Outcome'}
+                    {step === 'capture' ? 'Capture a Visit Note'
+                     : step === 'camera' ? 'Scan Business Card'
+                     : 'Select Visit Outcome'}
                 </DialogTitle>
                 <DialogDescription>
                     {step === 'capture'
                     ? 'Record the details of your visit for the Lead Gen team.'
+                    : step === 'camera'
+                    ? 'Take a photo of the front and back of the business card.'
                     : 'Choose the final outcome of your visit.'}
                 </DialogDescription>
             </div>
@@ -222,7 +295,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
             <Form {...form}>
             <form onSubmit={form.handleSubmit(handleCaptureSubmit)} className="space-y-4">
                 <p className="text-sm text-muted-foreground p-2 bg-secondary rounded-md">
-                    <b>Prompt:</b> Include Company Name, Address, Contact Person, Outcome, and Action Items.
+                    <b>Prompt:</b> Include Company Name, Address, Contact Person, and why they might be a good fit (e.g. qualified for appointment, interested).
                 </p>
                 <FormField
                 control={form.control}
@@ -231,11 +304,14 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                     <FormItem>
                     <FormControl>
                         <div className="relative">
-                        <Textarea placeholder="Start typing or use the mic..." {...field} rows={10} />
-                        <Button type="button" variant="ghost" size="icon" className="absolute bottom-2 right-2" onClick={handleToggleListening}>
-                            {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
-                            <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
-                        </Button>
+                        <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
+                         <div className="absolute bottom-2 right-2 flex gap-1">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                            <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
+                                {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
+                                <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
+                            </Button>
+                          </div>
                         </div>
                     </FormControl>
                     <FormMessage />
@@ -248,6 +324,31 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
                 </DialogFooter>
             </form>
             </Form>
+        ) : step === 'camera' ? (
+             <div className="space-y-4">
+                <div className="relative">
+                    <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
+                    <div className="absolute top-2 left-2 flex gap-2">
+                        {frontImage && <img src={frontImage} alt="Front" className="w-24 rounded-md border-2 border-white shadow-lg"/>}
+                        {backImage && <img src={backImage} alt="Back" className="w-24 rounded-md border-2 border-white shadow-lg"/>}
+                    </div>
+                </div>
+                {hasCameraPermission === false && (
+                    <Alert variant="destructive">
+                        <AlertTitle>Camera Access Required</AlertTitle>
+                        <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
+                    </Alert>
+                )}
+                <div className="flex flex-col gap-2">
+                    {!frontImage ? (
+                        <Button onClick={handleCaptureImage} disabled={!hasCameraPermission}>Capture Front</Button>
+                    ) : !backImage ? (
+                        <Button onClick={handleCaptureImage} disabled={!hasCameraPermission}>Capture Back</Button>
+                    ) : null}
+                    <Button variant="outline" onClick={() => setStep('capture')}>Done</Button>
+                </div>
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+            </div>
         ) : (
         <div className="space-y-4">
             <Accordion type="single" collapsible className="w-full">

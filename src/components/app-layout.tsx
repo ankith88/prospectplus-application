@@ -36,7 +36,6 @@ import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
-import { QuickAddLeadDialog } from "./quick-add-lead-dialog"
 import { VisitNoteDialog } from "./visit-note-dialog"
 
 
@@ -45,7 +44,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isVisitNoteDialogOpen, setIsVisitNoteDialogOpen] = useState(false);
 
   const isActive = (path: string) => {
@@ -402,12 +400,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-           {canCreateLead && (
-             <Button variant="ghost" size="sm" onClick={() => setIsQuickAddOpen(true)} className="text-sidebar-accent hover:text-sidebar-hover-foreground">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Quick Add
-             </Button>
-            )}
             {canCaptureVisit && (
              <Button variant="ghost" size="sm" onClick={() => setIsVisitNoteDialogOpen(true)} className="text-sidebar-accent hover:text-sidebar-hover-foreground">
                 <ClipboardCheck className="mr-2 h-4 w-4" />
@@ -453,7 +445,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {new Date().getFullYear()} MailPlus Pty. Ltd. All rights reserved.
         </footer>
       </SidebarInset>
-      <QuickAddLeadDialog isOpen={isQuickAddOpen} onOpenChange={setIsQuickAddOpen} />
       <VisitNoteDialog isOpen={isVisitNoteDialogOpen} onOpenChange={setIsVisitNoteDialogOpen} />
     </>
   )

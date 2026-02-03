@@ -174,6 +174,8 @@ export interface VisitNote {
     outcome?: string;
     actionItems?: string[];
   };
+  frontImageDataUri?: string;
+  backImageDataUri?: string;
 }
 
 export interface Lead {
