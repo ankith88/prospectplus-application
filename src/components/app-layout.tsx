@@ -36,7 +36,6 @@ import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
-import { VisitNoteDialog } from "./visit-note-dialog"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -44,7 +43,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
-  const [isVisitNoteDialogOpen, setIsVisitNoteDialogOpen] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/leads') {
@@ -169,6 +167,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+            )}
+            {canCaptureVisit && (
+                 <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/capture-visit")} tooltip="Capture Visit">
+                    <Link href="/capture-visit">
+                        <ClipboardCheck />
+                        <span>Capture Visit</span>
+                    </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
             )}
             {canViewD2D && (
               <SidebarMenuItem>
@@ -400,12 +408,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            {canCaptureVisit && (
-             <Button variant="ghost" size="sm" onClick={() => setIsVisitNoteDialogOpen(true)} className="text-sidebar-accent hover:text-sidebar-hover-foreground">
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                Capture Visit
-             </Button>
-            )}
            <UniversalSearch />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -445,7 +447,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {new Date().getFullYear()} MailPlus Pty. Ltd. All rights reserved.
         </footer>
       </SidebarInset>
-      <VisitNoteDialog isOpen={isVisitNoteDialogOpen} onOpenChange={setIsVisitNoteDialogOpen} />
     </>
   )
 }
