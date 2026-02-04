@@ -84,6 +84,7 @@ export default function VisitNotesClient() {
     'Rejected': 'bg-red-100 text-red-800',
   };
 
+  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
   return (
     <>
@@ -136,13 +137,15 @@ export default function VisitNotesClient() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                           <Button
-                            size="sm"
-                            onClick={() => handleProcessNote(note)}
-                            disabled={note.status !== 'New'}
-                          >
-                            {note.status === 'New' ? 'Process' : 'View'}
-                          </Button>
+                           {canProcess && (
+                             <Button
+                              size="sm"
+                              onClick={() => handleProcessNote(note)}
+                              disabled={note.status !== 'New'}
+                            >
+                              {note.status === 'New' ? 'Process' : 'View'}
+                            </Button>
+                           )}
                           {canManage && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
