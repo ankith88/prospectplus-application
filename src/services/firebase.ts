@@ -1,5 +1,4 @@
 
-
 'use server';
 
 /**
@@ -7,7 +6,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 
@@ -1671,9 +1670,8 @@ interface NewLeadData {
   };
   initialNotes?: string;
   dialerAssigned?: string;
-  customerPhone?: string;
-  customerServiceEmail?: string;
-  abn?: string;
+  salesRepAssigned?: string;
+  checkinQuestions?: CheckinQuestion[];
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadID?: string; message?: string; }> {
@@ -2008,9 +2006,13 @@ async function addVisitNote(note: Omit<VisitNote, 'id' | 'createdAt' | 'status'>
     }
 }
 
-async function getVisitNotes(): Promise<VisitNote[]> {
+async function getVisitNotes(userId?: string): Promise<VisitNote[]> {
     try {
-        const q = query(collection(firestore, 'visitnotes'), orderBy('createdAt', 'desc'));
+        let q: Query = collection(firestore, 'visitnotes');
+        if (userId) {
+            q = query(q, where('capturedByUid', '==', userId));
+        }
+        q = query(q, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
     } catch (error) {
@@ -2026,6 +2028,16 @@ async function updateVisitNote(noteId: string, data: Partial<VisitNote>): Promis
     } catch (error) {
         console.error(`Failed to update visit note ${noteId}:`, error);
         throw new Error('Failed to update visit note in Firebase');
+    }
+}
+
+async function deleteVisitNote(noteId: string): Promise<void> {
+    try {
+        const noteRef = doc(firestore, 'visitnotes', noteId);
+        await deleteDoc(noteRef);
+    } catch (error) {
+        console.error(`Failed to delete visit note ${noteId}:`, error);
+        throw new Error('Failed to delete visit note from Firebase');
     }
 }
 
@@ -2103,6 +2115,5 @@ export {
     addVisitNote,
     getVisitNotes,
     updateVisitNote,
+    deleteVisitNote,
 };
-
-

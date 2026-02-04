@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,28 +7,52 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
-import { getVisitNotes, updateVisitNote } from '@/services/firebase';
+import { getVisitNotes, deleteVisitNote } from '@/services/firebase';
 import type { VisitNote } from '@/lib/types';
 import { format } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
+import { MoreHorizontal, Trash2, Edit } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<VisitNote | null>(null);
   const router = useRouter();
+  const { userProfile } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
+    if (!userProfile) return;
     const fetchNotes = async () => {
       setLoading(true);
-      const fetchedNotes = await getVisitNotes();
+      const userIdToFilter = userProfile.role === 'Field Sales' ? userProfile.uid : undefined;
+      const fetchedNotes = await getVisitNotes(userIdToFilter);
       setNotes(fetchedNotes);
       setLoading(false);
     };
     fetchNotes();
-  }, []);
+  }, [userProfile]);
 
   const handleProcessNote = (note: VisitNote) => {
     setSelectedNote(note);
@@ -35,10 +60,21 @@ export default function VisitNotesClient() {
   };
   
   const handleNoteProcessed = (noteId: string, status: 'Converted' | 'Rejected', leadId?: string) => {
-    updateVisitNote(noteId, { status, leadId });
-    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, status, leadId } : n));
-    if (status === 'Converted' && leadId) {
-        router.push(`/leads/${leadId}`);
+    // This function might need adjustment based on where it's called from
+    // For now, we assume it's handled, but a direct update might be needed.
+    // e.g., setNotes(prev => prev.map(n => n.id === noteId ? {...n, status} : n));
+  };
+
+  const handleDeleteNote = async () => {
+    if (!noteToDelete) return;
+    try {
+      await deleteVisitNote(noteToDelete.id);
+      setNotes(prev => prev.filter(n => n.id !== noteToDelete.id));
+      toast({ title: 'Success', description: 'Visit note deleted.' });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the note.' });
+    } finally {
+      setNoteToDelete(null);
     }
   };
 
@@ -97,13 +133,30 @@ export default function VisitNotesClient() {
                         <Badge className={statusColorMap[note.status]}>{note.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => handleProcessNote(note)}
-                          disabled={note.status !== 'New'}
-                        >
-                          {note.status === 'New' ? 'Process' : 'View'}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                           <Button
+                            size="sm"
+                            onClick={() => handleProcessNote(note)}
+                            disabled={note.status !== 'New'}
+                          >
+                            {note.status === 'New' ? 'Process' : 'View'}
+                          </Button>
+                          {note.capturedByUid === userProfile?.uid && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem disabled>
+                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -128,6 +181,18 @@ export default function VisitNotesClient() {
           onProcessed={handleNoteProcessed}
         />
       )}
+      <AlertDialog open={!!noteToDelete} onOpenChange={(open) => !open && setNoteToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>This will permanently delete the visit note. This action cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

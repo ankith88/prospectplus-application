@@ -249,6 +249,7 @@ export interface UserProfile {
     aircallUserId?: string;
     role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin';
     disabled?: boolean;
+    linkedSalesRep?: string;
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales' | 'lastProspected'> & { isProspect?: boolean, isCompany?: boolean };
