@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -86,7 +85,7 @@ const salesReps = [
 ];
 const services = ["Pick up and Delivery from PO", "Outgoing Mail Lodgement", "Express Banking"];
 
-const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)", "Couriers Please/Aramex (100+ items/week)"];
+const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please/Aramex (100+ items/week)"];
 const reasonsToLeave = ["Banking", "Local Same Day"];
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
@@ -317,7 +316,7 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     const checkinValues = checkinForm.getValues();
 
     const isLPOReferral = Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.includes("Couriers Please/Aramex (100+ items/week)");
-    const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)"];
+    const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)"];
     const shouldScheduleAppointment =
         checkinValues.auspostPaidService === 'Yes' ||
         (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
