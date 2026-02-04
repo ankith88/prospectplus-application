@@ -1,4 +1,5 @@
 
+
 export type LeadStatus =
   | 'New'
   | 'Contacted'
@@ -136,6 +137,10 @@ export interface DiscoveryData {
     scoringReason?: string;
     checkInCompleted?: boolean;
     searchKeywords?: string[];
+    discoverySignals?: string[];
+    inconvenience?: 'Very inconvenient' | 'Somewhat inconvenient' | 'Not a big issue';
+    occurrence?: 'Daily' | 'Weekly' | 'Ad-hoc';
+    recurring?: 'Yes - predictable' | 'Sometimes' | 'One-off';
 }
 
 export interface Invoice {

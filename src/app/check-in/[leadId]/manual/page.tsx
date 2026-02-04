@@ -5,12 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, type Note } from '@/services/firebase';
-import type { Lead, CheckinQuestion, Contact, LeadStatus, Address } from '@/lib/types';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, type Note } from '@/services/firebase';
+import type { Lead, DiscoveryData, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink, Move } from 'lucide-react';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,18 +30,15 @@ import { useAuth } from '@/hooks/use-auth';
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogHeader } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
+import { Badge } from '@/components/ui/badge';
 
 
-const checkinSchema = z.object({
-  auspostRelationship: z.enum(['Yes', 'No']).optional(),
-  auspostUsage: z.string().optional(),
-  auspostPaidService: z.enum(['Yes', 'No']).optional(),
-  auspostLodge: z.array(z.string()).optional(),
-  otherCouriers: z.enum(['Yes', 'No']).optional(),
-  otherCouriersList: z.array(z.string()).optional(),
-  localDeliveries: z.enum(['Yes', 'No']).optional(),
-  peopleLeaveOffice: z.enum(['Yes', 'No']).optional(),
-  reasonsToLeave: z.array(z.string()).optional(),
+const discoverySchema = z.object({
+  discoverySignals: z.array(z.string()).optional(),
+  inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
+  occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
+  recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
 });
 
 const newContactSchema = z.object({
@@ -51,8 +48,8 @@ const newContactSchema = z.object({
     phone: z.string().min(1, "Phone number is required."),
 });
 
-const TOTAL_STEPS = 6;
-const stepLabels = ["Company", "Contact", "AusPost", "Couriers", "Errands", "Finish"];
+const TOTAL_STEPS = 4;
+const stepLabels = ["Company", "Contact", "Field Discovery", "Finish"];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
@@ -114,8 +111,8 @@ export default function ManualCheckinPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    const methods = useForm<Partial<z.infer<typeof checkinSchema>>>({
-        resolver: zodResolver(checkinSchema.partial()),
+    const methods = useForm<Partial<z.infer<typeof discoverySchema>>>({
+        resolver: zodResolver(discoverySchema.partial()),
     });
     
     const newContactForm = useForm<z.infer<typeof newContactSchema>>({
@@ -139,20 +136,8 @@ export default function ManualCheckinPage() {
                 if (leadData) {
                     setLead(leadData);
                     setContacts(leadData.contacts || []);
-                    if (leadData.checkinQuestions) {
-                        const formData: Partial<z.infer<typeof checkinSchema>> = {};
-                        leadData.checkinQuestions.forEach(q => {
-                           if (q.question === "Do you have a relationship with Australia Post?") formData.auspostRelationship = q.answer as 'Yes' | 'No';
-                           if (q.question === "What do you use them for?") formData.auspostUsage = q.answer as string;
-                           if (q.question === "Do you pay for the service?") formData.auspostPaidService = q.answer as 'Yes' | 'No';
-                           if (q.question === "Do you drop it off or do they come here?") formData.auspostLodge = q.answer as string[];
-                           if (q.question === "Do you use any other couriers?") formData.otherCouriers = q.answer as 'Yes' | 'No';
-                           if (q.question === "Which Courier do you use?") formData.otherCouriersList = q.answer as string[];
-                           if (q.question === "Do you have any need for local deliveries?") formData.localDeliveries = q.answer as 'Yes' | 'No';
-                           if (q.question === "Do people leave the office during the day?") formData.peopleLeaveOffice = q.answer as 'Yes' | 'No';
-                           if (q.question === "What are the reasons people leave the office?") formData.reasonsToLeave = q.answer as string[];
-                        });
-                        methods.reset(formData);
+                    if (leadData.discoveryData) {
+                        methods.reset(leadData.discoveryData);
                     }
                     await logActivity(leadId, { type: 'Update', notes: 'Checked in at location via map.' });
                 } else {
@@ -173,33 +158,15 @@ export default function ManualCheckinPage() {
     const handleSaveAndNext = async () => {
         setIsSaving(true);
         const formValues = methods.getValues();
-        const questionsToSave: CheckinQuestion[] = [];
-        
-        Object.entries(formValues).forEach(([key, value]) => {
-            if(value === undefined || value === null) return;
-            let question = "";
-            switch(key) {
-                case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
-                case 'auspostUsage': question = "What do you use them for?"; break;
-                case 'auspostPaidService': question = "Do you pay for the service?"; break;
-                case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
-                case 'otherCouriers': question = "Do you use any other couriers?"; break;
-                case 'otherCouriersList': question = "Which Courier do you use?"; break;
-                case 'localDeliveries': question = "Do you have any need for local deliveries?"; break;
-                case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
-                case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
-            }
-            if(question) {
-                questionsToSave.push({ question, answer: value as string | string[]});
-            }
-        });
 
         try {
-            if(lead?.id && questionsToSave.length > 0) {
-                await updateLeadCheckinQuestions(lead.id, questionsToSave);
+            if(lead?.id) {
+                const discoveryData = calculateScoreAndRouting(formValues);
+                await updateLeadDiscoveryData(lead.id, discoveryData);
+                setLead(prev => prev ? { ...prev, discoveryData } : null);
             }
-            if (currentStep === TOTAL_STEPS) {
-                 await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in form was completed.' });
+            if (currentStep === 3) {
+                 await logActivity(lead!.id, { type: 'Update', notes: 'Manual check-in discovery form was completed.' });
             }
             setCurrentStep(prev => prev + 1);
         } catch (error) {
@@ -284,8 +251,10 @@ export default function ManualCheckinPage() {
     };
 
     const renderStep = () => {
+        const onNextAction = currentStep === 3 ? handleSaveAndNext : () => setCurrentStep(prev => prev + 1);
+
         const stepProps = {
-            onNext: currentStep < 3 ? () => setCurrentStep(prev => prev + 1) : handleSaveAndNext,
+            onNext: onNextAction,
             onBack: handleBack,
             isSaving: isSaving,
             onOpenLogOutcome: () => setIsLogOutcomeOpen(true),
@@ -296,10 +265,8 @@ export default function ManualCheckinPage() {
         switch (currentStep) {
             case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
             case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
-            case 3: return <AusPostStep {...stepProps} />;
-            case 4: return <OtherCouriersStep {...stepProps} />;
-            case 5: return <OfficeErrandsStep {...stepProps} />;
-            case 6: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} />;
+            case 3: return <FieldDiscoveryStep {...stepProps} />;
+            case 4: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} />;
             default: return null;
         }
     };
@@ -408,57 +375,113 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
     </StepWrapper>
 );
 
-const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
-    const { control, watch } = useFormContext();
-    const auspostRelationship = watch('auspostRelationship');
-    return (
-        <StepWrapper title="Australia Post" script="How do you handle your post? Do you have a relationship with AusPost?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
-            <div className="space-y-6">
-                <FormField control={control} name="auspostRelationship" render={({ field }) => (<FormItem><FormLabel>Do you have a relationship with Australia Post?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                {auspostRelationship === 'Yes' && (
-                    <div className="space-y-4 pl-4 border-l-2">
-                        <FormField control={control} name="auspostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                        <FormField control={control} name="auspostPaidService" render={({ field }) => (<FormItem><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                        <FormField control={control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>Do you drop it off or do they come here?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter(v => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter(v => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
-                    </div>
-                )}
-            </div>
-        </StepWrapper>
-    );
-};
+const discoverySignals = [
+  { id: 'pays_aus_post', label: 'Pays Australia Post', description: 'They currently pay for Australia Post' },
+  { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge' },
+  { id: 'drop_off_hassle', label: 'Drop-off is a Hassle', description: 'Drop-offs are inconvenient' },
+  { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)', description: 'TGE, StarTrack, TNT' },
+  { id: 'uses_couriers_100_plus', label: 'Uses Other Couriers (100+/wk)', description: 'High-volume standard freight' },
+  { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking' },
+  { id: 'needs_same_day', label: 'Needs Same-Day Delivery', description: 'Uses or wants same-day' },
+  { id: 'inter_office', label: 'Inter-Office Deliveries', description: 'Movement between offices' },
+];
 
-const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
-    const { control, watch } = useFormContext();
-    const otherCouriers = watch('otherCouriers');
-    const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please", "Aramex"];
-    return (
-        <StepWrapper title="Other Couriers" script="Do you use any other couriers for your shipping needs?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
-            <div className="space-y-6">
-                <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                {otherCouriers === 'Yes' && (
-                    <div className="space-y-4 pl-4 border-l-2">
-                        <FormField control={control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which Courier do you use?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter(v => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
-                        <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                    </div>
-                )}
-            </div>
-        </StepWrapper>
-    );
-};
+const FieldDiscoveryStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: { onNext: () => void; onBack: () => void; isSaving?: boolean; onOpenLogOutcome: () => void; onOpenLogNote: () => void; onOpenRevisitDialog: () => void; onMoveToOutbound: () => void; }) => {
+    const { control } = useFormContext<z.infer<typeof discoverySchema>>();
 
-const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote, onOpenRevisitDialog, onMoveToOutbound }: any) => {
-    const { control, watch } = useFormContext();
-    const peopleLeaveOffice = watch('peopleLeaveOffice');
-    const reasons = ["Banking", "Local Same Day"];
     return (
-        <StepWrapper title="Office Errands" script="Do people leave the office during the day for errands like banking or local deliveries?" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
-            <div className="space-y-6">
-                <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                {peopleLeaveOffice === 'Yes' && (
-                    <div className="space-y-4 pl-4 border-l-2">
-                        <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What are the reasons people leave?</FormLabel><div className="grid grid-cols-2 gap-2">{reasons.map(r => <FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+         <StepWrapper title="Field Discovery" onNext={onNext} onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={onOpenLogNote} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound} isSaving={isSaving}>
+            <div className="space-y-8">
+                <FormField
+                    control={control}
+                    name="discoverySignals"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="text-lg font-semibold">Discovery Signals</FormLabel>
+                            <FormDescription>Capture observable behaviour and decision context.</FormDescription>
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                {discoverySignals.map((signal) => {
+                                    const isSelected = field.value?.includes(signal.label);
+                                    return (
+                                        <Button
+                                            key={signal.id}
+                                            type="button"
+                                            variant={isSelected ? 'default' : 'outline'}
+                                            className="h-auto flex flex-col items-start p-3 text-left"
+                                            onClick={() => {
+                                                const newValue = isSelected
+                                                    ? field.value?.filter((v) => v !== signal.label)
+                                                    : [...(field.value || []), signal.label];
+                                                field.onChange(newValue);
+                                            }}
+                                        >
+                                            <span className="font-semibold">{signal.label}</span>
+                                            <span className="text-xs font-normal opacity-70">{signal.description}</span>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                <div className="space-y-6 pt-4 border-t">
+                    <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                        <FormField
+                            control={control}
+                            name="inconvenience"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>How inconvenient is this today?</FormLabel>
+                                    <FormControl>
+                                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Very inconvenient" /></FormControl><FormLabel className="font-normal">Very inconvenient</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Somewhat inconvenient" /></FormControl><FormLabel className="font-normal">Somewhat inconvenient</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Not a big issue" /></FormControl><FormLabel className="font-normal">Not a big issue</FormLabel></FormItem>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={control}
+                            name="occurrence"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>How often does this occur?</FormLabel>
+                                    <FormControl>
+                                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Weekly" /></FormControl><FormLabel className="font-normal">Weekly</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={control}
+                            name="recurring"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>Is this recurring?</FormLabel>
+                                    <FormControl>
+                                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Yes - predictable" /></FormControl><FormLabel className="font-normal">Yes - predictable</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Sometimes" /></FormControl><FormLabel className="font-normal">Sometimes</FormLabel></FormItem>
+                                            <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="One-off" /></FormControl><FormLabel className="font-normal">One-off</FormLabel></FormItem>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
-                )}
+                </div>
             </div>
         </StepWrapper>
     );
@@ -470,8 +493,31 @@ const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome,
     return (
         <StepWrapper title="Finish" onBack={onBack} onOpenLogOutcome={onOpenLogOutcome} onOpenLogNote={() => {}} onOpenRevisitDialog={onOpenRevisitDialog} onMoveToOutbound={onMoveToOutbound}>
             <div className="text-center space-y-4">
-                <h3 className="text-xl font-semibold">Check-in Complete!</h3>
-                <p className="text-muted-foreground">You have finished the manual check-in process for {lead.companyName}. Choose your next action.</p>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Discovery Analysis</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-center space-y-4">
+                        <p className="text-muted-foreground">Based on the answers provided, here is the lead analysis:</p>
+                        <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Score</p>
+                                <p className="text-3xl font-bold">{lead.discoveryData?.score ?? 'N/A'}</p>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                <Badge variant="outline" className="text-lg mt-1">{lead.discoveryData?.routingTag ?? 'N/A'}</Badge>
+                            </div>
+                        </div>
+                        {lead.discoveryData?.scoringReason && (
+                             <p className="text-xs text-muted-foreground p-2 border-t">
+                                <strong>Scoring Rationale:</strong> {lead.discoveryData.scoringReason}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <h3 className="text-xl font-semibold">Check-in Complete! Choose your next action.</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                     <Button size="lg" className="h-auto py-4" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}><Briefcase className="mr-2"/> Signup</Button>
                     <Button size="lg" className="h-auto py-4 bg-green-600 hover:bg-green-700" onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}><Star className="mr-2"/> Free Trial</Button>
