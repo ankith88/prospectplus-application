@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check } from 'lucide-react';
-import { addVisitNote, getAllUsers } from '@/services/firebase';
+import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import {
@@ -31,10 +31,10 @@ import {
 } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
-import type { Address, CheckinQuestion, UserProfile, DiscoveryData } from '@/lib/types';
+import type { Address, CheckinQuestion, UserProfile, DiscoveryData, VisitNote } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +51,8 @@ import { salesReps } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 
 const noteSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
@@ -104,6 +106,11 @@ const contactTagOptions: Option[] = [
     { value: 'Gatekeeper', label: 'Gatekeeper' },
 ];
 
+const formatAddressDisplay = (address?: Address) => {
+    if (!address) return '';
+    return [address.address1, address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+};
+
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
         <div className="flex items-center w-full" aria-label={"Step " + currentStep + " of " + totalSteps}>
@@ -147,7 +154,7 @@ export default function CaptureVisitPage() {
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<any>(null);
 
-    const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
+    const [selectedPlace, setSelectedPlace] = useState<any | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
     const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -166,10 +173,15 @@ export default function CaptureVisitPage() {
     
     const [fieldSalesUsers, setFieldSalesUsers] = useState<UserProfile[]>([]);
     const [selectedFieldSalesRep, setSelectedFieldSalesRep] = useState<string>('');
+
+    const [editingNote, setEditingNote] = useState<VisitNote | null>(null);
+    const [isLoadingNote, setIsLoadingNote] = useState(false);
   
     const { toast } = useToast();
     const { userProfile } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const noteIdToEdit = searchParams.get('noteId');
 
     const captureForm = useForm<z.infer<typeof noteSchema>>({
         resolver: zodResolver(noteSchema),
@@ -188,6 +200,53 @@ export default function CaptureVisitPage() {
     const showDecisionMakerFields = personSpokenWithTags.length > 0 && !personSpokenWithTags.includes('Decision Maker');
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+
+    useEffect(() => {
+        if (noteIdToEdit) {
+            setIsLoadingNote(true);
+            const fetchNote = async () => {
+                try {
+                    const noteRef = doc(firestore, 'visitnotes', noteIdToEdit);
+                    const noteSnap = await getDoc(noteRef);
+                    if (noteSnap.exists()) {
+                        const noteData = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
+                        setEditingNote(noteData);
+
+                        if (noteData.companyName) {
+                            setSearchQuery(noteData.companyName);
+                            setSelectedPlace({
+                                name: noteData.companyName,
+                                formatted_address: formatAddressDisplay(noteData.address),
+                                website: noteData.websiteUrl,
+                                address_components: [],
+                                geometry: noteData.address?.lat ? { location: new google.maps.LatLng(noteData.address.lat, noteData.address.lng!) } : undefined,
+                                place_id: noteData.googlePlaceId
+                            });
+                        }
+                        if (noteData.discoveryData) {
+                            discoveryForm.reset(noteData.discoveryData);
+                        }
+                        if (noteData.content) {
+                            captureForm.setValue('content', noteData.content);
+                            setNoteContent(noteData.content);
+                        }
+                        if (noteData.frontImageDataUri) setFrontImage(noteData.frontImageDataUri);
+                        if (noteData.backImageDataUri) setBackImage(noteData.backImageDataUri);
+                        
+                    } else {
+                        toast({ variant: 'destructive', title: 'Error', description: 'Visit note not found.' });
+                        router.push('/visit-notes');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    toast({ variant: 'destructive', title: 'Error', description: 'Failed to load visit note.' });
+                } finally {
+                    setIsLoadingNote(false);
+                }
+            }
+            fetchNote();
+        }
+    }, [noteIdToEdit, router, toast, discoveryForm, captureForm]);
 
     useEffect(() => {
         if (isAdminOrLeadGen) {
@@ -217,6 +276,8 @@ export default function CaptureVisitPage() {
         setSelectedPlace(null);
         setSearchQuery('');
         setPredictions([]);
+        setEditingNote(null);
+        setIsLoadingNote(false);
         if (videoRef.current?.srcObject) {
             (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
         }
@@ -451,6 +512,29 @@ export default function CaptureVisitPage() {
         
         const discoveryFormValues = discoveryForm.getValues();
     
+        if (editingNote) {
+            try {
+                await updateVisitNote(editingNote.id, {
+                    content: fullNote,
+                    companyName: selectedPlace?.name,
+                    address: addressData,
+                    websiteUrl: selectedPlace?.website,
+                    googlePlaceId: selectedPlace?.place_id,
+                    outcome: { type: outcomeType, details: detailsObject },
+                    discoveryData: discoveryFormValues,
+                });
+                toast({ title: 'Success', description: 'Your visit note has been updated.' });
+                router.push('/visit-notes');
+            } catch (error) {
+                console.error('Failed to update visit note:', error);
+                toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update your visit note.' });
+            } finally {
+                setIsSubmitting(false);
+            }
+            return;
+        }
+
+
         try {
           await addVisitNote({
             content: fullNote,
@@ -523,6 +607,10 @@ export default function CaptureVisitPage() {
     const repForAppointment = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : appointmentRep;
     const repForQuote = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : quoteRep;
     const repForSignup = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : signUpRep;
+
+    if (isLoadingNote) {
+        return <div className="flex h-full items-center justify-center"><Loader /></div>;
+    }
 
     return (
         <>
@@ -657,14 +745,14 @@ export default function CaptureVisitPage() {
                                                     <FormField control={control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" /></FormControl><FormMessage /></FormItem>)} />
                                                 </CardContent>
                                             </Card>
                                         )}
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
-                                    <Button onClick={handleNextStep}>Next</Button>
+                                    <Button onClick={handleNextStep} disabled={!selectedPlace}>Next</Button>
                                 </div>
                             </div>
                         ) : step === 'discovery' ? (

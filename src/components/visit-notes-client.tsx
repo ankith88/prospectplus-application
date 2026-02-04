@@ -46,8 +46,7 @@ export default function VisitNotesClient() {
     if (!userProfile) return;
     const fetchNotes = async () => {
       setLoading(true);
-      const userIdToFilter = userProfile.role === 'Field Sales' ? userProfile.uid : undefined;
-      const fetchedNotes = await getVisitNotes(userIdToFilter);
+      const fetchedNotes = await getVisitNotes();
       setNotes(fetchedNotes);
       setLoading(false);
     };
@@ -60,9 +59,7 @@ export default function VisitNotesClient() {
   };
   
   const handleNoteProcessed = (noteId: string, status: 'Converted' | 'Rejected', leadId?: string) => {
-    // This function might need adjustment based on where it's called from
-    // For now, we assume it's handled, but a direct update might be needed.
-    // e.g., setNotes(prev => prev.map(n => n.id === noteId ? {...n, status} : n));
+    setNotes(prev => prev.map(n => n.id === noteId ? {...n, status, leadId} : n));
   };
 
   const handleDeleteNote = async () => {
@@ -122,7 +119,9 @@ export default function VisitNotesClient() {
                     </TableCell>
                   </TableRow>
                 ) : notes.length > 0 ? (
-                  notes.map((note) => (
+                  notes.map((note) => {
+                    const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                    return (
                     <TableRow key={note.id}>
                       <TableCell>{note.capturedBy}</TableCell>
                       <TableCell>{format(new Date(note.createdAt), 'PPpp')}</TableCell>
@@ -141,13 +140,13 @@ export default function VisitNotesClient() {
                           >
                             {note.status === 'New' ? 'Process' : 'View'}
                           </Button>
-                          {note.capturedByUid === userProfile?.uid && (
+                          {canManage && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
-                                    <DropdownMenuItem disabled>
+                                    <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
@@ -159,7 +158,7 @@ export default function VisitNotesClient() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                  )})
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-24">
