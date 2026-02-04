@@ -129,7 +129,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
-  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role);
+  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
 
 
   return (
