@@ -54,7 +54,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar } from './ui/calendar'
-import type { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker';
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -202,7 +202,7 @@ export default function LeadsClientPage() {
     campaign: 'all',
     suburb: '',
     dateLeadEntered: undefined as DateRange | undefined,
-    source: [] as string[],
+    source: [],
     entityId: '',
   });
   
@@ -231,10 +231,9 @@ export default function LeadsClientPage() {
             getAllUsers()
         ]);
         setAllLeads(fetchedLeads);
-        const dialers = fetchedUsers
-            .filter(u => u.firstName && u.lastName)
-            .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
+        const dialers = fetchedUsers.filter(u => u.role === 'user');
         setAllDialers(dialers);
+
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
     } finally {
@@ -1120,22 +1119,22 @@ export default function LeadsClientPage() {
             <div className="flex flex-wrap items-center gap-2">
                 {selectedForReassignment.length > 0 && (
                     <>
-                        <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedForReassignment)}>
+                       <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedForReassignment)}>
                            <Trash2 className="mr-2 h-4 w-4" />
                            Delete ({selectedForReassignment.length})
-                        </Button>
-                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                       </Button>
+                       <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
                             <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedForReassignment.length})
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
-                            <UserX className="mr-2 h-4 w-4" />
-                            Unassign ({selectedForReassignment.length})
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
-                            <UserCog className="h-4 w-4 mr-2" />
-                            Reassign ({selectedForReassignment.length})
-                        </Button>
+                       <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
+                           <UserX className="mr-2 h-4 w-4" />
+                           Unassign ({selectedForReassignment.length})
+                       </Button>
+                       <Button variant="outline" size="sm" onClick={() => setIsReassignDialogOpen(true)}>
+                           <UserCog className="h-4 w-4 mr-2" />
+                           Reassign ({selectedForReassignment.length})
+                       </Button>
                     </>
                 )}
                 <Button onClick={() => exportLeadsToCsv(filteredLeads.filter(l => l.dialerAssigned), `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
