@@ -1671,7 +1671,7 @@ interface NewLeadData {
   initialNotes?: string;
   dialerAssigned?: string;
   salesRepAssigned?: string;
-  checkinQuestions?: CheckinQuestion[];
+  discoveryData?: Partial<DiscoveryData>;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadID?: string; message?: string; }> {
@@ -2012,14 +2012,20 @@ async function getVisitNotes(userId?: string): Promise<VisitNote[]> {
         if (userId) {
             q = query(q, where('capturedByUid', '==', userId));
         }
-        q = query(q, orderBy('createdAt', 'desc'));
+        
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
+        const notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
+
+        // Manually sort by date client-side to avoid composite index requirement
+        notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        return notes;
     } catch (error) {
         console.error('Failed to fetch visit notes:', error);
         return [];
     }
 }
+
 
 async function updateVisitNote(noteId: string, data: Partial<VisitNote>): Promise<void> {
     try {
