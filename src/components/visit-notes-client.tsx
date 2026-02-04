@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,11 @@ import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
 import { getVisitNotes, deleteVisitNote } from '@/services/firebase';
 import type { VisitNote } from '@/lib/types';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, Edit } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +31,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+import { Calendar } from './ui/calendar';
+import type { DateRange } from 'react-day-picker';
+import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
+
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
@@ -41,6 +49,14 @@ export default function VisitNotesClient() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const { toast } = useToast();
+
+  const [filters, setFilters] = useState({
+    capturedBy: [] as string[],
+    date: undefined as DateRange | undefined,
+    outcome: [] as string[],
+    companyName: '',
+    status: [] as string[],
+  });
 
   useEffect(() => {
     if (!userProfile) return;
@@ -75,6 +91,65 @@ export default function VisitNotesClient() {
       setNoteToDelete(null);
     }
   };
+  
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      capturedBy: [],
+      date: undefined,
+      outcome: [],
+      companyName: '',
+      status: [],
+    });
+  };
+  
+  const capturedByOptions: Option[] = useMemo(() => {
+    const users = new Set(notes.map(n => n.capturedBy));
+    return Array.from(users).map(u => ({ value: u, label: u }));
+  }, [notes]);
+
+  const outcomeOptions: Option[] = useMemo(() => {
+    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
+    return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
+  }, [notes]);
+
+  const statusOptions: Option[] = useMemo(() => {
+    const statuses = new Set(notes.map(n => n.status));
+    return Array.from(statuses).map(s => ({ value: s, label: s }));
+  }, [notes]);
+
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note => {
+      const companyNameMatch = filters.companyName
+        ? note.companyName?.toLowerCase().includes(filters.companyName.toLowerCase())
+        : true;
+      
+      const capturedByMatch = filters.capturedBy.length === 0
+        ? true
+        : filters.capturedBy.includes(note.capturedBy);
+        
+      const outcomeMatch = filters.outcome.length === 0
+        ? true
+        : note.outcome?.type && filters.outcome.includes(note.outcome.type);
+
+      const statusMatch = filters.status.length === 0
+        ? true
+        : filters.status.includes(note.status);
+
+      let dateMatch = true;
+      if (filters.date?.from) {
+        const noteDate = new Date(note.createdAt);
+        const fromDate = startOfDay(filters.date.from);
+        const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+        dateMatch = noteDate >= fromDate && noteDate <= toDate;
+      }
+
+      return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
+    });
+  }, [notes, filters]);
 
 
   const statusColorMap: Record<VisitNote['status'], string> = {
@@ -85,6 +160,7 @@ export default function VisitNotesClient() {
   };
 
   const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   return (
     <>
@@ -93,11 +169,70 @@ export default function VisitNotesClient() {
           <h1 className="text-3xl font-bold tracking-tight">Visit Notes Queue</h1>
           <p className="text-muted-foreground">Review and process notes captured by the Field Sales team.</p>
         </header>
+
+        <Collapsible>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                <span>Filters</span>
+              </CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span className="ml-2">Toggle Filters</span>
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input id="companyName" value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Captured By</Label>
+                  <MultiSelectCombobox options={capturedByOptions} selected={filters.capturedBy} onSelectedChange={(selected) => handleFilterChange('capturedBy', selected)} placeholder="Select users..." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <MultiSelectCombobox options={statusOptions} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select statuses..." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Outcome</Label>
+                  <MultiSelectCombobox options={outcomeOptions} selected={filters.outcome} onSelectedChange={(selected) => handleFilterChange('outcome', selected)} placeholder="Select outcomes..." />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date Captured</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : <span>Pick a date range</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 flex" align="start">
+                      <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                 {hasActiveFilters && (
+                    <div className="space-y-2 col-start-1">
+                        <Button variant="ghost" onClick={clearFilters}>
+                            <X className="mr-2 h-4 w-4" /> Clear Filters
+                        </Button>
+                    </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
         <Card>
           <CardHeader>
-            <CardTitle>New Visit Notes</CardTitle>
+            <CardTitle>Visit Notes</CardTitle>
             <CardDescription>
-              Displaying {notes.filter(n => n.status === 'New').length} new notes.
+              Displaying {filteredNotes.length} of {notes.length} notes.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -121,8 +256,8 @@ export default function VisitNotesClient() {
                       <Loader />
                     </TableCell>
                   </TableRow>
-                ) : notes.length > 0 ? (
-                  notes.map((note) => {
+                ) : filteredNotes.length > 0 ? (
+                  filteredNotes.map((note) => {
                     const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
                     return (
                     <TableRow key={note.id}>
@@ -141,7 +276,6 @@ export default function VisitNotesClient() {
                              <Button
                               size="sm"
                               onClick={() => handleProcessNote(note)}
-                              disabled={note.status !== 'New'}
                             >
                               {note.status === 'New' ? 'Process' : 'View'}
                             </Button>
