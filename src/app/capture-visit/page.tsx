@@ -426,7 +426,6 @@ export default function CaptureVisitPage() {
             setFrontImage(dataUrl);
         } else {
             setBackImage(dataUrl);
-            setStep('discovery');
         }
     };
 
@@ -597,7 +596,7 @@ export default function CaptureVisitPage() {
                             <div className="flex-grow">
                                 <CardTitle>{stepLabels[currentStepNumber - 1]}</CardTitle>
                                 <CardDescription>
-                                    {step === 'search' ? 'Search for the business you visited.' :
+                                    {step === 'search' ? 'Search for the business you visited, or capture a business card.' :
                                     step === 'discovery' ? 'Capture observable behaviour and decision context.' :
                                     step === 'capture' ? 'Record the details of your visit for the Lead Gen team.' :
                                     step === 'camera' ? 'Take a photo of the front and back of the business card.' :
@@ -652,12 +651,24 @@ export default function CaptureVisitPage() {
                                         </Card>
                                     )}
                                 </div>
-                                {selectedPlace && (
+                                { (selectedPlace || frontImage) && (
                                     <div className="space-y-6 pt-4">
-                                        <div className="p-3 border rounded-md bg-secondary/50 text-sm">
-                                            <p className="font-semibold">{selectedPlace.name}</p>
-                                            <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
-                                        </div>
+                                        {selectedPlace && (
+                                            <div className="p-3 border rounded-md bg-secondary/50 text-sm">
+                                                <p className="font-semibold">{selectedPlace.name}</p>
+                                                <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {(frontImage || backImage) && !selectedPlace && (
+                                            <div className="space-y-2">
+                                                <Label>Captured Images</Label>
+                                                <div className="flex gap-2">
+                                                    {frontImage && <Image src={frontImage} alt="Front of card" width={100} height={60} className="rounded-md border"/>}
+                                                    {backImage && <Image src={backImage} alt="Back of card" width={100} height={60} className="rounded-md border"/>}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <FormField
                                             control={control}
@@ -773,21 +784,13 @@ export default function CaptureVisitPage() {
                                 )}
                                 {!frontImage ? (
                                     <div className="flex gap-2">
-                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
+                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Image</Button>
                                         <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
                                     </div>
-                                ) : !backImage ? (
-                                    <div className="space-y-2">
-                                        <div className="flex gap-2">
-                                            <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Back</Button>
-                                            <Button variant="secondary" className="w-full" onClick={() => setStep('discovery')}>Continue with 1 Image</Button>
-                                        </div>
-                                        <Button variant="outline" className="w-full" onClick={() => setFrontImage(null)}>Retake Front</Button>
-                                    </div>
                                 ) : (
-                                    <div className="flex gap-2">
-                                        <Button onClick={() => setStep('discovery')} className="w-full">Done</Button>
-                                        <Button variant="outline" className="w-full" onClick={() => { setFrontImage(null); setBackImage(null); }}>Retake All</Button>
+                                     <div className="flex gap-2">
+                                        <Button onClick={() => setStep('search')} className="w-full">Done</Button>
+                                        <Button variant="outline" className="w-full" onClick={() => setFrontImage(null)}>Retake</Button>
                                     </div>
                                 )}
                             </div>
