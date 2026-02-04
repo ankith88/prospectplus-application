@@ -46,7 +46,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
 import { salesReps } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
@@ -169,7 +168,6 @@ export default function CaptureVisitPage() {
     const [backImage, setBackImage] = useState<string | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     
     const [fieldSalesUsers, setFieldSalesUsers] = useState<UserProfile[]>([]);
     const [selectedFieldSalesRep, setSelectedFieldSalesRep] = useState<string>('');
@@ -201,13 +199,13 @@ export default function CaptureVisitPage() {
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
-    const currentStepNumber = ({
+    const currentStepNumber = {
         search: 1,
         camera: 1,
         discovery: 2,
         capture: 3,
         outcome: 4,
-    } as Record<string, number>)[step] || 1;
+    }[step] || 1;
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -430,50 +428,7 @@ export default function CaptureVisitPage() {
             setBackImage(dataUrl);
             setStep('capture');
         }
-        return dataUrl;
     };
-
-
-    const handleAnalyze = (front: string | null, back: string | null) => {
-        setStep('search');
-        setIsAnalyzing(true);
-        analyzeBusinessCard({ frontImageDataUri: front || undefined, backImageDataUri: back || undefined })
-          .then(result => {
-            if (result.companyName) {
-                let fullSearchQuery = result.companyName;
-                if (result.address) {
-                  fullSearchQuery += `, ${result.address}`;
-                }
-                setSearchQuery(fullSearchQuery);
-                fetchPredictions(fullSearchQuery);
-    
-                toast({
-                  title: 'Card Analyzed',
-                  description: 'Business details populated. Please select from the dropdown to confirm.',
-                });
-            } else {
-              toast({ variant: 'destructive', title: 'Analysis Failed', description: 'Could not find a company name on the card.' });
-            }
-          })
-          .catch(err => {
-            console.error("Analysis failed:", err);
-            toast({ variant: 'destructive', title: 'Analysis Error', description: 'Could not analyze the business card.' });
-          })
-          .finally(() => {
-            setIsAnalyzing(false);
-          });
-    };
-
-    const handleCaptureBackAndAnalyze = () => {
-        const image = handleCaptureImage();
-        if (image) {
-          handleAnalyze(frontImage, image);
-        }
-      };
-    
-      const handleSkipAndAnalyze = () => {
-        handleAnalyze(frontImage, null);
-      };
 
     const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
         let captureUser = userProfile;
@@ -652,13 +607,6 @@ export default function CaptureVisitPage() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                        {isAnalyzing && (
-                            <div className="flex flex-col items-center justify-center gap-2 p-8">
-                                <Loader />
-                                <p className="text-sm text-muted-foreground">Analyzing Business Card...</p>
-                            </div>
-                        )}
-
                         {step === 'search' ? (
                             <div className="py-4 space-y-4">
                                 {isAdminOrLeadGen && (
@@ -686,7 +634,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -772,6 +720,16 @@ export default function CaptureVisitPage() {
                                             <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
                                         </div>
                                     )}
+                                     {(frontImage || backImage) && (
+                                        <div className="space-y-2">
+                                            <Label>Captured Images</Label>
+                                            <div className="flex gap-2">
+                                                {frontImage && <Image src={frontImage} alt="Front of card" width={100} height={60} className="rounded-md border"/>}
+                                                {backImage && <Image src={backImage} alt="Back of card" width={100} height={60} className="rounded-md border"/>}
+                                                <Button variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <FormField
                                     control={captureForm.control}
                                     name="content"
@@ -781,7 +739,7 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setShowCamera(true)}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                         <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
@@ -816,15 +774,20 @@ export default function CaptureVisitPage() {
                                 {!frontImage ? (
                                     <div className="flex gap-2">
                                         <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
-                                        <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
+                                        <Button variant="outline" onClick={() => setShowCamera(false)}>Cancel</Button>
                                     </div>
-                                ) : (
+                                ) : !backImage ? (
                                     <div className="space-y-2">
                                         <div className="flex gap-2">
-                                            <Button onClick={handleCaptureBackAndAnalyze} className="w-full" disabled={!hasCameraPermission}>Capture Back & Analyze</Button>
-                                            <Button variant="outline" onClick={() => setFrontImage(null)}>Retake</Button>
+                                            <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Back</Button>
+                                            <Button variant="secondary" className="w-full" onClick={() => setStep('capture')}>Continue with 1 Image</Button>
                                         </div>
-                                        <Button variant="secondary" className="w-full" onClick={handleSkipAndAnalyze}>Skip & Analyze Front Only</Button>
+                                        <Button variant="outline" className="w-full" onClick={() => setFrontImage(null)}>Retake Front</Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <Button onClick={() => setStep('capture')} className="w-full">Done</Button>
+                                        <Button variant="outline" className="w-full" onClick={() => { setFrontImage(null); setBackImage(null); }}>Retake All</Button>
                                     </div>
                                 )}
                             </div>

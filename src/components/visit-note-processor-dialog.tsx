@@ -88,6 +88,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   const handleReject = async () => {
     setIsRejecting(true);
     try {
+        await updateVisitNote(note.id, { status: 'Rejected' });
         onProcessed(note.id, 'Rejected');
         toast({ title: 'Note Rejected', description: 'The visit note has been marked as rejected.' });
         onOpenChange(false);
@@ -127,6 +128,26 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                       </div>
                    </div>
                )}
+                {note.discoveryData && Object.keys(note.discoveryData).length > 0 && (
+                    <div>
+                        <h4 className="font-semibold mb-2">Field Discovery Data</h4>
+                        <ScrollArea className="h-32 rounded-md border p-4 text-sm">
+                            <ul className="list-disc pl-5 space-y-1">
+                            {Object.entries(note.discoveryData).map(([key, value]) => {
+                                if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                                const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                                return (
+                                <li key={key}>
+                                    <span className="font-semibold">{formattedKey}:</span>{' '}
+                                    <span className="text-muted-foreground">{formattedValue}</span>
+                                </li>
+                                )
+                            })}
+                            </ul>
+                        </ScrollArea>
+                    </div>
+                )}
             </div>
             <div className="space-y-2">
               <h4 className="font-semibold">AI Analysis</h4>
