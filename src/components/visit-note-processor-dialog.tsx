@@ -119,6 +119,10 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             : note.outcome.details.salesRep;
         params.set('salesRepAssigned', repName);
     }
+
+    if (note.discoveryData) {
+      params.set('discoveryData', JSON.stringify(note.discoveryData));
+    }
     
     params.set('fromVisitNote', note.id);
     params.set('initialNotes', note.content);

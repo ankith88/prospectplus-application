@@ -33,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
-import type { Address, CheckinQuestion } from '@/lib/types';
+import type { Address, CheckinQuestion, DiscoveryData } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -86,7 +86,7 @@ export function NewLeadForm() {
   const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const [checkinQuestions, setCheckinQuestions] = useState<CheckinQuestion[] | null>(null);
+  const [discoveryData, setDiscoveryData] = useState<Partial<DiscoveryData> | null>(null);
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
@@ -148,14 +148,14 @@ export function NewLeadForm() {
   }, [defaultValues, form]);
 
   useEffect(() => {
-    const visitNoteId = searchParams.get('fromVisitNote');
-    if (visitNoteId) {
-      getVisitNotes().then(notes => {
-        const note = notes.find(n => n.id === visitNoteId);
-        if (note && note.checkinQuestions) {
-          setCheckinQuestions(note.checkinQuestions);
+    const discoveryDataParam = searchParams.get('discoveryData');
+    if (discoveryDataParam) {
+        try {
+            const data = JSON.parse(discoveryDataParam);
+            setDiscoveryData(data);
+        } catch (e) {
+            console.error("Failed to parse discoveryData from URL", e);
         }
-      });
     }
   }, [searchParams]);
 
@@ -368,7 +368,7 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName, checkinQuestions: checkinQuestions || undefined });
+      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName, discoveryData: discoveryData || undefined });
 
       if (result.success && result.leadId) {
         const visitNoteId = searchParams.get('fromVisitNote');
@@ -579,23 +579,26 @@ export function NewLeadForm() {
                     )}/>
                 </div>
             </div>
-            
-            {checkinQuestions && checkinQuestions.length > 0 && (
+
+            {discoveryData && Object.keys(discoveryData).length > 0 && (
               <>
                 <hr />
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Check-in Answers</h3>
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Info className="w-5 h-5" />Field Discovery Answers</h3>
                   <Card>
                     <CardContent className="p-4 space-y-3 text-sm">
                       <ul className="list-disc pl-5 space-y-2">
-                        {checkinQuestions.map((q, index) => (
-                          <li key={index}>
-                            <span className="font-semibold">{q.question}:</span>{' '}
-                            <span className="text-muted-foreground">
-                              {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
-                            </span>
-                          </li>
-                        ))}
+                        {Object.entries(discoveryData).map(([key, value]) => {
+                          if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                          const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                          const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                          return (
+                            <li key={key}>
+                              <span className="font-semibold">{formattedKey}:</span>{' '}
+                              <span className="text-muted-foreground">{formattedValue}</span>
+                            </li>
+                          )
+                        })}
                       </ul>
                     </CardContent>
                   </Card>
@@ -649,5 +652,3 @@ export function NewLeadForm() {
     </>
   );
 }
-
-    
