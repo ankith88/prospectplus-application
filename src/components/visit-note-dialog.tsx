@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -313,30 +314,8 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
 
   const handleCaptureSubmit = (values: z.infer<typeof formSchema>) => {
     setNoteContent(values.content);
-    const checkinValues = checkinForm.getValues();
-
-    const isLPOReferral = Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.includes("Couriers Please/Aramex (100+ items/week)");
-    const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)"];
-    const shouldScheduleAppointment =
-        checkinValues.auspostPaidService === 'Yes' ||
-        (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
-        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => appointmentQualifyingCouriers.includes(c))) ||
-        (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
-
-    if (isLPOReferral && shouldScheduleAppointment) {
-        setForceLPOReferral(false);
-        setForceAppointment(false);
-    } else if (isLPOReferral) {
-        setForceLPOReferral(true);
-        setForceAppointment(false);
-    } else if (shouldScheduleAppointment) {
-        setForceAppointment(true);
-        setForceLPOReferral(false);
-    } else {
-        setForceAppointment(false);
-        setForceLPOReferral(false);
-    }
-
+    setForceAppointment(false);
+    setForceLPOReferral(false);
     setStep('outcome');
   };
   
@@ -358,6 +337,47 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
   };
 
 
+  const handleAnalyze = (front: string | null, back: string | null) => {
+    setStep('capture');
+    setIsAnalyzing(true);
+    analyzeVisitNote({ frontImageDataUri: front || undefined, backImageDataUri: back || undefined })
+      .then(result => {
+        if (result.companyName) {
+            let fullSearchQuery = result.companyName;
+            if (result.address) {
+              fullSearchQuery += `, ${result.address}`;
+            }
+            setSearchQuery(fullSearchQuery);
+            fetchPredictions(fullSearchQuery);
+
+            toast({
+              title: 'Card Analyzed',
+              description: 'Business details populated. Please select from the dropdown to confirm.',
+            });
+        } else {
+          toast({ variant: 'destructive', title: 'Analysis Failed', description: 'Could not find a company name on the card.' });
+        }
+      })
+      .catch(err => {
+        console.error("Analysis failed:", err);
+        toast({ variant: 'destructive', title: 'Analysis Error', description: 'Could not analyze the business card.' });
+      })
+      .finally(() => {
+        setIsAnalyzing(false);
+      });
+  };
+
+  const handleCaptureBackAndAnalyze = () => {
+    const image = handleCapture();
+    if (image) {
+      handleAnalyze(frontImage, image);
+    }
+  };
+
+  const handleSkipAndAnalyze = () => {
+    handleAnalyze(frontImage, null);
+  };
+  
   const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
     if (!userProfile) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
@@ -611,130 +631,104 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
               </div>
           ) : (
             <div className="space-y-4">
-                {forceLPOReferral ? (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">LPO Referral Qualified</h3>
-                        <p className="text-sm text-muted-foreground">This lead qualifies for an LPO Referral based on their high shipping volume with Couriers Please/Aramex.</p>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setStep('capture')}>Back</Button>
-                            <Button className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting} onClick={() => handleFinalSubmit('LPO Referral', {})}>
-                                {isSubmitting ? <Loader /> : 'Submit as LPO Referral'}
-                            </Button>
-                        </DialogFooter>
-                    </div>
-                ) : forceAppointment ? (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Appointment Qualified</h3>
-                        <p className="text-sm text-muted-foreground">This lead qualifies for an appointment based on your check-in answers.</p>
-                        <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
-                            {salesReps.map(rep => (
-                                <div key={rep.name} className="flex items-center space-x-2">
-                                    <RadioGroupItem value={rep.name} id={`forced-rep-${rep.name}`} />
-                                    <Label htmlFor={`forced-rep-${rep.name}`}>{rep.name}</Label>
-                                </div>
-                            ))}
-                        </RadioGroup>
-                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setStep('capture')}>Back</Button>
+                <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>Appointment Qualified</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
+                                {salesReps.map(rep => (
+                                    <div key={rep.name} className="flex items-center space-x-2">
+                                        <RadioGroupItem value={rep.name} id={`rep-${rep.name}`} />
+                                        <Label htmlFor={`rep-${rep.name}`}>{rep.name}</Label>
+                                    </div>
+                                ))}
+                            </RadioGroup>
                             <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: appointmentRep })}>
                                 {isSubmitting ? <Loader /> : 'Submit'}
                             </Button>
-                        </DialogFooter>
-                    </div>
-                ) : (
-                    <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="item-1">
-                            <AccordionTrigger>Appointment Qualified</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
-                                    {salesReps.map(rep => (
-                                        <div key={rep.name} className="flex items-center space-x-2">
-                                            <RadioGroupItem value={rep.name} id={`rep-${rep.name}`} />
-                                            <Label htmlFor={`rep-${rep.name}`}>{rep.name}</Label>
-                                        </div>
-                                    ))}
-                                </RadioGroup>
-                                <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!appointmentRep || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: appointmentRep })}>
-                                    {isSubmitting ? <Loader /> : 'Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="item-2">
-                            <AccordionTrigger>Needs Follow-up</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up.</p>
-                                <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('Needs Follow-up', {})}>
-                                    {isSubmitting ? <Loader /> : 'Confirm & Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="item-6">
-                            <AccordionTrigger>No Access/Contact</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up due to no access or contact.</p>
-                                <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('No Access/Contact', {})}>
-                                    {isSubmitting ? <Loader /> : 'Confirm & Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="item-3">
-                            <AccordionTrigger>Send Quote</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <div className="space-y-2">
-                                    <Label>Assign to Sales Rep</Label>
-                                    <RadioGroup onValueChange={setQuoteRep} value={quoteRep}>{salesReps.map(rep => (<div key={`q-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`q-${rep.name}`} /><Label htmlFor={`q-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Quote For</Label>
-                                    <RadioGroup onValueChange={(v) => setQuoteType(v as any)} value={quoteType}><div className="flex items-center space-x-2"><RadioGroupItem value="Products" id="q-prod" /><Label htmlFor="q-prod">Products</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="Services" id="q-serv" /><Label htmlFor="q-serv">Services</Label></div></RadioGroup>
-                                </div>
-                                {quoteType === 'Services' && <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`qs-${s}`} checked={quoteServices.includes(s)} onCheckedChange={checked => setQuoteServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`qs-${s}`}>{s}</Label></div>))}</div>}
-                                <Button className="w-full" disabled={!quoteRep || !quoteType || isSubmitting} onClick={() => handleFinalSubmit('Send Quote', { salesRep: quoteRep, quoteFor: quoteType, services: quoteServices })}>
-                                    {isSubmitting ? <Loader /> : 'Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="item-4">
-                            <AccordionTrigger>Free Trial</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <div className="space-y-2">
-                                    <Label>Assign to Sales Rep</Label>
-                                    <RadioGroup onValueChange={setTrialRep} value={trialRep}>{salesReps.map(rep => (<div key={`t-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`t-${rep.name}`} /><Label htmlFor={`t-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Trial For</Label>
-                                    <RadioGroup onValueChange={(v) => setTrialType(v as any)} value={trialType}><div className="flex items-center space-x-2"><RadioGroupItem value="ShipMate" id="t-ship" /><Label htmlFor="t-ship">ShipMate</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="Services" id="t-serv" /><Label htmlFor="t-serv">Services</Label></div></RadioGroup>
-                                </div>
-                                {trialType === 'Services' && <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`ts-${s}`} checked={trialServices.includes(s)} onCheckedChange={checked => setTrialServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`ts-${s}`}>{s}</Label></div>))}</div>}
-                                <Button className="w-full" disabled={!trialRep || !trialType || isSubmitting} onClick={() => handleFinalSubmit('Free Trial', { salesRep: trialRep, trialFor: trialType, services: trialServices })}>
-                                    {isSubmitting ? <Loader /> : 'Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="item-5">
-                            <AccordionTrigger>Sign Up</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-2">
-                                <div className="space-y-2">
-                                    <Label>Assign to Sales Rep</Label>
-                                    <RadioGroup onValueChange={setSignUpRep} value={signUpRep}>{salesReps.map(rep => (<div key={`su-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`su-${rep.name}`} /><Label htmlFor={`su-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex items-center space-x-2"><Checkbox id="su-ship" checked={signUpShipMate} onCheckedChange={v => setSignUpShipMate(!!v)} /><Label htmlFor="su-ship">Needs ShipMate Access</Label></div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Services Required</Label>
-                                    <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`sus-${s}`} checked={signUpServices.includes(s)} onCheckedChange={checked => setSignUpServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`sus-${s}`}>{s}</Label></div>))}</div>
-                                </div>
-                                <Button className="w-full" disabled={!signUpRep || isSubmitting} onClick={() => handleFinalSubmit('Sign Up', { salesRep: signUpRep, needsShipmateAccess: signUpShipMate, services: signUpServices })}>
-                                    {isSubmitting ? <Loader /> : 'Submit'}
-                                </Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                )}
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setStep('capture')}>Back to Note</Button>
-                </DialogFooter>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-lpo">
+                        <AccordionTrigger>LPO Referral</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <p className="text-sm text-muted-foreground">This lead qualifies for an LPO Referral based on their high shipping volume with Couriers Please/Aramex.</p>
+                            <Button className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting} onClick={() => handleFinalSubmit('LPO Referral', {})}>
+                                {isSubmitting ? <Loader /> : 'Submit as LPO Referral'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-2">
+                        <AccordionTrigger>Needs Follow-up</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up.</p>
+                            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('Needs Follow-up', {})}>
+                                {isSubmitting ? <Loader /> : 'Confirm & Submit'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-6">
+                        <AccordionTrigger>No Access/Contact</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <p className="text-sm text-muted-foreground">This lead will be marked for the Outbound team to follow-up due to no access or contact.</p>
+                            <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('No Access/Contact', {})}>
+                                {isSubmitting ? <Loader /> : 'Confirm & Submit'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-3">
+                        <AccordionTrigger>Send Quote</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <div className="space-y-2">
+                                <Label>Assign to Sales Rep</Label>
+                                <RadioGroup onValueChange={setQuoteRep} value={quoteRep}>{salesReps.map(rep => (<div key={`q-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`q-${rep.name}`} /><Label htmlFor={`q-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Quote For</Label>
+                                <RadioGroup onValueChange={(v) => setQuoteType(v as any)} value={quoteType}><div className="flex items-center space-x-2"><RadioGroupItem value="Products" id="q-prod" /><Label htmlFor="q-prod">Products</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="Services" id="q-serv" /><Label htmlFor="q-serv">Services</Label></div></RadioGroup>
+                            </div>
+                            {quoteType === 'Services' && <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`qs-${s}`} checked={quoteServices.includes(s)} onCheckedChange={checked => setQuoteServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`qs-${s}`}>{s}</Label></div>))}</div>}
+                            <Button className="w-full" disabled={!quoteRep || !quoteType || isSubmitting} onClick={() => handleFinalSubmit('Send Quote', { salesRep: quoteRep, quoteFor: quoteType, services: quoteServices })}>
+                                {isSubmitting ? <Loader /> : 'Submit'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-4">
+                        <AccordionTrigger>Free Trial</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <div className="space-y-2">
+                                <Label>Assign to Sales Rep</Label>
+                                <RadioGroup onValueChange={setTrialRep} value={trialRep}>{salesReps.map(rep => (<div key={`t-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`t-${rep.name}`} /><Label htmlFor={`t-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Trial For</Label>
+                                <RadioGroup onValueChange={(v) => setTrialType(v as any)} value={trialType}><div className="flex items-center space-x-2"><RadioGroupItem value="ShipMate" id="t-ship" /><Label htmlFor="t-ship">ShipMate</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="Services" id="t-serv" /><Label htmlFor="t-serv">Services</Label></div></RadioGroup>
+                            </div>
+                            {trialType === 'Services' && <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`ts-${s}`} checked={trialServices.includes(s)} onCheckedChange={checked => setTrialServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`ts-${s}`}>{s}</Label></div>))}</div>}
+                            <Button className="w-full" disabled={!trialRep || !trialType || isSubmitting} onClick={() => handleFinalSubmit('Free Trial', { salesRep: trialRep, trialFor: trialType, services: trialServices })}>
+                                {isSubmitting ? <Loader /> : 'Submit'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="item-5">
+                        <AccordionTrigger>Sign Up</AccordionTrigger>
+                        <AccordionContent className="space-y-4 pt-2">
+                            <div className="space-y-2">
+                                <Label>Assign to Sales Rep</Label>
+                                <RadioGroup onValueChange={setSignUpRep} value={signUpRep}>{salesReps.map(rep => (<div key={`su-${rep.name}`} className="flex items-center space-x-2"><RadioGroupItem value={rep.name} id={`su-${rep.name}`} /><Label htmlFor={`su-${rep.name}`}>{rep.name}</Label></div>))}</RadioGroup>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center space-x-2"><Checkbox id="su-ship" checked={signUpShipMate} onCheckedChange={v => setSignUpShipMate(!!v)} /><Label htmlFor="su-ship">Needs ShipMate Access</Label></div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Services Required</Label>
+                                <div className="space-y-2 pl-4">{services.map(s => (<div key={s} className="flex items-center space-x-2"><Checkbox id={`sus-${s}`} checked={signUpServices.includes(s)} onCheckedChange={checked => setSignUpServices(prev => checked ? [...prev, s] : prev.filter(ps => ps !== s))} /><Label htmlFor={`sus-${s}`}>{s}</Label></div>))}</div>
+                            </div>
+                            <Button className="w-full" disabled={!signUpRep || isSubmitting} onClick={() => handleFinalSubmit('Sign Up', { salesRep: signUpRep, needsShipmateAccess: signUpShipMate, services: signUpServices })}>
+                                {isSubmitting ? <Loader /> : 'Submit'}
+                            </Button>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
             </div>
           )}
           </DialogContent>
