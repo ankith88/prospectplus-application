@@ -426,7 +426,7 @@ export default function CaptureVisitPage() {
             setFrontImage(dataUrl);
         } else {
             setBackImage(dataUrl);
-            setStep('capture');
+            setStep('discovery');
         }
     };
 
@@ -706,7 +706,7 @@ export default function CaptureVisitPage() {
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
-                                    <Button onClick={handleNextStep} disabled={!selectedPlace}>Next</Button>
+                                    <Button onClick={handleNextStep} disabled={!selectedPlace && !frontImage}>Next</Button>
                                 </div>
                             </div>
                         ) : step === 'discovery' ? (
@@ -780,13 +780,13 @@ export default function CaptureVisitPage() {
                                     <div className="space-y-2">
                                         <div className="flex gap-2">
                                             <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Back</Button>
-                                            <Button variant="secondary" className="w-full" onClick={() => setStep('capture')}>Continue with 1 Image</Button>
+                                            <Button variant="secondary" className="w-full" onClick={() => setStep('discovery')}>Continue with 1 Image</Button>
                                         </div>
                                         <Button variant="outline" className="w-full" onClick={() => setFrontImage(null)}>Retake Front</Button>
                                     </div>
                                 ) : (
                                     <div className="flex gap-2">
-                                        <Button onClick={() => setStep('capture')} className="w-full">Done</Button>
+                                        <Button onClick={() => setStep('discovery')} className="w-full">Done</Button>
                                         <Button variant="outline" className="w-full" onClick={() => { setFrontImage(null); setBackImage(null); }}>Retake All</Button>
                                     </div>
                                 )}
