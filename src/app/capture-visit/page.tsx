@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { z } from 'zod';
@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check } from 'lucide-react';
 import { addVisitNote } from '@/services/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
 import { salesReps } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 const noteSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
@@ -76,6 +77,44 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     address.state = get('administrative_area_level_1', true);
     address.zip = get('postal_code');
     return address as Address;
+};
+
+const TOTAL_STEPS = 4;
+const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome"];
+
+const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
+    return (
+        <div className="flex items-center w-full" aria-label={"Step " + currentStep + " of " + totalSteps}>
+            {labels.map((label, index) => {
+                const step = index + 1;
+                const isCompleted = currentStep > step;
+                const isCurrent = currentStep === step;
+
+                return (
+                    <React.Fragment key={step}>
+                        <button
+                            type="button"
+                            onClick={() => onStepClick(step)}
+                            className="flex flex-col items-center text-center cursor-pointer disabled:cursor-not-allowed group"
+                        >
+                            <div className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 group-hover:ring-2 group-hover:ring-primary/50",
+                                isCompleted ? "bg-primary text-primary-foreground" : isCurrent ? "border-2 border-primary bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                            )}>
+                                {isCompleted ? <Check className="w-5 h-5" /> : step}
+                            </div>
+                            <p className={cn("text-xs mt-1 hidden md:block", isCurrent ? "font-bold text-primary" : "text-muted-foreground")}>
+                                {label}
+                            </p>
+                        </button>
+                        {step < labels.length && (
+                            <div className={cn("flex-1 h-0.5 transition-all duration-300", currentStep > step ? "bg-primary" : "bg-muted")} />
+                        )}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+    );
 };
 
 
@@ -262,11 +301,6 @@ export default function CaptureVisitPage() {
         }
         );
     };
-
-    const handleCaptureSubmit = (values: z.infer<typeof noteSchema>) => {
-        setNoteContent(values.content);
-        setStep('outcome');
-    };
     
     const handleCaptureImage = () => {
         if (!videoRef.current || !canvasRef.current) return;
@@ -403,30 +437,13 @@ export default function CaptureVisitPage() {
         }
       };
 
-    const getStepTitle = () => {
-        switch(step) {
-            case 'search': return 'Step 1: Find Business';
-            case 'discovery': return 'Step 2: Field Discovery';
-            case 'capture': return 'Step 3: Capture Visit Note';
-            case 'camera': return 'Scan Business Card';
-            case 'outcome': return 'Step 4: Select Visit Outcome';
-            default: return 'Capture Visit';
-        }
-    }
-    const getStepDescription = () => {
-        switch(step) {
-            case 'search': return 'Search for the business you visited.';
-            case 'discovery': return 'Capture observable behaviour and decision context.';
-            case 'capture': return 'Record the details of your visit for the Lead Gen team.';
-            case 'camera': return 'Take a photo of the front and back of the business card.';
-            case 'outcome': return 'Choose the final outcome of your visit.';
-            default: return 'Log your field sales visits and interactions.';
-        }
-    }
-    
     const handleNextStep = () => {
+        if (step === 'capture') {
+            setNoteContent(captureForm.getValues('content'));
+        }
         switch(step) {
             case 'search': setStep('discovery'); break;
+            case 'camera': setStep('discovery'); break;
             case 'discovery': setStep('capture'); break;
             case 'capture': setStep('outcome'); break;
             default: break;
@@ -441,6 +458,25 @@ export default function CaptureVisitPage() {
         }
     }
 
+    const handleStepClick = (stepNumber: number) => {
+        if (step === 'capture' && stepNumber !== 3) {
+            setNoteContent(captureForm.getValues('content'));
+        }
+        if (stepNumber === 1) setStep('search');
+        else if (stepNumber === 2) setStep('discovery');
+        else if (stepNumber === 3) setStep('capture');
+        else if (stepNumber === 4) setStep('outcome');
+    };
+
+    const stepMap: Record<string, number> = {
+        search: 1,
+        camera: 1,
+        discovery: 2,
+        capture: 3,
+        outcome: 4,
+    };
+    const currentStepNumber = stepMap[step] || 1;
+
     return (
         <>
         <FormProvider {...discoveryForm}>
@@ -449,6 +485,10 @@ export default function CaptureVisitPage() {
                     <h1 className="text-3xl font-bold tracking-tight">Capture Visit</h1>
                     <p className="text-muted-foreground">Log your field sales visits and interactions.</p>
                 </header>
+                
+                <div className="my-4">
+                    <ResponsiveProgress currentStep={currentStepNumber} totalSteps={TOTAL_STEPS} labels={stepLabels} onStepClick={handleStepClick} />
+                </div>
 
                 <Card>
                     <CardHeader>
@@ -459,8 +499,14 @@ export default function CaptureVisitPage() {
                                 </Button>
                             )}
                             <div className="flex-grow">
-                                <CardTitle>{getStepTitle()}</CardTitle>
-                                <CardDescription>{getStepDescription()}</CardDescription>
+                                <CardTitle>{stepLabels[currentStepNumber - 1]}</CardTitle>
+                                <CardDescription>
+                                    {step === 'search' ? 'Search for the business you visited.' :
+                                    step === 'discovery' ? 'Capture observable behaviour and decision context.' :
+                                    step === 'capture' ? 'Record the details of your visit for the Lead Gen team.' :
+                                    step === 'camera' ? 'Take a photo of the front and back of the business card.' :
+                                    'Choose the final outcome of your visit.'}
+                                </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
@@ -482,7 +528,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -507,14 +553,14 @@ export default function CaptureVisitPage() {
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
-                                    <Button onClick={handleNextStep} disabled={!selectedPlace}>Next</Button>
+                                    <Button onClick={handleNextStep}>Next</Button>
                                 </div>
                             </div>
                         ) : step === 'discovery' ? (
                             <FieldDiscoveryStep onNext={handleNextStep} onBack={handlePreviousStep} />
                         ) : step === 'capture' ? (
                             <FormProvider {...captureForm}>
-                                <form onSubmit={captureForm.handleSubmit(handleCaptureSubmit)} className="space-y-4">
+                                <div className="space-y-4">
                                     {selectedPlace && (
                                         <div className="p-3 border rounded-md bg-secondary/50 text-sm">
                                             <p className="font-semibold">{selectedPlace.name}</p>
@@ -530,7 +576,7 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setShowCamera(true)}><Camera /></Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                         <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
@@ -544,9 +590,9 @@ export default function CaptureVisitPage() {
                                     />
                                     <div className="flex justify-between">
                                         <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
-                                        <Button type="submit">Next</Button>
+                                        <Button type="button" onClick={handleNextStep}>Next</Button>
                                     </div>
-                                </form>
+                                </div>
                             </FormProvider>
                         ) : step === 'camera' ? (
                             <div className="space-y-4">
@@ -564,8 +610,8 @@ export default function CaptureVisitPage() {
                                 )}
                                 {!frontImage ? (
                                     <div className="flex gap-2">
-                                        <Button onClick={handleCaptureFront} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
-                                        <Button variant="outline" onClick={() => setShowCamera(false)}>Cancel</Button>
+                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
+                                        <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
@@ -681,10 +727,10 @@ const discoverySignals = [
 ];
 
 const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: () => void }) => {
-    const { control, handleSubmit } = useFormContext<z.infer<typeof discoverySchema>>();
+    const { control } = useFormContext<z.infer<typeof discoverySchema>>();
 
     return (
-        <form onSubmit={handleSubmit(onNext)} className="space-y-8">
+        <div className="space-y-8">
             <FormField
                 control={control}
                 name="discoverySignals"
@@ -803,8 +849,8 @@ const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: ()
             </div>
             <div className="flex justify-between pt-8">
                 <Button type="button" variant="outline" onClick={onBack}>Back</Button>
-                <Button type="submit">Next</Button>
+                <Button type="button" onClick={onNext}>Next</Button>
             </div>
-        </form>
+        </div>
     );
 };
