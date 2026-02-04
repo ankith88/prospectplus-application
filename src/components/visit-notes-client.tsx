@@ -46,7 +46,7 @@ export default function VisitNotesClient() {
     if (!userProfile) return;
     const fetchNotes = async () => {
       setLoading(true);
-      const canSeeAll = ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!);
+      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!);
       const fetchedNotes = canSeeAll ? await getVisitNotes() : await getVisitNotes(userProfile.uid);
       setNotes(fetchedNotes);
       setLoading(false);
