@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -482,7 +482,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -530,7 +530,7 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setShowCamera(true)}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                         <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
@@ -565,7 +565,7 @@ export default function CaptureVisitPage() {
                                 {!frontImage ? (
                                     <div className="flex gap-2">
                                         <Button onClick={handleCaptureFront} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
-                                        <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
+                                        <Button variant="outline" onClick={() => setShowCamera(false)}>Cancel</Button>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
