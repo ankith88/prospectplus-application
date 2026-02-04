@@ -190,6 +190,15 @@ export default function CaptureVisitPage() {
         resolver: zodResolver(discoverySchema),
         defaultValues: {
             discoverySignals: [],
+            personSpokenWithName: '',
+            personSpokenWithTitle: '',
+            personSpokenWithEmail: '',
+            personSpokenWithPhone: '',
+            personSpokenWithTags: [],
+            decisionMakerName: '',
+            decisionMakerTitle: '',
+            decisionMakerEmail: '',
+            decisionMakerPhone: '',
         },
     });
     
@@ -660,7 +669,7 @@ export default function CaptureVisitPage() {
                                             </div>
                                         )}
                                         
-                                        {(frontImage || backImage) && !selectedPlace && (
+                                        {(frontImage || backImage) && (
                                             <div className="space-y-2">
                                                 <Label>Captured Images</Label>
                                                 <div className="flex gap-2">
