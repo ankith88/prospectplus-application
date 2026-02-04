@@ -201,14 +201,13 @@ export default function CaptureVisitPage() {
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
-    const stepMap: Record<string, number> = {
+    const currentStepNumber = ({
         search: 1,
         camera: 1,
         discovery: 2,
         capture: 3,
         outcome: 4,
-    };
-    const currentStepNumber = stepMap[step] || 1;
+    } as Record<string, number>)[step] || 1;
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -577,6 +576,7 @@ export default function CaptureVisitPage() {
       };
 
     const handleNextStep = () => {
+        window.scrollTo(0, 0);
         if (step === 'capture') {
             setNoteContent(captureForm.getValues('content'));
         }
@@ -589,6 +589,7 @@ export default function CaptureVisitPage() {
         }
     }
     const handlePreviousStep = () => {
+        window.scrollTo(0, 0);
         switch(step) {
             case 'discovery': setStep('search'); break;
             case 'capture': setStep('discovery'); break;
@@ -598,6 +599,7 @@ export default function CaptureVisitPage() {
     }
 
     const handleStepClick = (stepNumber: number) => {
+        window.scrollTo(0, 0);
         if (step === 'capture' && stepNumber !== 3) {
             setNoteContent(captureForm.getValues('content'));
         }
@@ -605,14 +607,6 @@ export default function CaptureVisitPage() {
         else if (stepNumber === 2) setStep('discovery');
         else if (stepNumber === 3) setStep('capture');
         else if (stepNumber === 4) setStep('outcome');
-    };
-
-    const stepMap: Record<string, number> = {
-        search: 1,
-        camera: 1,
-        discovery: 2,
-        capture: 3,
-        outcome: 4,
     };
 
     const isFieldSalesRepWithLinkedRep = userProfile?.role === 'Field Sales' && userProfile.linkedSalesRep;
@@ -692,7 +686,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -787,7 +781,7 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setShowCamera(true)}><Camera /></Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                         <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
