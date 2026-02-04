@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
-import type { Address, CheckinQuestion, UserProfile } from '@/lib/types';
+import type { Address, CheckinQuestion, UserProfile, DiscoveryData } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
@@ -450,33 +450,6 @@ export default function CaptureVisitPage() {
         }
         
         const discoveryFormValues = discoveryForm.getValues();
-        const checkinQuestionsToSave: CheckinQuestion[] = [];
-        
-        // Step 2 questions
-        if (discoveryFormValues.discoverySignals?.length) {
-            checkinQuestionsToSave.push({ question: 'Discovery Signals', answer: discoveryFormValues.discoverySignals });
-        }
-        if (discoveryFormValues.inconvenience) {
-            checkinQuestionsToSave.push({ question: 'Inconvenience', answer: discoveryFormValues.inconvenience });
-        }
-        if (discoveryFormValues.occurrence) {
-            checkinQuestionsToSave.push({ question: 'Occurrence', answer: discoveryFormValues.occurrence });
-        }
-        if (discoveryFormValues.recurring) {
-            checkinQuestionsToSave.push({ question: 'Recurring', answer: discoveryFormValues.recurring });
-        }
-        // Step 1 questions
-        if (discoveryFormValues.businessType) checkinQuestionsToSave.push({ question: 'Business Type', answer: discoveryFormValues.businessType });
-        if (discoveryFormValues.personSpokenWithName) checkinQuestionsToSave.push({ question: 'Person Spoken With Name', answer: discoveryFormValues.personSpokenWithName });
-        if (discoveryFormValues.personSpokenWithTitle) checkinQuestionsToSave.push({ question: 'Person Spoken With Title', answer: discoveryFormValues.personSpokenWithTitle });
-        if (discoveryFormValues.personSpokenWithEmail) checkinQuestionsToSave.push({ question: 'Person Spoken With Email', answer: discoveryFormValues.personSpokenWithEmail });
-        if (discoveryFormValues.personSpokenWithPhone) checkinQuestionsToSave.push({ question: 'Person Spoken With Phone', answer: discoveryFormValues.personSpokenWithPhone });
-        if (discoveryFormValues.personSpokenWithTags) checkinQuestionsToSave.push({ question: 'Person Spoken With Tags', answer: discoveryFormValues.personSpokenWithTags });
-        if (discoveryFormValues.decisionMakerName) checkinQuestionsToSave.push({ question: 'Decision Maker Name', answer: discoveryFormValues.decisionMakerName });
-        if (discoveryFormValues.decisionMakerTitle) checkinQuestionsToSave.push({ question: 'Decision Maker Title', answer: discoveryFormValues.decisionMakerTitle });
-        if (discoveryFormValues.decisionMakerEmail) checkinQuestionsToSave.push({ question: 'Decision Maker Email', answer: discoveryFormValues.decisionMakerEmail });
-        if (discoveryFormValues.decisionMakerPhone) checkinQuestionsToSave.push({ question: 'Decision Maker Phone', answer: discoveryFormValues.decisionMakerPhone });
-
     
         try {
           await addVisitNote({
@@ -493,7 +466,7 @@ export default function CaptureVisitPage() {
               type: outcomeType,
               details: detailsObject,
             },
-            checkinQuestions: checkinQuestionsToSave,
+            discoveryData: discoveryFormValues,
           });
           toast({ title: 'Success', description: 'Your visit note has been submitted.' });
           

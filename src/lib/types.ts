@@ -187,7 +187,7 @@ export interface VisitNote {
   frontImageDataUri?: string;
   backImageDataUri?: string;
   websiteUrl?: string;
-  checkinQuestions?: CheckinQuestion[];
+  discoveryData?: Partial<DiscoveryData>;
 }
 
 export interface Lead {

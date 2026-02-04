@@ -585,11 +585,11 @@ interface NewLeadData {
   initialNotes?: string;
   dialerAssigned?: string;
   salesRepAssigned?: string;
-  checkinQuestions?: CheckinQuestion[];
+  discoveryData?: Partial<DiscoveryData>;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, checkinQuestions } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -633,11 +633,17 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     if (salesRepAssigned) {
         params.append('salesrep', salesRepAssigned);
     }
-    if (checkinQuestions) {
-        const checkinString = checkinQuestions
-            .map(q => `${q.question}: ${Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}`)
+    if (discoveryData) {
+        const discoveryString = Object.entries(discoveryData)
+            .map(([key, value]) => {
+                if (!value || (Array.isArray(value) && value.length === 0)) return '';
+                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                return `${formattedKey}: ${formattedValue}`;
+            })
+            .filter(Boolean)
             .join('\n');
-        params.append('custentity_checkin_questions', checkinString);
+        params.append('custentity_checkin_questions', discoveryString);
     }
 
     const url = `${baseUrl}?${params.toString()}`;
