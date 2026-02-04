@@ -49,6 +49,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
 import { salesReps } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 
 const noteSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
@@ -56,11 +57,25 @@ const noteSchema = z.object({
 
 const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
-  decisionMakerStatus: z.enum(['Speaking to decision maker', 'Decision maker identified', 'Decision maker unknown']).optional(),
   inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
   occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
   recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
+
+  // New fields for Step 1
+  businessType: z.enum(['Retail', 'B2B']).optional(),
+  
+  personSpokenWithName: z.string().optional(),
+  personSpokenWithTitle: z.string().optional(),
+  personSpokenWithEmail: z.string().email().optional().or(z.literal('')),
+  personSpokenWithPhone: z.string().optional(),
+  personSpokenWithTags: z.array(z.string()).optional(),
+
+  decisionMakerName: z.string().optional(),
+  decisionMakerTitle: z.string().optional(),
+  decisionMakerEmail: z.string().email().optional().or(z.literal('')),
+  decisionMakerPhone: z.string().optional(),
 });
+
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
     const address: Partial<Address> = { country: 'Australia' };
@@ -81,6 +96,12 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 
 const TOTAL_STEPS = 4;
 const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome"];
+
+const contactTagOptions: Option[] = [
+    { value: 'Decision Maker', label: 'Decision Maker' },
+    { value: 'Influencer', label: 'Influencer' },
+    { value: 'Gatekeeper', label: 'Gatekeeper' },
+];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
@@ -158,6 +179,10 @@ export default function CaptureVisitPage() {
         },
     });
     
+    const { control, watch } = discoveryForm;
+    const personSpokenWithTags = watch("personSpokenWithTags") || [];
+    const showDecisionMakerFields = personSpokenWithTags.length > 0 && !personSpokenWithTags.includes('Decision Maker');
+
     const resetState = useCallback(() => {
         captureForm.reset();
         discoveryForm.reset();
@@ -393,11 +418,9 @@ export default function CaptureVisitPage() {
         const discoveryFormValues = discoveryForm.getValues();
         const checkinQuestionsToSave: CheckinQuestion[] = [];
         
+        // Step 2 questions
         if (discoveryFormValues.discoverySignals?.length) {
             checkinQuestionsToSave.push({ question: 'Discovery Signals', answer: discoveryFormValues.discoverySignals });
-        }
-        if (discoveryFormValues.decisionMakerStatus) {
-            checkinQuestionsToSave.push({ question: 'Decision Maker Status', answer: discoveryFormValues.decisionMakerStatus });
         }
         if (discoveryFormValues.inconvenience) {
             checkinQuestionsToSave.push({ question: 'Inconvenience', answer: discoveryFormValues.inconvenience });
@@ -408,6 +431,18 @@ export default function CaptureVisitPage() {
         if (discoveryFormValues.recurring) {
             checkinQuestionsToSave.push({ question: 'Recurring', answer: discoveryFormValues.recurring });
         }
+        // Step 1 questions
+        if (discoveryFormValues.businessType) checkinQuestionsToSave.push({ question: 'Business Type', answer: discoveryFormValues.businessType });
+        if (discoveryFormValues.personSpokenWithName) checkinQuestionsToSave.push({ question: 'Person Spoken With Name', answer: discoveryFormValues.personSpokenWithName });
+        if (discoveryFormValues.personSpokenWithTitle) checkinQuestionsToSave.push({ question: 'Person Spoken With Title', answer: discoveryFormValues.personSpokenWithTitle });
+        if (discoveryFormValues.personSpokenWithEmail) checkinQuestionsToSave.push({ question: 'Person Spoken With Email', answer: discoveryFormValues.personSpokenWithEmail });
+        if (discoveryFormValues.personSpokenWithPhone) checkinQuestionsToSave.push({ question: 'Person Spoken With Phone', answer: discoveryFormValues.personSpokenWithPhone });
+        if (discoveryFormValues.personSpokenWithTags) checkinQuestionsToSave.push({ question: 'Person Spoken With Tags', answer: discoveryFormValues.personSpokenWithTags });
+        if (discoveryFormValues.decisionMakerName) checkinQuestionsToSave.push({ question: 'Decision Maker Name', answer: discoveryFormValues.decisionMakerName });
+        if (discoveryFormValues.decisionMakerTitle) checkinQuestionsToSave.push({ question: 'Decision Maker Title', answer: discoveryFormValues.decisionMakerTitle });
+        if (discoveryFormValues.decisionMakerEmail) checkinQuestionsToSave.push({ question: 'Decision Maker Email', answer: discoveryFormValues.decisionMakerEmail });
+        if (discoveryFormValues.decisionMakerPhone) checkinQuestionsToSave.push({ question: 'Decision Maker Phone', answer: discoveryFormValues.decisionMakerPhone });
+
     
         try {
           await addVisitNote({
@@ -528,7 +563,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -547,9 +582,56 @@ export default function CaptureVisitPage() {
                                     )}
                                 </div>
                                 {selectedPlace && (
-                                    <div className="p-3 border rounded-md bg-secondary/50 text-sm">
-                                        <p className="font-semibold">{selectedPlace.name}</p>
-                                        <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
+                                    <div className="space-y-6 pt-4">
+                                        <div className="p-3 border rounded-md bg-secondary/50 text-sm">
+                                            <p className="font-semibold">{selectedPlace.name}</p>
+                                            <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
+                                        </div>
+
+                                        <FormField
+                                            control={control}
+                                            name="businessType"
+                                            render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Business Type</FormLabel>
+                                                <FormControl>
+                                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4">
+                                                    <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="Retail" /></FormControl><FormLabel className="font-normal">Retail</FormLabel></FormItem>
+                                                    <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="B2B" /></FormControl><FormLabel className="font-normal">B2B</FormLabel></FormItem>
+                                                </RadioGroup>
+                                                </FormControl>
+                                            </FormItem>
+                                            )}
+                                        />
+                                        
+                                        <Card>
+                                            <CardHeader><CardTitle>Person Spoken With</CardTitle></CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <FormField control={control} name="personSpokenWithName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                <FormField control={control} name="personSpokenWithTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Manager" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                <FormField control={control} name="personSpokenWithEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="jane@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                <FormField control={control} name="personSpokenWithPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0400 123 456" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                <FormField control={control} name="personSpokenWithTags" render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Role</FormLabel>
+                                                        <MultiSelectCombobox options={contactTagOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select roles..." />
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )} />
+                                            </CardContent>
+                                        </Card>
+
+                                        {showDecisionMakerFields && (
+                                            <Card>
+                                                <CardHeader><CardTitle>Decision Maker Details</CardTitle><CardDescription>Since you didn't speak to the decision maker, add their details if you have them.</CardDescription></CardHeader>
+                                                <CardContent className="space-y-4">
+                                                    <FormField control={control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                </CardContent>
+                                            </Card>
+                                        )}
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
@@ -768,32 +850,6 @@ const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: ()
             <div className="space-y-6 pt-4 border-t">
                 <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                    <FormField
-                        control={control}
-                        name="decisionMakerStatus"
-                        render={({ field }) => (
-                            <FormItem className="space-y-3">
-                                <FormLabel>Decision Maker Status</FormLabel>
-                                <FormControl>
-                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                                        <FormItem className="flex items-center space-x-3 space-y-0">
-                                            <FormControl><RadioGroupItem value="Speaking to decision maker" /></FormControl>
-                                            <FormLabel className="font-normal">Speaking to decision maker</FormLabel>
-                                        </FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0">
-                                            <FormControl><RadioGroupItem value="Decision maker identified" /></FormControl>
-                                            <FormLabel className="font-normal">Decision maker identified</FormLabel>
-                                        </FormItem>
-                                         <FormItem className="flex items-center space-x-3 space-y-0">
-                                            <FormControl><RadioGroupItem value="Decision maker unknown" /></FormControl>
-                                            <FormLabel className="font-normal">Decision maker unknown</FormLabel>
-                                        </FormItem>
-                                    </RadioGroup>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
                     <FormField
                         control={control}
                         name="inconvenience"
