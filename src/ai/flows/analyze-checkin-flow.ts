@@ -5,8 +5,9 @@
  */
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { updateLeadCheckinQuestions, updateLeadDetails } from '@/services/firebase';
-import type { CheckinQuestion, Lead } from '@/lib/types';
+import { updateLeadDiscoveryData, updateLeadDetails } from '@/services/firebase';
+import type { Lead } from '@/lib/types';
+import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 
 
 const CheckinAnalysisInputSchema = z.object({
@@ -16,14 +17,18 @@ const CheckinAnalysisInputSchema = z.object({
 });
 export type CheckinAnalysisInput = z.infer<typeof CheckinAnalysisInputSchema>;
 
+const DiscoveryDataSchema = z.object({
+  discoverySignals: z.array(z.string()).optional(),
+  inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
+  occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
+  recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
+});
+
 const CheckinAnalysisSchema = z.object({
   summary: z.string().describe("A concise summary of the entire conversation."),
   painPoints: z.array(z.string()).describe("A list of pain points or challenges mentioned by the lead."),
   actionItems: z.array(z.string()).describe("A list of clear, actionable next steps for the sales representative based on the conversation."),
-  checkinQuestions: z.array(z.object({
-      question: z.string(),
-      answer: z.union([z.string(), z.array(z.string())]),
-  })).describe("An array of answers to the standard check-in questions, extracted from the conversation."),
+  discoveryData: DiscoveryDataSchema.describe("Structured data from the field discovery questions."),
   transcript: z.string().describe("The full transcript of the conversation."),
   checkinScore: z.number().optional(),
   checkinRoutingTag: z.string().optional(),
@@ -32,16 +37,15 @@ const CheckinAnalysisSchema = z.object({
 export type CheckinAnalysis = z.infer<typeof CheckinAnalysisSchema>;
 
 
-const checkinQuestionsList = [
-    "Do you have a relationship with Australia Post?",
-    "What do you use them for?",
-    "Do you pay for the service?",
-    "Do you drop it off or do they come here? (Answer should be 'Drop-off', 'They collect', or both)",
-    "Do you use any other couriers?",
-    "Which Courier do you use? (List them)",
-    "Do you have any need for local same-day deliveries?",
-    "Do people leave the office during the day?",
-    "What are the reasons people leave the office? (e.g., Banking, Local Same Day)",
+const discoverySignals = [
+  { id: 'pays_aus_post', label: 'Pays Australia Post' },
+  { id: 'staff_handle_post', label: 'Staff Handle Post' },
+  { id: 'drop_off_hassle', label: 'Drop-off is a Hassle' },
+  { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)' },
+  { id: 'uses_couriers_100_plus', label: 'Uses Other Couriers (100+/wk)' },
+  { id: 'banking_runs', label: 'Banking Runs' },
+  { id: 'needs_same_day', label: 'Needs Same-Day Delivery' },
+  { id: 'inter_office', label: 'Inter-Office Deliveries' },
 ];
 
 const analyzeCheckinPrompt = ai.definePrompt({
@@ -61,8 +65,11 @@ const analyzeCheckinPrompt = ai.definePrompt({
     2.  **Summarize the conversation:** Provide a brief summary of the key discussion points.
     3.  **Identify Pain Points:** List any challenges or problems the lead mentioned regarding their current shipping, mail, or logistics processes.
     4.  **Define Action Items:** Create a list of clear, actionable next steps for the sales representative.
-    5.  **Answer Check-in Questions:** Based *only* on the transcript, answer the following questions. If the information is not mentioned, leave the answer as an empty string or empty array.
-        - ${checkinQuestionsList.join("\n        - ")}
+    5.  **Field Discovery:** Based *only* on the transcript, extract the following information into the 'discoveryData' object.
+        - **discoverySignals**: Identify which of the following signals are present in the conversation: ${discoverySignals.map(s => `'${s.label}'`).join(", ")}.
+        - **inconvenience**: How inconvenient is their current process? ('Very inconvenient', 'Somewhat inconvenient', 'Not a big issue').
+        - **occurrence**: How often does the inconvenience occur? ('Daily', 'Weekly', 'Ad-hoc').
+        - **recurring**: Is this a recurring problem? ('Yes - predictable', 'Sometimes', 'One-off').
 
     Provide the output in the specified JSON format.
     `,
@@ -81,17 +88,18 @@ const analyzeCheckinFlow = ai.defineFlow(
             throw new Error("AI failed to generate check-in analysis.");
         }
 
-        // Save questions and get back scoring data
-        const { scoreData } = await updateLeadCheckinQuestions(leadId, aiOutput.checkinQuestions as CheckinQuestion[]);
+        const discoveryDataWithScore = calculateScoreAndRouting(aiOutput.discoveryData || {});
         
-        // Update summary separately
+        await updateLeadDiscoveryData(leadId, discoveryDataWithScore);
+        
         await updateLeadDetails(leadId, { id: leadId } as Lead, { companyDescription: aiOutput.summary });
 
         return {
             ...aiOutput,
-            checkinScore: scoreData?.checkinScore,
-            checkinRoutingTag: scoreData?.checkinRoutingTag,
-            checkinScoringReason: scoreData?.checkinScoringReason,
+            checkinScore: discoveryDataWithScore.score,
+            checkinRoutingTag: discoveryDataWithScore.routingTag,
+            checkinScoringReason: discoveryDataWithScore.scoringReason,
+            discoveryData: discoveryDataWithScore,
         };
     }
 );
