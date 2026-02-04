@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import Link from "next/link"
@@ -29,19 +28,21 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2 } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
+
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
+
   const isActive = (path: string) => {
     if (path === '/leads') {
         return pathname === '/leads';
@@ -125,6 +126,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
+  const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+
 
   return (
     <>
@@ -162,6 +167,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+            {canCaptureVisit && (
+                 <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/capture-visit")} tooltip="Capture Visit">
+                    <Link href="/capture-visit">
+                        <ClipboardCheck />
+                        <span>Capture Visit</span>
+                    </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            )}
             {canViewD2D && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
@@ -188,7 +203,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role)) && (
+            {canCreateLead && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/new")} tooltip="New Lead">
                   <Link href="/leads/new">
@@ -197,6 +212,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+            )}
+             {canProcessVisits && (
+                <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/visit-notes")} tooltip="Visit Notes">
+                    <Link href="/visit-notes">
+                        <ClipboardCheck />
+                        <span>Visit Notes</span>
+                    </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
             )}
             {(userProfile?.role && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
@@ -236,6 +261,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <Link href="/door-to-door-reporting">
                         <BarChart3 />
                         <span>D2D Reporting</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                      <Link href="/field-activity-report">
+                        <BarChart3 />
+                        <span>Field Activity</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
