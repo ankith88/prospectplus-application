@@ -317,21 +317,27 @@ export function VisitNoteDialog({ isOpen, onOpenChange }: VisitNoteDialogProps) 
     const checkinValues = checkinForm.getValues();
 
     const isLPOReferral = Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.includes("Couriers Please/Aramex (100+ items/week)");
+    const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)"];
+    const shouldScheduleAppointment =
+        checkinValues.auspostPaidService === 'Yes' ||
+        (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
+        (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => appointmentQualifyingCouriers.includes(c))) ||
+        (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
 
-    if (isLPOReferral) {
+    if (isLPOReferral && shouldScheduleAppointment) {
+        setForceLPOReferral(false);
+        setForceAppointment(false);
+    } else if (isLPOReferral) {
         setForceLPOReferral(true);
+        setForceAppointment(false);
+    } else if (shouldScheduleAppointment) {
+        setForceAppointment(true);
+        setForceLPOReferral(false);
     } else {
-        const appointmentQualifyingCouriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "FedEx (upto 5kg)"];
-        const shouldScheduleAppointment =
-            checkinValues.auspostPaidService === 'Yes' ||
-            (Array.isArray(checkinValues.auspostLodge) && checkinValues.auspostLodge.includes('Drop-off')) ||
-            (Array.isArray(checkinValues.otherCouriersList) && checkinValues.otherCouriersList.some(c => appointmentQualifyingCouriers.includes(c))) ||
-            (Array.isArray(checkinValues.reasonsToLeave) && checkinValues.reasonsToLeave.some(r => ['Banking', 'Local Same Day'].includes(r)));
-
-        if (shouldScheduleAppointment) {
-            setForceAppointment(true);
-        }
+        setForceAppointment(false);
+        setForceLPOReferral(false);
     }
+
     setStep('outcome');
   };
   
