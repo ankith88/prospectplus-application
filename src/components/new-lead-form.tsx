@@ -33,11 +33,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
-import type { Address, CheckinQuestion, DiscoveryData } from '@/lib/types';
+import type { Address, CheckinQuestion, DiscoveryData, VisitNote } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createNewLead, checkForDuplicateLead, getVisitNotes, updateLeadStatus } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
+import { getDoc, doc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
@@ -87,77 +89,123 @@ export function NewLeadForm() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [discoveryData, setDiscoveryData] = useState<Partial<DiscoveryData> | null>(null);
+  const [isLoadingFromNote, setIsLoadingFromNote] = useState(false);
+  const [noteCapturedBy, setNoteCapturedBy] = useState<string | null>(null);
+
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
 
-  const defaultValues = useMemo(() => {
-    const getParam = (name: string) => searchParams.get(name);
-    
-    const companyName = getParam('companyName') || '';
-    const websiteUrl = getParam('websiteUrl') || '';
-    const phone = getParam('phone') || '';
-    const email = getParam('email') || '';
-    const salesRepAssignedParam = getParam('salesRepAssigned');
-    const fromVisitNote = getParam('fromVisitNote');
-
-    const repName = salesRepAssignedParam
-      ? (salesRepAssignedParam.includes(':') 
-          ? salesRepAssignedParam.split(':')[1].trim()
-          : salesRepAssignedParam)
-      : '';
-      
-    const campaign = fromVisitNote ? 'Door-to-Door' : '';
-
-    return {
-      companyName,
-      websiteUrl,
-      customerPhone: phone,
-      customerServiceEmail: email,
-      abn: '',
-      industryCategory: getParam('industryCategory') || '',
-      campaign: campaign,
-      initialNotes: getParam('initialNotes') || '',
-      address: {
-        address1: '',
-        street: getParam('street') || '',
-        city: getParam('city') || '',
-        state: getParam('state') || '',
-        zip: getParam('zip') || '',
-        country: 'Australia',
-        lat: getParam('lat') ? parseFloat(getParam('lat')!) : undefined,
-        lng: getParam('lng') ? parseFloat(getParam('lng')!) : undefined,
-      },
-      contact: {
-        firstName: getParam('contactFirstName') || 'Info',
-        lastName: getParam('contactLastName') || companyName,
-        title: getParam('contactTitle') || 'Primary Contact',
-        email: email,
-        phone: phone,
-      },
-      salesRepAssigned: repName,
-    };
-  }, [searchParams]);
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues,
+    defaultValues: {
+      companyName: '',
+      websiteUrl: '',
+      customerPhone: '',
+      customerServiceEmail: '',
+      abn: '',
+      industryCategory: '',
+      campaign: '',
+      initialNotes: '',
+      address: {
+        address1: '',
+        street: '',
+        city: '',
+        state: '',
+        zip: '',
+        country: 'Australia',
+      },
+      contact: {
+        firstName: 'Info',
+        lastName: '',
+        title: 'Primary Contact',
+        email: '',
+        phone: '',
+      },
+      salesRepAssigned: '',
+    },
   });
 
   useEffect(() => {
-    form.reset(defaultValues);
-  }, [defaultValues, form]);
+    const visitNoteId = searchParams.get('fromVisitNote');
 
-  useEffect(() => {
-    const discoveryDataParam = searchParams.get('discoveryData');
-    if (discoveryDataParam) {
-        try {
-            const data = JSON.parse(discoveryDataParam);
-            setDiscoveryData(data);
-        } catch (e) {
-            console.error("Failed to parse discoveryData from URL", e);
+    const fetchAndPopulateVisitNote = async (noteId: string) => {
+      setIsLoadingFromNote(true);
+      try {
+        const noteRef = doc(firestore, 'visitnotes', noteId);
+        const noteSnap = await getDoc(noteRef);
+
+        if (noteSnap.exists()) {
+          const note = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
+          setNoteCapturedBy(note.capturedBy);
+          
+          const companyName = note.analyzedData?.companyName || note.companyName || '';
+          const email = note.analyzedData?.contactEmail || '';
+          const phone = note.analyzedData?.contactPhone || '';
+          
+          let repName = '';
+          if (note.outcome?.details?.salesRep) {
+            repName = note.outcome.details.salesRep.includes(':') 
+                ? note.outcome.details.salesRep.split(':')[1].trim()
+                : note.outcome.details.salesRep;
+          }
+
+          const nameParts = (note.analyzedData?.contactName || '').split(' ');
+
+          const newDefaultValues = {
+            companyName,
+            websiteUrl: note.websiteUrl || '',
+            customerPhone: phone,
+            customerServiceEmail: email,
+            campaign: 'Door-to-Door',
+            initialNotes: note.content || '',
+            address: {
+              address1: note.address?.address1 || '',
+              street: note.address?.street || '',
+              city: note.address?.city || '',
+              state: note.address?.state || '',
+              zip: note.address?.zip || '',
+              country: 'Australia',
+              lat: note.address?.lat,
+              lng: note.address?.lng,
+            },
+            contact: {
+              firstName: nameParts[0] || 'Info',
+              lastName: nameParts.slice(1).join(' ') || companyName,
+              title: note.analyzedData?.contactTitle || 'Primary Contact',
+              email: email,
+              phone: phone,
+            },
+            salesRepAssigned: repName,
+          };
+
+          form.reset(newDefaultValues as any);
+          if(note.discoveryData) {
+              setDiscoveryData(note.discoveryData);
+          }
+
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Could not find the visit note to pre-fill the form.',
+          });
         }
+      } catch (error) {
+        console.error('Failed to fetch visit note:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'An error occurred while fetching visit note details.',
+        });
+      } finally {
+        setIsLoadingFromNote(false);
+      }
+    };
+
+    if (visitNoteId) {
+      fetchAndPopulateVisitNote(visitNoteId);
     }
-  }, [searchParams]);
+  }, [searchParams, form, toast]);
 
 
   const handleAiProspect = useCallback(async (websiteUrl?: string) => {
@@ -357,6 +405,11 @@ export function NewLeadForm() {
         return;
     }
 
+    let dialerForLead = userProfile?.displayName;
+    if (noteCapturedBy) {
+        dialerForLead = noteCapturedBy;
+    }
+
     if (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') {
         if (!values.campaign) {
             form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
@@ -368,15 +421,20 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: userProfile?.displayName, discoveryData: discoveryData || undefined });
+      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined });
 
       if (result.success && result.leadId) {
         const visitNoteId = searchParams.get('fromVisitNote');
         if (visitNoteId) {
-            const notes = await getVisitNotes();
-            const note = notes.find(n => n.id === visitNoteId);
-            if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified' || note.outcome?.type === 'Schedule Appointment')) {
-                await updateLeadStatus(result.leadId, 'Qualified');
+            // This is a simplified check, ideally you'd fetch the note again to get the outcome
+            // But since we don't have that here, we assume if the param exists, we might need to qualify.
+            const noteRef = doc(firestore, 'visitnotes', visitNoteId);
+            const noteSnap = await getDoc(noteRef);
+            if (noteSnap.exists()) {
+                const note = noteSnap.data() as VisitNote;
+                if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified' || note.outcome?.type === 'Schedule Appointment')) {
+                    await updateLeadStatus(result.leadId, 'Qualified');
+                }
             }
         }
 
@@ -403,6 +461,11 @@ export function NewLeadForm() {
         setIsSubmitting(false);
     }
   }
+
+  if (isLoadingFromNote) {
+    return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  }
+
 
   return (
     <>

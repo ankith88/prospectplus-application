@@ -79,54 +79,8 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   const handleCreateLead = () => {
     if (!note) return;
     setIsCreating(true);
-
     const params = new URLSearchParams();
-    
-    // Prefer analyzed data if available, otherwise fall back to note data
-    const companyName = note.analyzedData?.companyName || note.companyName;
-    const address = note.analyzedData?.address ? note.analyzedData.address : formatAddressDisplay(note.address);
-
-    if (companyName) params.set('companyName', companyName);
-    
-    if (note.address) { // Always use the structured address object for coords
-        if (note.address.street) params.set('street', note.address.street);
-        if (note.address.city) params.set('city', note.address.city);
-        if (note.address.state) params.set('state', note.address.state);
-        if (note.address.zip) params.set('zip', note.address.zip);
-        if (note.address.lat) params.set('lat', note.address.lat.toString());
-        if (note.address.lng) params.set('lng', note.address.lng.toString());
-    }
-    
-    if (note.websiteUrl) {
-      params.set('websiteUrl', note.websiteUrl);
-    }
-
-    if (note.analyzedData) {
-      const { contactName, contactTitle, contactEmail, contactPhone } = note.analyzedData;
-      if (contactName) {
-        const nameParts = contactName.split(' ');
-        params.set('contactFirstName', nameParts[0] || '');
-        params.set('contactLastName', nameParts.slice(1).join(' '));
-      }
-      if(contactTitle) params.set('contactTitle', contactTitle);
-      if (contactEmail) params.set('email', contactEmail);
-      if (contactPhone) params.set('phone', contactPhone);
-    }
-    
-    if (note.outcome?.details?.salesRep) {
-        const repName = note.outcome.details.salesRep.includes(':') 
-            ? note.outcome.details.salesRep.split(':')[1].trim()
-            : note.outcome.details.salesRep;
-        params.set('salesRepAssigned', repName);
-    }
-
-    if (note.discoveryData) {
-      params.set('discoveryData', JSON.stringify(note.discoveryData));
-    }
-    
     params.set('fromVisitNote', note.id);
-    params.set('initialNotes', note.content);
-
     router.push(`/leads/new?${params.toString()}`);
     onOpenChange(false);
   };
