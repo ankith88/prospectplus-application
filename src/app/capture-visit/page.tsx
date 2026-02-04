@@ -13,16 +13,16 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot } from 'lucide-react';
 import { addVisitNote } from '@/services/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Accordion,
   AccordionContent,
@@ -46,27 +46,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { analyzeVisitNote } from '@/ai/flows/analyze-visit-note';
+import { analyzeBusinessCard } from '@/ai/flows/analyze-business-card';
 import { salesReps } from '@/lib/constants';
 
-const formSchema = z.object({
+const noteSchema = z.object({
   content: z.string().min(10, 'Please provide more detail in your note.'),
 });
 
-const checkinSchema = z.object({
-  auspostRelationship: z.enum(['Yes', 'No']).optional(),
-  auspostUsage: z.string().optional(),
-  auspostPaidService: z.enum(['Yes', 'No']).optional(),
-  auspostLodge: z.array(z.string()).optional(),
-  otherCouriers: z.enum(['Yes', 'No']).optional(),
-  otherCouriersList: z.array(z.string()).optional(),
-  localDeliveries: z.enum(['Yes', 'No']).optional(),
-  peopleLeaveOffice: z.enum(['Yes', 'No']).optional(),
-  reasonsToLeave: z.array(z.string()).optional(),
+const discoverySchema = z.object({
+  discoverySignals: z.array(z.string()).optional(),
+  decisionMakerStatus: z.enum(['Speaking to decision maker', 'Decision maker identified', 'Decision maker unknown']).optional(),
+  inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
+  occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
+  recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
 });
-
-const couriers = ["TGE (upto 5kg)", "StarTrack (upto 5kg)", "TNT (upto 5kg)", "Couriers Please/Aramex (100+ items/week)"];
-const reasonsToLeave = ["Banking", "Local Same Day"];
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
     const address: Partial<Address> = { country: 'Australia' };
@@ -87,7 +80,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 
 
 export default function CaptureVisitPage() {
-    const [step, setStep] = useState<'search' | 'checkin' | 'capture' | 'outcome' | 'camera'>('search');
+    const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'camera'>('search');
     const [noteContent, setNoteContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isListening, setIsListening] = useState(false);
@@ -108,30 +101,32 @@ export default function CaptureVisitPage() {
     const [backImage, setBackImage] = useState<string | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
   
     const { toast } = useToast();
     const { userProfile } = useAuth();
     const router = useRouter();
 
-    const captureForm = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
+    const captureForm = useForm<z.infer<typeof noteSchema>>({
+        resolver: zodResolver(noteSchema),
         defaultValues: { content: '' },
     });
 
-    const checkinForm = useForm<Partial<z.infer<typeof checkinSchema>>>({
-        resolver: zodResolver(checkinSchema.partial()),
+    const discoveryForm = useForm<z.infer<typeof discoverySchema>>({
+        resolver: zodResolver(discoverySchema),
+        defaultValues: {
+            discoverySignals: [],
+        },
     });
     
     const resetState = useCallback(() => {
         captureForm.reset();
-        checkinForm.reset();
+        discoveryForm.reset();
         setStep('search');
         setNoteContent('');
         setIsSubmitting(false);
         if (recognitionRef.current && isListening) {
-        recognitionRef.current.stop();
+            recognitionRef.current.stop();
         }
         setIsListening(false);
         setAppointmentRep('');
@@ -144,9 +139,9 @@ export default function CaptureVisitPage() {
         setSearchQuery('');
         setPredictions([]);
         if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
         }
-    }, [captureForm, checkinForm, isListening]);
+    }, [captureForm, discoveryForm, isListening]);
     
     useEffect(() => {
         if (window.google && !autocompleteService.current) {
@@ -268,7 +263,7 @@ export default function CaptureVisitPage() {
         );
     };
 
-    const handleCaptureSubmit = (values: z.infer<typeof formSchema>) => {
+    const handleCaptureSubmit = (values: z.infer<typeof noteSchema>) => {
         setNoteContent(values.content);
         setStep('outcome');
     };
@@ -293,9 +288,9 @@ export default function CaptureVisitPage() {
 
 
     const handleAnalyze = (front: string | null, back: string | null) => {
-        setStep('capture');
+        setStep('search');
         setIsAnalyzing(true);
-        analyzeVisitNote({ frontImageDataUri: front || undefined, backImageDataUri: back || undefined })
+        analyzeBusinessCard({ frontImageDataUri: front || undefined, backImageDataUri: back || undefined })
           .then(result => {
             if (result.companyName) {
                 let fullSearchQuery = result.companyName;
@@ -361,26 +356,24 @@ export default function CaptureVisitPage() {
             }
         }
         
-        const checkinFormValues = checkinForm.getValues();
+        const discoveryFormValues = discoveryForm.getValues();
         const checkinQuestionsToSave: CheckinQuestion[] = [];
-        Object.entries(checkinFormValues).forEach(([key, value]) => {
-            if(value === undefined || value === null) return;
-            let question = "";
-            switch(key) {
-                case 'auspostRelationship': question = "Do you have a relationship with Australia Post?"; break;
-                case 'auspostUsage': question = "What do you use them for?"; break;
-                case 'auspostPaidService': question = "Do you pay for the service?"; break;
-                case 'auspostLodge': question = "Do you drop it off or do they come here?"; break;
-                case 'otherCouriers': question = "Do you use any other couriers?"; break;
-                case 'otherCouriersList': question = "Which Courier do you use?"; break;
-                case 'localDeliveries': question = "Do you have any need for local same-day deliveries?"; break;
-                case 'peopleLeaveOffice': question = "Do people leave the office during the day?"; break;
-                case 'reasonsToLeave': question = "What are the reasons people leave the office?"; break;
-            }
-            if(question) {
-                checkinQuestionsToSave.push({ question, answer: value as string | string[]});
-            }
-        });
+        
+        if (discoveryFormValues.discoverySignals?.length) {
+            checkinQuestionsToSave.push({ question: 'Discovery Signals', answer: discoveryFormValues.discoverySignals });
+        }
+        if (discoveryFormValues.decisionMakerStatus) {
+            checkinQuestionsToSave.push({ question: 'Decision Maker Status', answer: discoveryFormValues.decisionMakerStatus });
+        }
+        if (discoveryFormValues.inconvenience) {
+            checkinQuestionsToSave.push({ question: 'Inconvenience', answer: discoveryFormValues.inconvenience });
+        }
+        if (discoveryFormValues.occurrence) {
+            checkinQuestionsToSave.push({ question: 'Occurrence', answer: discoveryFormValues.occurrence });
+        }
+        if (discoveryFormValues.recurring) {
+            checkinQuestionsToSave.push({ question: 'Recurring', answer: discoveryFormValues.recurring });
+        }
     
         try {
           await addVisitNote({
@@ -410,9 +403,47 @@ export default function CaptureVisitPage() {
         }
       };
 
+    const getStepTitle = () => {
+        switch(step) {
+            case 'search': return 'Step 1: Find Business';
+            case 'discovery': return 'Step 2: Field Discovery';
+            case 'capture': return 'Step 3: Capture Visit Note';
+            case 'camera': return 'Scan Business Card';
+            case 'outcome': return 'Step 4: Select Visit Outcome';
+            default: return 'Capture Visit';
+        }
+    }
+    const getStepDescription = () => {
+        switch(step) {
+            case 'search': return 'Search for the business you visited.';
+            case 'discovery': return 'Capture observable behaviour and decision context.';
+            case 'capture': return 'Record the details of your visit for the Lead Gen team.';
+            case 'camera': return 'Take a photo of the front and back of the business card.';
+            case 'outcome': return 'Choose the final outcome of your visit.';
+            default: return 'Log your field sales visits and interactions.';
+        }
+    }
+    
+    const handleNextStep = () => {
+        switch(step) {
+            case 'search': setStep('discovery'); break;
+            case 'discovery': setStep('capture'); break;
+            case 'capture': setStep('outcome'); break;
+            default: break;
+        }
+    }
+    const handlePreviousStep = () => {
+        switch(step) {
+            case 'discovery': setStep('search'); break;
+            case 'capture': setStep('discovery'); break;
+            case 'outcome': setStep('capture'); break;
+            default: setStep('search'); break;
+        }
+    }
+
     return (
         <>
-        <FormProvider {...checkinForm}>
+        <FormProvider {...discoveryForm}>
             <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
                  <header>
                     <h1 className="text-3xl font-bold tracking-tight">Capture Visit</h1>
@@ -422,30 +453,14 @@ export default function CaptureVisitPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center gap-4">
-                            {(step !== 'search') && (
-                                <Button variant="ghost" size="icon" onClick={() => setStep(step === 'checkin' ? 'search' : 'checkin')} className="shrink-0">
+                            {(step !== 'search' && step !== 'camera') && (
+                                <Button variant="ghost" size="icon" onClick={handlePreviousStep} className="shrink-0">
                                     <ChevronLeft />
                                 </Button>
                             )}
                             <div className="flex-grow">
-                                <CardTitle>
-                                    {step === 'search' ? 'Find Business'
-                                    : step === 'checkin' ? 'Check-in Questions'
-                                    : step === 'capture' ? 'Capture Visit Note'
-                                    : step === 'camera' ? 'Scan Business Card'
-                                    : 'Select Visit Outcome'}
-                                </CardTitle>
-                                <CardDescription>
-                                    {step === 'search'
-                                    ? 'Search for the business you visited.'
-                                    : step === 'checkin'
-                                    ? 'Answer a few quick questions about the business.'
-                                    : step === 'capture'
-                                    ? 'Record the details of your visit for the Lead Gen team.'
-                                    : step === 'camera'
-                                    ? 'Take a photo of the front and back of the business card.'
-                                    : 'Choose the final outcome of your visit.'}
-                                </CardDescription>
+                                <CardTitle>{getStepTitle()}</CardTitle>
+                                <CardDescription>{getStepDescription()}</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
@@ -460,7 +475,6 @@ export default function CaptureVisitPage() {
                         {step === 'search' ? (
                             <div className="py-4 space-y-4">
                                 <div className="space-y-2 relative">
-                                    <Label htmlFor="visit-note-search">Search Business Name or Address</Label>
                                     <div className="flex gap-2">
                                         <Input 
                                             id="visit-note-search" 
@@ -493,46 +507,11 @@ export default function CaptureVisitPage() {
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
-                                    <Button onClick={() => setStep('checkin')} disabled={!selectedPlace}>Next</Button>
+                                    <Button onClick={handleNextStep} disabled={!selectedPlace}>Next</Button>
                                 </div>
                             </div>
-                        ) : step === 'checkin' ? (
-                            <form onSubmit={checkinForm.handleSubmit(() => setStep('capture'))}>
-                                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                                    <div className="py-4 space-y-4">
-                                        <Accordion type="single" collapsible defaultValue="auspost" className="w-full">
-                                            {/* Accordion items for checkin questions */}
-                                            <AccordionItem value="auspost">
-                                                <AccordionTrigger>Australia Post</AccordionTrigger>
-                                                <AccordionContent className="space-y-6 pt-4">
-                                                    <FormField control={checkinForm.control} name="auspostRelationship" render={({ field }) => (<FormItem><FormLabel>Relationship with AusPost?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                                                    <FormField control={checkinForm.control} name="auspostPaidService" render={({ field }) => (<FormItem><FormLabel>Do they pay for service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                                                    <FormField control={checkinForm.control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>How do they lodge?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter(v => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter(v => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                            <AccordionItem value="couriers">
-                                                <AccordionTrigger>Other Couriers</AccordionTrigger>
-                                                <AccordionContent className="space-y-6 pt-4">
-                                                    <FormField control={checkinForm.control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Use other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                                                    <FormField control={checkinForm.control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which ones?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={checkinForm.control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter(v => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
-                                                    <FormField control={checkinForm.control} name="localDeliveries" render={({ field }) => (<FormItem><FormLabel>Need local same-day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                            <AccordionItem value="errands">
-                                                <AccordionTrigger>Office Errands</AccordionTrigger>
-                                                <AccordionContent className="space-y-6 pt-4">
-                                                    <FormField control={checkinForm.control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                                                    <FormField control={checkinForm.control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What for?</FormLabel><div className="grid grid-cols-2 gap-2">{reasonsToLeave.map(r => <FormField key={r} control={checkinForm.control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                        </Accordion>
-                                    </div>
-                                </ScrollArea>
-                                <div className="flex justify-between pt-4">
-                                    <Button type="button" variant="outline" onClick={() => setStep('search')}>Back</Button>
-                                    <Button type="submit">Next</Button>
-                                </div>
-                            </form>
+                        ) : step === 'discovery' ? (
+                            <FieldDiscoveryStep onNext={handleNextStep} onBack={handlePreviousStep} />
                         ) : step === 'capture' ? (
                             <FormProvider {...captureForm}>
                                 <form onSubmit={captureForm.handleSubmit(handleCaptureSubmit)} className="space-y-4">
@@ -542,9 +521,6 @@ export default function CaptureVisitPage() {
                                             <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
                                         </div>
                                     )}
-                                    <p className="text-sm text-muted-foreground p-2 bg-secondary rounded-md">
-                                        <b>Prompt:</b> Why did the lead qualify for an appointment or why were they interested?
-                                    </p>
                                     <FormField
                                     control={captureForm.control}
                                     name="content"
@@ -567,7 +543,7 @@ export default function CaptureVisitPage() {
                                     )}
                                     />
                                     <div className="flex justify-between">
-                                        <Button type="button" variant="outline" onClick={() => setStep('checkin')}>Back</Button>
+                                        <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
                                         <Button type="submit">Next</Button>
                                     </div>
                                 </form>
@@ -576,10 +552,9 @@ export default function CaptureVisitPage() {
                             <div className="space-y-4">
                                 <div className="relative">
                                     <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
-                                    <div className="absolute top-2 left-2 flex gap-2">
-                                        {frontImage && <Image src={frontImage} alt="Front" width={100} height={60} className="w-24 h-auto rounded-md border-2 border-white shadow-lg"/>}
-                                        {backImage && <Image src={backImage} alt="Back" width={100} height={60} className="w-24 h-auto rounded-md border-2 border-white shadow-lg"/>}
-                                    </div>
+                                    {frontImage && (
+                                        <Image src={frontImage} alt="Front of business card" width={100} height={60} className="absolute top-2 left-2 w-1/4 h-auto rounded-md border-2 border-white shadow-lg"/>
+                                    )}
                                 </div>
                                 {hasCameraPermission === false && (
                                     <Alert variant="destructive">
@@ -587,20 +562,24 @@ export default function CaptureVisitPage() {
                                         <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
                                     </Alert>
                                 )}
-                                <div className="flex flex-col gap-2">
-                                    {!frontImage ? (
-                                        <Button onClick={handleCaptureImage} disabled={!hasCameraPermission}>Capture Front</Button>
-                                    ) : !backImage ? (
-                                        <Button onClick={handleCaptureImage} disabled={!hasCameraPermission}>Capture Back</Button>
-                                    ) : null}
-                                    <Button variant="outline" onClick={() => setStep('capture')}>Done</Button>
-                                </div>
-                                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                                {!frontImage ? (
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleCaptureFront} className="w-full" disabled={!hasCameraPermission}>Capture Front</Button>
+                                        <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <Button onClick={handleCaptureBackAndAnalyze} className="w-full" disabled={!hasCameraPermission}>Capture Back & Analyze</Button>
+                                            <Button variant="outline" onClick={() => setFrontImage(null)}>Retake</Button>
+                                        </div>
+                                        <Button variant="secondary" className="w-full" onClick={handleSkipAndAnalyze}>Skip & Analyze Front Only</Button>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 <Accordion type="single" collapsible className="w-full">
-                                    {/* Outcome Accordions */}
                                     <AccordionItem value="item-1">
                                         <AccordionTrigger>Appointment Qualified</AccordionTrigger>
                                         <AccordionContent className="space-y-4 pt-2">
@@ -677,7 +656,7 @@ export default function CaptureVisitPage() {
                                     </Button>
                                 </div>
                                 <div className="flex justify-start pt-4">
-                                    <Button type="button" variant="outline" onClick={() => setStep('capture')}>Back</Button>
+                                    <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
                                 </div>
                             </div>
                         )}
@@ -685,27 +664,147 @@ export default function CaptureVisitPage() {
                 </Card>
             </div>
         </FormProvider>
-        <AlertDialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Duplicate Found</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This business appears to already exist in your system.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => {
-                        if (duplicateLeadId) {
-                            router.push(`/leads/${duplicateLeadId}`);
-                            setDuplicateLeadId(null);
-                        }
-                    }}>
-                        View Existing Lead
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    </>
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        </>
     );
 }
+
+const discoverySignals = [
+  { id: 'pays_aus_post', label: 'Pays Australia Post', description: 'They currently pay for Australia Post' },
+  { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge' },
+  { id: 'drop_off_hassle', label: 'Drop-off is a Hassle', description: 'Drop-offs are inconvenient' },
+  { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)', description: 'TGE, StarTrack, TNT' },
+  { id: 'uses_couriers_100_plus', label: 'Uses Other Couriers (100+/wk)', description: 'High-volume standard freight' },
+  { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking' },
+  { id: 'needs_same_day', label: 'Needs Same-Day Delivery', description: 'Uses or wants same-day' },
+  { id: 'inter_office', label: 'Inter-Office Deliveries', description: 'Movement between offices' },
+];
+
+const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: () => void }) => {
+    const { control, handleSubmit } = useFormContext<z.infer<typeof discoverySchema>>();
+
+    return (
+        <form onSubmit={handleSubmit(onNext)} className="space-y-8">
+            <FormField
+                control={control}
+                name="discoverySignals"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel className="text-lg font-semibold">Discovery Signals</FormLabel>
+                        <FormDescription>Capture observable behaviour and decision context.</FormDescription>
+                        <div className="flex flex-wrap gap-2 pt-2">
+                            {discoverySignals.map((signal) => {
+                                const isSelected = field.value?.includes(signal.label);
+                                return (
+                                    <Button
+                                        key={signal.id}
+                                        type="button"
+                                        variant={isSelected ? 'default' : 'outline'}
+                                        className="h-auto flex flex-col items-start p-3 text-left"
+                                        onClick={() => {
+                                            const newValue = isSelected
+                                                ? field.value?.filter((v) => v !== signal.label)
+                                                : [...(field.value || []), signal.label];
+                                            field.onChange(newValue);
+                                        }}
+                                    >
+                                        <span className="font-semibold">{signal.label}</span>
+                                        <span className="text-xs font-normal opacity-70">{signal.description}</span>
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            <div className="space-y-6 pt-4 border-t">
+                <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                    <FormField
+                        control={control}
+                        name="decisionMakerStatus"
+                        render={({ field }) => (
+                            <FormItem className="space-y-3">
+                                <FormLabel>Decision Maker Status</FormLabel>
+                                <FormControl>
+                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="Speaking to decision maker" /></FormControl>
+                                            <FormLabel className="font-normal">Speaking to decision maker</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="Decision maker identified" /></FormControl>
+                                            <FormLabel className="font-normal">Decision maker identified</FormLabel>
+                                        </FormItem>
+                                         <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="Decision maker unknown" /></FormControl>
+                                            <FormLabel className="font-normal">Decision maker unknown</FormLabel>
+                                        </FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={control}
+                        name="inconvenience"
+                        render={({ field }) => (
+                            <FormItem className="space-y-3">
+                                <FormLabel>How inconvenient is this today?</FormLabel>
+                                <FormControl>
+                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Very inconvenient" /></FormControl><FormLabel className="font-normal">Very inconvenient</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Somewhat inconvenient" /></FormControl><FormLabel className="font-normal">Somewhat inconvenient</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Not a big issue" /></FormControl><FormLabel className="font-normal">Not a big issue</FormLabel></FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={control}
+                        name="occurrence"
+                        render={({ field }) => (
+                            <FormItem className="space-y-3">
+                                <FormLabel>How often does this occur?</FormLabel>
+                                <FormControl>
+                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Weekly" /></FormControl><FormLabel className="font-normal">Weekly</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                      <FormField
+                        control={control}
+                        name="recurring"
+                        render={({ field }) => (
+                            <FormItem className="space-y-3">
+                                <FormLabel>Is this recurring?</FormLabel>
+                                <FormControl>
+                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Yes - predictable" /></FormControl><FormLabel className="font-normal">Yes - predictable</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Sometimes" /></FormControl><FormLabel className="font-normal">Sometimes</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="One-off" /></FormControl><FormLabel className="font-normal">One-off</FormLabel></FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            </div>
+            <div className="flex justify-between pt-8">
+                <Button type="button" variant="outline" onClick={onBack}>Back</Button>
+                <Button type="submit">Next</Button>
+            </div>
+        </form>
+    );
+};
