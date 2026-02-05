@@ -1,20 +1,17 @@
 /**
- * @fileoverview Cloud Functions for task reminders.
+ * @fileoverview Cloud Functions for task reminders and integrations.
  */
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
+import fetch from "node-fetch";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
 
 // Configure nodemailer to use Gmail with an App Password
-// IMPORTANT: Do not hardcode credentials. Use environment variables.
-// To set env vars, run in your terminal:
-// firebase functions:config:set gmail.email="your-email@gmail.com"
-// firebase functions:config:set gmail.password="your-gmail-app-password"
 const mailTransport = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -22,6 +19,63 @@ const mailTransport = nodemailer.createTransport({
     pass: functions.config().gmail.password,
   },
 });
+
+/**
+ * Sends a notification to a Microsoft Teams channel when a new visit note is created.
+ */
+export const onVisitNoteCreated = functions
+  .region("australia-southeast1")
+  .firestore.document("visitnotes/{noteId}")
+  .onCreate(async (snap, context) => {
+    const noteData = snap.data();
+    const webhookUrl = functions.config().teams?.webhook_url;
+
+    if (!webhookUrl) {
+      functions.logger.error("Microsoft Teams webhook URL is not configured. Set it in Firebase config: teams.webhook_url");
+      return;
+    }
+
+    const { companyName, capturedBy, outcome, content } = noteData;
+
+    const card = {
+      "@type": "MessageCard",
+      "@context": "http://schema.org/extensions",
+      "themeColor": "0076D7",
+      "summary": `New Visit Note by ${capturedBy}`,
+      "sections": [{
+        "activityTitle": `**${capturedBy}** captured a new visit note`,
+        "activitySubtitle": `For: **${companyName || 'Unknown Company'}**`,
+        "facts": [{
+          "name": "Outcome",
+          "value": outcome?.type || "N/A"
+        }, {
+          "name": "Captured At",
+          "value": new Date(noteData.createdAt).toLocaleString("en-AU", { timeZone: "Australia/Sydney" })
+        }],
+        "markdown": true
+      }, {
+        "text": `> ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`
+      }]
+    };
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        body: JSON.stringify(card),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        functions.logger.error("Failed to send Teams notification:", response.status, response.statusText, errorText);
+      } else {
+        functions.logger.info("Successfully sent Teams notification for new visit note.");
+      }
+    } catch (error) {
+      functions.logger.error("Error sending POST request to Teams webhook:", error);
+    }
+  });
+
 
 /**
  * A scheduled function that runs every hour to check for due tasks.

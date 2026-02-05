@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, Appointment, UserProfile, SavedRoute } from '@/lib/types';
+import type { Lead, Activity, Appointment, UserProfile, SavedRoute, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ import {
   CheckSquare,
 } from 'lucide-react';
 import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers, getAllUserRoutes } from '@/services/firebase';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 import { isThisWeek, isToday, format, isFuture, isSameDay } from 'date-fns';
 import {
   Table,
@@ -56,7 +58,9 @@ type DashboardStats = {
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentVisitNotes, setRecentVisitNotes] = useState<VisitNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingVisits, setLoadingVisits] = useState(true);
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
 
@@ -67,6 +71,24 @@ export default function AdminDashboardPage() {
       router.replace('/leads');
     }
   }, [userProfile, authLoading, router, hasAccess]);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+
+    setLoadingVisits(true);
+    const notesQuery = query(collection(firestore, 'visitnotes'), orderBy('createdAt', 'desc'), limit(10));
+    
+    const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
+        const notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
+        setRecentVisitNotes(notes);
+        setLoadingVisits(false);
+    }, (error) => {
+        console.error("Failed to fetch real-time visit notes:", error);
+        setLoadingVisits(false);
+    });
+
+    return () => unsubscribe();
+  }, [hasAccess]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -296,42 +318,42 @@ export default function AdminDashboardPage() {
         <LeaderboardCard title="Top Field Sales Performer" user={stats?.topFieldSalesPerformer?.name || null} metric={`${stats?.topFieldSalesPerformer?.rate || 0}% check-in to win/trial rate`} icon={CheckSquare} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        <Card className="xl:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card>
           <CardHeader>
-            <CardTitle>Recent Wins</CardTitle>
-            <CardDescription>The latest customers to come on board.</CardDescription>
+            <CardTitle>Recent Field Activity</CardTitle>
+            <CardDescription>The latest notes captured from the field.</CardDescription>
           </CardHeader>
           <CardContent>
-            {stats?.recentWins && stats.recentWins.length > 0 ? (
+            {loadingVisits ? <Loader /> : recentVisitNotes.length > 0 ? (
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Company</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Assigned To</TableHead>
+                            <TableHead>Captured By</TableHead>
+                            <TableHead className="text-right">Outcome</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stats.recentWins.map(lead => (
-                            <TableRow key={lead.id}>
+                        {recentVisitNotes.map(note => (
+                            <TableRow key={note.id}>
                                 <TableCell>
-                                    <Button variant="link" className="p-0 h-auto" asChild>
-                                        <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
+                                     <Button variant="link" className="p-0 h-auto" asChild>
+                                        <Link href={`/visit-notes`}>{note.companyName}</Link>
                                     </Button>
                                 </TableCell>
-                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                <TableCell className="text-right">{lead.salesRepAssigned || lead.dialerAssigned || 'N/A'}</TableCell>
+                                <TableCell>{note.capturedBy}</TableCell>
+                                <TableCell className="text-right">{note.outcome?.type || 'N/A'}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No recent wins to show.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No recent visit notes.</p>
             )}
           </CardContent>
         </Card>
-         <Card className="xl:col-span-1">
+         <Card>
           <CardHeader>
             <CardTitle>Upcoming Appointments</CardTitle>
             <CardDescription>The next few appointments on the calendar.</CardDescription>
@@ -365,33 +387,37 @@ export default function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
-        <Card className="xl:col-span-1">
+        <Card>
           <CardHeader>
-            <CardTitle>Saved Routes</CardTitle>
-            <CardDescription>All saved routes across all users.</CardDescription>
+            <CardTitle>Recent Wins</CardTitle>
+            <CardDescription>The latest customers to come on board.</CardDescription>
           </CardHeader>
           <CardContent>
-            {stats?.allSavedRoutes && stats.allSavedRoutes.length > 0 ? (
+            {stats?.recentWins && stats.recentWins.length > 0 ? (
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Route Name</TableHead>
-                            <TableHead>User</TableHead>
-                            <TableHead className="text-right">Stops</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Assigned To</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stats.allSavedRoutes.map(route => (
-                            <TableRow key={route.id}>
-                                <TableCell className="font-medium">{route.name}</TableCell>
-                                <TableCell>{route.userName}</TableCell>
-                                <TableCell className="text-right">{route.leads.length}</TableCell>
+                        {stats.recentWins.map(lead => (
+                            <TableRow key={lead.id}>
+                                <TableCell>
+                                    <Button variant="link" className="p-0 h-auto" asChild>
+                                        <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
+                                    </Button>
+                                </TableCell>
+                                <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                <TableCell className="text-right">{lead.salesRepAssigned || lead.dialerAssigned || 'N/A'}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No saved routes found.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No recent wins to show.</p>
             )}
           </CardContent>
         </Card>
