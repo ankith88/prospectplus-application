@@ -240,7 +240,6 @@ export default function VisitNotesClient() {
                   <TableHead>Date</TableHead>
                   <TableHead>Company Name</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Note Preview</TableHead>
                   <TableHead>Outcome</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -249,7 +248,7 @@ export default function VisitNotesClient() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center h-24">
+                    <TableCell colSpan={7} className="text-center h-24">
                       <Loader />
                     </TableCell>
                   </TableRow>
@@ -262,7 +261,6 @@ export default function VisitNotesClient() {
                       <TableCell>{format(new Date(note.createdAt), 'PPpp')}</TableCell>
                       <TableCell>{note.companyName || 'N/A'}</TableCell>
                       <TableCell>{note.address ? `${note.address.street}, ${note.address.city}` : 'N/A'}</TableCell>
-                      <TableCell className="max-w-xs truncate">{note.content}</TableCell>
                       <TableCell className="max-w-[150px] truncate">{note.outcome?.type || 'N/A'}</TableCell>
                       <TableCell>
                         <Badge className={statusColorMap[note.status]}>{note.status}</Badge>
@@ -302,7 +300,7 @@ export default function VisitNotesClient() {
                   )})
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center h-24">
+                    <TableCell colSpan={7} className="text-center h-24">
                       No visit notes found.
                     </TableCell>
                   </TableRow>
