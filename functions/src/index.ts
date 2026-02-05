@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Cloud Functions for task reminders and integrations.
  */
@@ -5,7 +6,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-import fetch from "node-fetch";
+import fetch = require("node-fetch");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -59,6 +60,8 @@ export const onVisitNoteCreated = functions
         "text": `> ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`
       }]
     };
+    
+    functions.logger.info("Sending card to Teams:", JSON.stringify(card, null, 2));
 
     try {
       const response = await fetch(webhookUrl, {
@@ -71,10 +74,11 @@ export const onVisitNoteCreated = functions
         const errorText = await response.text();
         functions.logger.error("Failed to send Teams notification:", response.status, response.statusText, errorText);
       } else {
-        functions.logger.info("Successfully sent Teams notification for new visit note.");
+        const responseText = await response.text();
+        functions.logger.info("Successfully sent Teams notification for new visit note. Response from Teams:", responseText);
       }
-    } catch (error) {
-      functions.logger.error("Error sending POST request to Teams webhook:", error);
+    } catch (error: any) {
+      functions.logger.error("Error sending POST request to Teams webhook:", error.message, error.stack);
     }
   });
 
