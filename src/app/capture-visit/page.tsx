@@ -527,7 +527,7 @@ export default function CaptureVisitPage() {
             },
             discoveryData: discoveryFormValues,
           });
-          toast({ title: 'Success', description: 'Your visit note has been submitted.' });
+          toast({ title: 'Success', description: 'Your visit note has been submitted and a notification will be sent to the Teams channel.' });
           
           resetState();
         } catch (error) {
@@ -1023,5 +1023,3 @@ const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: ()
         </div>
     );
 };
-
-    
