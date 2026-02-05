@@ -414,6 +414,8 @@ export function NewLeadForm() {
     setIsSubmitting(true);
     let finalValues = { ...values };
 
+    const visitNoteId = searchParams.get('fromVisitNote');
+
     const duplicateId = await checkForDuplicateLead(
         values.companyName, 
         values.websiteUrl,
@@ -442,10 +444,9 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined });
+      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined, visitNoteId: visitNoteId || undefined });
 
       if (result.success && result.leadId) {
-        const visitNoteId = searchParams.get('fromVisitNote');
         if (visitNoteId) {
             await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
         }

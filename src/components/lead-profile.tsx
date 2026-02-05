@@ -49,7 +49,7 @@ import {
   CheckSquare,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion, VisitNote } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -111,7 +111,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, orderBy, getDocs, limit } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
@@ -120,7 +120,7 @@ import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { format, startOfDay, endOfDay } from 'date-fns'
-import type { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker';
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
@@ -286,6 +286,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+  const [visitNoteDiscovery, setVisitNoteDiscovery] = useState<Partial<DiscoveryData> | null>(null);
 
 
   const router = useRouter();
@@ -322,6 +323,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       });
     }
   }, [initialLead]);
+
+  useEffect(() => {
+    const fetchVisitNoteData = async () => {
+        const q = query(collection(firestore, 'visitnotes'), where('leadId', '==', initialLead.id), limit(1));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const visitNote = querySnapshot.docs[0].data() as VisitNote;
+            if (visitNote.discoveryData) {
+                setVisitNoteDiscovery(visitNote.discoveryData);
+            }
+        }
+    };
+    fetchVisitNoteData();
+  }, [initialLead.id]);
 
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
@@ -1125,6 +1140,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardContent>
            </Card>
           
+          {visitNoteDiscovery && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Info className="w-5 h-5 text-muted-foreground" />
+                        Field Discovery Answers
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <ul className="space-y-2 text-sm">
+                    {Object.entries(visitNoteDiscovery).map(([key, value]) => {
+                        if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                        const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                        return (
+                        <li key={key}>
+                            <span className="font-semibold">{formattedKey}:</span>{' '}
+                            <span className="text-muted-foreground">{formattedValue}</span>
+                        </li>
+                        )
+                    })}
+                    </ul>
+                </CardContent>
+            </Card>
+           )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
