@@ -139,8 +139,6 @@ export function NewLeadForm() {
           setNoteCapturedBy(note.capturedBy);
           
           const companyName = note.analyzedData?.companyName || note.companyName || '';
-          const email = note.analyzedData?.contactEmail || '';
-          const phone = note.analyzedData?.contactPhone || '';
           
           let repName = '';
           if (note.outcome?.details?.salesRep) {
@@ -148,8 +146,31 @@ export function NewLeadForm() {
                 ? note.outcome.details.salesRep.split(':')[1].trim()
                 : note.outcome.details.salesRep;
           }
+          
+          const discovery = note.discoveryData;
+          let contactName = note.analyzedData?.contactName || '';
+          let contactTitle = note.analyzedData?.contactTitle || 'Primary Contact';
+          let contactEmail = note.analyzedData?.contactEmail || '';
+          let contactPhone = note.analyzedData?.contactPhone || '';
 
-          const nameParts = (note.analyzedData?.contactName || '').split(' ');
+          // Prioritize Decision Maker from discovery data
+          if (discovery?.decisionMakerName) {
+              contactName = discovery.decisionMakerName;
+              contactTitle = discovery.decisionMakerTitle || 'Decision Maker';
+              contactEmail = discovery.decisionMakerEmail || '';
+              contactPhone = discovery.decisionMakerPhone || '';
+          } 
+          // Then fall back to Person Spoken With
+          else if (discovery?.personSpokenWithName) {
+              contactName = discovery.personSpokenWithName;
+              contactTitle = discovery.personSpokenWithTitle || 'Contact';
+              contactEmail = discovery.personSpokenWithEmail || '';
+              contactPhone = discovery.personSpokenWithPhone || '';
+          }
+
+          const nameParts = (contactName).split(' ');
+          const email = contactEmail;
+          const phone = contactPhone;
 
           const newDefaultValues = {
             companyName,
@@ -171,7 +192,7 @@ export function NewLeadForm() {
             contact: {
               firstName: nameParts[0] || 'Info',
               lastName: nameParts.slice(1).join(' ') || companyName,
-              title: note.analyzedData?.contactTitle || 'Primary Contact',
+              title: contactTitle,
               email: email,
               phone: phone,
             },
@@ -433,7 +454,7 @@ export function NewLeadForm() {
             if (noteSnap.exists()) {
                 const note = noteSnap.data() as VisitNote;
                 if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified' || note.outcome?.type === 'Schedule Appointment')) {
-                    await updateLeadStatus(result.leadId, 'Qualified');
+                    // await updateLeadStatus(result.leadId, 'Qualified');
                 }
             }
         }
@@ -715,3 +736,5 @@ export function NewLeadForm() {
     </>
   );
 }
+
+    
