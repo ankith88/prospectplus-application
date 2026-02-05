@@ -173,7 +173,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <ClipboardCheck />
-                  <span>Door-to-Door Visits</span>
+                  <span>Field Visits</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
                   {canCaptureVisit && (
@@ -443,5 +443,3 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     </>
   )
 }
-
-    
