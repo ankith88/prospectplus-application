@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -150,7 +149,7 @@ export default function VisitNotesClient() {
       }
 
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
-    });
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notes, filters]);
 
 
@@ -233,80 +232,82 @@ export default function VisitNotesClient() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Captured By</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Company Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Outcome</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">
-                      <Loader />
-                    </TableCell>
-                  </TableRow>
-                ) : filteredNotes.length > 0 ? (
-                  filteredNotes.map((note) => {
-                    const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
-                    return (
-                    <TableRow key={note.id}>
-                      <TableCell>{note.capturedBy}</TableCell>
-                      <TableCell>{format(new Date(note.createdAt), 'PPpp')}</TableCell>
-                      <TableCell>{note.companyName || 'N/A'}</TableCell>
-                      <TableCell>{note.address ? `${note.address.street}, ${note.address.city}` : 'N/A'}</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{note.outcome?.type || 'N/A'}</TableCell>
-                      <TableCell>
-                        <Badge className={statusColorMap[note.status]}>{note.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                           {note.status === 'Converted' && note.leadId ? (
-                                <Button asChild size="sm" variant="outline">
-                                    <Link href={`/leads/${note.leadId}`} target="_blank">View Lead</Link>
-                                </Button>
-                            ) : canProcess ? (
-                                <Button
-                                size="sm"
-                                onClick={() => handleProcessNote(note)}
-                                >
-                                {note.status === 'New' ? 'Process' : 'View'}
-                                </Button>
-                            ) : null}
-                          {canManage && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
-                                        <Edit className="mr-2 h-4 w-4" /> Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
-                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </TableCell>
+            <div className="overflow-x-auto">
+                <Table>
+                <TableHeader>
+                    <TableRow>
+                    <TableHead className="hidden md:table-cell">Captured By</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Company Name</TableHead>
+                    <TableHead className="hidden sm:table-cell">Address</TableHead>
+                    <TableHead>Outcome</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                  )})
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">
-                      No visit notes found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                    {loading ? (
+                    <TableRow>
+                        <TableCell colSpan={7} className="text-center h-24">
+                        <Loader />
+                        </TableCell>
+                    </TableRow>
+                    ) : filteredNotes.length > 0 ? (
+                    filteredNotes.map((note) => {
+                        const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                        return (
+                        <TableRow key={note.id}>
+                        <TableCell className="hidden md:table-cell">{note.capturedBy}</TableCell>
+                        <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
+                        <TableCell>{note.companyName || 'N/A'}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{note.address ? `${note.address.street}, ${note.address.city}` : 'N/A'}</TableCell>
+                        <TableCell className="whitespace-normal max-w-[150px]">{note.outcome?.type || 'N/A'}</TableCell>
+                        <TableCell>
+                            <Badge className={statusColorMap[note.status]}>{note.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                            {note.status === 'Converted' && note.leadId ? (
+                                    <Button asChild size="sm" variant="outline">
+                                        <Link href={`/leads/${note.leadId}`} target="_blank">View Lead</Link>
+                                    </Button>
+                                ) : canProcess ? (
+                                    <Button
+                                    size="sm"
+                                    onClick={() => handleProcessNote(note)}
+                                    >
+                                    {note.status === 'New' ? 'Process' : 'View'}
+                                    </Button>
+                                ) : null}
+                            {canManage && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
+                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            )}
+                            </div>
+                        </TableCell>
+                        </TableRow>
+                    )})
+                    ) : (
+                    <TableRow>
+                        <TableCell colSpan={7} className="text-center h-24">
+                        No visit notes found.
+                        </TableCell>
+                    </TableRow>
+                    )}
+                </TableBody>
+                </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
