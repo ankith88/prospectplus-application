@@ -8,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, Map as MapIcon } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, Map as MapIcon, Star } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
