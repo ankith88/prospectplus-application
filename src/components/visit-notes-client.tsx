@@ -55,7 +55,7 @@ export default function VisitNotesClient() {
     date: undefined as DateRange | undefined,
     outcome: [] as string[],
     companyName: '',
-    status: [] as string[],
+    status: ['New'] as string[],
   });
 
   useEffect(() => {

@@ -37,7 +37,7 @@ import type { Address, CheckinQuestion, DiscoveryData, VisitNote } from '@/lib/t
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead, updateVisitNote } from '@/services/firebase';
 import { getDoc, doc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
@@ -447,16 +447,7 @@ export function NewLeadForm() {
       if (result.success && result.leadId) {
         const visitNoteId = searchParams.get('fromVisitNote');
         if (visitNoteId) {
-            // This is a simplified check, ideally you'd fetch the note again to get the outcome
-            // But since we don't have that here, we assume if the param exists, we might need to qualify.
-            const noteRef = doc(firestore, 'visitnotes', visitNoteId);
-            const noteSnap = await getDoc(noteRef);
-            if (noteSnap.exists()) {
-                const note = noteSnap.data() as VisitNote;
-                if (note && (note.outcome?.type === 'LPO Referral' || note.outcome?.type === 'Appointment Qualified' || note.outcome?.type === 'Schedule Appointment')) {
-                    // await updateLeadStatus(result.leadId, 'Qualified');
-                }
-            }
+            await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
         }
 
         toast({
@@ -736,5 +727,3 @@ export function NewLeadForm() {
     </>
   );
 }
-
-    
