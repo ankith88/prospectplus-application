@@ -147,7 +147,13 @@ export default function FieldActivityReportPage() {
 
 
     const visitsByOutcome = filteredVisitNotes.reduce((acc, note) => {
-        const outcome = note.outcome?.type || 'No Outcome';
+        let outcome = note.outcome?.type || 'No Outcome';
+        if (outcome === 'Schedule Appointment') {
+            outcome = 'Appointment Qualified';
+        }
+        if (outcome === 'Move to Outbound') {
+            outcome = 'Needs Follow-up';
+        }
         acc[outcome] = (acc[outcome] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
