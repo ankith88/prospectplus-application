@@ -5,7 +5,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-import fetch = require("node-fetch");
+import fetch from "node-fetch";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -61,7 +61,7 @@ export const onVisitNoteCreated = functions
     };
 
     try {
-      const response = await (fetch as any)(webhookUrl, {
+      const response = await fetch(webhookUrl, {
         method: "POST",
         body: JSON.stringify(card),
         headers: { "Content-Type": "application/json" },
