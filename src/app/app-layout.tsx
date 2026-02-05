@@ -268,14 +268,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/door-to-door-reporting")}>
-                      <Link href="/door-to-door-reporting">
-                        <BarChart3 />
-                        <span>D2D Reporting</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
                       <Link href="/field-activity-report">
@@ -293,16 +285,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/reports">
                     <BarChart2 />
                     <span>Outbound Reporting</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-             {(canViewReporting && (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin')) && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
-                  <Link href="/door-to-door-reporting">
-                    <BarChart3 />
-                    <span>D2D Reporting</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -461,3 +443,5 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     </>
   )
 }
+
+    

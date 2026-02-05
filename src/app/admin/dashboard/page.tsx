@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Briefcase,
   CheckSquare,
+  BarChart3,
 } from 'lucide-react';
 import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers, getVisitNotes } from '@/services/firebase';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
@@ -409,7 +410,7 @@ export default function AdminDashboardPage() {
                 <Link href="/reports"><BarChart className="mr-2 h-4 w-4"/> Outbound Reporting</Link>
             </Button>
             <Button asChild variant="outline">
-                <Link href="/door-to-door-reporting"><Target className="mr-2 h-4 w-4"/>D2D Reporting</Link>
+                <Link href="/field-activity-report"><BarChart3 className="mr-2 h-4 w-4"/>Field Activity</Link>
             </Button>
              <Button asChild variant="outline">
                 <Link href="/leads"><Users className="mr-2 h-4 w-4"/>Manage All Leads</Link>
@@ -422,5 +423,7 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
 
     
