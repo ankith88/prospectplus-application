@@ -130,6 +130,81 @@ export function NewLeadForm() {
     },
   });
 
+  const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
+        const companyName = place.name || '';
+        const phoneNumber = place.formatted_phone_number || '';
+        const websiteUrl = place.website || '';
+        const email = `info@${(websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`;
+
+        const duplicateId = await checkForDuplicateLead(
+            companyName,
+            websiteUrl,
+            email,
+            {
+                street: place.address_components?.find(c => c.types.includes('route'))?.long_name,
+                city: place.address_components?.find(c => c.types.includes('locality'))?.long_name,
+                state: place.address_components?.find(c => c.types.includes('administrative_area_level_1'))?.short_name,
+                zip: place.address_components?.find(c => c.types.includes('postal_code'))?.long_name,
+                country: 'Australia'
+            } as Address
+        );
+
+        if (duplicateId) {
+            setDuplicateLeadId(duplicateId);
+            return;
+        }
+
+        form.setValue('companyName', companyName);
+        form.setValue('websiteUrl', websiteUrl);
+        if (phoneNumber) form.setValue('customerPhone', phoneNumber);
+
+        const getAddressComponent = (type: string, useShortName = false) => {
+            const component = place.address_components?.find(c => c.types.includes(type));
+            return useShortName ? component?.short_name : component?.long_name || '';
+        }
+
+        const street_number = getAddressComponent('street_number');
+        const route = getAddressComponent('route');
+
+        form.setValue('address.street', `${street_number} ${route}`.trim());
+        form.setValue('address.city', getAddressComponent('locality') || getAddressComponent('postal_town'));
+        form.setValue('address.state', getAddressComponent('administrative_area_level_1', true));
+        form.setValue('address.zip', getAddressComponent('postal_code'));
+        form.setValue('address.country', getAddressComponent('country', true));
+        if (place.geometry?.location) {
+            form.setValue('address.lat', place.geometry.location.lat());
+            form.setValue('address.lng', place.geometry.location.lng());
+        }
+
+        form.setValue('contact.lastName', place.name || '');
+        const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+        if (websiteDomain) {
+            const email = `info@${websiteDomain}`;
+            form.setValue('contact.email', email);
+            form.setValue('customerServiceEmail', email);
+        }
+  }, [form]);
+
+  const setupAutocomplete = useCallback((inputElement: HTMLInputElement | null) => {
+    if (!window.google || !inputElement) {
+        return;
+    }
+    if ((inputElement as any).autocomplete) {
+        return;
+    }
+    const autocomplete = new window.google.maps.places.Autocomplete(inputElement, {
+        types: ['establishment'],
+        componentRestrictions: { country: 'au' },
+    });
+    (inputElement as any).autocomplete = autocomplete;
+    autocomplete.addListener('place_changed', async () => {
+        const place = autocomplete.getPlace();
+        if (place.address_components) {
+            fillFormWithPlace(place);
+        }
+    });
+  }, [fillFormWithPlace]);
+
   useEffect(() => {
     const visitNoteId = searchParams.get('fromVisitNote');
 
@@ -146,7 +221,7 @@ export function NewLeadForm() {
           if (note.frontImageDataUri) setFrontImageDataUri(note.frontImageDataUri);
           if (note.backImageDataUri) setBackImageDataUri(note.backImageDataUri);
           
-          const companyName = note.analyzedData?.companyName || note.companyName || '';
+          const companyName = note.companyName || '';
           
           let repName = '';
           if (note.outcome?.details?.salesRep) {
@@ -156,10 +231,10 @@ export function NewLeadForm() {
           }
           
           const discovery = note.discoveryData;
-          let contactName = note.analyzedData?.contactName || '';
-          let contactTitle = note.analyzedData?.contactTitle || 'Primary Contact';
-          let contactEmail = note.analyzedData?.contactEmail || '';
-          let contactPhone = note.analyzedData?.contactPhone || '';
+          let contactName = '';
+          let contactTitle = 'Primary Contact';
+          let contactEmail = '';
+          let contactPhone = '';
 
           // Prioritize Decision Maker from discovery data
           if (discovery?.decisionMakerName) {
@@ -273,81 +348,6 @@ export function NewLeadForm() {
       setIsProspecting(false);
     }
   }, [form, toast]);
-
-    const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
-        const companyName = place.name || '';
-        const phoneNumber = place.formatted_phone_number || '';
-        const websiteUrl = place.website || '';
-        const email = `info@${(websiteUrl || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0]}`;
-
-        const duplicateId = await checkForDuplicateLead(
-            companyName,
-            websiteUrl,
-            email,
-            {
-                street: place.address_components?.find(c => c.types.includes('route'))?.long_name,
-                city: place.address_components?.find(c => c.types.includes('locality'))?.long_name,
-                state: place.address_components?.find(c => c.types.includes('administrative_area_level_1'))?.short_name,
-                zip: place.address_components?.find(c => c.types.includes('postal_code'))?.long_name,
-                country: 'Australia'
-            } as Address
-        );
-
-        if (duplicateId) {
-            setDuplicateLeadId(duplicateId);
-            return;
-        }
-
-        form.setValue('companyName', companyName);
-        form.setValue('websiteUrl', websiteUrl);
-        if (phoneNumber) form.setValue('customerPhone', phoneNumber);
-
-        const getAddressComponent = (type: string, useShortName = false) => {
-            const component = place.address_components?.find(c => c.types.includes(type));
-            return useShortName ? component?.short_name : component?.long_name || '';
-        }
-
-        const street_number = getAddressComponent('street_number');
-        const route = getAddressComponent('route');
-
-        form.setValue('address.street', `${street_number} ${route}`.trim());
-        form.setValue('address.city', getAddressComponent('locality') || getAddressComponent('postal_town'));
-        form.setValue('address.state', getAddressComponent('administrative_area_level_1', true));
-        form.setValue('address.zip', getAddressComponent('postal_code'));
-        form.setValue('address.country', getAddressComponent('country', true));
-        if (place.geometry?.location) {
-            form.setValue('address.lat', place.geometry.location.lat());
-            form.setValue('address.lng', place.geometry.location.lng());
-        }
-
-        form.setValue('contact.lastName', place.name || '');
-        const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-        if (websiteDomain) {
-            const email = `info@${websiteDomain}`;
-            form.setValue('contact.email', email);
-            form.setValue('customerServiceEmail', email);
-        }
-  }, [form]);
-
-  const setupAutocomplete = useCallback(() => {
-    if (!window.google || !autocompleteInputRef.current) return;
-
-    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-        types: ['establishment'],
-        componentRestrictions: { country: 'au' },
-    });
-
-    autocomplete.addListener('place_changed', async () => {
-        const place = autocomplete.getPlace();
-        if (place.address_components) {
-            fillFormWithPlace(place);
-        }
-    });
-  }, [fillFormWithPlace]);
-
-  useEffect(() => {
-    setupAutocomplete();
-  }, [setupAutocomplete]);
 
 
   useEffect(() => {
@@ -555,7 +555,10 @@ export function NewLeadForm() {
                     <FormControl>
                       <Input
                         {...field}
-                        ref={autocompleteInputRef}
+                        ref={(node) => {
+                          field.ref(node);
+                          setupAutocomplete(node);
+                        }}
                         placeholder="Start typing to search Google Maps..."
                       />
                     </FormControl>
