@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, Appointment, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, Map as MapIcon, Star } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -43,13 +43,18 @@ export default function FieldActivityReportPage() {
     franchisee: [] as string[],
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!userProfile) return;
     setIsRefreshing(true);
     setLoading(true);
     toast({ title: 'Loading Report Data...', description: 'Fetching the latest information.' });
     try {
+      const notesPromise = userProfile.role === 'Field Sales'
+          ? getVisitNotes(userProfile.uid)
+          : getVisitNotes();
+
       const [notes, leads, appointments, users] = await Promise.all([
-        getVisitNotes(),
+        notesPromise,
         getAllLeadsForReport(),
         getAllAppointments(),
         getAllUsers(),
@@ -66,11 +71,13 @@ export default function FieldActivityReportPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [userProfile, toast]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (userProfile) {
+      fetchData();
+    }
+  }, [userProfile, fetchData]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -168,12 +175,13 @@ export default function FieldActivityReportPage() {
     const convertedLeadsByStatusData = Object.entries(convertedLeadsByStatus).map(([name, value]) => ({ name, value }));
 
     const convertedLeadsWithFranchisee = convertedLeads.map(lead => ({...lead, franchisee: lead.franchisee || 'Unknown' }));
-    const visitsByFranchisee = convertedLeadsWithFranchisee.reduce((acc, lead) => {
-        acc[lead.franchisee!] = (acc[lead.franchisee!] || 0) + 1;
+    const visitsByFranchiseeData = convertedLeadsWithFranchisee.reduce((acc, lead) => {
+        const key = lead.franchisee || 'Unknown';
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
-    const visitsByFranchiseeData = Object.entries(visitsByFranchisee).map(([name, visits]) => ({ name, visits })).sort((a,b) => b.visits - a.visits);
-    
+    const visitsByFranchiseeSortedData = Object.entries(visitsByFranchiseeData).map(([name, visits]) => ({ name, visits })).sort((a,b) => b.visits - a.visits);
+
     const commissionEligible = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
         if (!lead) return false;
@@ -198,7 +206,7 @@ export default function FieldActivityReportPage() {
       visitsByOutcomeData,
       visitsOverTimeData,
       convertedLeadsByStatusData,
-      visitsByFranchiseeData,
+      visitsByFranchiseeData: visitsByFranchiseeSortedData,
       commissionEligibleCount: commissionEligible.length,
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, filters.date]);
@@ -257,10 +265,12 @@ export default function FieldActivityReportPage() {
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              <div className="space-y-2">
-                <Label>Captured By</Label>
-                <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
-              </div>
+              {userProfile?.role !== 'Field Sales' && (
+                <div className="space-y-2">
+                    <Label>Captured By</Label>
+                    <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
+                </div>
+              )}
                <div className="space-y-2">
                 <Label>Franchisee</Label>
                 <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
