@@ -130,6 +130,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewVisits = canCaptureVisit || canProcessVisits;
 
 
   return (
@@ -168,15 +169,35 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {canCaptureVisit && (
-                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/capture-visit")} tooltip="Capture Visit">
-                    <Link href="/capture-visit">
-                        <ClipboardCheck />
-                        <span>Capture Visit</span>
-                    </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
+            {canViewVisits && (
+              <SidebarMenuItem>
+                <SidebarMenuButton>
+                  <ClipboardCheck />
+                  <span>Field Visits</span>
+                </SidebarMenuButton>
+                <SidebarMenuSub>
+                  {canCaptureVisit && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/capture-visit')}>
+                        <Link href="/capture-visit">
+                          <PlusCircle />
+                          <span>Capture Visit</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
+                  {canProcessVisits && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/visit-notes')}>
+                        <Link href="/visit-notes">
+                          <FileText />
+                          <span>Visit Notes</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
+                </SidebarMenuSub>
+              </SidebarMenuItem>
             )}
             {canViewD2D && (
               <SidebarMenuItem>
@@ -214,16 +235,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             {canProcessVisits && (
-                <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/visit-notes")} tooltip="Visit Notes">
-                    <Link href="/visit-notes">
-                        <ClipboardCheck />
-                        <span>Visit Notes</span>
-                    </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            )}
             {(userProfile?.role && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role)) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
@@ -257,14 +268,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/door-to-door-reporting")}>
-                      <Link href="/door-to-door-reporting">
-                        <BarChart3 />
-                        <span>D2D Reporting</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
                       <Link href="/field-activity-report">
@@ -282,16 +285,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/reports">
                     <BarChart2 />
                     <span>Outbound Reporting</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-             {(canViewReporting && (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin')) && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/door-to-door-reporting")} tooltip="D2D Reporting">
-                  <Link href="/door-to-door-reporting">
-                    <BarChart3 />
-                    <span>D2D Reporting</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
