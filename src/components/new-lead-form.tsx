@@ -47,6 +47,7 @@ import { industryCategories, salesReps } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 import Image from 'next/image';
+import { Label } from '@/components/ui/label';
 
 const abnRegex = /^\d{11}$/;
 
