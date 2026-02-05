@@ -5,7 +5,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-import fetch from "node-fetch";
+import fetch = require("node-fetch");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -35,6 +35,8 @@ export const onVisitNoteCreated = functions
       return;
     }
 
+    functions.logger.info("Teams webhook URL is present. Preparing to send notification.");
+
     const { companyName, capturedBy, outcome, content } = noteData;
 
     const card = {
@@ -59,7 +61,7 @@ export const onVisitNoteCreated = functions
     };
 
     try {
-      const response = await fetch(webhookUrl, {
+      const response = await (fetch as any)(webhookUrl, {
         method: "POST",
         body: JSON.stringify(card),
         headers: { "Content-Type": "application/json" },
