@@ -916,7 +916,7 @@ const discoverySignals = [
   { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking' },
   { id: 'needs_same_day', label: 'Needs Same-Day Delivery', description: 'Uses or wants same-day' },
   { id: 'inter_office', label: 'Inter-Office Deliveries', description: 'Movement between offices' },
-  { id: 'uses_auspost_platform', label: 'Uses Australia Post, MyPost Business, Express Post', description: 'Uses AP platforms for shipping' },
+  { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'MyPost Business, Express Post Products' },
   { id: 'shopify_woo', label: 'Shopify/Woo', description: 'Uses Shopify or WooCommerce' },
   { id: 'other_label_platform', label: 'Other Label Platform, Starshippit etc', description: 'Uses other shipping platforms' },
 ];
