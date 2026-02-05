@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -38,6 +39,7 @@ import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
+import Link from 'next/link';
 
 
 export default function VisitNotesClient() {
@@ -205,12 +207,7 @@ export default function VisitNotesClient() {
                 <div className="space-y-2">
                   <Label htmlFor="date">Date Captured</Label>
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : <span>Pick a date range</span>}
-                      </Button>
-                    </PopoverTrigger>
+                    <PopoverTrigger asChild><Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger>
                     <PopoverContent className="w-auto p-0 flex" align="start">
                       <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
                     </PopoverContent>
@@ -272,14 +269,18 @@ export default function VisitNotesClient() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                           {canProcess && (
-                             <Button
-                              size="sm"
-                              onClick={() => handleProcessNote(note)}
-                            >
-                              {note.status === 'New' ? 'Process' : 'View'}
-                            </Button>
-                           )}
+                           {note.status === 'Converted' && note.leadId ? (
+                                <Button asChild size="sm" variant="outline">
+                                    <Link href={`/leads/${note.leadId}`} target="_blank">View Lead</Link>
+                                </Button>
+                            ) : canProcess ? (
+                                <Button
+                                size="sm"
+                                onClick={() => handleProcessNote(note)}
+                                >
+                                {note.status === 'New' ? 'Process' : 'View'}
+                                </Button>
+                            ) : null}
                           {canManage && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
