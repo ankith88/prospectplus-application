@@ -42,10 +42,11 @@ import { getDoc, doc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera } from 'lucide-react';
 import { industryCategories, salesReps } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
+import Image from 'next/image';
 
 const abnRegex = /^\d{11}$/;
 
@@ -91,6 +92,9 @@ export function NewLeadForm() {
   const [discoveryData, setDiscoveryData] = useState<Partial<DiscoveryData> | null>(null);
   const [isLoadingFromNote, setIsLoadingFromNote] = useState(false);
   const [noteCapturedBy, setNoteCapturedBy] = useState<string | null>(null);
+  const [isLinking, setIsLinking] = useState(false);
+  const [frontImageDataUri, setFrontImageDataUri] = useState<string | null>(null);
+  const [backImageDataUri, setBackImageDataUri] = useState<string | null>(null);
 
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +141,9 @@ export function NewLeadForm() {
         if (noteSnap.exists()) {
           const note = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
           setNoteCapturedBy(note.capturedBy);
+
+          if (note.frontImageDataUri) setFrontImageDataUri(note.frontImageDataUri);
+          if (note.backImageDataUri) setBackImageDataUri(note.backImageDataUri);
           
           const companyName = note.analyzedData?.companyName || note.companyName || '';
           
@@ -410,6 +417,31 @@ export function NewLeadForm() {
     }
   };
 
+  const handleLinkToExistingLead = async () => {
+    const visitNoteId = searchParams.get('fromVisitNote');
+    if (!duplicateLeadId || !visitNoteId) return;
+
+    setIsLinking(true);
+    try {
+        await updateVisitNote(visitNoteId, { status: 'Converted', leadId: duplicateLeadId });
+        toast({
+            title: 'Note Linked Successfully',
+            description: 'The visit note has been linked to the existing lead.',
+        });
+        router.push(`/leads/${duplicateLeadId}`);
+    } catch (error) {
+        console.error('Failed to link visit note:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Linking Failed',
+            description: 'Could not link the visit note. Please try again.',
+        });
+    } finally {
+        setIsLinking(false);
+        setDuplicateLeadId(null);
+    }
+  };
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
     let finalValues = { ...values };
@@ -487,11 +519,16 @@ export function NewLeadForm() {
             <AlertDialogHeader>
                 <AlertDialogTitle>Duplicate Found</AlertDialogTitle>
                 <AlertDialogDescription>
-                    A lead with this name or other details already exists in the system.
+                    This business appears to already exist in your system. You can view the existing lead or, if you started from a visit note, you can link the note to this lead.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setDuplicateLeadId(null)}>Cancel</AlertDialogCancel>
+                {searchParams.get('fromVisitNote') && (
+                    <AlertDialogAction onClick={handleLinkToExistingLead} disabled={isLinking}>
+                        {isLinking ? <Loader /> : 'Link Note to this Lead'}
+                    </AlertDialogAction>
+                )}
                 <AlertDialogAction onClick={() => {
                     if(duplicateLeadId) {
                         router.push(`/leads/${duplicateLeadId}`);
@@ -528,6 +565,29 @@ export function NewLeadForm() {
             </div>
 
             <hr/>
+
+            {(frontImageDataUri || backImageDataUri) && (
+              <>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Camera className="w-5 h-5" />Captured Images</h3>
+                  <div className="flex gap-4">
+                    {frontImageDataUri && (
+                      <div className="space-y-1">
+                        <Label>Front of Card</Label>
+                        <Image src={frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>
+                      </div>
+                    )}
+                    {backImageDataUri && (
+                      <div className="space-y-1">
+                        <Label>Back of Card</Label>
+                        <Image src={backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <hr/>
+              </>
+            )}
 
             <div className="space-y-4">
               <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Company Details</h3>
