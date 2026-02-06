@@ -419,7 +419,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 lg:gap-4">
            <UniversalSearch />
             {canSeeCalendlyButton && (
-                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="hidden sm:inline-flex bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
+                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
                     {userProfile.linkedSalesRep} Calendar
                 </Button>
