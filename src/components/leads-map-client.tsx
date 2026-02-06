@@ -1806,53 +1806,93 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         </Collapsible>
         
         <div className="flex-grow flex flex-col md:flex-row-reverse gap-4">
-            <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
-                <CardHeader>
-                  <CardTitle>Route Planner</CardTitle>
-                </CardHeader>
-                 <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
-                    <Tabs defaultValue="stops">
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="stops">Stops</TabsTrigger>
-                            <TabsTrigger value="routes">Saved Routes</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="stops" className="mt-4 flex-grow overflow-hidden flex flex-col gap-2">
-                            <div className="flex-shrink-0">
-                                {selectedRouteLeads.length > 0 ? (
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-sm text-muted-foreground">{selectedRouteLeads.length} stop(s) selected.</p>
-                                        <Button variant="outline" size="sm" onClick={handleClearRoute}>Clear All</Button>
+             {(selectedRouteLeads.length > 0 || isCreatingArea || loadedRoute) && (
+                <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
+                    <CardHeader>
+                      <CardTitle>{isCreatingArea ? 'Prospecting Area' : 'Route Planner'}</CardTitle>
+                    </CardHeader>
+                     <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                        <Tabs defaultValue="stops">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="stops">{isCreatingArea ? 'Area Leads' : 'Stops'}</TabsTrigger>
+                                <TabsTrigger value="routes">Saved Routes</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="stops" className="mt-4 flex-grow overflow-hidden flex flex-col gap-2">
+                                {isCreatingArea ? (
+                                    <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
+                                        {areaLeads.length} leads selected in this area. Assign below.
                                     </div>
                                 ) : (
-                                    <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
-                                        Use "Click to Select" mode or "Draw to Select" to add stops to the route planner.
+                                    <div className="flex-shrink-0">
+                                        {selectedRouteLeads.length > 0 ? (
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-sm text-muted-foreground">{selectedRouteLeads.length} stop(s) selected.</p>
+                                                <Button variant="outline" size="sm" onClick={handleClearRoute}>Clear All</Button>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
+                                                Use "Click to Select" mode or "Draw to Select" to add stops to the route planner.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-                            </div>
-                            <ScrollArea className="flex-grow">
-                                <div className="space-y-2">
-                                {sortedSelectedRouteLeads.map((lead) => (
-                                    <div key={lead.id}>
-                                        <Card className="p-3">
-                                            <div className="flex items-start gap-2">
-                                                <GripVertical className="h-5 w-5 text-muted-foreground mt-1 flex-shrink-0" />
-                                                <div className="flex-grow overflow-hidden">
-                                                    <p className="font-bold truncate">{lead.companyName}</p>
-                                                    <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                <ScrollArea className="flex-grow">
+                                    <div className="space-y-2">
+                                    {sortedSelectedRouteLeads.map((lead) => (
+                                        <div key={lead.id}>
+                                            <Card className="p-3">
+                                                <div className="flex items-start gap-2">
+                                                    <GripVertical className="h-5 w-5 text-muted-foreground mt-1 flex-shrink-0" />
+                                                    <div className="flex-grow overflow-hidden">
+                                                        <p className="font-bold truncate">{lead.companyName}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                                    </div>
+                                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
-                                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+                                            </Card>
+                                        </div>
+                                    ))}
+                                    </div>
+                                </ScrollArea>
+                            </TabsContent>
+                            <TabsContent value="routes" className="mt-4">
+                                <div className="flex-shrink-0 p-1 space-y-2 border-b mb-2">
+                                    <h4 className="font-semibold flex items-center gap-2"><Filter className="h-4 w-4" /> Filter Routes</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Input placeholder="Filter by route name..." value={routeNameFilter} onChange={e => setRouteNameFilter(e.target.value)} />
+                                    </div>
+                                </div>
+                                <ScrollArea className="h-96">
+                                {localSavedRoutes.length > 0 ? (
+                                    <div className="space-y-2">
+                                    {localSavedRoutes.map(route => (
+                                        <Card key={route.id} className="p-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                <div>
+                                                    <p className="font-semibold">{route.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{route.leads.length} stops</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load</Button>
+                                                    <Button size="sm" variant="destructive" onClick={() => route.id && handleDeleteRoute(route.id, route.name)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </Card>
+                                    ))}
                                     </div>
-                                ))}
-                                </div>
-                            </ScrollArea>
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
+                                ) : (
+                                    <p className="text-center text-muted-foreground pt-10">No saved routes.</p>
+                                )}
+                                </ScrollArea>
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            )}
             <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
                 <GoogleMap
                     mapContainerStyle={containerStyle}
@@ -2009,7 +2049,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
                                                 <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                             </Button>
-                                            <Button size="sm" variant="outline" onClick={handleFindNearby} disabled={isSearchingNearby}>
+                                            <Button size="sm" variant="outline" onClick={handleFindNearby} disabled={isSearchingNearby || (selectedLead.lastProspected && isToday(selectedLead.lastProspected))}>
                                                 {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar</span></>}
                                             </Button>
                                             <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
@@ -2274,6 +2314,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
-
-    
