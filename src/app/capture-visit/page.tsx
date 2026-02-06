@@ -667,7 +667,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
