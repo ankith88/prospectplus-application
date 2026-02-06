@@ -206,6 +206,13 @@ export default function LeadsMapClient() {
   const [allCheckInActivities, setAllCheckInActivities] = useState<Activity[]>([]);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
 
+  const [isCreatingArea, setIsCreatingArea] = useState(false);
+  const [areaLeads, setAreaLeads] = useState<MapLead[]>([]);
+  const [isAssignAreaDialogOpen, setIsAssignAreaDialogOpen] = useState(false);
+  const [areaName, setAreaName] = useState('');
+  const [areaAssignee, setAreaAssignee] = useState('');
+  const [isSavingArea, setIsSavingArea] = useState(false);
+
   
   const geoSearchAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -260,6 +267,8 @@ export default function LeadsMapClient() {
   const routeIdToLoad = searchParams.get('routeId');
 
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
+  const canCreateArea = userProfile?.role && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+
 
   useEffect(() => {
     if (isFieldSalesUser) {
@@ -284,6 +293,12 @@ export default function LeadsMapClient() {
   useEffect(() => {
     if (!userProfile) return;
 
+    if (canCreateArea) {
+        getAllUsers().then(users => {
+            setAssignableUsers(users.filter(u => u.role === 'Field Sales'));
+        });
+    }
+
     const fetchAllRoutes = async () => {
       const allRoutes = await getAllUserRoutes();
       setAllSystemRoutes(allRoutes);
@@ -298,7 +313,7 @@ export default function LeadsMapClient() {
     };
 
     fetchAllRoutes();
-  }, [userProfile]);
+  }, [userProfile, canCreateArea]);
   
   const handleShowMyLocation = useCallback(() => {
     setLocationError(null);
@@ -451,7 +466,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     
                     setAllCheckInActivities(checkIns);
                     setAllDialers(users);
-                    setAssignableUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin'));
+                    setAssignableUsers(users.filter(u => u.role === 'Field Sales'));
 
                     let leadsMapData: MapLead[] = [];
                     if (mapLeads) {
@@ -1623,7 +1638,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
                                             <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
                                         </Button>
-                                        <DropdownMenu>
+                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="outline" className="w-full" disabled={isDrawing}>
                                                     <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
@@ -1643,6 +1658,40 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                         )}
                                     </div>
                                 </div>
+                                {canCreateArea && (
+                                  <div className="space-y-2">
+                                    <Label>Create Prospecting Area</Label>
+                                    <div className="flex gap-2">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="outline" className="w-full" disabled={isCreatingArea}>
+                                            <PenSquare className="mr-2 h-4 w-4" />
+                                            Draw Area
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                          <DropdownMenuItem onClick={() => startAreaCreation(google.maps.drawing.OverlayType.CIRCLE)}>
+                                            <CircleDot className="mr-2 h-4 w-4" />
+                                            Circle
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => startAreaCreation(google.maps.drawing.OverlayType.RECTANGLE)}>
+                                            <RectangleHorizontal className="mr-2 h-4 w-4" />
+                                            Rectangle
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => startAreaCreation(google.maps.drawing.OverlayType.POLYGON)}>
+                                            <Spline className="mr-2 h-4 w-4" />
+                                            Polygon
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                      {isCreatingArea && (
+                                        <Button onClick={cancelAreaCreation} variant="destructive">
+                                          <X className="mr-2 h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                             </CardContent>
                         </TabsContent>
                     </Tabs>
@@ -1837,12 +1886,12 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     }}
                     mapTypeId={mapTypeId}
                 >
-                    {isDrawing && window.google && (
+                     {isLoaded && (isCreatingArea || (selectionMode === 'select' && isDrawing)) && (
                         <DrawingManagerF
                             onLoad={(dm) => (drawingManagerRef.current = dm)}
-                            onCircleComplete={(c) => onDrawingComplete(c)}
-                            onRectangleComplete={(r) => onDrawingComplete(r)}
-                            onPolygonComplete={(p) => onDrawingComplete(p)}
+                            onCircleComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
+                            onRectangleComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
+                            onPolygonComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
                             drawingMode={drawingMode}
                             options={{
                                 drawingControl: false,
@@ -2219,6 +2268,42 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     <Button variant="outline" onClick={() => setDuplicateLeadId(null)}>Cancel</Button>
                     <Button onClick={() => { window.open(`/leads/${duplicateLeadId}`, '_blank'); setDuplicateLeadId(null); }}>
                         View Existing Lead
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={isAssignAreaDialogOpen} onOpenChange={setIsAssignAreaDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Assign Prospecting Area</DialogTitle>
+                    <DialogDescription>
+                        You've selected {areaLeads.length} leads. Name this area and assign it to a Field Sales rep.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="area-name">Area Name</Label>
+                        <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder="e.g., North Sydney Industrial Park" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="area-assignee">Assign To</Label>
+                        <Select value={areaAssignee} onValueChange={setAreaAssignee}>
+                            <SelectTrigger id="area-assignee">
+                                <SelectValue placeholder="Select a Field Sales Rep..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {assignableUsers.map(user => (
+                                    <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAssignAreaDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveArea} disabled={isSavingArea || !areaName || !areaAssignee}>
+                        {isSavingArea ? <Loader /> : 'Save & Assign Area'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
