@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -165,8 +165,7 @@ export default function CaptureVisitPage() {
     const [signUpRep, setSignUpRep] = useState('');
     
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-    const [frontImage, setFrontImage] = useState<string | null>(null);
-    const [backImage, setBackImage] = useState<string | null>(null);
+    const [images, setImages] = useState<string[]>([]);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
@@ -250,8 +249,7 @@ export default function CaptureVisitPage() {
                             captureForm.setValue('content', noteData.content);
                             setNoteContent(noteData.content);
                         }
-                        if (noteData.frontImageDataUri) setFrontImage(noteData.frontImageDataUri);
-                        if (noteData.backImageDataUri) setBackImage(noteData.backImageDataUri);
+                        if (noteData.imageUrls) setImages(noteData.imageUrls);
                         
                     } else {
                         toast({ variant: 'destructive', title: 'Error', description: 'Visit note not found.' });
@@ -290,8 +288,7 @@ export default function CaptureVisitPage() {
         setAppointmentRep('');
         setQuoteRep('');
         setSignUpRep('');
-        setFrontImage(null);
-        setBackImage(null);
+        setImages([]);
         setHasCameraPermission(null);
         setSelectedPlace(null);
         setSearchQuery('');
@@ -431,12 +428,11 @@ export default function CaptureVisitPage() {
         const context = canvas.getContext('2d');
         context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
+        setImages(prev => [...prev, dataUrl]);
+    };
 
-        if (!frontImage) {
-            setFrontImage(dataUrl);
-        } else {
-            setBackImage(dataUrl);
-        }
+    const handleDeleteImage = (indexToDelete: number) => {
+        setImages(prev => prev.filter((_, index) => index !== indexToDelete));
     };
 
     const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
@@ -498,6 +494,7 @@ export default function CaptureVisitPage() {
                     googlePlaceId: selectedPlace?.place_id,
                     outcome: { type: outcomeType, details: detailsObject },
                     discoveryData: discoveryFormValues,
+                    imageUrls: images,
                 });
                 toast({ title: 'Success', description: 'Your visit note has been updated.' });
                 router.push('/visit-notes');
@@ -516,8 +513,7 @@ export default function CaptureVisitPage() {
                 content: fullNote,
                 capturedBy: captureUser.displayName || 'Unknown User',
                 capturedByUid: captureUser.uid,
-                frontImageDataUri: frontImage || undefined,
-                backImageDataUri: backImage || undefined,
+                imageUrls: images,
                 googlePlaceId: selectedPlace?.place_id,
                 companyName: selectedPlace?.name,
                 address: addressData,
@@ -574,7 +570,7 @@ export default function CaptureVisitPage() {
         }
         switch(step) {
             case 'search': setStep('discovery'); break;
-            case 'camera': setStep('discovery'); break;
+            case 'camera': setStep('capture'); break;
             case 'discovery': setStep('capture'); break;
             case 'capture': setStep('outcome'); break;
             default: break;
@@ -637,7 +633,7 @@ export default function CaptureVisitPage() {
                                     {step === 'search' ? 'Search for the business you visited, or capture a business card.' :
                                     step === 'discovery' ? 'Capture observable behaviour and decision context.' :
                                     step === 'capture' ? 'Record the details of your visit for the Lead Gen team.' :
-                                    step === 'camera' ? 'Take a photo of the front and back of the business card.' :
+                                    step === 'camera' ? 'Take photos related to your visit.' :
                                     'Choose the final outcome of your visit.'}
                                 </CardDescription>
                             </div>
@@ -689,7 +685,7 @@ export default function CaptureVisitPage() {
                                         </Card>
                                     )}
                                 </div>
-                                { (selectedPlace || frontImage) && (
+                                { (selectedPlace || images.length > 0) && (
                                     <div className="space-y-6 pt-4">
                                         {selectedPlace && (
                                             <div className="p-3 border rounded-md bg-secondary/50 text-sm">
@@ -698,12 +694,16 @@ export default function CaptureVisitPage() {
                                             </div>
                                         )}
                                         
-                                        {(frontImage || backImage) && (
+                                        {images.length > 0 && (
                                             <div className="space-y-2">
                                                 <Label>Captured Images</Label>
-                                                <div className="flex gap-2">
-                                                    {frontImage && <Image src={frontImage} alt="Front of card" width={100} height={60} className="rounded-md border"/>}
-                                                    {backImage && <Image src={backImage} alt="Back of card" width={100} height={60} className="rounded-md border"/>}
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {images.map((img, index) => (
+                                                        <div key={index} className="relative">
+                                                            <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover" />
+                                                            <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}
@@ -755,7 +755,7 @@ export default function CaptureVisitPage() {
                                     </div>
                                 )}
                                 <div className="flex justify-end pt-4">
-                                    <Button onClick={handleNextStep} disabled={!selectedPlace && !frontImage}>Next</Button>
+                                    <Button onClick={handleNextStep} disabled={!selectedPlace && images.length === 0}>Next</Button>
                                 </div>
                             </div>
                         ) : step === 'discovery' ? (
@@ -769,13 +769,16 @@ export default function CaptureVisitPage() {
                                             <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
                                         </div>
                                     )}
-                                     {(frontImage || backImage) && (
+                                     {images.length > 0 && (
                                         <div className="space-y-2">
                                             <Label>Captured Images</Label>
-                                            <div className="flex gap-2">
-                                                {frontImage && <Image src={frontImage} alt="Front of card" width={100} height={60} className="rounded-md border"/>}
-                                                {backImage && <Image src={backImage} alt="Back of card" width={100} height={60} className="rounded-md border"/>}
-                                                <Button variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                            <div className="flex gap-2 flex-wrap items-center">
+                                                {images.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover" />
+                                                        <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
@@ -810,9 +813,6 @@ export default function CaptureVisitPage() {
                             <div className="space-y-4">
                                 <div className="relative">
                                     <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
-                                    {frontImage && (
-                                        <Image src={frontImage} alt="Front of business card" width={100} height={60} className="absolute top-2 left-2 w-1/4 h-auto rounded-md border-2 border-white shadow-lg"/>
-                                    )}
                                 </div>
                                 {hasCameraPermission === false && (
                                     <Alert variant="destructive">
@@ -820,15 +820,26 @@ export default function CaptureVisitPage() {
                                         <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
                                     </Alert>
                                 )}
-                                {!frontImage ? (
-                                    <div className="flex gap-2">
-                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>Capture Image</Button>
-                                        <Button variant="outline" onClick={() => setStep('search')}>Cancel</Button>
-                                    </div>
-                                ) : (
-                                     <div className="flex gap-2">
-                                        <Button onClick={() => setStep('search')} className="w-full">Done</Button>
-                                        <Button variant="outline" className="w-full" onClick={() => setFrontImage(null)}>Retake</Button>
+                                <div className="flex gap-2">
+                                     <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
+                                        <Camera className="mr-2 h-4 w-4" /> Capture Image
+                                    </Button>
+                                    <Button variant="outline" onClick={() => setStep('capture')}>Back to Note</Button>
+                                </div>
+                               
+                                {images.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label>Captured Images ({images.length})</Label>
+                                        <ScrollArea className="h-32">
+                                            <div className="flex gap-2 flex-wrap p-1">
+                                                {images.map((img, index) => (
+                                                    <div key={index} className="relative">
+                                                        <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover"/>
+                                                        <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
                                     </div>
                                 )}
                             </div>

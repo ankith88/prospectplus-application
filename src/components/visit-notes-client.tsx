@@ -13,7 +13,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -39,7 +45,8 @@ import { Calendar } from './ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import Link from 'next/link';
-
+import Image from 'next/image';
+import { ScrollArea } from './ui/scroll-area';
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
@@ -47,6 +54,7 @@ export default function VisitNotesClient() {
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<VisitNote | null>(null);
+  const [viewingImages, setViewingImages] = useState<string[] | null>(null);
   const router = useRouter();
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -288,6 +296,9 @@ export default function VisitNotesClient() {
                                         <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
                                             <Edit className="mr-2 h-4 w-4" /> Edit
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem disabled={!note.imageUrls || note.imageUrls.length === 0} onClick={() => setViewingImages(note.imageUrls || [])}>
+                                            <Camera className="mr-2 h-4 w-4" /> View Images
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
                                             <Trash2 className="mr-2 h-4 w-4" /> Delete
                                         </DropdownMenuItem>
@@ -332,6 +343,20 @@ export default function VisitNotesClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+       <Dialog open={!!viewingImages} onOpenChange={(open) => !open && setViewingImages(null)}>
+        <DialogContent className="max-w-4xl">
+            <DialogHeader>
+                <DialogTitle>Captured Images</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[70vh]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4">
+                    {viewingImages?.map((url, index) => (
+                        <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={400} height={240} className="rounded-md border object-cover"/>
+                    ))}
+                </div>
+            </ScrollArea>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }

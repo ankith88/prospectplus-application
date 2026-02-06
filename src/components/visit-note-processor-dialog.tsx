@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -93,15 +94,18 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                   <p className="whitespace-pre-wrap text-sm">{note.content}</p>
                   </ScrollArea>
                </div>
-               {(note.frontImageDataUri || note.backImageDataUri) && (
-                   <div>
-                      <h4 className="font-semibold mb-2">Attached Images</h4>
-                       <div className="flex gap-4">
-                          {note.frontImageDataUri && <Image src={note.frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>}
-                          {note.backImageDataUri && <Image src={note.backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>}
-                      </div>
-                   </div>
-               )}
+               {note.imageUrls && note.imageUrls.length > 0 && (
+                    <div>
+                        <h4 className="font-semibold mb-2">Attached Images</h4>
+                        <ScrollArea className="h-40">
+                            <div className="flex gap-4 flex-wrap p-1">
+                                {note.imageUrls.map((url, index) => (
+                                    <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={200} height={120} className="rounded-md border object-cover"/>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                )}
                 {note.discoveryData && Object.keys(note.discoveryData).length > 0 && (
                     <div>
                         <h4 className="font-semibold mb-2">Field Discovery Data</h4>

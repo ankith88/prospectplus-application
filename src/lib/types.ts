@@ -189,8 +189,7 @@ export interface VisitNote {
     details: Record<string, any>;
   };
   analyzedData?: VisitNoteAnalysis;
-  frontImageDataUri?: string;
-  backImageDataUri?: string;
+  imageUrls?: string[];
   websiteUrl?: string;
   discoveryData?: Partial<DiscoveryData>;
 }
