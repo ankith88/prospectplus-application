@@ -269,6 +269,134 @@ export default function LeadsMapClient() {
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
   const canCreateArea = userProfile?.role && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
 
+  const startDrawing = (mode: google.maps.drawing.OverlayType) => {
+    setIsDrawing(true);
+    setDrawingMode(mode);
+    toast({
+        title: "Drawing Mode Activated",
+        description: `Draw a ${mode.toLowerCase()} on the map to select leads. Press Esc or click Cancel to exit.`,
+    });
+  };
+
+  const cancelDrawing = () => {
+    setIsDrawing(false);
+    setDrawingMode(null);
+    if (drawingManagerRef.current) {
+        drawingManagerRef.current.setDrawingMode(null);
+    }
+    if (isCreatingArea) {
+        setIsCreatingArea(false);
+    }
+    toast({ title: "Drawing Mode Canceled" });
+  };
+  
+  const startAreaCreation = (mode: google.maps.drawing.OverlayType) => {
+    setIsCreatingArea(true);
+    startDrawing(mode);
+  }
+
+  const cancelAreaCreation = () => {
+    cancelDrawing();
+  }
+
+  const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
+    const leadsInShape = filteredData.filter(lead => {
+        if (lead.isCompany || leadToRouteMap.has(lead.id)) return false;
+        if (lead.latitude && lead.longitude) {
+            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+            if ((overlay as any).get('radius')) {
+                return google.maps.geometry.spherical.computeDistanceBetween(
+                    (overlay as google.maps.Circle).getCenter()!,
+                    leadLatLng
+                ) <= (overlay as google.maps.Circle).getRadius();
+            } else if ((overlay as any).get('bounds')) {
+                return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
+            } else {
+                return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
+            }
+        }
+        return false;
+    });
+
+    if (isCreatingArea) {
+        if (leadsInShape.length > 0) {
+            setAreaLeads(leadsInShape);
+            setIsAssignAreaDialogOpen(true);
+        } else {
+            toast({
+                variant: "destructive",
+                title: "No Leads Found",
+                description: "No un-routed leads were found within the drawn area.",
+            });
+        }
+        setIsCreatingArea(false);
+    } else {
+        setSelectedRouteLeads(prev => [...new Set([...prev, ...leadsInShape])]);
+        toast({
+          title: `${leadsInShape.length} Stops Added`,
+          description: "You can continue to select more areas or individual stops.",
+        });
+    }
+
+    (overlay as any).setMap(null);
+    setDrawingMode(null);
+    setIsDrawing(false);
+  };
+  
+  const handleSaveArea = async () => {
+    if (!areaName || !areaAssignee || areaLeads.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Information',
+        description: 'Please provide a name, an assignee, and ensure at least one lead is in the area.',
+      });
+      return;
+    }
+
+    setIsSavingArea(true);
+    try {
+      const newRoute: Omit<StorableRoute, 'id'> = {
+        name: areaName,
+        createdAt: new Date().toISOString(),
+        leads: areaLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! })),
+        travelMode: google.maps.TravelMode.DRIVING,
+      };
+
+      const savedRouteId = await saveUserRoute(areaAssignee, newRoute);
+      
+      const assigneeData = assignableUsers.find(u => u.uid === areaAssignee);
+      const newRouteForState: SavedRoute & { userName: string, userId: string } = {
+        ...newRoute,
+        id: savedRouteId,
+        userId: areaAssignee,
+        userName: assigneeData?.displayName || 'Unknown',
+        directions: null,
+      };
+
+      setAllSystemRoutes(prev => [newRouteForState, ...prev]);
+
+      toast({
+        title: 'Area Created',
+        description: `Prospecting area "${areaName}" has been created and assigned.`,
+      });
+      
+      setIsAssignAreaDialogOpen(false);
+      setAreaName('');
+      setAreaAssignee('');
+      setAreaLeads([]);
+      
+    } catch (error) {
+      console.error('Failed to save prospecting area:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error Saving Area',
+        description: 'An unexpected error occurred while saving the prospecting area.',
+      });
+    } finally {
+      setIsSavingArea(false);
+    }
+  };
+
 
   useEffect(() => {
     if (isFieldSalesUser) {
@@ -352,7 +480,7 @@ export default function LeadsMapClient() {
     if (!isLoaded) return null;
     const geocoder = new window.google.maps.Geocoder();
     return new Promise((resolve) => {
-        geocoder.geocode({ address, componentRestrictions: { country: 'au' } }, (results, status) => {
+        geocoder.geocode({ address, componentRestrictions: { country: 'AU' } }, (results, status) => {
             if (status === 'OK' && results?.[0]?.geometry.location) {
                 resolve(results[0].geometry.location);
             } else {
@@ -888,26 +1016,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
   }, [map, mapData, getPlaceDetails, toast]);
   
-  const handleFindProspectsNearMe = useCallback(() => {
-    if (!myLocation) {
-        toast({
-            variant: "destructive",
-            title: "Location Required",
-            description: "Please enable location services or use 'My Location' first.",
-        });
-        return;
-    }
-    if (!prospectSearchQuery) {
-        toast({
-            variant: "destructive",
-            title: "Search Term Required",
-            description: "Please enter a keyword to search for (e.g., 'cafe').",
-        });
-        return;
-    }
-    findProspects(myLocation, prospectSearchQuery);
-  }, [myLocation, prospectSearchQuery, findProspects, toast]);
-
   const handleFindNearby = useCallback(async () => {
     if (!selectedLead || !map) return;
   
@@ -1192,37 +1300,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   }, [drawnTerritory, selectedRouteLeads, findProspects, toast]);
 
 
-    const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
-        const leadsInShape = filteredData.filter(lead => {
-            if (lead.isCompany) return false;
-            if (leadToRouteMap.has(lead.id)) return false;
-            if (lead.latitude && lead.longitude) {
-                const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-                if ((overlay as any).get('radius')) {
-                    return google.maps.geometry.spherical.computeDistanceBetween(
-                        (overlay as google.maps.Circle).getCenter()!, 
-                        leadLatLng
-                    ) <= (overlay as google.maps.Circle).getRadius();
-                } else if ((overlay as any).get('bounds')) {
-                    return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
-                } else {
-                    return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
-                }
-            }
-            return false;
-        });
-
-        setSelectedRouteLeads(prev => [...new Set([...prev, ...leadsInShape])]);
-        
-        toast({
-          title: `${leadsInShape.length} Stops Added`,
-          description: "You can continue to select more areas or individual stops.",
-        });
-        
-        (overlay as any).setMap(null);
-        setDrawingMode(null);
-    };
-
     const handleRemoveFromRoute = (leadId: string) => {
         setSelectedRouteLeads(prev => prev.filter(l => l.id !== leadId));
     };
@@ -1351,27 +1428,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         handleClearRoute();
         toast({ title: 'Route Stopped', description: 'Active route has been cleared.' });
     };
-
-    const startDrawing = (mode: google.maps.drawing.OverlayType) => {
-        setIsDrawing(true);
-        setDrawingMode(mode);
-        toast({
-            title: "Drawing Mode Activated",
-            description: `Draw a ${mode.toLowerCase()} on the map to select leads. Press Esc or click Cancel to exit.`,
-        });
-    };
-
-    const cancelDrawing = () => {
-        setIsDrawing(false);
-        setDrawingMode(null);
-        if (drawingManagerRef.current) {
-            drawingManagerRef.current.setDrawingMode(null);
-        }
-        toast({
-            title: "Drawing Mode Canceled",
-        });
-    };
-
+    
     const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
         if (!address) return 'Address not available';
         if (typeof address === 'string') return address;
@@ -1889,9 +1946,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                      {isLoaded && (isCreatingArea || (selectionMode === 'select' && isDrawing)) && (
                         <DrawingManagerF
                             onLoad={(dm) => (drawingManagerRef.current = dm)}
-                            onCircleComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
-                            onRectangleComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
-                            onPolygonComplete={isCreatingArea ? onAreaDrawingComplete : onDrawingComplete}
+                            onCircleComplete={onDrawingComplete}
+                            onRectangleComplete={onDrawingComplete}
+                            onPolygonComplete={onDrawingComplete}
                             drawingMode={drawingMode}
                             options={{
                                 drawingControl: false,
@@ -2126,7 +2183,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </Card>
                         ))}
                     </div>
-
                     <div className="hidden md:block">
                         <Table>
                             <TableHeader>
@@ -2311,3 +2367,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
