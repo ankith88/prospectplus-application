@@ -38,7 +38,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createNewLead, checkForDuplicateLead, updateVisitNote } from '@/services/firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
@@ -482,6 +482,11 @@ export function NewLeadForm() {
       if (result.success && result.leadId) {
         if (visitNoteId) {
             await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
+        }
+        
+        if (discoveryData && Object.keys(discoveryData).length > 0) {
+          const leadRef = doc(firestore, 'leads', result.leadId);
+          await updateDoc(leadRef, { discoveryData });
         }
 
         toast({
