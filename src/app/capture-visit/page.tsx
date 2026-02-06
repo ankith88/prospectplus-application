@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -666,7 +667,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => setShowCamera(true)}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -788,7 +789,7 @@ export default function CaptureVisitPage() {
                                         <FormItem>
                                         <FormControl>
                                             <div className="relative">
-                                                <Textarea placeholder="Start typing or use the mic to dictate..." {...field} rows={10} />
+                                                <Textarea placeholder="Why is this a good lead? What are their pain points? e.g. 'Good lead, they send 20 parcels/week and are unhappy with their current courier. Interested in a free trial.'" {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
                                                     <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
