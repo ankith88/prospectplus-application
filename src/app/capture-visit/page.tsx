@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
+import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import {
@@ -88,7 +89,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     const streetNumber = get('street_number');
     const route = get('route');
     
-    address.street = `${streetNumber || ''} ${route || ''}`.trim();
+    address.street = `${'${streetNumber || \'\''}'} ${'${route || \'\''}'}`.trim();
     address.address1 = get('subpremise'); // For level, suite, etc.
     address.city = get('locality') || get('postal_town');
     address.state = get('administrative_area_level_1', true);
@@ -467,14 +468,14 @@ export default function CaptureVisitPage() {
             .map(([key, value]) => {
                 if (value) {
                     const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    return `${formattedKey}: ${Array.isArray(value) ? value.join(', ') : value}`;
+                    return `${'${formattedKey}'}: ${Array.isArray(value) ? value.join(', ') : value}`;
                 }
                 return null;
             })
             .filter(Boolean)
             .join('\n');
             
-        const fullNote = `${noteContent}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
+        const fullNote = `${'${noteContent}'}\n\n---\nOutcome: ${'${outcomeType}'}\n${'${detailsString}'}`;
     
         let addressData: Address | undefined;
         if (selectedPlace?.address_components) {
@@ -511,25 +512,53 @@ export default function CaptureVisitPage() {
 
 
         try {
-          await addVisitNote({
-            content: fullNote,
-            capturedBy: captureUser.displayName || 'Unknown User',
-            capturedByUid: captureUser.uid,
-            frontImageDataUri: frontImage || undefined,
-            backImageDataUri: backImage || undefined,
-            googlePlaceId: selectedPlace?.place_id,
-            companyName: selectedPlace?.name,
-            address: addressData,
-            websiteUrl: selectedPlace?.website,
-            outcome: {
-              type: outcomeType,
-              details: detailsObject,
-            },
-            discoveryData: discoveryFormValues,
-          });
-          toast({ title: 'Success', description: 'Your visit note has been submitted and a notification will be sent to the Teams channel.' });
-          
-          resetState();
+            await addVisitNote({
+                content: fullNote,
+                capturedBy: captureUser.displayName || 'Unknown User',
+                capturedByUid: captureUser.uid,
+                frontImageDataUri: frontImage || undefined,
+                backImageDataUri: backImage || undefined,
+                googlePlaceId: selectedPlace?.place_id,
+                companyName: selectedPlace?.name,
+                address: addressData,
+                websiteUrl: selectedPlace?.website,
+                outcome: {
+                type: outcomeType,
+                details: detailsObject,
+                },
+                discoveryData: discoveryFormValues,
+            });
+
+            const discoveryAnswers = Object.entries(discoveryFormValues)
+                .map(([key, value]) => {
+                    if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                    const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                    const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                    return `${'${formattedKey}'}: ${'${formattedValue}'}`;
+                })
+                .filter(Boolean)
+                .join('\n');
+
+            const nsPayload = {
+                capturedBy: captureUser.displayName || 'Unknown User',
+                outcome: outcomeType,
+                companyName: selectedPlace?.name || 'Unknown Company',
+                discoveryAnswers,
+            };
+
+            const nsResult = await sendVisitNoteToNetSuite(nsPayload);
+
+            if (nsResult.success) {
+                toast({ title: 'Success', description: 'Visit note submitted and synced with NetSuite. A notification will be sent to the Teams channel.' });
+            } else {
+                toast({
+                    title: 'Partial Success',
+                    description: `Visit note saved, but failed to sync with NetSuite. A Teams notification will still be sent. Error: ${'${nsResult.message}'}`,
+                    variant: 'destructive',
+                });
+            }
+            
+            resetState();
         } catch (error) {
           console.error('Failed to submit visit note:', error);
           toast({ variant: 'destructive', title: 'Submission Failed', description: 'Could not save your visit note.' });
@@ -815,8 +844,8 @@ export default function CaptureVisitPage() {
                                                 <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
                                                     {salesReps.map(rep => (
                                                         <div key={rep.name} className="flex items-center space-x-2">
-                                                            <RadioGroupItem value={rep.name} id={`rep-${rep.name}`} />
-                                                            <Label htmlFor={`rep-${rep.name}`}>{rep.name}</Label>
+                                                            <RadioGroupItem value={rep.name} id={`rep-${'${rep.name}'}`} />
+                                                            <Label htmlFor={`rep-${'${rep.name}'}`}>{rep.name}</Label>
                                                         </div>
                                                     ))}
                                                 </RadioGroup>
@@ -845,9 +874,9 @@ export default function CaptureVisitPage() {
                                                 ) : (
                                                     <RadioGroup onValueChange={setQuoteRep} value={quoteRep}>
                                                         {salesReps.map(rep => (
-                                                            <div key={`qt-${rep.name}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`qt-${rep.name}`} />
-                                                                <Label htmlFor={`qt-${rep.name}`}>{rep.name}</Label>
+                                                            <div key={`qt-${'${rep.name}'}`} className="flex items-center space-x-2">
+                                                                <RadioGroupItem value={rep.name} id={`qt-${'${rep.name}'}`} />
+                                                                <Label htmlFor={`qt-${'${rep.name}'}`}>{rep.name}</Label>
                                                             </div>
                                                         ))}
                                                     </RadioGroup>
@@ -868,9 +897,9 @@ export default function CaptureVisitPage() {
                                                 ) : (
                                                     <RadioGroup onValueChange={setSignUpRep} value={signUpRep}>
                                                         {salesReps.map(rep => (
-                                                            <div key={`su-${rep.name}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`su-${rep.name}`} />
-                                                                <Label htmlFor={`su-${rep.name}`}>{rep.name}</Label>
+                                                            <div key={`su-${'${rep.name}'}`} className="flex items-center space-x-2">
+                                                                <RadioGroupItem value={rep.name} id={`su-${'${rep.name}'}`} />
+                                                                <Label htmlFor={`su-${'${rep.name}'}`}>{rep.name}</Label>
                                                             </div>
                                                         ))}
                                                     </RadioGroup>
