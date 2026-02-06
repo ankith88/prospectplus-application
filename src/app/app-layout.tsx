@@ -29,7 +29,7 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect, useState } from "react"
@@ -140,7 +140,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
@@ -228,6 +228,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Save />
                         <span>Saved Routes</span>
                       </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive('/prospecting-areas')}>
+                        <Link href="/prospecting-areas">
+                            <LayoutGrid />
+                            <span>Prospecting Areas</span>
+                        </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                   <SidebarMenuSubItem>

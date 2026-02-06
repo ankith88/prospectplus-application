@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -317,6 +318,7 @@ export default function LeadsMapClient() {
         createdAt: new Date().toISOString(),
         leads: areaLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! })),
         travelMode: google.maps.TravelMode.DRIVING,
+        isProspectingArea: true,
       };
 
       const savedRouteId = await saveUserRoute(areaAssignee, newRoute);
@@ -1495,11 +1497,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         const itemsInShape = filteredData.filter(item => {
             if (item.latitude && item.longitude) {
                 const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
-                if (overlay.get('radius')) { // Circle
+                if ((overlay as any).get('radius')) { // Circle
                     const center = (overlay as google.maps.Circle).getCenter();
                     if (!center) return false;
                     return google.maps.geometry.spherical.computeDistanceBetween(center, itemLatLng) <= (overlay as google.maps.Circle).getRadius();
-                } else if (overlay.get('bounds')) { // Rectangle
+                } else if ((overlay as any).get('bounds')) { // Rectangle
                     const bounds = (overlay as google.maps.Rectangle).getBounds();
                     return !!bounds && bounds.contains(itemLatLng);
                 } else { // Polygon
@@ -1530,45 +1532,34 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         setIsDrawing(false);
     };
 
-    const escapeCsvCell = (cellData: any) => {
-      if (cellData === null || cellData === undefined) {
-          return '';
-      }
-      const stringData = String(cellData);
-      if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
-          return `"${stringData.replace(/"/g, '""')}"`;
-      }
-      return stringData;
-    };
-  
-  const handleExportProspects = () => {
-    if (prospects.length === 0) {
-      toast({ variant: 'destructive', title: 'No Data', description: 'There are no prospects to export.' });
-      return;
-    }
+    const handleExportProspects = useCallback(() => {
+        if (prospects.length === 0) {
+        toast({ variant: 'destructive', title: 'No Data', description: 'There are no prospects to export.' });
+        return;
+        }
 
-    const headers = ['Name', 'Address', 'Classification', 'Description', 'Website', 'Phone'];
-    const rows = prospects.map(p => {
-      return [
-        escapeCsvCell(p.place.name),
-        escapeCsvCell(p.place.vicinity),
-        escapeCsvCell(p.classification),
-        escapeCsvCell(p.description),
-        escapeCsvCell(p.place.website),
-        escapeCsvCell(p.place.formatted_phone_number),
-      ];
-    });
+        const headers = ['Name', 'Address', 'Classification', 'Description', 'Website', 'Phone'];
+        const rows = prospects.map(p => {
+        return [
+            escapeCsvCell(p.place.name),
+            escapeCsvCell(p.place.vicinity),
+            escapeCsvCell(p.classification),
+            escapeCsvCell(p.description),
+            escapeCsvCell(p.place.website),
+            escapeCsvCell(p.place.formatted_phone_number),
+        ];
+        });
 
-    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.setAttribute('download', `nearby_prospects_export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute('download', `nearby_prospects_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }, [prospects, toast]);
     
 
     const handleFindProspectsNearMe = useCallback(() => {
@@ -2130,7 +2121,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <Eye className="mr-2 h-4 w-4" /> View
                                         </Button>
                                     ) : (
-                                        <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                        <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                             {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                             Add
                                         </Button>

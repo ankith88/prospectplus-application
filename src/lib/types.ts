@@ -270,6 +270,7 @@ export type StorableRoute = {
     scheduledDate?: string;
     totalDistance?: string | null;
     totalDuration?: string | null;
+    isProspectingArea?: boolean;
 };
 
 
