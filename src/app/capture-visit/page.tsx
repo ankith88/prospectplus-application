@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -89,7 +88,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     const streetNumber = get('street_number');
     const route = get('route');
     
-    address.street = `${'${streetNumber || \'\''}'} ${'${route || \'\''}'}`.trim();
+    address.street = `${streetNumber || ''} ${route || ''}`.trim();
     address.address1 = get('subpremise'); // For level, suite, etc.
     address.city = get('locality') || get('postal_town');
     address.state = get('administrative_area_level_1', true);
@@ -464,14 +463,14 @@ export default function CaptureVisitPage() {
             .map(([key, value]) => {
                 if (value) {
                     const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    return `${'${formattedKey}'}: ${Array.isArray(value) ? value.join(', ') : value}`;
+                    return `${formattedKey}: ${Array.isArray(value) ? value.join(', ') : value}`;
                 }
                 return null;
             })
             .filter(Boolean)
             .join('\n');
             
-        const fullNote = `${'${noteContent}'}\n\n---\nOutcome: ${'${outcomeType}'}\n${'${detailsString}'}`;
+        const fullNote = `${noteContent}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
     
         let addressData: Address | undefined;
         if (selectedPlace?.address_components) {
@@ -530,7 +529,7 @@ export default function CaptureVisitPage() {
                     if (!value || (Array.isArray(value) && value.length === 0)) return null;
                     const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
                     const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
-                    return `${'${formattedKey}'}: ${'${formattedValue}'}`;
+                    return `${formattedKey}: ${formattedValue}`;
                 })
                 .filter(Boolean)
                 .join('\n');
@@ -549,7 +548,7 @@ export default function CaptureVisitPage() {
             } else {
                 toast({
                     title: 'Partial Success',
-                    description: `Visit note saved, but failed to sync with NetSuite. A Teams notification will still be sent. Error: ${'${nsResult.message}'}`,
+                    description: `Visit note saved, but failed to sync with NetSuite. A Teams notification will still be sent. Error: ${nsResult.message}`,
                     variant: 'destructive',
                 });
             }
@@ -855,23 +854,14 @@ export default function CaptureVisitPage() {
                                                 <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
                                                     {salesReps.map(rep => (
                                                         <div key={rep.name} className="flex items-center space-x-2">
-                                                            <RadioGroupItem value={rep.name} id={`rep-${'${rep.name}'}`} />
-                                                            <Label htmlFor={`rep-${'${rep.name}'}`}>{rep.name}</Label>
+                                                            <RadioGroupItem value={rep.name} id={`rep-${rep.name}`} />
+                                                            <Label htmlFor={`rep-${rep.name}`}>{rep.name}</Label>
                                                         </div>
                                                     ))}
                                                 </RadioGroup>
                                             )}
                                             <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!repForAppointment || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: repForAppointment })}>
                                                 {isSubmitting ? <Loader /> : 'Submit'}
-                                            </Button>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                    <AccordionItem value="item-lpo">
-                                        <AccordionTrigger>LPO Referral</AccordionTrigger>
-                                        <AccordionContent className="space-y-4 pt-2">
-                                            <p className="text-sm text-muted-foreground">This lead qualifies for an LPO Referral.</p>
-                                            <Button className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting} onClick={() => handleFinalSubmit('LPO Referral', {})}>
-                                                {isSubmitting ? <Loader /> : 'Submit as LPO Referral'}
                                             </Button>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -885,9 +875,9 @@ export default function CaptureVisitPage() {
                                                 ) : (
                                                     <RadioGroup onValueChange={setQuoteRep} value={quoteRep}>
                                                         {salesReps.map(rep => (
-                                                            <div key={`qt-${'${rep.name}'}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`qt-${'${rep.name}'}`} />
-                                                                <Label htmlFor={`qt-${'${rep.name}'}`}>{rep.name}</Label>
+                                                            <div key={`qt-${rep.name}`} className="flex items-center space-x-2">
+                                                                <RadioGroupItem value={rep.name} id={`qt-${rep.name}`} />
+                                                                <Label htmlFor={`qt-${rep.name}`}>{rep.name}</Label>
                                                             </div>
                                                         ))}
                                                     </RadioGroup>
@@ -908,9 +898,9 @@ export default function CaptureVisitPage() {
                                                 ) : (
                                                     <RadioGroup onValueChange={setSignUpRep} value={signUpRep}>
                                                         {salesReps.map(rep => (
-                                                            <div key={`su-${'${rep.name}'}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`su-${'${rep.name}'}`} />
-                                                                <Label htmlFor={`su-${'${rep.name}'}`}>{rep.name}</Label>
+                                                            <div key={`su-${rep.name}`} className="flex items-center space-x-2">
+                                                                <RadioGroupItem value={rep.name} id={`su-${rep.name}`} />
+                                                                <Label htmlFor={`su-${rep.name}`}>{rep.name}</Label>
                                                             </div>
                                                         ))}
                                                     </RadioGroup>
@@ -1063,4 +1053,3 @@ const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: ()
         </div>
     );
 };
-
