@@ -326,7 +326,7 @@ export default function CaptureVisitPage() {
           } catch (error) {
             console.error('Error accessing camera:', error);
             setHasCameraPermission(false);
-            setStep('capture');
+            setStep(previousStep); // Go back to the previous step on error
             toast({
               variant: 'destructive',
               title: 'Camera Access Denied',
@@ -340,7 +340,7 @@ export default function CaptureVisitPage() {
                 (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
             }
         };
-      }, [step, toast]);
+      }, [step, toast, previousStep]);
 
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -430,6 +430,7 @@ export default function CaptureVisitPage() {
         context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
         setImages(prev => [...prev, dataUrl]);
+        setStep(previousStep);
     };
 
     const handleDeleteImage = (indexToDelete: number) => {
@@ -571,7 +572,6 @@ export default function CaptureVisitPage() {
         }
         switch(step) {
             case 'search': setStep('discovery'); break;
-            case 'camera': setStep('capture'); break;
             case 'discovery': setStep('capture'); break;
             case 'capture': setStep('outcome'); break;
             default: break;
@@ -633,7 +633,7 @@ export default function CaptureVisitPage() {
                                 <CardDescription>
                                     {step === 'search' ? 'Search for the business you visited, or capture a business card.' :
                                     step === 'discovery' ? 'Capture observable behaviour and decision context.' :
-                                    step === 'capture' ? 'Record the details of your visit for the Lead Gen team.' :
+                                    step === 'capture' ? 'Record the details of your visit. What are their pain points? Why is this a good lead?' :
                                     step === 'camera' ? 'Take photos related to your visit.' :
                                     'Choose the final outcome of your visit.'}
                                 </CardDescription>
@@ -822,27 +822,11 @@ export default function CaptureVisitPage() {
                                     </Alert>
                                 )}
                                 <div className="flex gap-2">
-                                     <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
+                                    <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
                                         <Camera className="mr-2 h-4 w-4" /> Capture Image
                                     </Button>
-                                    <Button variant="outline" onClick={() => setStep(previousStep)}>{previousStep === 'search' ? 'Back to Search' : 'Back to Note'}</Button>
+                                    <Button variant="outline" onClick={() => setStep(previousStep)}>Cancel</Button>
                                 </div>
-                               
-                                {images.length > 0 && (
-                                    <div className="space-y-2">
-                                        <Label>Captured Images ({images.length})</Label>
-                                        <ScrollArea className="h-32">
-                                            <div className="flex gap-2 flex-wrap p-1">
-                                                {images.map((img, index) => (
-                                                    <div key={index} className="relative">
-                                                        <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover"/>
-                                                        <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </ScrollArea>
-                                    </div>
-                                )}
                             </div>
                         ) : (
                             <div className="space-y-4">
