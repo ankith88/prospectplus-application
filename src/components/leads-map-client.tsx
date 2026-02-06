@@ -83,12 +83,12 @@ const containerStyle = {
   width: '100%',
   height: '100%',
   borderRadius: '0.5rem',
-}
+};
 
 const center = {
   lat: -25.2744,
   lng: 133.7751,
-}
+};
 
 const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
@@ -299,50 +299,6 @@ export default function LeadsMapClient() {
     cancelDrawing();
   }
 
-  const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
-    const leadsInShape = filteredData.filter(lead => {
-        if (lead.isCompany || leadToRouteMap.has(lead.id)) return false;
-        if (lead.latitude && lead.longitude) {
-            const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-            if ((overlay as any).get('radius')) {
-                return google.maps.geometry.spherical.computeDistanceBetween(
-                    (overlay as google.maps.Circle).getCenter()!,
-                    leadLatLng
-                ) <= (overlay as google.maps.Circle).getRadius();
-            } else if ((overlay as any).get('bounds')) {
-                return (overlay as google.maps.Rectangle).getBounds()!.contains(leadLatLng);
-            } else {
-                return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
-            }
-        }
-        return false;
-    });
-
-    if (isCreatingArea) {
-        if (leadsInShape.length > 0) {
-            setAreaLeads(leadsInShape);
-            setIsAssignAreaDialogOpen(true);
-        } else {
-            toast({
-                variant: "destructive",
-                title: "No Leads Found",
-                description: "No un-routed leads were found within the drawn area.",
-            });
-        }
-        setIsCreatingArea(false);
-    } else {
-        setSelectedRouteLeads(prev => [...new Set([...prev, ...leadsInShape])]);
-        toast({
-          title: `${leadsInShape.length} Stops Added`,
-          description: "You can continue to select more areas or individual stops.",
-        });
-    }
-
-    (overlay as any).setMap(null);
-    setDrawingMode(null);
-    setIsDrawing(false);
-  };
-  
   const handleSaveArea = async () => {
     if (!areaName || !areaAssignee || areaLeads.length === 0) {
       toast({
@@ -1088,11 +1044,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }
   }, [selectedLead, toast]);
 
+
     const handleFindMultiSites = useCallback(() => {
     if (!selectedLead) return;
     findProspects({ lat: -25.2744, lng: 133.7751 }, selectedLead.companyName, true);
   }, [selectedLead, findProspects]);
-
 
     const handleCreateLeadFromProspect = async () => {
         if (!prospectToCreate || !userProfile?.displayName) return;
@@ -1553,6 +1509,27 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }
     setSelectedLead(null);
   }, [selectedLead, mapData, toast]);
+
+    const handleFindProspectsNearMe = useCallback(() => {
+    if (!myLocation) {
+        toast({
+            variant: 'destructive',
+            title: 'Location Unknown',
+            description: 'Click "My Location" first to set your position on the map.',
+        });
+        handleShowMyLocation();
+        return;
+    }
+    if (!prospectSearchQuery) {
+        toast({
+            variant: 'destructive',
+            title: 'Search Term Missing',
+            description: 'Please enter what you are looking for (e.g., "cafe").',
+        });
+        return;
+    }
+    findProspects(myLocation, prospectSearchQuery);
+  }, [myLocation, prospectSearchQuery, findProspects, handleShowMyLocation, toast]);
 
     if (authLoading || loadingData || !isLoaded) {
         return (
@@ -2239,30 +2216,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </Table>
                     </div>
                 </ScrollArea>
-                <DialogFooter>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button disabled={selectedProspects.length === 0}>
-                                <Route className="mr-2 h-4 w-4" />
-                                Create Route from Selected ({selectedProspects.length})
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.DRIVING)}>
-                                <Car className="mr-2 h-4 w-4" />
-                                Driving
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.WALKING)}>
-                                <Footprints className="mr-2 h-4 w-4" />
-                                Walking
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCreateRouteFromProspects(google.maps.TravelMode.BICYCLING)}>
-                                <Bike className="mr-2 h-4 w-4" />
-                                Bicycling
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </DialogFooter>
+                 <DialogFooter>
+                    <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export Prospects
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
+                 </DialogFooter>
             </DialogContent>
         </Dialog>
 
@@ -2367,4 +2327,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
