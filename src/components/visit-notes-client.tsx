@@ -263,6 +263,7 @@ export default function VisitNotesClient() {
                     ) : filteredNotes.length > 0 ? (
                     filteredNotes.map((note) => {
                         const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                        const canDelete = userProfile?.role === 'admin';
                         return (
                         <TableRow key={note.id}>
                         <TableCell className="hidden md:table-cell">{note.capturedBy}</TableCell>
@@ -299,9 +300,11 @@ export default function VisitNotesClient() {
                                         <DropdownMenuItem disabled={!note.imageUrls || note.imageUrls.length === 0} onClick={() => setViewingImages(note.imageUrls || [])}>
                                             <Camera className="mr-2 h-4 w-4" /> View Images
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
-                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                        </DropdownMenuItem>
+                                        {canDelete && (
+                                            <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
+                                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                            </DropdownMenuItem>
+                                        )}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             )}
