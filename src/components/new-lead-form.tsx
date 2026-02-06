@@ -94,8 +94,7 @@ export function NewLeadForm() {
   const [isLoadingFromNote, setIsLoadingFromNote] = useState(false);
   const [noteCapturedBy, setNoteCapturedBy] = useState<string | null>(null);
   const [isLinking, setIsLinking] = useState(false);
-  const [frontImageDataUri, setFrontImageDataUri] = useState<string | null>(null);
-  const [backImageDataUri, setBackImageDataUri] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
 
 
   const autocompleteInputRef = useRef<HTMLInputElement>(null);
@@ -218,8 +217,9 @@ export function NewLeadForm() {
           const note = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
           setNoteCapturedBy(note.capturedBy);
 
-          if (note.frontImageDataUri) setFrontImageDataUri(note.frontImageDataUri);
-          if (note.backImageDataUri) setBackImageDataUri(note.backImageDataUri);
+          if (note.imageUrls) {
+            setImageUrls(note.imageUrls);
+          }
           
           const companyName = note.companyName || '';
           
@@ -575,23 +575,16 @@ export function NewLeadForm() {
 
             <hr/>
 
-            {(frontImageDataUri || backImageDataUri) && (
+            {imageUrls.length > 0 && (
               <>
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium flex items-center gap-2"><Camera className="w-5 h-5" />Captured Images</h3>
-                  <div className="flex gap-4">
-                    {frontImageDataUri && (
-                      <div className="space-y-1">
-                        <Label>Front of Card</Label>
-                        <Image src={frontImageDataUri} alt="Front of card" width={200} height={120} className="rounded-md border"/>
+                  <h3 className="text-lg font-medium flex items-center gap-2"><Camera className="w-5 h-5" />Captured Images from Visit</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {imageUrls.map((url, index) => (
+                      <div key={index}>
+                        <Image src={url} alt={`Visit image ${index + 1}`} width={200} height={120} className="rounded-md border object-cover"/>
                       </div>
-                    )}
-                    {backImageDataUri && (
-                      <div className="space-y-1">
-                        <Label>Back of Card</Label>
-                        <Image src={backImageDataUri} alt="Back of card" width={200} height={120} className="rounded-md border"/>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 </div>
                 <hr/>

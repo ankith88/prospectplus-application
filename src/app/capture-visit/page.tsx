@@ -174,6 +174,7 @@ export default function CaptureVisitPage() {
 
     const [editingNote, setEditingNote] = useState<VisitNote | null>(null);
     const [isLoadingNote, setIsLoadingNote] = useState(false);
+    const [previousStep, setPreviousStep] = useState<'search' | 'capture'>('search');
   
     const { toast } = useToast();
     const { userProfile } = useAuth();
@@ -667,7 +668,7 @@ export default function CaptureVisitPage() {
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
-                                        <Button type="button" variant="outline" size="icon" onClick={() => setStep('camera')}><Camera className="h-4 w-4" /></Button>
+                                        <Button type="button" variant="outline" size="icon" onClick={() => { setPreviousStep('search'); setStep('camera'); }}><Camera className="h-4 w-4" /></Button>
                                     </div>
                                     {predictions.length > 0 && (
                                         <Card className="absolute z-50 w-full mt-1">
@@ -791,7 +792,7 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Why is this a good lead? What are their pain points? e.g. 'Good lead, they send 20 parcels/week and are unhappy with their current courier. Interested in a free trial.'" {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => setStep('camera')}><Camera /></Button>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => { setPreviousStep('capture'); setStep('camera'); }}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                         <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
@@ -824,7 +825,7 @@ export default function CaptureVisitPage() {
                                      <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
                                         <Camera className="mr-2 h-4 w-4" /> Capture Image
                                     </Button>
-                                    <Button variant="outline" onClick={() => setStep('capture')}>Back to Note</Button>
+                                    <Button variant="outline" onClick={() => setStep(previousStep)}>{previousStep === 'search' ? 'Back to Search' : 'Back to Note'}</Button>
                                 </div>
                                
                                 {images.length > 0 && (
