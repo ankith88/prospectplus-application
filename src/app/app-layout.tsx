@@ -421,7 +421,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {canSeeCalendlyButton && (
                 <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="hidden sm:inline-flex bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
-                    Book Appointment
+                    {userProfile.linkedSalesRep} Calendar
                 </Button>
             )}
            <DropdownMenu>
