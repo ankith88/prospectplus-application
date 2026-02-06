@@ -38,7 +38,7 @@ export type CheckinAnalysis = z.infer<typeof CheckinAnalysisSchema>;
 
 
 const discoverySignals = [
-  { id: 'pays_aus_post', label: 'Pays Australia Post' },
+  { id: 'pays_aus_post', label: 'Pays Australia Post (Services)' },
   { id: 'staff_handle_post', label: 'Staff Handle Post' },
   { id: 'drop_off_hassle', label: 'Drop-off is a Hassle' },
   { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)' },

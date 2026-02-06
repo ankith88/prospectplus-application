@@ -948,10 +948,10 @@ export default function CaptureVisitPage() {
 }
 
 const discoverySignals = [
-  { id: 'pays_aus_post', label: 'Pays Australia Post', description: 'They currently pay for Australia Post' },
+  { id: 'pays_aus_post', label: 'Pays Australia Post (Services)', description: 'They currently pay for Australia Post' },
   { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge' },
   { id: 'drop_off_hassle', label: 'Drop-off is a Hassle', description: 'Drop-offs are inconvenient' },
-  { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'MyPost Business, Express Post Products' },
+  { id: 'uses_auspost_platform', label: 'Uses Australia Post (Products)', description: 'MyPost Business, Express Post Products' },
   { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)', description: 'TGE, StarTrack, TNT' },
   { id: 'uses_couriers_100_plus', label: 'Uses Other Couriers (100+/wk)', description: 'High-volume standard freight' },
   { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking' },
@@ -1063,3 +1063,4 @@ const FieldDiscoveryStep = ({ onNext, onBack }: { onNext: () => void; onBack: ()
         </div>
     );
 };
+
