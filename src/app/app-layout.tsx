@@ -36,6 +36,7 @@ import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
+import { salesReps } from "@/lib/constants"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -101,6 +102,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     
     // Fallback for numbers that don't fit the pattern
     return phoneNumber;
+  };
+
+  const canSeeCalendlyButton = userProfile?.role && ['Field Sales', 'Field Sales Admin'].includes(userProfile.role) && userProfile.linkedSalesRep;
+
+  const handleCalendlyClick = () => {
+    if (userProfile?.linkedSalesRep) {
+      const rep = salesReps.find(r => r.name === userProfile.linkedSalesRep);
+      if (rep) {
+        const url = new URL(rep.url);
+        if (userProfile.email) {
+          url.searchParams.set('email', userProfile.email);
+        }
+        window.open(url.toString(), '_blank');
+      }
+    }
   };
 
 
@@ -402,6 +418,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 lg:gap-4">
            <UniversalSearch />
+            {canSeeCalendlyButton && (
+                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="hidden sm:inline-flex bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Book Appointment
+                </Button>
+            )}
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
