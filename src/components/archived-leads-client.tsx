@@ -225,7 +225,7 @@ export default function ArchivedLeadsClientPage() {
 
         let campaignMatch = true;
         if (filters.campaign && filters.campaign !== 'all') {
-            const leadCampaign = lead.campaign;
+            const leadCampaign = (lead as Lead).campaign;
             const filterCampaign = filters.campaign;
             if (filterCampaign === 'D2D') {
               campaignMatch = leadCampaign === 'Door-to-Door Field Sales' || leadCampaign === 'Door-to-door Field Sales';
@@ -867,6 +867,7 @@ export default function ArchivedLeadsClientPage() {
 
 
     
+
 
 
 
