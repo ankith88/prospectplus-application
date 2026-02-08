@@ -53,6 +53,9 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import SummaryStep from '@/components/capture-visit/summary-step';
+import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
+
 
 const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/field-discovery-step'), {
     loading: () => <div className="flex justify-center p-8"><Loader /></div>,
@@ -103,8 +106,8 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const TOTAL_STEPS = 4;
-const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome"];
+const TOTAL_STEPS = 5;
+const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome", "Summary"];
 
 const contactTagOptions: Option[] = [
     { value: 'Decision Maker', label: 'Decision Maker' },
@@ -154,7 +157,7 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
 
 
 export default function CaptureVisitPage() {
-    const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'camera'>('search');
+    const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'summary' | 'camera'>('search');
     const [noteContent, setNoteContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isListening, setIsListening] = useState(false);
@@ -166,9 +169,7 @@ export default function CaptureVisitPage() {
     const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
     const placesService = useRef<google.maps.places.PlacesService | null>(null);
 
-    const [appointmentRep, setAppointmentRep] = useState('');
-    const [quoteRep, setQuoteRep] = useState('');
-    const [signUpRep, setSignUpRep] = useState('');
+    const [outcomeData, setOutcomeData] = useState<{ type: string; details: Record<string, any> } | null>(null);
     
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
     const [images, setImages] = useState<string[]>([]);
@@ -221,6 +222,7 @@ export default function CaptureVisitPage() {
         discovery: 2,
         capture: 3,
         outcome: 4,
+        summary: 5,
     }[step] || 1;
 
     useEffect(() => {
@@ -292,9 +294,7 @@ export default function CaptureVisitPage() {
             recognitionRef.current.stop();
         }
         setIsListening(false);
-        setAppointmentRep('');
-        setQuoteRep('');
-        setSignUpRep('');
+        setOutcomeData(null);
         setImages([]);
         setHasCameraPermission(null);
         setSelectedPlace(null);
@@ -443,7 +443,13 @@ export default function CaptureVisitPage() {
         setImages(prev => prev.filter((_, index) => index !== indexToDelete));
     };
 
-    const handleFinalSubmit = async (outcomeType: string, detailsObject: Record<string, any>) => {
+    const handleFinalSubmit = async () => {
+        if (!outcomeData) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No outcome selected.' });
+            return;
+        }
+        const { type: outcomeType, details: detailsObject } = outcomeData;
+
         let captureUser = userProfile;
         if (isAdminOrLeadGen) {
             if (selectedFieldSalesRep) {
@@ -479,7 +485,7 @@ export default function CaptureVisitPage() {
             .filter(Boolean)
             .join('\n');
             
-        const fullNote = `${noteContent}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
+        const fullNote = `${captureForm.getValues('content')}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
     
         let addressData: Address | undefined;
         if (selectedPlace?.address_components) {
@@ -491,6 +497,7 @@ export default function CaptureVisitPage() {
         }
         
         const discoveryFormValues = discoveryForm.getValues();
+        const scoredDiscoveryData = calculateScoreAndRouting(discoveryFormValues);
     
         if (editingNote) {
             try {
@@ -501,7 +508,7 @@ export default function CaptureVisitPage() {
                     websiteUrl: selectedPlace?.website,
                     googlePlaceId: selectedPlace?.place_id,
                     outcome: { type: outcomeType, details: detailsObject },
-                    discoveryData: discoveryFormValues,
+                    discoveryData: scoredDiscoveryData,
                     imageUrls: images,
                 });
                 toast({ title: 'Success', description: 'Your visit note has been updated.' });
@@ -527,13 +534,13 @@ export default function CaptureVisitPage() {
                 address: addressData,
                 websiteUrl: selectedPlace?.website,
                 outcome: {
-                type: outcomeType,
-                details: detailsObject,
+                    type: outcomeType,
+                    details: detailsObject,
                 },
-                discoveryData: discoveryFormValues,
+                discoveryData: scoredDiscoveryData,
             });
 
-            const discoveryAnswers = Object.entries(discoveryFormValues)
+            const discoveryAnswers = Object.entries(scoredDiscoveryData)
                 .map(([key, value]) => {
                     if (!value || (Array.isArray(value) && value.length === 0)) return null;
                     const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
@@ -580,6 +587,7 @@ export default function CaptureVisitPage() {
             case 'search': setStep('discovery'); break;
             case 'discovery': setStep('capture'); break;
             case 'capture': setStep('outcome'); break;
+            case 'outcome': setStep('summary'); break;
             default: break;
         }
     }
@@ -589,6 +597,7 @@ export default function CaptureVisitPage() {
             case 'discovery': setStep('search'); break;
             case 'capture': setStep('discovery'); break;
             case 'outcome': setStep('capture'); break;
+            case 'summary': setStep('outcome'); break;
             default: setStep('search'); break;
         }
     }
@@ -602,13 +611,11 @@ export default function CaptureVisitPage() {
         else if (stepNumber === 2) setStep('discovery');
         else if (stepNumber === 3) setStep('capture');
         else if (stepNumber === 4) setStep('outcome');
+        else if (stepNumber === 5) setStep('summary');
     };
 
     const isFieldSalesRepWithLinkedRep = userProfile?.role === 'Field Sales' && userProfile.linkedSalesRep;
-    const repForAppointment = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : appointmentRep;
-    const repForQuote = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : quoteRep;
-    const repForSignup = isFieldSalesRepWithLinkedRep ? userProfile.linkedSalesRep : signUpRep;
-
+    
     if (isLoadingNote) {
         return <div className="flex h-full items-center justify-center"><Loader /></div>;
     }
@@ -641,7 +648,8 @@ export default function CaptureVisitPage() {
                                     step === 'discovery' ? 'Capture observable behaviour and decision context.' :
                                     step === 'capture' ? 'Record the details of your visit. Why is this a good lead? What are their pain points?' :
                                     step === 'camera' ? 'Take photos related to your visit.' :
-                                    'Choose the final outcome of your visit.'}
+                                    step === 'outcome' ? 'Choose the final outcome of your visit.' : 
+                                    'Review the discovery analysis and submit.'}
                                 </CardDescription>
                             </div>
                         </div>
@@ -834,6 +842,13 @@ export default function CaptureVisitPage() {
                                     <Button variant="outline" onClick={() => setStep(previousStep)}>Cancel</Button>
                                 </div>
                             </div>
+                        ) : step === 'summary' ? (
+                            <SummaryStep
+                                discoveryData={discoveryForm.getValues()}
+                                onSubmit={handleFinalSubmit}
+                                onBack={handlePreviousStep}
+                                isSubmitting={isSubmitting}
+                             />
                         ) : (
                             <div className="space-y-4">
                                 <Accordion type="single" collapsible className="w-full">
@@ -843,7 +858,7 @@ export default function CaptureVisitPage() {
                                             {isFieldSalesRepWithLinkedRep ? (
                                                 <p className="text-sm p-2 text-center bg-secondary rounded-md">Will be assigned to linked rep: <strong>{userProfile.linkedSalesRep}</strong></p>
                                             ) : (
-                                                <RadioGroup onValueChange={setAppointmentRep} value={appointmentRep}>
+                                                <RadioGroup onValueChange={(rep) => setOutcomeData({ type: 'Appointment Qualified', details: { salesRep: rep } })}>
                                                     {salesReps.map(rep => (
                                                         <div key={rep.name} className="flex items-center space-x-2">
                                                             <RadioGroupItem value={rep.name} id={`rep-${rep.name}`} />
@@ -852,67 +867,61 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
-                                            <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!repForAppointment || isSubmitting} onClick={() => handleFinalSubmit('Appointment Qualified', { salesRep: repForAppointment })}>
-                                                {isSubmitting ? <Loader /> : 'Submit'}
+                                            <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                                Next
                                             </Button>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="item-quote-trial">
                                         <AccordionTrigger>Send Quote / Free Trial</AccordionTrigger>
                                         <AccordionContent className="space-y-4 pt-2">
-                                            <div className="space-y-2">
-                                                <Label>Assign to Sales Rep</Label>
-                                                {isFieldSalesRepWithLinkedRep ? (
+                                             {isFieldSalesRepWithLinkedRep ? (
                                                     <p className="text-sm p-2 text-center bg-secondary rounded-md">Will be assigned to linked rep: <strong>{userProfile.linkedSalesRep}</strong></p>
                                                 ) : (
-                                                    <RadioGroup onValueChange={setQuoteRep} value={quoteRep}>
-                                                        {salesReps.map(rep => (
-                                                            <div key={`qt-${rep.name}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`qt-${rep.name}`} />
-                                                                <Label htmlFor={`qt-${rep.name}`}>{rep.name}</Label>
-                                                            </div>
-                                                        ))}
-                                                    </RadioGroup>
-                                                )}
-                                            </div>
-                                            <Button className="w-full" disabled={!repForQuote || isSubmitting} onClick={() => handleFinalSubmit('Send Quote / Free Trial', { salesRep: repForQuote })}>
-                                                {isSubmitting ? <Loader /> : 'Submit'}
+                                                <RadioGroup onValueChange={(rep) => setOutcomeData({ type: 'Send Quote / Free Trial', details: { salesRep: rep } })}>
+                                                    {salesReps.map(rep => (
+                                                        <div key={`qt-${rep.name}`} className="flex items-center space-x-2">
+                                                            <RadioGroupItem value={rep.name} id={`qt-${rep.name}`} />
+                                                            <Label htmlFor={`qt-${rep.name}`}>{rep.name}</Label>
+                                                        </div>
+                                                    ))}
+                                                </RadioGroup>
+                                            )}
+                                            <Button className="w-full" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                                Next
                                             </Button>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="item-5">
                                         <AccordionTrigger>Sign Up</AccordionTrigger>
                                         <AccordionContent className="space-y-4 pt-2">
-                                            <div className="space-y-2">
-                                                <Label>Assign to Sales Rep</Label>
-                                                {isFieldSalesRepWithLinkedRep ? (
+                                             {isFieldSalesRepWithLinkedRep ? (
                                                     <p className="text-sm p-2 text-center bg-secondary rounded-md">Will be assigned to linked rep: <strong>{userProfile.linkedSalesRep}</strong></p>
                                                 ) : (
-                                                    <RadioGroup onValueChange={setSignUpRep} value={signUpRep}>
-                                                        {salesReps.map(rep => (
-                                                            <div key={`su-${rep.name}`} className="flex items-center space-x-2">
-                                                                <RadioGroupItem value={rep.name} id={`su-${rep.name}`} />
-                                                                <Label htmlFor={`su-${rep.name}`}>{rep.name}</Label>
-                                                            </div>
-                                                        ))}
-                                                    </RadioGroup>
-                                                )}
-                                            </div>
-                                            <Button className="w-full" disabled={!repForSignup || isSubmitting} onClick={() => handleFinalSubmit('Sign Up', { salesRep: repForSignup })}>
-                                                {isSubmitting ? <Loader /> : 'Submit'}
+                                                <RadioGroup onValueChange={(rep) => setOutcomeData({ type: 'Sign Up', details: { salesRep: rep } })}>
+                                                    {salesReps.map(rep => (
+                                                        <div key={`su-${rep.name}`} className="flex items-center space-x-2">
+                                                            <RadioGroupItem value={rep.name} id={`su-${rep.name}`} />
+                                                            <Label htmlFor={`su-${rep.name}`}>{rep.name}</Label>
+                                                        </div>
+                                                    ))}
+                                                </RadioGroup>
+                                            )}
+                                            <Button className="w-full" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                                Next
                                             </Button>
                                         </AccordionContent>
                                     </AccordionItem>
                                 </Accordion>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                    <Button className="w-full bg-amber-500 hover:bg-amber-600" disabled={isSubmitting} onClick={() => handleFinalSubmit('Needs Follow-up', {})}>
-                                        {isSubmitting ? <Loader /> : 'Needs Follow-up'}
+                                    <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Needs Follow-up', details: {} }); handleNextStep(); }}>
+                                        Needs Follow-up
                                     </Button>
-                                     <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" disabled={isSubmitting} onClick={() => handleFinalSubmit('No Access/Contact', {})}>
-                                        {isSubmitting ? <Loader /> : 'No Access/Contact'}
+                                     <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'No Access/Contact', details: {} }); handleNextStep(); }}>
+                                        No Access/Contact
                                     </Button>
-                                    <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" disabled={isSubmitting} onClick={() => handleFinalSubmit('Not Interested', {})}>
-                                        {isSubmitting ? <Loader /> : 'Not Interested'}
+                                    <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Not Interested', details: {} }); handleNextStep(); }}>
+                                        Not Interested
                                     </Button>
                                 </div>
                                 <div className="flex justify-start pt-4">
