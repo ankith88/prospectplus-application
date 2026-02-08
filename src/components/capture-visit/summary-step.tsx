@@ -39,6 +39,7 @@ export default function SummaryStep({ discoveryData, onSubmit, onBack, isSubmitt
               </Badge>
             </div>
           </div>
+          <DiscoveryRadarChart discoveryData={discoveryData as DiscoveryData} />
           {scoringReason && (
             <p className="text-xs text-muted-foreground p-2 border-t">
               <strong>Scoring Rationale:</strong> {scoringReason}
