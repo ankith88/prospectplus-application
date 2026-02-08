@@ -802,7 +802,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     
     if (isLeadGenAdmin) {
-      return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
+      return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
     }
 
     if (isFieldSales || isFieldSalesAdmin) {
