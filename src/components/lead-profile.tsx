@@ -142,7 +142,7 @@ interface LeadProfileProps {
 interface MoveLeadDialogProps {
   lead: Lead;
   isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
+  onOpenChange: (open: boolean) => void;
   onLeadMoved: () => void;
 }
 
@@ -696,21 +696,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead, toast]);
 
 
-  if (!lead || !user) {
-    return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <Loader />
-      </div>
-    );
-  }
-  
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
+    const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
     const isFieldSales = userProfile?.role === 'Field Sales';
     const isFieldSalesAdmin = userProfile?.role === 'Field Sales Admin';
-    const isNormalUser = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
-
-    const canCheckIn = isAdmin || isFieldSales || isFieldSalesAdmin;
+    const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
 
     const checkInButton = (
       <Button variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
@@ -743,16 +734,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
     const scheduleAppointmentButton = (
-        <Button variant={isNormalUser || isAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}>
+        <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}>
             <Calendar className="mr-2 h-4 w-4" />
             Schedule Appointment
         </Button>
     );
     
-    const logOutcomeButton = (
+    const logCallButton = (
         <Button variant={(isFieldSales || isFieldSalesAdmin) ? "secondary" : "outline"} onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
             <PhoneCall className="mr-2 h-4 w-4" />{(isFieldSales || isFieldSalesAdmin) ? 'Log Outcome' : 'Log a Call'}
         </Button>
+    );
+
+    const processFieldLeadButton = (
+      <Button onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
+        <Briefcase className="mr-2 h-4 w-4" />
+        Process Field Lead
+      </Button>
     );
 
     const logNoteButton = (
@@ -779,38 +777,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
     );
 
-
-    if (isFieldSales || isFieldSalesAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logOutcomeButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
-    }
-    
-    if (isNormalUser) {
-        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logOutcomeButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
-    }
-
     if (isAdmin) {
         return (
             <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-muted-foreground mr-2">Field Sales Actions:</p>
-                    {checkInButton}{signupButton}{freeTrialButton}{logOutcomeButton}
+                    <p className="text-sm font-semibold text-muted-foreground mr-2">Primary Actions:</p>
+                    {processFieldLeadButton}
+                    {scheduleAppointmentButton}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-muted-foreground mr-2">Dialer Actions:</p>
-                    {scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{scorecardButton}
+                    <p className="text-sm font-semibold text-muted-foreground mr-2">Field Sales Actions:</p>
+                    {checkInButton}
+                    {signupButton}
+                    {freeTrialButton}
                 </div>
-                 <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-muted-foreground mr-2">Admin Actions:</p>
                     {moveLeadButton}
+                    {logNoteButton}
+                    {scorecardButton}
                 </div>
             </div>
         );
+    }
+    
+    if (isLeadGenAdmin) {
+      return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
+    }
+
+    if (isFieldSales || isFieldSalesAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logCallButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
+    }
+    
+    if (isDialer) {
+        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logCallButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
     }
 
     return null;
   };
 
 
+  if (!lead || !user) {
+    return (
+      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
+  
   const fullAddress = lead.address
     ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
@@ -898,6 +912,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOutcomeLogged={handleCallLogged}
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
+        processMode={userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin'}
     />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
