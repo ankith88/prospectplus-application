@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import Link from "next/link"
@@ -140,7 +139,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
@@ -313,7 +312,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin') && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales') && (
                  <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                     <Link href="/signed-customers">
@@ -473,3 +472,5 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     </>
   )
 }
+
+    
