@@ -867,7 +867,15 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
-                                            <Button className="w-full bg-green-600 hover:bg-green-700" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                            <Button 
+                                                className="w-full bg-green-600 hover:bg-green-700" 
+                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Appointment Qualified'}
+                                                onClick={() => {
+                                                    if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
+                                                        setOutcomeData({ type: 'Appointment Qualified', details: { salesRep: userProfile.linkedSalesRep } });
+                                                    }
+                                                    handleNextStep();
+                                                }}>
                                                 Next
                                             </Button>
                                         </AccordionContent>
@@ -887,7 +895,15 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
-                                            <Button className="w-full" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                            <Button 
+                                                className="w-full"
+                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Send Quote / Free Trial'}
+                                                onClick={() => {
+                                                    if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
+                                                        setOutcomeData({ type: 'Send Quote / Free Trial', details: { salesRep: userProfile.linkedSalesRep } });
+                                                    }
+                                                    handleNextStep();
+                                                }}>
                                                 Next
                                             </Button>
                                         </AccordionContent>
@@ -907,7 +923,15 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
-                                            <Button className="w-full" disabled={!outcomeData && !isFieldSalesRepWithLinkedRep} onClick={handleNextStep}>
+                                            <Button 
+                                                className="w-full"
+                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Sign Up'}
+                                                onClick={() => {
+                                                    if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
+                                                        setOutcomeData({ type: 'Sign Up', details: { salesRep: userProfile.linkedSalesRep } });
+                                                    }
+                                                    handleNextStep();
+                                                }}>
                                                 Next
                                             </Button>
                                         </AccordionContent>
