@@ -1,58 +1,75 @@
-
 'use client';
 import type { DiscoveryData } from './types';
 
 export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score: number, routingTag: string, scoringReason: string } & Partial<DiscoveryData> {
-      let score = 0;
       const reasonParts: string[] = [];
-      let servicePoints = 0;
-      let productPoints = 0;
-
-      // Scoring logic
-      if (data.relevanceCheck === 'No') {
-          return { ...data, score: 0, routingTag: 'Not Relevant', scoringReason: 'Lead is not relevant as nobody leaves the office.' };
-      }
-      if (data.relevanceCheck === 'Yes') { score += 10; reasonParts.push('+10 for relevance check pass.');}
       
-      if (data.reasonsToLeave?.includes('Post office')) { score += 5; servicePoints++; reasonParts.push('+5 for leaving for Post Office.'); }
-      if (data.reasonsToLeave?.includes('Banking / deposits')) { score += 5; servicePoints++; reasonParts.push('+5 for leaving for Banking.'); }
+      // --- Discovery Score ---
+      let groupA_score = 0;
+      if (data.discoverySignals?.includes('Pays for Australia Post')) {
+          groupA_score = 6;
+          reasonParts.push('+6 for paying for AP services.');
+      } else if (data.discoverySignals?.includes('Staff handle post')) {
+          groupA_score = 5;
+          reasonParts.push('+5 for staff handling post.');
+      }
+      
+      let groupB_score = 0;
+      if (data.discoverySignals?.includes('Drop-off is a hassle')) { groupB_score += 6; reasonParts.push('+6 for drop-off hassle.'); }
+      if (data.discoverySignals?.includes('Banking runs')) { groupB_score += 4; reasonParts.push('+4 for banking runs.'); }
+      if (data.discoverySignals?.includes('Inter-office deliveries')) { groupB_score += 4; reasonParts.push('+4 for inter-office deliveries.'); }
+      if (data.discoverySignals?.includes('Needs same-day delivery')) { groupB_score += 3; reasonParts.push('+3 for same-day needs.'); }
 
+      let groupC_score = 0;
+      if (data.discoverySignals?.includes('Uses Australia Post')) { groupC_score += 3; reasonParts.push('+3 for using AP products.'); }
+      if (data.discoverySignals?.includes('Uses other couriers (<5kg)')) { groupC_score += 2; reasonParts.push('+2 for using other small couriers.'); }
+      if (data.discoverySignals?.includes('Uses other couriers (100+ per week)')) { groupC_score += 2; reasonParts.push('+2 for high volume with other couriers.'); }
+      if (data.discoverySignals?.includes('Shopify / WooCommerce')) { groupC_score += 1; reasonParts.push('+1 for Shopify/Woo.'); }
+      if (data.discoverySignals?.includes('Other label platforms')) { groupC_score -= 2; reasonParts.push('-2 for other label platforms.'); }
+      
+      const discoveryScore = groupA_score + groupB_score + groupC_score;
+      
+      // --- Qualification Score ---
+      let q1_score = 0;
+      if (data.inconvenience === 'Very inconvenient') { q1_score = 5; }
+      else if (data.inconvenience === 'Somewhat inconvenient') { q1_score = 2; }
+      else if (data.inconvenience === 'Not a big issue') { q1_score = 1; }
+      if (q1_score > 0) reasonParts.push(`+${q1_score} for inconvenience level.`);
 
-      if (data.postOfficeRelationship === 'Yes-Post Office walk up') { score += 10; servicePoints += 2; reasonParts.push('+10 for Post Office walk-up.'); }
-      if (data.logisticsSetup === 'Drop-off') { score += 10; servicePoints++; reasonParts.push('+10 for dropping off items.'); }
-      if (data.servicePayment === 'Yes') { score += 10; servicePoints += 2; reasonParts.push('+10 for paying for collection.'); }
-      if (data.shippingVolume === '<20') { score += 5; productPoints++; reasonParts.push('+5 for <20 items/week.'); }
-      else if (data.shippingVolume === '20-100') { score += 10; productPoints += 2; reasonParts.push('+10 for 20-100 items/week.'); }
-      else if (data.shippingVolume === '100+') { score += 15; productPoints += 3; reasonParts.push('+15 for 100+ items/week.'); }
-      if (data.expressVsStandard === 'Mostly Standard (>=80%)') { score += 10; productPoints += 2; reasonParts.push('+10 for mostly standard shipping.'); }
-      else if (data.expressVsStandard === 'Balanced Mix (20-79% Express)') { score += 5; productPoints += 2; reasonParts.push('+5 for balanced shipping mix.'); }
-      else if (data.expressVsStandard === 'Mostly Express (>=80%)') { score += 10; productPoints += 2; reasonParts.push('+10 for mostly express shipping.'); }
-      if (data.packageType?.length) { score += 10; productPoints++; reasonParts.push('+10 for specifying package types.'); }
-      if (data.currentProvider?.length) { score += 5; reasonParts.push('+5 for using a current provider.'); }
-      if (data.painPoints) { score += 10; reasonParts.push('+10 for having known pain points.'); }
-      if (data.eCommerceTech?.some(t => ['Shopify', 'Woo'].includes(t))) { score += 10; productPoints += 2; reasonParts.push('+10 for using compatible e-commerce tech.'); }
-      if (data.sameDayCourier === 'Yes') { score += 5; productPoints++; reasonParts.push('+5 for using same-day couriers.'); }
-      if (data.decisionMaker === 'Owner') { score += 10; reasonParts.push('+10 for direct contact with owner.'); }
+      let q2_score = 0;
+      if (data.occurrence === 'Daily') { q2_score = 5; }
+      else if (data.occurrence === 'Weekly') { q2_score = 3; }
+      else if (data.occurrence === 'Ad-hoc') { q2_score = 1; }
+      if (q2_score > 0) reasonParts.push(`+${q2_score} for occurrence frequency.`);
+      
+      let q3_score = 0;
+      if (data.taskOwner === 'Shared admin responsibility') { q3_score = 5; }
+      else if (data.taskOwner === 'Dedicated staff role') { q3_score = 3; }
+      else if (data.taskOwner === 'Ad-hoc / whoever is free') { q3_score = 1; }
+      if (q3_score > 0) reasonParts.push(`+${q3_score} for task ownership.`);
+      
+      let q4_score = 0;
+      if ((data as any).personSpokenWithTags?.includes('Decision Maker')) { q4_score = 5; }
+      else if ((data as any).decisionMakerName) { q4_score = 3; }
+      else { q4_score = 1; }
+      if (q4_score > 0) reasonParts.push(`+${q4_score} for decision maker access.`);
 
-      // Routing logic
-      let routingTag = '';
-      if (productPoints > servicePoints && productPoints > 1) {
-          routingTag = 'Product';
-      } else if (servicePoints > productPoints && servicePoints > 1) {
-          routingTag = 'Service';
-      } else if (productPoints > 0 && servicePoints > 0) {
+      const qualificationScore = q1_score + q2_score + q3_score + q4_score;
+
+      // --- Final Score & Routing ---
+      const finalScore = Math.round(discoveryScore * (qualificationScore / 10));
+
+      const servicePoints = (data.discoverySignals?.filter(s => ['Pays for Australia Post', 'Staff handle post', 'Drop-off is a hassle', 'Banking runs', 'Inter-office deliveries', 'Needs same-day delivery'].includes(s)).length || 0) > 0;
+      const productPoints = (data.discoverySignals?.filter(s => ['Uses Australia Post', 'Uses other couriers (<5kg)', 'Uses other couriers (100+ per week)', 'Shopify / WooCommerce', 'Other label platforms'].includes(s)).length || 0) > 0;
+
+      let routingTag = 'Service'; // Default
+      if (servicePoints && productPoints) {
           routingTag = 'Service & Product';
-      } else if (productPoints > 0) {
+      } else if (productPoints) {
           routingTag = 'Product';
-      } else if (servicePoints > 0) {
-          routingTag = 'Service';
-      } else {
-          routingTag = 'Service'; // Default
       }
       
-      const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'Score based on initial data.';
+      const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'No specific scoring criteria met.';
 
-      return { ...data, score: Math.min(score, 100), routingTag, scoringReason };
+      return { ...data, score: Math.min(finalScore, 100), routingTag, scoringReason };
   }
-
-    

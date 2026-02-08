@@ -15,24 +15,24 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const discoverySignals = [
-  { id: 'pays_aus_post', label: 'Pays Australia Post (Services)', description: 'They currently pay for Australia Post' },
-  { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge' },
-  { id: 'drop_off_hassle', label: 'Drop-off is a Hassle', description: 'Drop-offs are inconvenient' },
-  { id: 'uses_auspost_platform', label: 'Uses Australia Post (Products)', description: 'MyPost Business, Express Post Products' },
-  { id: 'uses_couriers_lt_5kg', label: 'Uses Other Couriers (<5kg)', description: 'TGE, StarTrack, TNT' },
-  { id: 'uses_couriers_100_plus', label: 'Uses Other Couriers (100+/wk)', description: 'High-volume standard freight' },
-  { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking' },
-  { id: 'needs_same_day', label: 'Needs Same-Day Delivery', description: 'Uses or wants same-day' },
-  { id: 'inter_office', label: 'Inter-Office Deliveries', description: 'Movement between offices' },
-  { id: 'shopify_woo', label: 'Shopify/Woo', description: 'Uses Shopify or WooCommerce' },
-  { id: 'other_label_platform', label: 'Other Label Platforms', description: 'Starshippit etc.' },
+  { id: 'pays_aus_post', label: 'Pays for Australia Post', description: 'They currently pay for Australia Post services.' },
+  { id: 'staff_handle_post', label: 'Staff handle post', description: 'Staff leave the office to lodge mail/parcels.' },
+  { id: 'drop_off_hassle', label: 'Drop-off is a hassle', description: 'They find dropping off items inconvenient.' },
+  { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'They use AP products like MyPost Business.' },
+  { id: 'uses_couriers_lt_5kg', label: 'Uses other couriers (<5kg)', description: 'They use other couriers for small parcels.' },
+  { id: 'uses_couriers_100_plus', label: 'Uses other couriers (100+ per week)', description: 'They are a high-volume shipper with other couriers.' },
+  { id: 'banking_runs', label: 'Banking runs', description: 'Staff leave the office for banking errands.' },
+  { id: 'needs_same_day', label: 'Needs same-day delivery', description: 'They have a need for same-day delivery services.' },
+  { id: 'inter_office', label: 'Inter-office deliveries', description: 'They move items between their own offices.' },
+  { id: 'shopify_woo', label: 'Shopify / WooCommerce', description: 'They use Shopify or WooCommerce for e-commerce.' },
+  { id: 'other_label_platform', label: 'Other label platforms', description: 'They use other platforms like Starshipit.' },
 ];
 
 const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
   inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
   occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
-  recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
+  taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
 });
 
 export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
@@ -113,15 +113,15 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                     />
                       <FormField
                         control={control}
-                        name="recurring"
+                        name="taskOwner"
                         render={({ field }) => (
                             <FormItem className="space-y-3">
-                                <FormLabel>Is this recurring?</FormLabel>
+                                <FormLabel>Who owns this task today?</FormLabel>
                                 <FormControl>
                                     <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Yes - predictable" /></FormControl><FormLabel className="font-normal">Yes - predictable</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Sometimes" /></FormControl><FormLabel className="font-normal">Sometimes</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="One-off" /></FormControl><FormLabel className="font-normal">One-off</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Shared admin responsibility" /></FormControl><FormLabel className="font-normal">Shared admin responsibility</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Dedicated staff role" /></FormControl><FormLabel className="font-normal">Dedicated staff role</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Ad-hoc / whoever is free" /></FormControl><FormLabel className="font-normal">Ad-hoc / whoever is free</FormLabel></FormItem>
                                     </RadioGroup>
                                 </FormControl>
                                 <FormMessage />

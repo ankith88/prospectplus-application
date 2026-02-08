@@ -71,7 +71,7 @@ const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
   inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
   occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
-  recurring: z.enum(['Yes - predictable', 'Sometimes', 'One-off']).optional(),
+  taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
 
   // New fields for Step 1
   businessType: z.enum(['Retail', 'B2B']).optional(),
