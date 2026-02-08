@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import {
@@ -60,11 +61,11 @@ type SortableLeadKeys = 'companyName' | 'status' | 'franchisee' | 'dialerAssigne
 type ExpandedLeadDetails = {
     note: Note | null;
     activity: Activity | null;
-    loadingNote: boolean;
+    loading: boolean;
 };
 
 const LEADS_PER_PAGE = 100;
-const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending'];
+const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity'];
 
 export default function ArchivedLeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -188,7 +189,7 @@ export default function ArchivedLeadsClientPage() {
      }
      
      return leads.filter(lead => {
-        const companyMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+        const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
         const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
         
@@ -233,7 +234,7 @@ export default function ArchivedLeadsClientPage() {
             }
         }
 
-        return companyMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
+        return companyNameMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
     });
   }, [allLeads, filters, userProfile]);
 
@@ -799,7 +800,7 @@ export default function ArchivedLeadsClientPage() {
                         <TableRow>
                             <TableCell colSpan={10} className="p-0">
                                 <div className="p-4 bg-secondary/50">
-                                    {expandedDetails[lead.id].loadingNote ? (
+                                    {expandedDetails[lead.id].loading ? (
                                         <Loader />
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -866,6 +867,7 @@ export default function ArchivedLeadsClientPage() {
 
 
     
+
 
 
 

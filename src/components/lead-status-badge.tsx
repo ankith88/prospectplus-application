@@ -24,12 +24,14 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     'LocalMile Pending': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'Priority Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
     'Priority Field Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
+    'Prospect Opportunity': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200 dark:bg-fuchsia-900/50 dark:text-fuchsia-300 dark:border-fuchsia-800',
+    'Customer Opportunity': 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-800',
   }[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
 
 
   return (
     <Badge variant="outline" className={`capitalize ${colorClass}`}>
-      {status}
+      {status === 'Won' ? 'Signed' : status}
     </Badge>
   )
 }

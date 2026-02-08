@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -45,9 +46,17 @@ interface PostCallOutcomeDialogProps {
   onOutcomeLogged: (newStatus?: LeadStatus) => void
   onSessionNext?: () => void;
   isSessionActive?: boolean;
+  processMode?: boolean;
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
+
+const leadGenAdminOutcomes = [
+    "Appointment Booked", 
+    "Send Quote/Free Trial", 
+    "Sign Up",
+    "Move to Outbound"
+];
 
 const callOutcomes = [
     'Busy',
@@ -66,12 +75,14 @@ const callOutcomes = [
     'LOST - No Contact',
 ];
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
+  const outcomes = processMode ? leadGenAdminOutcomes : callOutcomes;
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -177,7 +188,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {callOutcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        {outcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -199,7 +210,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 )}
               />
                {submissionState === 'error' && (
-                <p className="text-sm text-destructive">An error occurred. Please try again or contact support.</p>
+                <p className="text-sm text-destructive">An error occurred. Please try again.</p>
               )}
               
               <DialogFooter>

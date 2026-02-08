@@ -71,7 +71,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -504,7 +504,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
 async function getArchivedLeads(): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity'];
         
         const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         const snapshot = await getDocs(q);
@@ -1036,7 +1036,20 @@ async function logCallActivity(
         'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
         'Reschedule': { status: 'Reschedule' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
+        "Send Quote/Free Trial": { status: "Prospect Opportunity" },
+        "Sign Up": { status: "Customer Opportunity" },
     };
+
+    if (callData.outcome === 'Move to Outbound') {
+        const assignees = ['Lachlan Ball', 'Grant Leddy'];
+        const assignee = assignees[Math.floor(Math.random() * assignees.length)];
+        await updateLeadDialerRep(leadId, assignee);
+        await updateLeadStatus(leadId, 'Priority Field Lead');
+        const notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+        await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
+        return 'Priority Field Lead';
+    }
+
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
     const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
@@ -1624,6 +1637,9 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
 interface NewLeadData {
   companyName: string;
   websiteUrl?: string;
+  customerPhone?: string;
+  customerServiceEmail?: string;
+  abn?: string;
   industryCategory?: string;
   campaign?: string;
   address: Address;
@@ -1643,7 +1659,10 @@ interface NewLeadData {
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
   const nsResult = await sendNewLeadToNetSuite(data);
-  return nsResult;
+  return {
+    ...nsResult,
+    leadId: nsResult.leadId ? String(nsResult.leadId) : undefined,
+  };
 }
 
 async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {

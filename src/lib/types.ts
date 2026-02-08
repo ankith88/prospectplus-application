@@ -18,6 +18,8 @@ export type LeadStatus =
   | 'Priority Field Lead'
   | 'LocalMile Pending'
   | 'Free Trial'
+  | 'Prospect Opportunity'
+  | 'Customer Opportunity'
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 
