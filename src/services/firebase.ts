@@ -1,4 +1,5 @@
 
+
 'use server';
 
 /**
@@ -1570,41 +1571,6 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     }
 }
 
-async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string; activityNote?: string; author?: string; }): Promise<void> {
-    const { leadIds, fieldSales, assigneeDisplayName, activityNote, author } = payload;
-    if (leadIds.length === 0) {
-        throw new Error("No leads selected to move.");
-    }
-    try {
-        const batch = writeBatch(firestore);
-        const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
-
-        leadIds.forEach(leadId => {
-            const leadRef = doc(firestore, 'leads', leadId);
-            batch.update(leadRef, {
-                fieldSales: fieldSales,
-                dialerAssigned: assigneeDisplayName
-            });
-
-            const activityRef = collection(leadRef, 'activity');
-            const newActivityRef = doc(activityRef);
-            const note = activityNote || `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`;
-            batch.set(newActivityRef, {
-                type: 'Update',
-                date: new Date().toISOString(),
-                notes: note,
-                author: author || 'System'
-            });
-        });
-
-        await batch.commit();
-        console.log(`Successfully moved ${leadIds.length} leads to ${bucketName} bucket.`);
-    } catch (error) {
-        console.error(`Failed to bulk move leads:`, error);
-        throw new Error('Failed to bulk move leads in Firebase');
-    }
-}
-
 
 async function addCallReview(leadId: string, activityId: string, reviewData: { reviewer: string; notes: string; category: ReviewCategory }): Promise<void> {
     try {
@@ -1662,19 +1628,20 @@ interface NewLeadData {
   campaign?: string;
   address: Address;
   contact: {
-    firstName: string;
-    lastName: string;
-    title: string;
-    email: string;
+    firstName?: string;
+    lastName?: string;
+    title?: string;
+    email?: string;
     phone?: string;
   };
   initialNotes?: string;
   dialerAssigned?: string;
   salesRepAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
+  visitNoteId?: string;
 }
 
-async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadID?: string; message?: string; }> {
+async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
   const nsResult = await sendNewLeadToNetSuite(data);
   return nsResult;
 }
@@ -1991,6 +1958,42 @@ async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; 
         throw new Error('Failed to move lead in Firebase');
     }
 }
+
+async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string; activityNote?: string; author?: string; }): Promise<void> {
+    const { leadIds, fieldSales, assigneeDisplayName, activityNote, author } = payload;
+    if (leadIds.length === 0) {
+        throw new Error("No leads selected to move.");
+    }
+    try {
+        const batch = writeBatch(firestore);
+        const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
+
+        leadIds.forEach(leadId => {
+            const leadRef = doc(firestore, 'leads', leadId);
+            batch.update(leadRef, {
+                fieldSales: fieldSales,
+                dialerAssigned: assigneeDisplayName
+            });
+
+            const activityRef = collection(leadRef, 'activity');
+            const newActivityRef = doc(activityRef);
+            const note = activityNote || `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`;
+            batch.set(newActivityRef, {
+                type: 'Update',
+                date: new Date().toISOString(),
+                notes: note,
+                author: author || 'System'
+            });
+        });
+
+        await batch.commit();
+        console.log(`Successfully moved ${leadIds.length} leads to ${bucketName} bucket.`);
+    } catch (error) {
+        console.error(`Failed to bulk move leads:`, error);
+        throw new Error('Failed to bulk move leads in Firebase');
+    }
+}
+
 
 async function addVisitNote(note: Omit<VisitNote, 'id' | 'createdAt' | 'status'>): Promise<string> {
     try {
