@@ -1043,8 +1043,14 @@ async function logCallActivity(
     if (callData.outcome === 'Move to Outbound') {
         const assignees = ['Lachlan Ball', 'Grant Leddy'];
         const assignee = assignees[Math.floor(Math.random() * assignees.length)];
-        await updateLeadDialerRep(leadId, assignee);
-        await updateLeadStatus(leadId, 'Priority Field Lead');
+        
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, {
+            dialerAssigned: assignee,
+            customerStatus: 'Priority Field Lead',
+            fieldSales: false
+        });
+
         const notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
         await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
         return 'Priority Field Lead';
