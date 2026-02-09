@@ -1,5 +1,3 @@
-
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -57,7 +55,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
@@ -85,11 +83,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -1155,35 +1151,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                            <div className="flex flex-col items-center">
-                                <p className="text-sm text-muted-foreground">Score</p>
-                                <p className="text-2xl font-bold">{visitNoteDiscovery.score}</p>
+                    {isDiscoveryLoading ? (
+                        <div className="flex justify-center p-8"><Loader /></div>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Score</p>
+                                    <p className="text-2xl font-bold">{visitNoteDiscovery.score}</p>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                    <Badge variant="outline">{visitNoteDiscovery.routingTag}</Badge>
+                                </div>
                             </div>
-                            <div className="flex flex-col items-center">
-                                <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                <Badge variant="outline">{visitNoteDiscovery.routingTag}</Badge>
+                            <DiscoveryRadarChart discoveryData={visitNoteDiscovery} />
+                            {visitNoteDiscovery.scoringReason && (
+                                <div className="text-xs text-muted-foreground p-2 border-t">
+                                    <strong>Scoring Rationale:</strong> {visitNoteDiscovery.scoringReason}
+                                </div>
+                            )}
+                             <div className="text-sm space-y-2 pt-4 border-t">
+                                <h4 className="font-semibold">Captured Answers:</h4>
+                                <ul className="list-disc pl-5 text-muted-foreground">
+                                    {visitNoteDiscovery.discoverySignals && visitNoteDiscovery.discoverySignals.length > 0 && (
+                                        <li><strong>Signals:</strong> {visitNoteDiscovery.discoverySignals.join(', ')}</li>
+                                    )}
+                                    {visitNoteDiscovery.inconvenience && <li><strong>Inconvenience:</strong> {visitNoteDiscovery.inconvenience}</li>}
+                                    {visitNoteDiscovery.occurrence && <li><strong>Occurrence:</strong> {visitNoteDiscovery.occurrence}</li>}
+                                    {(visitNoteDiscovery as any).taskOwner && <li><strong>Task Owner:</strong> {(visitNoteDiscovery as any).taskOwner}</li>}
+                                </ul>
                             </div>
                         </div>
-                        <DiscoveryRadarChart discoveryData={visitNoteDiscovery} />
-                        {visitNoteDiscovery.scoringReason && (
-                            <div className="text-xs text-muted-foreground p-2 border-t">
-                                <strong>Scoring Rationale:</strong> {visitNoteDiscovery.scoringReason}
-                            </div>
-                        )}
-                         <div className="text-sm space-y-2 pt-4 border-t">
-                            <h4 className="font-semibold">Captured Answers:</h4>
-                            <ul className="list-disc pl-5 text-muted-foreground">
-                                {visitNoteDiscovery.discoverySignals && visitNoteDiscovery.discoverySignals.length > 0 && (
-                                    <li><strong>Signals:</strong> {visitNoteDiscovery.discoverySignals.join(', ')}</li>
-                                )}
-                                {visitNoteDiscovery.inconvenience && <li><strong>Inconvenience:</strong> {visitNoteDiscovery.inconvenience}</li>}
-                                {visitNoteDiscovery.occurrence && <li><strong>Occurrence:</strong> {visitNoteDiscovery.occurrence}</li>}
-                                {(visitNoteDiscovery as any).taskOwner && <li><strong>Task Owner:</strong> {(visitNoteDiscovery as any).taskOwner}</li>}
-                            </ul>
-                        </div>
-                    </div>
+                    )}
                 </CardContent>
             </Card>
           )}
