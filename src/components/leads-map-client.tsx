@@ -216,7 +216,8 @@ export default function LeadsMapClient() {
   const [isSavingArea, setIsSavingArea] = useState(false);
 
   
-  const geoSearchAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const startPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const endPointAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
@@ -247,6 +248,8 @@ export default function LeadsMapClient() {
 
   const [routeNameFilter, setRouteNameFilter] = useState('');
   const [routeAddressFilter, setRouteAddressFilter] = useState('');
+
+  const [searchedLocation, setSearchedLocation] = useState<google.maps.LatLngLiteral | null>(null);
 
   const [filters, setFilters] = useState({
     companyName: '',
@@ -1461,13 +1464,21 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
     const geoSearchInputRef = useCallback((node: HTMLInputElement) => {
       if (node !== null && map) {
-        initAutocomplete(node, geoSearchAutocompleteRef, (place) => {
-          if (place.geometry?.viewport) {
-            map?.fitBounds(place.geometry.viewport);
-          } else if (place.geometry?.location) {
-            map?.panTo(place.geometry.location);
-            map?.setZoom(15);
-          }
+        initAutocomplete(node, autocompleteRef, (place) => {
+            if (place.geometry?.location) {
+                const location = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                };
+                setSearchedLocation(location);
+
+                if (place.geometry?.viewport) {
+                    map.fitBounds(place.geometry.viewport);
+                } else {
+                    map.panTo(location);
+                    map.setZoom(15);
+                }
+            }
         });
       }
     }, [map, initAutocomplete]);
@@ -1978,6 +1989,15 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         />
                     )}
 
+                    {searchedLocation && (
+                        <MarkerF
+                            position={searchedLocation}
+                            icon={{
+                                url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png'
+                            }}
+                        />
+                    )}
+
                     {selectedLead && (
                         <InfoWindowF
                             position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
@@ -2311,4 +2331,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
-
