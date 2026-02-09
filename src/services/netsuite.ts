@@ -587,11 +587,11 @@ interface NewLeadData {
   dialerAssigned?: string;
   salesRepAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
-  visitNoteId?: string;
+  visitNoteID?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteId } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -648,8 +648,8 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         params.append('custentity_checkin_questions', discoveryString);
     }
 
-    if (visitNoteId) {
-        params.append('custentity_visit_note_id', visitNoteId);
+    if (visitNoteID) {
+        params.append('custentity_visit_note_id', visitNoteID);
     }
 
     const url = `${baseUrl}?${params.toString()}`;

@@ -302,7 +302,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     setLead(initialLead);
-    const visitNoteId = (initialLead as any).visitNoteID || initialLead.visitNoteId;
+    const visitNoteId = (initialLead as any).visitNoteID;
     const fetchVisitNoteData = async () => {
         if (visitNoteId) {
             setIsDiscoveryLoading(true);
@@ -785,7 +785,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
     );
 
-    if (isAdmin || isLeadGenAdmin) {
+    if (isAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
+    }
+    
+    if (isLeadGenAdmin) {
         return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
     }
     

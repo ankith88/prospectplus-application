@@ -201,6 +201,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           checkinScore: data.checkinScore,
           checkinScoringReason: data.checkinScoringReason,
           checkinRoutingTag: data.checkinRoutingTag,
+          visitNoteID: data.visitNoteID,
         };
 
         if (includeSubCollections) {
@@ -416,6 +417,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource,
+          visitNoteID: data.visitNoteID,
         };
 
         return transformedLead;
@@ -1660,7 +1662,7 @@ interface NewLeadData {
   dialerAssigned?: string;
   salesRepAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
-  visitNoteId?: string;
+  visitNoteID?: string;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
