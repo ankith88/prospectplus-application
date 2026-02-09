@@ -300,7 +300,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     setLead(initialLead);
-    const visitNoteId = initialLead.visitNoteID; // Corrected field name
+    const visitNoteId = initialLead.visitNoteID;
     const fetchVisitNoteData = async () => {
         if (visitNoteId) {
             setIsDiscoveryLoading(true);
@@ -717,7 +717,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
     const signupButton = (
-      <Button variant={(isFieldSales || isFieldSalesAdmin) ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
+      <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
         <Briefcase className="mr-2 h-4 w-4" />
         Signup
       </Button>
@@ -726,7 +726,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const freeTrialButton = (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={(isFieldSales || isFieldSalesAdmin) ? "default" : "outline"}>
+              <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"}>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Free Trial
               </Button>
@@ -783,12 +783,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
     );
 
-    if (isAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
-    }
-    
-    if (isLeadGenAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
+    if (isAdmin || isLeadGenAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{processFieldLeadButton}{scheduleAppointmentButton}{signupButton}{freeTrialButton}{logNoteButton}{viewScriptButton}{scorecardButton}{moveLeadButton}</div>;
     }
     
     if (isFieldSales || isFieldSalesAdmin) {
@@ -1204,7 +1200,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       {contacts.map((contact, index) => {
                          return (
                           <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
-                              <Card className="relative group/contact">
+                              <Card className="relative group/contact p-4">
                                   <CardHeader className="flex-row items-start justify-between pb-2 p-0">
                                       <div>
                                           <p className="font-semibold">{contact.name}</p>
@@ -1263,7 +1259,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                           </div>
                                       </div>
                                   </CardContent>
-                                  <CardFooter>
+                                  <CardFooter className="p-0 pt-4">
                                        <Button
                                             variant="outline"
                                             size="sm"
