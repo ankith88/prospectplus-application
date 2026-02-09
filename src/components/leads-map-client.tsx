@@ -1,6 +1,5 @@
 
 
-
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -177,7 +176,7 @@ const getPinColor = (status: LeadStatus, isInRouteList: boolean, isCheckedForRou
 export default function LeadsMapClient() {
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script', // IMPORTANT: this ID has to be unique for every useJsApiLoader
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   })
@@ -1185,8 +1184,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             setCampaign('');
         }
     };
-    
-    const handleClearRoute = () => {
+  
+  const handleClearRoute = () => {
         setDirections(null);
         setSelectedRouteLeads([]);
         setSelectedForRouting([]);
@@ -1439,10 +1438,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         return map;
     }, [directions, selectedRouteLeads]);
   
-    const infoWindowOptions = {
-        pixelOffset: new window.google.maps.Size(0, -30),
-    };
-
     const initAutocomplete = useCallback((
       inputEl: HTMLInputElement | null,
       autocompleteRef: React.MutableRefObject<google.maps.places.Autocomplete | null>,
@@ -1598,6 +1593,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }
     
     const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (val && val !== 'all'));
+    
+    const infoWindowOptions = {
+        pixelOffset: new window.google.maps.Size(0, -30),
+    };
+
 
     const MapLegend = () => (
       <div className="absolute bottom-4 left-4 bg-background/80 p-2 rounded-lg shadow-lg text-xs space-y-1">
@@ -2312,4 +2312,3 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     );
 }
 
-    
