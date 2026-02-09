@@ -1,17 +1,36 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile } from '@/lib/types';
+import type { SavedRoute, UserProfile, MapLead } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, LayoutGrid, MapPin } from 'lucide-react';
+import { Calendar, User, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes } from '@/services/firebase';
+import {
+  GoogleMap,
+  useJsApiLoader,
+  MarkerF,
+  InfoWindowF,
+} from '@react-google-maps/api';
+
+// Styles and map options from leads-map-client.tsx
+const containerStyle = {
+  width: '100%',
+  height: '60vh', // Adjust height as needed
+  borderRadius: '0.5rem',
+};
+
+const center = {
+  lat: -25.2744,
+  lng: 133.7751,
+};
+
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 type ProspectingArea = SavedRoute & {
   userName: string;
@@ -22,6 +41,17 @@ export default function ProspectingAreasPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
+  
+  // New state for map
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
+  const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script-prospecting',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries,
+  });
 
   const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
 
@@ -66,13 +96,25 @@ export default function ProspectingAreasPage() {
         fetchProspectingAreas();
     }
   }, [userProfile, hasAccess]);
-  
-  const handleLoadRoute = (routeId: string) => {
-    localStorage.setItem('activeRouteId', routeId);
-    router.push(`/leads/map?routeId=${routeId}`);
+
+  const handleLoadArea = (area: ProspectingArea) => {
+    setSelectedArea(area);
+    setSelectedLead(null); // Clear any selected lead when loading a new area
   };
 
-  if (loading || authLoading || !hasAccess) {
+  useEffect(() => {
+    if (map && selectedArea && selectedArea.leads.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      selectedArea.leads.forEach(lead => {
+        if (lead.latitude && lead.longitude) {
+          bounds.extend(new window.google.maps.LatLng(lead.latitude, lead.longitude));
+        }
+      });
+      map.fitBounds(bounds);
+    }
+  }, [map, selectedArea]);
+
+  if (loading || authLoading || !isLoaded || !hasAccess) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -90,7 +132,7 @@ export default function ProspectingAreasPage() {
         <CardHeader>
           <CardTitle>Areas</CardTitle>
           <CardDescription>
-            Showing {prospectingAreas.length} area(s).
+            Showing {prospectingAreas.length} area(s). {selectedArea && `Currently viewing: ${selectedArea.name}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -107,7 +149,7 @@ export default function ProspectingAreasPage() {
             <TableBody>
               {prospectingAreas.length > 0 ? (
                 prospectingAreas.map(area => (
-                  <TableRow key={area.id}>
+                  <TableRow key={area.id} className={selectedArea?.id === area.id ? 'bg-muted' : ''}>
                     <TableCell className="font-medium">{area.name}</TableCell>
                     <TableCell>
                         <div className="flex items-center gap-2">
@@ -123,7 +165,7 @@ export default function ProspectingAreasPage() {
                     </TableCell>
                     <TableCell>{area.leads.length}</TableCell>
                     <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => handleLoadRoute(area.id!)}>
+                        <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
                             <MapPin className="mr-2 h-4 w-4" /> Load on Map
                         </Button>
                     </TableCell>
@@ -140,8 +182,57 @@ export default function ProspectingAreasPage() {
           </Table>
         </CardContent>
       </Card>
+      {selectedArea && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Map View: {selectedArea.name}</CardTitle>
+          </CardHeader>
+          <CardContent>
+             <div style={containerStyle}>
+                {isLoaded ? (
+                  <GoogleMap
+                      mapContainerStyle={containerStyle}
+                      center={center}
+                      zoom={4}
+                      onLoad={setMap}
+                      options={{
+                          streetViewControl: false,
+                          mapTypeControl: false,
+                      }}
+                  >
+                     {selectedArea.leads.map(lead => (
+                        <MarkerF
+                          key={lead.id}
+                          position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                          onClick={() => setSelectedLead(lead as MapLead)}
+                        />
+                      ))}
+                      {selectedLead && (
+                        <InfoWindowF
+                            position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+                            onCloseClick={() => setSelectedLead(null)}
+                        >
+                           <div className="p-2 max-w-xs space-y-2">
+                               <h3 className="font-bold">{selectedLead.companyName}</h3>
+                               <p className="text-sm text-muted-foreground">
+                                   {selectedLead.address?.street}, {selectedLead.address?.city}
+                               </p>
+                                <Button size="sm" onClick={() => router.push(`/leads/${selectedLead.id}`)}>
+                                    View Lead
+                                </Button>
+                           </div>
+                        </InfoWindowF>
+                      )}
+                  </GoogleMap>
+                ) : loadError ? (
+                  <div className="flex h-full items-center justify-center text-destructive">Error loading map.</div>
+                ) : (
+                  <div className="flex h-full items-center justify-center"><Loader /></div>
+                )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
-
-    
