@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -55,7 +56,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
@@ -86,6 +87,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -1165,7 +1167,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <Badge variant="outline">{visitNoteDiscovery.routingTag}</Badge>
                                 </div>
                             </div>
-                            <DiscoveryRadarChart discoveryData={visitNoteDiscovery} />
+                            <DiscoveryRadarChart discoveryData={visitNoteDiscovery as DiscoveryData} />
                             {visitNoteDiscovery.scoringReason && (
                                 <div className="text-xs text-muted-foreground p-2 border-t">
                                     <strong>Scoring Rationale:</strong> {visitNoteDiscovery.scoringReason}
@@ -1619,3 +1621,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
