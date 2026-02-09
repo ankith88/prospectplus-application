@@ -118,7 +118,7 @@ export default function SignedCustomersPage() {
 
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -745,7 +745,7 @@ export default function SignedCustomersPage() {
     };
 
     try {
-        const result = await createNewLead(newLeadData);
+        const result = await createNewLead(newLeadData as any);
         if (result.success && result.leadId) {
             toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
             
@@ -1034,8 +1034,7 @@ export default function SignedCustomersPage() {
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
                                          <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || (selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
-                                            {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
+                                            {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar</span></>}
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
                                             <Building className="mr-2 h-4 w-4" /> Find Multi-sites
@@ -1206,7 +1205,7 @@ export default function SignedCustomersPage() {
       </Card>
     </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="w-[95vw] md:w-full max-w-4xl">
+            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
@@ -1297,7 +1296,7 @@ export default function SignedCustomersPage() {
                                                     View
                                                 </Button>
                                             ) : (
-                                                <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                     {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
                                                     {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
                                                 </Button>
