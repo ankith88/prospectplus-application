@@ -29,13 +29,14 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "./ui/sidebar"
 import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "./ui/loader"
 import { TaskReminderBell } from "./task-reminder-bell"
 import { UniversalSearch } from "./universal-search"
+import { salesReps } from "@/lib/constants"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -101,6 +102,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     
     // Fallback for numbers that don't fit the pattern
     return phoneNumber;
+  };
+
+  const canSeeCalendlyButton = !!userProfile?.linkedSalesRep;
+
+  const handleCalendlyClick = () => {
+    if (userProfile?.linkedSalesRep) {
+      const rep = salesReps.find(r => r.name === userProfile.linkedSalesRep);
+      if (rep) {
+        const url = new URL(rep.url);
+        if (userProfile.email) {
+          url.searchParams.set('email', userProfile.email);
+        }
+        window.open(url.toString(), '_blank');
+      }
+    }
   };
 
 
@@ -214,6 +230,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                   <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive('/prospecting-areas')}>
+                        <Link href="/prospecting-areas">
+                            <LayoutGrid />
+                            <span>Prospecting Areas</span>
+                        </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
                       <Link href="/completed-routes">
@@ -289,7 +313,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin') && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales') && (
                  <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                     <Link href="/signed-customers">
@@ -401,6 +425,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            {canSeeCalendlyButton && (
+                <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {userProfile.linkedSalesRep} Calendar
+                </Button>
+            )}
            <UniversalSearch />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -443,3 +473,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     </>
   )
 }
+
+    
+
+    

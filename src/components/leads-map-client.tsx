@@ -1,5 +1,6 @@
 
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
@@ -302,11 +303,16 @@ export default function LeadsMapClient() {
   }
 
   const handleSaveArea = async () => {
-    if (!areaName || !areaAssignee || areaLeads.length === 0) {
+    let finalAreaName = areaName.trim();
+    if (!finalAreaName) {
+      finalAreaName = `Prospecting Area - ${new Date().toLocaleDateString('en-AU')}`;
+    }
+
+    if (!areaAssignee || areaLeads.length === 0) {
       toast({
         variant: 'destructive',
         title: 'Missing Information',
-        description: 'Please provide a name, an assignee, and ensure at least one lead is in the area.',
+        description: 'Please select an assignee and ensure at least one lead is in the area.',
       });
       return;
     }
@@ -314,7 +320,7 @@ export default function LeadsMapClient() {
     setIsSavingArea(true);
     try {
       const newRoute: Omit<StorableRoute, 'id'> = {
-        name: areaName,
+        name: finalAreaName,
         createdAt: new Date().toISOString(),
         leads: areaLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! })),
         travelMode: google.maps.TravelMode.DRIVING,
@@ -336,7 +342,7 @@ export default function LeadsMapClient() {
 
       toast({
         title: 'Area Created',
-        description: `Prospecting area "${areaName}" has been created and assigned.`,
+        description: `Prospecting area "${finalAreaName}" has been created and assigned.`,
       });
       
       setIsAssignAreaDialogOpen(false);
@@ -2121,7 +2127,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                             <Eye className="mr-2 h-4 w-4" /> View
                                         </Button>
                                     ) : (
-                                        <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                        <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                             {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                             Add
                                         </Button>
@@ -2277,8 +2283,8 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="area-name">Area Name</Label>
-                        <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder="e.g., North Sydney Industrial Park" />
+                        <Label htmlFor="area-name">Area Name (Optional)</Label>
+                        <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={`e.g., North Sydney Industrial Park`} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="area-assignee">Assign To</Label>
@@ -2296,7 +2302,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsAssignAreaDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveArea} disabled={isSavingArea || !areaName || !areaAssignee}>
+                    <Button onClick={handleSaveArea} disabled={isSavingArea || !areaAssignee}>
                         {isSavingArea ? <Loader /> : 'Save & Assign Area'}
                     </Button>
                 </DialogFooter>
@@ -2305,3 +2311,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
+    
