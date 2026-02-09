@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -111,7 +112,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { collection, onSnapshot, query, where, orderBy, getDocs, limit } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, orderBy, getDocs, limit, doc, getDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
@@ -287,6 +288,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [visitNoteDiscovery, setVisitNoteDiscovery] = useState<Partial<DiscoveryData> | null>(null);
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
 
 
   const router = useRouter();
@@ -299,6 +301,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
 
   useEffect(() => {
+    setLead(initialLead);
+    const visitNoteId = (initialLead as any).visitNoteID || initialLead.visitNoteId;
+    const fetchVisitNoteData = async () => {
+        if (visitNoteId) {
+            setIsDiscoveryLoading(true);
+            try {
+                const noteRef = doc(firestore, 'visitnotes', visitNoteId);
+                const noteSnap = await getDoc(noteRef);
+                if (noteSnap.exists()) {
+                    const visitNote = noteSnap.data() as VisitNote;
+                    if (visitNote.discoveryData) {
+                        setVisitNoteDiscovery(visitNote.discoveryData);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch visit note discovery data:", error);
+            } finally {
+                setIsDiscoveryLoading(false);
+            }
+        }
+    };
+    fetchVisitNoteData();
+
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
     if (sessionLeadIds) {
       const leads = JSON.parse(sessionLeadIds);
@@ -311,32 +336,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } else {
       setIsSessionActive(false);
     }
-  }, [initialLead]);
-  
-  useEffect(() => {
     if (initialLead.aiScore) {
-      setScoringResult({
-        leadId: initialLead.id,
-        score: initialLead.aiScore,
-        reason: initialLead.aiReason || '',
-        prospectedContacts: [],
-      });
+        setScoringResult({
+            leadId: initialLead.id,
+            score: initialLead.aiScore,
+            reason: initialLead.aiReason || '',
+            prospectedContacts: [],
+        });
     }
   }, [initialLead]);
-
-  useEffect(() => {
-    const fetchVisitNoteData = async () => {
-        const q = query(collection(firestore, 'visitnotes'), where('leadId', '==', initialLead.id), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            const visitNote = querySnapshot.docs[0].data() as VisitNote;
-            if (visitNote.discoveryData) {
-                setVisitNoteDiscovery(visitNote.discoveryData);
-            }
-        }
-    };
-    fetchVisitNoteData();
-  }, [initialLead.id]);
 
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
@@ -777,34 +785,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
     );
 
-    if (isAdmin) {
-        return (
-            <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-muted-foreground mr-2">Primary Actions:</p>
-                    {processFieldLeadButton}
-                    {scheduleAppointmentButton}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-muted-foreground mr-2">Field Sales Actions:</p>
-                    {checkInButton}
-                    {signupButton}
-                    {freeTrialButton}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-muted-foreground mr-2">Admin Actions:</p>
-                    {moveLeadButton}
-                    {logNoteButton}
-                    {scorecardButton}
-                </div>
-            </div>
-        );
+    if (isAdmin || isLeadGenAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
     }
     
-    if (isLeadGenAdmin) {
-      return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{moveLeadButton}</div>;
-    }
-
     if (isFieldSales || isFieldSalesAdmin) {
         return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logCallButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
     }
@@ -1160,30 +1144,49 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Info className="w-5 h-5 text-muted-foreground" />
-                        Field Discovery Answers
+                        Field Discovery from Visit Note
                     </CardTitle>
+                    <CardDescription>
+                        The following discovery data was captured during the initial visit.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ul className="space-y-2 text-sm">
-                    {Object.entries(visitNoteDiscovery).map(([key, value]) => {
-                        if (!value || (Array.isArray(value) && value.length === 0)) return null;
-                        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-                        const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
-                        return (
-                        <li key={key}>
-                            <span className="font-semibold">{formattedKey}:</span>{' '}
-                            <span className="text-muted-foreground">{formattedValue}</span>
-                        </li>
-                        )
-                    })}
-                    </ul>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Score</p>
+                                <p className="text-2xl font-bold">{visitNoteDiscovery.score}</p>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                <Badge variant="outline">{visitNoteDiscovery.routingTag}</Badge>
+                            </div>
+                        </div>
+                        <DiscoveryRadarChart discoveryData={visitNoteDiscovery} />
+                        {visitNoteDiscovery.scoringReason && (
+                            <div className="text-xs text-muted-foreground p-2 border-t">
+                                <strong>Scoring Rationale:</strong> {visitNoteDiscovery.scoringReason}
+                            </div>
+                        )}
+                         <div className="text-sm space-y-2 pt-4 border-t">
+                            <h4 className="font-semibold">Captured Answers:</h4>
+                            <ul className="list-disc pl-5 text-muted-foreground">
+                                {visitNoteDiscovery.discoverySignals && visitNoteDiscovery.discoverySignals.length > 0 && (
+                                    <li><strong>Signals:</strong> {visitNoteDiscovery.discoverySignals.join(', ')}</li>
+                                )}
+                                {visitNoteDiscovery.inconvenience && <li><strong>Inconvenience:</strong> {visitNoteDiscovery.inconvenience}</li>}
+                                {visitNoteDiscovery.occurrence && <li><strong>Occurrence:</strong> {visitNoteDiscovery.occurrence}</li>}
+                                {(visitNoteDiscovery as any).taskOwner && <li><strong>Task Owner:</strong> {(visitNoteDiscovery as any).taskOwner}</li>}
+                            </ul>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
-           )}
+          )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
+                    <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-muted-foreground" />
                             Contacts
@@ -1304,7 +1307,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                       </DialogContent>
                     </Dialog>
                     </CardContent>
-                 </Card>
+                </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -1569,7 +1572,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardTitle>
                      <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)}>
                         <FileQuestion className="mr-2 h-4 w-4" />
-                        Open Form
+                        Open Discovery Form
                     </Button>
                 </CardHeader>
                  <CardContent>

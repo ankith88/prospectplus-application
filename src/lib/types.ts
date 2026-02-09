@@ -243,6 +243,7 @@ export interface Lead {
   lastProspected?: string;
   dateLeadEntered?: string;
   customerSource?: string;
+  visitNoteId?: string;
 }
 
 export interface UserProfile {
