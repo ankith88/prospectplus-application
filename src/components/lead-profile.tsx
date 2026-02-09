@@ -14,7 +14,6 @@ import {
   Globe,
   Hash,
   Key,
-  Lightbulb,
   Link as LinkIcon,
   MessageSquare,
   Mail,
@@ -88,6 +87,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -300,7 +300,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     setLead(initialLead);
-    const visitNoteId = (initialLead as any).visitNoteID;
+    const visitNoteId = initialLead.visitNoteID; // Corrected field name
     const fetchVisitNoteData = async () => {
         if (visitNoteId) {
             setIsDiscoveryLoading(true);
@@ -852,7 +852,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     )}
 
     <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
           <DialogHeader>
               <DialogTitle>Nearby Signed Customers</DialogTitle>
               <DialogDescription>
@@ -861,24 +861,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
               {nearbyCompanies.length > 0 ? (
-                  <div className="space-y-2 p-1">
-                      {nearbyCompanies.map(company => (
-                           <Card key={company.id} className="p-3">
-                              <div className="flex flex-col space-y-1">
-                                  <Button variant="link" className="p-0 h-auto font-semibold justify-start" onClick={() => window.open(`/companies/${company.id}`, '_blank')}>{company.companyName}</Button>
-                                  <p className="text-sm text-muted-foreground">{formatAddress(company.address as Address)}</p>
-                                  <p className="text-sm text-muted-foreground"><span className="font-semibold">Franchisee:</span> {company.franchisee || 'N/A'}</p>
-                                  {company.industryCategory && <p className="text-sm text-muted-foreground"><span className="font-semibold">Industry:</span> {company.industryCategory}</p>}
-                                  {company.websiteUrl && (
-                                      <a href={company.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1 pt-1">
-                                          <Globe className="h-4 w-4" />
-                                          <span>Visit Website</span>
-                                      </a>
-                                  )}
-                              </div>
-                          </Card>
-                      ))}
-                  </div>
+                  <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Address</TableHead>
+                                <TableHead>Industry</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {nearbyCompanies.map(company => (
+                                <TableRow key={company.id}>
+                                    <TableCell className="font-semibold">{company.companyName}</TableCell>
+                                    <TableCell>{formatAddress(company.address as Address)}</TableCell>
+                                    <TableCell>{company.industryCategory || 'N/A'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
               ) : (
                   <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
               )}
@@ -1621,5 +1621,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
