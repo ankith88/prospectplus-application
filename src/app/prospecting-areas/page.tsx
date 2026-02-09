@@ -8,9 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, MapPin } from 'lucide-react';
+import { Calendar, User, MapPin, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getAllUserRoutes } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute } from '@/services/firebase';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 import {
   GoogleMap,
   useJsApiLoader,
@@ -34,6 +45,7 @@ const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', '
 
 type ProspectingArea = SavedRoute & {
   userName: string;
+  userId: string;
 };
 
 export default function ProspectingAreasPage() {
@@ -41,11 +53,13 @@ export default function ProspectingAreasPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   
   // New state for map
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
+  const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -79,8 +93,9 @@ export default function ProspectingAreasPage() {
             return {
               ...route,
               userName: (route as any).userName || 'Unknown User',
+              userId: (route as any).userId || '',
             };
-        }).filter((area): area is ProspectingArea => area !== null);
+        }).filter((area): area is ProspectingArea => area !== null && !!area.userId);
         
         areas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setProspectingAreas(areas);
@@ -113,6 +128,25 @@ export default function ProspectingAreasPage() {
       map.fitBounds(bounds);
     }
   }, [map, selectedArea]);
+  
+  const handleDelete = async () => {
+    if (!areaToDelete) return;
+
+    try {
+      await deleteUserRoute(areaToDelete.userId, areaToDelete.id!);
+      setProspectingAreas(prev => prev.filter(area => area.id !== areaToDelete.id));
+      toast({ title: "Success", description: `Prospecting area "${areaToDelete.name}" has been deleted.` });
+      if (selectedArea?.id === areaToDelete.id) {
+        setSelectedArea(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete prospecting area:", error);
+      toast({ variant: 'destructive', title: "Error", description: "Could not delete the area." });
+    } finally {
+      setAreaToDelete(null);
+    }
+  };
+
 
   if (loading || authLoading || !isLoaded || !hasAccess) {
     return (
@@ -123,6 +157,7 @@ export default function ProspectingAreasPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Prospecting Areas</h1>
@@ -165,9 +200,14 @@ export default function ProspectingAreasPage() {
                     </TableCell>
                     <TableCell>{area.leads.length}</TableCell>
                     <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
-                            <MapPin className="mr-2 h-4 w-4" /> Load on Map
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
+                                <MapPin className="mr-2 h-4 w-4" /> Load on Map
+                            </Button>
+                             <Button variant="destructive" size="sm" onClick={() => setAreaToDelete(area)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -234,5 +274,22 @@ export default function ProspectingAreasPage() {
         </Card>
       )}
     </div>
+    <AlertDialog open={!!areaToDelete} onOpenChange={(open) => !open && setAreaToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete the prospecting area "{areaToDelete?.name}". This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                    Delete
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
