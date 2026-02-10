@@ -43,6 +43,14 @@ export default function FieldActivityReportPage() {
     franchisee: [] as string[],
   });
 
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
+
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setIsRefreshing(true);
@@ -74,10 +82,10 @@ export default function FieldActivityReportPage() {
   }, [userProfile, toast]);
 
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && hasAccess) {
       fetchData();
     }
-  }, [userProfile, fetchData]);
+  }, [userProfile, hasAccess, fetchData]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -241,7 +249,7 @@ export default function FieldActivityReportPage() {
   }, [allVisitNotes, allLeads]);
 
 
-  if (authLoading || loading) {
+  if (authLoading || loading || !hasAccess) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
   
@@ -391,3 +399,5 @@ export default function FieldActivityReportPage() {
     </div>
   );
 }
+
+    
