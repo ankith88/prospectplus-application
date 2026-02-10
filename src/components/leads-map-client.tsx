@@ -13,6 +13,7 @@ import {
   DirectionsRenderer,
   DrawingManagerF,
   CircleF,
+  HeatmapLayer
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers, getAllUserRoutes, getAllActivities } from '@/services/firebase'
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -91,7 +92,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -214,6 +215,7 @@ export default function LeadsMapClient() {
   const [areaName, setAreaName] = useState('');
   const [areaAssignee, setAreaAssignee] = useState('');
   const [isSavingArea, setIsSavingArea] = useState(false);
+  const [heatmapData, setHeatmapData] = useState<google.maps.LatLng[]>([]);
 
   
   const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
@@ -270,6 +272,7 @@ export default function LeadsMapClient() {
   const isMobile = useIsMobile();
   const searchParams = useSearchParams();
   const routeIdToLoad = searchParams.get('routeId');
+  const addLeadId = searchParams.get('addLead');
 
   const isFieldSalesUser = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
   const canCreateArea = userProfile?.role && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
@@ -304,6 +307,10 @@ export default function LeadsMapClient() {
     cancelDrawing();
   }
 
+  const handleRemoveFromArea = (leadId: string) => {
+    setAreaLeads(prev => prev.filter(l => l.id !== leadId));
+  };
+  
   const handleSaveArea = async () => {
     let finalAreaName = areaName.trim();
     if (!finalAreaName) {
@@ -351,6 +358,7 @@ export default function LeadsMapClient() {
       setAreaName('');
       setAreaAssignee('');
       setAreaLeads([]);
+      setHeatmapData([]);
       
     } catch (error) {
       console.error('Failed to save prospecting area:', error);
@@ -657,6 +665,20 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
             });
         }
     }, [allSystemRoutes, localSavedRoutes, isLoaded, loadingData, handleLoadRoute, routeIdToLoad, toast, router]);
+    
+     useEffect(() => {
+      if(addLeadId && mapData.length > 0){
+        const leadToAdd = mapData.find(l => l.id === addLeadId);
+        if(leadToAdd) {
+            setSelectedRouteLeads(prev => [...prev, leadToAdd]);
+             toast({
+                title: "Lead Added to Route Planner",
+                description: `${leadToAdd.companyName} has been added to your current route list.`,
+            });
+        }
+        router.replace('/leads/map', { scroll: false });
+      }
+    }, [addLeadId, mapData, router, toast]);
 
     const visibleData = useMemo(() => {
       if (!userProfile) return [];
@@ -1525,6 +1547,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     
         if (isCreatingArea) {
             setAreaLeads(itemsInShape as MapLead[]);
+            setHeatmapData(itemsInShape.map(l => new window.google.maps.LatLng(l.latitude!, l.longitude!)));
             setIsAssignAreaDialogOpen(true);
         } else {
             setSelectedRouteLeads(prev => {
@@ -1595,19 +1618,19 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         findProspects(myLocation, prospectSearchQuery);
     }, [myLocation, prospectSearchQuery, findProspects, handleShowMyLocation, toast]);
 
-    if (authLoading || loadingData || !isLoaded) {
-        return (
-            <div className="flex h-full items-center justify-center">
-            <Loader />
-            </div>
-        )
-    }
-    
-    const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (val && val !== 'all'));
-    
-    const infoWindowOptions = {
-        pixelOffset: new window.google.maps.Size(0, -30),
-    };
+  if (authLoading || loadingData || !isLoaded) {
+    return (
+        <div className="flex h-full items-center justify-center">
+          <Loader />
+        </div>
+    )
+  }
+  
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
+  
+  const infoWindowOptions = {
+    pixelOffset: new window.google.maps.Size(0, -30),
+  };
 
 
     const MapLegend = () => (
@@ -1827,43 +1850,75 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                             </TabsList>
                             <TabsContent value="stops" className="mt-4 flex-grow overflow-hidden flex flex-col gap-2">
                                 {isCreatingArea ? (
-                                    <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
-                                        {areaLeads.length} leads selected in this area. Assign below.
-                                    </div>
-                                ) : (
-                                    <div className="flex-shrink-0">
-                                        {selectedRouteLeads.length > 0 ? (
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-sm text-muted-foreground">{selectedRouteLeads.length} stop(s) selected.</p>
-                                                <Button variant="outline" size="sm" onClick={handleClearRoute}>Clear All</Button>
-                                            </div>
-                                        ) : (
-                                            <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
-                                                Use "Click to Select" mode or "Draw to Select" to add stops to the route planner.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                <ScrollArea className="flex-grow">
-                                    <div className="space-y-2">
-                                    {sortedSelectedRouteLeads.map((lead) => (
-                                        <div key={lead.id}>
-                                            <Card className="p-3">
-                                                <div className="flex items-start gap-2">
-                                                    <GripVertical className="h-5 w-5 text-muted-foreground mt-1 flex-shrink-0" />
-                                                    <div className="flex-grow overflow-hidden">
-                                                        <p className="font-bold truncate">{lead.companyName}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
-                                                    </div>
-                                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveFromRoute(lead.id)}>
-                                                        <X className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </Card>
+                                    <>
+                                        <div className="flex-shrink-0 text-center text-sm text-muted-foreground p-2 border-b">
+                                            {areaLeads.length} leads selected.
                                         </div>
-                                    ))}
-                                    </div>
-                                </ScrollArea>
+                                        <ScrollArea className="flex-grow">
+                                            <div className="space-y-2">
+                                                {areaLeads.map((lead) => (
+                                                    <div key={lead.id}>
+                                                        <Card className="p-3">
+                                                            <div className="flex items-start gap-2">
+                                                                <div className="flex-grow overflow-hidden">
+                                                                    <p className="font-bold truncate">{lead.companyName}</p>
+                                                                    <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                                                </div>
+                                                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveFromArea(lead.id)}>
+                                                                    <X className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </Card>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                        <div className="flex-shrink-0 pt-2 border-t">
+                                            <Button
+                                                onClick={() => setIsAssignAreaDialogOpen(true)}
+                                                disabled={areaLeads.length === 0}
+                                                className="w-full"
+                                            >
+                                                Assign Area ({areaLeads.length})
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex-shrink-0">
+                                            {selectedRouteLeads.length > 0 ? (
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm text-muted-foreground">{selectedRouteLeads.length} stop(s) selected.</p>
+                                                    <Button variant="outline" size="sm" onClick={handleClearRoute}>Clear All</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center text-sm text-muted-foreground p-4 border rounded-md">
+                                                    Use "Click to Select" mode or "Draw to Select" to add stops to the route planner.
+                                                </div>
+                                            )}
+                                        </div>
+                                        <ScrollArea className="flex-grow">
+                                            <div className="space-y-2">
+                                                {sortedSelectedRouteLeads.map((lead) => (
+                                                    <div key={lead.id}>
+                                                        <Card className="p-3">
+                                                            <div className="flex items-start gap-2">
+                                                                <GripVertical className="h-5 w-5 text-muted-foreground mt-1 flex-shrink-0" />
+                                                                <div className="flex-grow overflow-hidden">
+                                                                    <p className="font-bold truncate">{lead.companyName}</p>
+                                                                    <p className="text-xs text-muted-foreground truncate">{formatAddress(lead.address as Address)}</p>
+                                                                </div>
+                                                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRemoveFromRoute(lead.id)}>
+                                                                    <X className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </Card>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </>
+                                )}
                             </TabsContent>
                             <TabsContent value="routes" className="mt-4">
                                 <div className="flex-shrink-0 p-1 space-y-2 border-b mb-2">
@@ -1915,6 +1970,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     }}
                     mapTypeId={mapTypeId}
                 >
+                    {heatmapData.length > 0 && <HeatmapLayer data={heatmapData} />}
                      {isLoaded && (isCreatingArea || (selectionMode === 'select' && isDrawing)) && (
                         <DrawingManagerF
                             onLoad={(dm) => (drawingManagerRef.current = dm)}
@@ -2109,11 +2165,11 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         </div>
 
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+            <DialogContent className="w-[95vw] md:w-full max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>
-                        Found {prospects.length} potential leads near {selectedLead?.companyName || 'your location'}.
+                        Found {prospects.length} potential leads.
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] -mx-6 px-6">
@@ -2331,3 +2387,4 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     </div>
     );
 }
+
