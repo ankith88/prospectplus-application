@@ -55,7 +55,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { Badge } from '@/components/ui/badge'
@@ -87,7 +87,6 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -230,7 +229,7 @@ function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDia
                              <Label>Assign To</Label>
                              <Select value={selectedUser} onValueChange={setSelectedUser}>
                                 <SelectTrigger disabled={isLoadingUsers}>
-                                    <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : 'Select a user'} />
+                                    <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${bucket === 'field' ? 'Field Sales Rep' : 'Dialer'}`} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {users.map(user => (
@@ -783,10 +782,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
     );
 
-    if (isAdmin || isLeadGenAdmin) {
+    if (isAdmin) {
         return <div className="flex flex-wrap items-center gap-2">{checkInButton}{processFieldLeadButton}{scheduleAppointmentButton}{signupButton}{freeTrialButton}{logNoteButton}{viewScriptButton}{scorecardButton}{moveLeadButton}</div>;
     }
     
+    if (isLeadGenAdmin) {
+        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{scorecardButton}{moveLeadButton}</div>;
+    }
+
     if (isFieldSales || isFieldSalesAdmin) {
         return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logCallButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
     }
@@ -1617,3 +1620,5 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
+
+    
