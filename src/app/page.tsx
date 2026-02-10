@@ -29,7 +29,7 @@ export default function HomePage() {
           router.replace('/capture-visit');
           break;
         case 'Lead Gen Admin':
-          router.replace('/signed-customers');
+          router.replace('/visit-notes');
           break;
         case 'Lead Gen':
           router.replace('/leads/new');
