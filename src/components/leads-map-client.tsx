@@ -211,7 +211,6 @@ export default function LeadsMapClient() {
 
   const [isCreatingArea, setIsCreatingArea] = useState(false);
   const [areaLeads, setAreaLeads] = useState<MapLead[]>([]);
-  const [isAssignAreaDialogOpen, setIsAssignAreaDialogOpen] = useState(false);
   const [areaName, setAreaName] = useState('');
   const [areaAssignee, setAreaAssignee] = useState('');
   const [isSavingArea, setIsSavingArea] = useState(false);
@@ -317,11 +316,11 @@ export default function LeadsMapClient() {
       finalAreaName = `Prospecting Area - ${new Date().toLocaleDateString('en-AU')}`;
     }
 
-    if (!areaAssignee || areaLeads.length === 0) {
+    if (!areaAssignee) {
       toast({
         variant: 'destructive',
         title: 'Missing Information',
-        description: 'Please select an assignee and ensure at least one lead is in the area.',
+        description: 'Please select an assignee for the area.',
       });
       return;
     }
@@ -354,7 +353,6 @@ export default function LeadsMapClient() {
         description: `Prospecting area "${finalAreaName}" has been created and assigned.`,
       });
       
-      setIsAssignAreaDialogOpen(false);
       setAreaName('');
       setAreaAssignee('');
       setAreaLeads([]);
@@ -1548,7 +1546,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         if (isCreatingArea) {
             setAreaLeads(itemsInShape as MapLead[]);
             setHeatmapData(itemsInShape.map(l => new window.google.maps.LatLng(l.latitude!, l.longitude!)));
-            setIsAssignAreaDialogOpen(true);
         } else {
             setSelectedRouteLeads(prev => {
                 const currentIds = new Set(prev.map(p => p.id));
@@ -1873,14 +1870,29 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                                                 ))}
                                             </div>
                                         </ScrollArea>
-                                        <div className="flex-shrink-0 pt-2 border-t">
-                                            <Button
-                                                onClick={() => setIsAssignAreaDialogOpen(true)}
-                                                disabled={areaLeads.length === 0}
-                                                className="w-full"
-                                            >
-                                                Assign Area ({areaLeads.length})
-                                            </Button>
+                                        <div className="flex-shrink-0 pt-4 border-t space-y-4">
+                                            <div className="space-y-2 px-2">
+                                                <Label htmlFor="area-name">Area Name (Optional)</Label>
+                                                <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={`e.g., North Sydney Industrial Park`} />
+                                            </div>
+                                            <div className="space-y-2 px-2">
+                                                <Label htmlFor="area-assignee">Assign To</Label>
+                                                <Select value={areaAssignee} onValueChange={setAreaAssignee}>
+                                                    <SelectTrigger id="area-assignee">
+                                                        <SelectValue placeholder="Select a Field Sales Rep..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {assignableUsers.map(user => (
+                                                            <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="px-2">
+                                                <Button onClick={handleSaveArea} disabled={isSavingArea || !areaAssignee} className="w-full">
+                                                    {isSavingArea ? <Loader /> : `Save Area (${areaLeads.length} leads)`}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </>
                                 ) : (
@@ -2163,227 +2175,6 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 </GoogleMap>
             </div>
         </div>
-
-        <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="w-[95vw] md:w-full max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle>Nearby Prospects</DialogTitle>
-                    <DialogDescription>
-                        Found {prospects.length} potential leads.
-                    </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                    <div className="md:hidden space-y-4">
-                        {prospects.map(prospectInfo => (
-                            <Card key={prospectInfo.place.place_id} className="p-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="font-medium pr-2">{prospectInfo.place.name}</div>
-                                    <Checkbox 
-                                        checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} 
-                                        onCheckedChange={() => handleProspectSelection(prospectInfo.place)} 
-                                    />
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                    {prospectInfo.place.vicinity}
-                                </div>
-                                {prospectInfo.description && (
-                                    <div>
-                                        <p className="text-sm my-2 text-muted-foreground line-clamp-2">
-                                            {prospectInfo.description}
-                                        </p>
-                                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center mt-2">
-                                    <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
-                                        {prospectInfo.classification}
-                                    </Badge>
-                                    {prospectInfo.existingLead ? (
-                                        <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                            <Eye className="mr-2 h-4 w-4" /> View
-                                        </Button>
-                                    ) : (
-                                        <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                            {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                                            Add
-                                        </Button>
-                                    )}
-                                </div>
-                                 {prospectInfo.place.website && (
-                                    <Button asChild variant="outline" size="sm" className="mt-2 w-full">
-                                        <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer">
-                                            <Globe className="mr-2 h-4 w-4" />
-                                            Visit Website
-                                        </a>
-                                    </Button>
-                                )}
-                            </Card>
-                        ))}
-                    </div>
-                    <div className="hidden md:block">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-8"><Checkbox onCheckedChange={(checked) => setSelectedProspects(checked ? prospects.map(p => p.place) : [])} /></TableHead>
-                                    <TableHead>Company</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>Address</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {prospects.map(prospectInfo => (
-                                    <TableRow key={prospectInfo.place.place_id}>
-                                        <TableCell><Checkbox checked={selectedProspects.some(p => p.place_id === prospectInfo.place.place_id)} onCheckedChange={() => handleProspectSelection(prospectInfo.place)} /></TableCell>
-                                        <TableCell>
-                                            <div className="font-medium">{prospectInfo.place.name}</div>
-                                             {prospectInfo.place.website && (
-                                                <Button asChild variant="link" size="sm" className="p-0 h-auto">
-                                                    <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1">
-                                                        <Globe className="h-3 w-3" />
-                                                        Website
-                                                    </a>
-                                                </Button>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                                <div className="flex flex-col items-start max-w-xs">
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                                        {prospectInfo.description}
-                                                    </p>
-                                                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
-                                                </div>
-                                        </TableCell>
-                                        <TableCell>{prospectInfo.place.vicinity}</TableCell>
-                                        <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
-                                        <TableCell className="text-right">
-                                            {prospectInfo.existingLead ? (
-                                                <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
-                                                    <Eye className="mr-2 h-4 w-4" />
-                                                    View
-                                                </Button>
-                                            ) : (
-                                                <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
-                                                    {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
-                                                    {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
-                                                </Button>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </ScrollArea>
-                 <DialogFooter>
-                    <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Prospects
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
-                 </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <Dialog open={!!viewingDescription} onOpenChange={() => setViewingDescription(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>AI Company Description</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh] text-sm text-muted-foreground">
-                    {viewingDescription}
-                </ScrollArea>
-            </DialogContent>
-        </Dialog>
-        
-        <Dialog open={!!prospectToCreate} onOpenChange={(open) => !open && setProspectToCreate(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Add New Lead</DialogTitle>
-                    <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                    {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
-                        <div className="space-y-2">
-                            <Label htmlFor="campaign-select">Campaign *</Label>
-                            <Select value={campaign} onValueChange={setCampaign}>
-                                <SelectTrigger id="campaign-select">
-                                    <SelectValue placeholder="Select a campaign" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Outbound">Outbound</SelectItem>
-                                    <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                     <div className="space-y-2">
-                        <Label htmlFor="initial-notes">Initial Notes (Optional)</Label>
-                        <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search for cafes." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
-                        {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-        
-        <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Duplicate Lead Found</DialogTitle>
-                    <DialogDescription>
-                        A lead with this name or phone number already exists in the system.
-                    </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setDuplicateLeadId(null)}>Cancel</Button>
-                    <Button onClick={() => { window.open(`/leads/${duplicateLeadId}`, '_blank'); setDuplicateLeadId(null); }}>
-                        View Existing Lead
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <Dialog open={isAssignAreaDialogOpen} onOpenChange={setIsAssignAreaDialogOpen}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Assign Prospecting Area</DialogTitle>
-                    <DialogDescription>
-                        You've selected {areaLeads.length} leads. Name this area and assign it to a Field Sales rep.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="area-name">Area Name (Optional)</Label>
-                        <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={`e.g., North Sydney Industrial Park`} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="area-assignee">Assign To</Label>
-                        <Select value={areaAssignee} onValueChange={setAreaAssignee}>
-                            <SelectTrigger id="area-assignee">
-                                <SelectValue placeholder="Select a Field Sales Rep..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {assignableUsers.map(user => (
-                                    <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAssignAreaDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveArea} disabled={isSavingArea || !areaAssignee}>
-                        {isSavingArea ? <Loader /> : 'Save & Assign Area'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
     </div>
     );
 }
