@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, UserProfile, MapLead } from '@/lib/types';
@@ -10,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, MapPin, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon } from 'lucide-react';
+import { format, startOfDay } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute } from '@/services/firebase';
 import {
   AlertDialog,
@@ -30,6 +29,12 @@ import {
   MarkerF,
   InfoWindowF,
 } from '@react-google-maps/api';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
+
 
 // Styles and map options from leads-map-client.tsx
 const containerStyle = {
@@ -62,6 +67,13 @@ export default function ProspectingAreasPage() {
   const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
+
+  // New state for filters
+  const [filters, setFilters] = useState({
+    areaName: '',
+    assignedUser: [] as string[],
+    creationDate: undefined as Date | undefined,
+  });
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -113,6 +125,46 @@ export default function ProspectingAreasPage() {
         fetchProspectingAreas();
     }
   }, [userProfile, hasAccess]);
+  
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      areaName: '',
+      assignedUser: [],
+      creationDate: undefined,
+    });
+  };
+
+  const userOptions: Option[] = useMemo(() => {
+    const users = new Set(prospectingAreas.map(a => a.userName));
+    return Array.from(users).map(u => ({ value: u, label: u }));
+  }, [prospectingAreas]);
+
+  const filteredProspectingAreas = useMemo(() => {
+    return prospectingAreas.filter(area => {
+        const nameMatch = filters.areaName
+            ? area.name.toLowerCase().includes(filters.areaName.toLowerCase())
+            : true;
+        
+        const userMatch = filters.assignedUser.length === 0
+            ? true
+            : filters.assignedUser.includes(area.userName);
+            
+        let dateMatch = true;
+        if (filters.creationDate) {
+            const areaDate = startOfDay(new Date(area.createdAt));
+            const filterDate = startOfDay(filters.creationDate);
+            dateMatch = areaDate.getTime() === filterDate.getTime();
+        }
+
+        return nameMatch && userMatch && dateMatch;
+    });
+  }, [prospectingAreas, filters]);
+
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   const handleLoadArea = (area: ProspectingArea) => {
     setSelectedArea(area);
@@ -165,11 +217,81 @@ export default function ProspectingAreasPage() {
         <h1 className="text-3xl font-bold tracking-tight">Prospecting Areas</h1>
         <p className="text-muted-foreground">Manage and review assigned prospecting areas.</p>
       </header>
+
+      {/* Filters Card */}
+      <Collapsible>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" /> Filters
+            </CardTitle>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <SlidersHorizontal className="h-4 w-4" />
+                <span className="ml-2">Toggle Filters</span>
+              </Button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="areaName">Area Name</Label>
+                <Input
+                  id="areaName"
+                  value={filters.areaName}
+                  onChange={(e) => handleFilterChange('areaName', e.target.value)}
+                  placeholder="Filter by name..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assignedUser">Assigned User</Label>
+                <MultiSelectCombobox
+                  options={userOptions}
+                  selected={filters.assignedUser}
+                  onSelectedChange={(val) => handleFilterChange('assignedUser', val)}
+                  placeholder="Select users..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="creationDate">Creation Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="creationDate"
+                      variant={"outline"}
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filters.creationDate ? format(filters.creationDate, 'PPP') : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={filters.creationDate}
+                      onSelect={(date) => handleFilterChange('creationDate', date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {hasActiveFilters && (
+                <div className="space-y-2">
+                  <Button variant="ghost" onClick={clearFilters}>
+                    <X className="mr-2 h-4 w-4" /> Clear Filters
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       <Card>
         <CardHeader>
           <CardTitle>Areas</CardTitle>
           <CardDescription>
-            Showing {prospectingAreas.length} area(s). {selectedArea && `Currently viewing: ${selectedArea.name}`}
+            Showing {filteredProspectingAreas.length} area(s). {selectedArea && `Currently viewing: ${selectedArea.name}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -184,8 +306,8 @@ export default function ProspectingAreasPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {prospectingAreas.length > 0 ? (
-                prospectingAreas.map(area => (
+              {filteredProspectingAreas.length > 0 ? (
+                filteredProspectingAreas.map(area => (
                   <TableRow key={area.id} className={selectedArea?.id === area.id ? 'bg-muted' : ''}>
                     <TableCell className="font-medium">{area.name}</TableCell>
                     <TableCell>
@@ -295,5 +417,3 @@ export default function ProspectingAreasPage() {
     </>
   );
 }
-
-    
