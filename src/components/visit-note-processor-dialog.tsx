@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import type { VisitNote, VisitNoteAnalysis, Address } from '@/lib/types';
+import type { VisitNote, VisitNoteAnalysis, Address, Lead } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
@@ -27,10 +27,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { createNewLead, updateVisitNote } from '@/services/firebase';
+import { createNewLead, updateVisitNote, getLeadsFromFirebase } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import Image from 'next/image';
 import { format } from 'date-fns';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Input } from './ui/input';
+import { Search } from 'lucide-react';
+
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -47,9 +51,51 @@ const formatAddressDisplay = (address: Address | undefined) => {
 export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcessed }: VisitNoteProcessorDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Lead[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
   const router = useRouter();
   const { toast } = useToast();
-  const { userProfile } = useAuth();
+
+  useEffect(() => {
+    if (!isOpen) {
+        setSearchQuery('');
+        setSearchResults([]);
+        setSelectedLead(null);
+    }
+  }, [isOpen]);
+
+  const handleSearchLeads = async (query: string) => {
+    if (query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const allLeads = await getLeadsFromFirebase({ summary: true });
+      const filteredLeads = allLeads.filter(lead =>
+        lead.companyName.toLowerCase().includes(query.toLowerCase())
+      );
+      setSearchResults(filteredLeads.slice(0, 10)); // Limit results
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not search for leads.' });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        if (searchQuery && !selectedLead) {
+            handleSearchLeads(searchQuery);
+        }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedLead]);
+
 
   const handleCreateLead = () => {
     if (!note) return;
@@ -74,9 +120,34 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     }
   }
 
+  const handleLinkToLead = async () => {
+    if (!selectedLead || !note) return;
+
+    setIsLinking(true);
+    try {
+      await updateVisitNote(note.id, { status: 'Converted', leadId: selectedLead.id });
+      onProcessed(note.id, 'Converted', selectedLead.id);
+      toast({
+        title: 'Note Linked Successfully',
+        description: `The visit note has been linked to ${selectedLead.companyName}.`,
+      });
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to link visit note:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Linking Failed',
+        description: 'Could not link the visit note. Please try again.',
+      });
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+
   return (
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Process Visit Note</DialogTitle>
             <DialogDescription>
@@ -86,7 +157,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 gap-6 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             <div className="space-y-4">
                <div>
                   <h4 className="font-semibold mb-2">Original Note</h4>
@@ -127,6 +198,74 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                     </div>
                 )}
             </div>
+            
+             <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Create New Lead</CardTitle>
+                        <CardDescription>
+                        Create a new lead in the system based on this visit note.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                        <Button onClick={handleCreateLead} disabled={isCreating || isRejecting} className="w-full">
+                        {isCreating ? <Loader /> : 'Create Lead'}
+                        </Button>
+                    </CardFooter>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Link to Existing Lead</CardTitle>
+                        <CardDescription>
+                        If this business already exists, search for it and link this note.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by company name..."
+                            className="pl-8"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        </div>
+                        {isSearching && <div className="flex justify-center"><Loader /></div>}
+                        {searchResults.length > 0 && !selectedLead && (
+                        <ScrollArea className="h-40 rounded-md border">
+                            <div className="p-2">
+                            {searchResults.map(lead => (
+                                <div key={lead.id} className="p-2 hover:bg-accent rounded cursor-pointer" onClick={() => {
+                                    setSelectedLead(lead);
+                                    setSearchQuery(lead.companyName);
+                                    setSearchResults([]);
+                                }}>
+                                <p className="font-semibold">{lead.companyName}</p>
+                                <p className="text-sm text-muted-foreground">{lead.address?.city}, {lead.address?.state}</p>
+                                </div>
+                            ))}
+                            </div>
+                        </ScrollArea>
+                        )}
+                        {selectedLead && (
+                        <div className="p-3 border rounded-md bg-secondary/50 text-sm">
+                            <p className="font-semibold">{selectedLead.companyName}</p>
+                            <p className="text-muted-foreground">{selectedLead.address?.street}, {selectedLead.address?.city}</p>
+                            <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => {
+                            setSelectedLead(null);
+                            setSearchQuery('');
+                            }}>Clear selection</Button>
+                        </div>
+                        )}
+                    </CardContent>
+                    <CardFooter>
+                        <Button onClick={handleLinkToLead} disabled={isLinking || !selectedLead} className="w-full">
+                            {isLinking ? <Loader /> : 'Link to this Lead'}
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </div>
           </div>
 
           <DialogFooter>
@@ -149,10 +288,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                   </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            
-            <Button onClick={handleCreateLead} disabled={isCreating}>
-              {isCreating ? <Loader /> : 'Create Lead'}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
