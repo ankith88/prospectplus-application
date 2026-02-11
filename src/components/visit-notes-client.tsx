@@ -262,7 +262,7 @@ export default function VisitNotesClient() {
                     </TableRow>
                     ) : filteredNotes.length > 0 ? (
                     filteredNotes.map((note) => {
-                        const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                        const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
                         const canDelete = userProfile?.role === 'admin';
                         return (
                         <TableRow key={note.id}>

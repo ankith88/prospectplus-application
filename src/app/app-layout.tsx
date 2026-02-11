@@ -175,7 +175,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {canViewD2D && (
+            {(userProfile?.role && ['admin'].includes(userProfile.role)) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
@@ -277,7 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {canViewReporting && (userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin') && (
+            {canViewReporting && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <BarChart2 />

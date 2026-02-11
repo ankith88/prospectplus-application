@@ -140,8 +140,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
@@ -175,7 +175,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {canViewD2D && (
+            {(userProfile?.role && ['admin'].includes(userProfile.role)) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
@@ -277,7 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {canViewReporting && (userProfile?.role === 'admin') && (
+            {canViewReporting && (
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <BarChart2 />
