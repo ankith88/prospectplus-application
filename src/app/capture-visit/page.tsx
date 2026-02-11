@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -56,6 +55,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import SummaryStep from '@/components/capture-visit/summary-step';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
+import { useJsApiLoader } from '@react-google-maps/api';
 
 
 const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/field-discovery-step'), {
@@ -187,6 +187,12 @@ export default function CaptureVisitPage() {
     const searchParams = useSearchParams();
     const noteIdToEdit = searchParams.get('noteId');
 
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script-capture-visit',
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+        libraries: ['places'],
+    });
+
     const captureForm = useForm<z.infer<typeof noteSchema>>({
         resolver: zodResolver(noteSchema),
         defaultValues: { content: '' },
@@ -225,7 +231,7 @@ export default function CaptureVisitPage() {
 
     const autocompleteRef = useRef<google.maps.places.Autocomplete>();
     const searchInputCallbackRef = useCallback((node: HTMLInputElement) => {
-        if (node && !autocompleteRef.current && window.google) {
+        if (node && !autocompleteRef.current && isLoaded) {
             autocompleteRef.current = new window.google.maps.places.Autocomplete(node, {
                 types: ['establishment'],
                 componentRestrictions: { country: 'au' },
@@ -239,7 +245,7 @@ export default function CaptureVisitPage() {
                 }
             });
         }
-    }, []);
+    }, [isLoaded]);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -592,7 +598,7 @@ export default function CaptureVisitPage() {
 
     const isFieldSalesRepWithLinkedRep = userProfile?.role === 'Field Sales' && userProfile.linkedSalesRep;
     
-    if (isLoadingNote) {
+    if (isLoadingNote || !isLoaded) {
         return <div className="flex h-full items-center justify-center"><Loader /></div>;
     }
 
