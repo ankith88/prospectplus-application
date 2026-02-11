@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -165,10 +166,7 @@ export default function CaptureVisitPage() {
 
     const [selectedPlace, setSelectedPlace] = useState<any | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-    const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
-    const placesService = useRef<google.maps.places.PlacesService | null>(null);
-
+    
     const [outcomeData, setOutcomeData] = useState<{ type: string; details: Record<string, any> } | null>(null);
     
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -224,6 +222,24 @@ export default function CaptureVisitPage() {
         outcome: 4,
         summary: 5,
     }[step] || 1;
+
+    const autocompleteRef = useRef<google.maps.places.Autocomplete>();
+    const searchInputCallbackRef = useCallback((node: HTMLInputElement) => {
+        if (node && !autocompleteRef.current && window.google) {
+            autocompleteRef.current = new window.google.maps.places.Autocomplete(node, {
+                types: ['establishment'],
+                componentRestrictions: { country: 'au' },
+                fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website'],
+            });
+            autocompleteRef.current.addListener('place_changed', () => {
+                const place = autocompleteRef.current?.getPlace();
+                if (place?.address_components) {
+                    setSelectedPlace(place);
+                    setSearchQuery(place.name || '');
+                }
+            });
+        }
+    }, []);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -299,20 +315,12 @@ export default function CaptureVisitPage() {
         setHasCameraPermission(null);
         setSelectedPlace(null);
         setSearchQuery('');
-        setPredictions([]);
         setEditingNote(null);
         setIsLoadingNote(false);
         if (videoRef.current?.srcObject) {
             (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
         }
     }, [captureForm, discoveryForm, isListening]);
-    
-    useEffect(() => {
-        if (window.google && !autocompleteService.current) {
-            autocompleteService.current = new window.google.maps.places.AutocompleteService();
-            placesService.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-        }
-    }, []);
 
     useEffect(() => {
         if (step !== 'camera') {
@@ -387,44 +395,12 @@ export default function CaptureVisitPage() {
         }
     };
     
-    const fetchPredictions = useCallback((input: string) => {
-        if (autocompleteService.current && input) {
-            autocompleteService.current.getPlacePredictions(
-                { input, componentRestrictions: { country: 'au' } },
-                (preds, status) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
-                        setPredictions(preds);
-                    } else {
-                        setPredictions([]);
-                    }
-                }
-            );
-        } else {
-            setPredictions([]);
-        }
-      }, []);
-
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         setSearchQuery(value);
-        setSelectedPlace(null);
-        fetchPredictions(value);
-    };
-    
-    const handlePredictionSelect = (prediction: google.maps.places.AutocompletePrediction) => {
-        placesService.current?.getDetails(
-        {
-            placeId: prediction.place_id,
-            fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website'],
-        },
-        (place, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && place) {
-            setSelectedPlace(place);
-            setSearchQuery(place.name || '');
-            setPredictions([]);
-            }
+        if (selectedPlace && value !== selectedPlace.name) {
+            setSelectedPlace(null);
         }
-        );
     };
     
     const handleCaptureImage = () => {
@@ -676,29 +652,15 @@ export default function CaptureVisitPage() {
                                 )}
                                 <div className="space-y-2 relative">
                                     <div className="flex gap-2">
-                                        <Input 
-                                            id="visit-note-search" 
+                                        <Input
+                                            id="visit-note-search"
+                                            ref={searchInputCallbackRef}
                                             placeholder="Start typing..."
                                             value={searchQuery}
                                             onChange={handleInputChange}
                                         />
                                         <Button type="button" variant="outline" size="icon" onClick={() => { setPreviousStep('search'); setStep('camera'); }}><Camera className="h-4 w-4" /></Button>
                                     </div>
-                                    {predictions.length > 0 && (
-                                        <Card className="absolute z-50 w-full mt-1">
-                                            <CardContent className="p-1">
-                                                {predictions.map((prediction) => (
-                                                    <div
-                                                        key={prediction.place_id}
-                                                        className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
-                                                        onClick={() => handlePredictionSelect(prediction)}
-                                                    >
-                                                        {prediction.description}
-                                                    </div>
-                                                ))}
-                                            </CardContent>
-                                        </Card>
-                                    )}
                                 </div>
                                 { (selectedPlace || images.length > 0) && (
                                     <div className="space-y-6 pt-4">
