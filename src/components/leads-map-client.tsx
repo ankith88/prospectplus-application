@@ -24,7 +24,7 @@ import { LeadStatusBadge } from './lead-status-badge'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone, Satellite } from 'lucide-react'
+import { Building, Search, Briefcase, PlusCircle, Eye, Phone, Globe, Link as LinkIcon, Locate, MousePointerClick, CheckSquare, Map as MapIcon, Car, Footprints, Bike, Route, X, History, PenSquare, Trash2, Save, Filter, SlidersHorizontal, Sparkles, PhoneCall, CircleDot, RectangleHorizontal, Spline, GripVertical, UserPlus, MapPin, Play, XCircle, MoreHorizontal, Clock, Milestone, Satellite, ExternalLink } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -1727,7 +1727,14 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         <div className="flex items-center gap-2"><img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lost" className="h-4 w-4" /> Lost/Unqualified</div>
       </div>
     );
-
+    const isToday = (dateString?: string) => {
+      if (!dateString) return false;
+      const date = new Date(dateString);
+      const today = new Date();
+      return date.getDate() === today.getDate() &&
+             date.getMonth() === today.getMonth() &&
+             date.getFullYear() === today.getFullYear();
+    };
 
     return (
       <>
@@ -1970,6 +1977,65 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
               options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
               mapTypeId={mapTypeId}
           >
+            {filteredData.map((item) => {
+              if (item.latitude == null || item.longitude == null) return null;
+              const isSelectedForRouting = selectedRouteLeads.some(l => l.id === item.id);
+              const pinColor = getPinColor(
+                item.status,
+                isSelectedForRouting,
+                false, // This was isCheckedForRouting, which seems deprecated
+                hoveredLeadId === item.id
+              );
+        
+              return (
+                <MarkerF
+                  key={item.id}
+                  position={{ lat: item.latitude, lng: item.longitude }}
+                  icon={{ url: pinColor }}
+                  onClick={() => onMarkerClick(item)}
+                  onMouseOver={() => setHoveredLeadId(item.id)}
+                  onMouseOut={() => setHoveredLeadId(null)}
+                />
+              );
+            })}
+             {selectedLead && (
+              <InfoWindowF
+                position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
+                onCloseClick={onInfoWindowClose}
+                options={infoWindowOptions}
+              >
+                <div className="p-2 max-w-xs space-y-2">
+                  <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                  <p className="text-sm"><LeadStatusBadge status={selectedLead.status} /></p>
+                  <p className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</p>
+                  <div className="flex flex-col gap-2">
+                    <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                      <ExternalLink className="mr-2 h-4 w-4" /> View {selectedLead.isCompany ? 'Customer' : 'Lead'}
+                    </Button>
+                    {selectedLead.isCompany ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={handleFindNearbyLeads} disabled={isFindingNearby}>
+                          {isFindingNearby ? <Loader /> : <Search className="mr-2 h-4 w-4" />}
+                          Nearby Leads
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isFindingNearby || (selectedLead.lastProspected && isToday(selectedLead.lastProspected))}>
+                          {isFindingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                          {isFindingNearby ? 'Searching...' : 'AI Find Similar'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
+                          <Building className="mr-2 h-4 w-4" /> Find Multi-sites
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="secondary" onClick={() => handleCheckIn(selectedLead)}>
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        Check In
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </InfoWindowF>
+            )}
             {streetMarkers.map((marker, index) => (
                 <MarkerF
                     key={`street-marker-${index}`}
