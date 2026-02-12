@@ -12,7 +12,7 @@ export default function TerritoryMapPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
 
   useEffect(() => {
     if (!loading && !hasAccess) {
@@ -38,3 +38,4 @@ export default function TerritoryMapPage() {
     </div>
   );
 }
+
