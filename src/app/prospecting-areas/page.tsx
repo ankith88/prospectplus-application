@@ -103,6 +103,7 @@ export default function ProspectingAreasPage() {
   }, [userProfile, hasAccess, toast]);
   
   const mapCenter = useMemo(() => {
+    if (!isLoaded) return defaultCenter;
     if (selectedArea?.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length && window.google) {
       const bounds = new window.google.maps.LatLngBounds();
       selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
@@ -122,7 +123,7 @@ export default function ProspectingAreasPage() {
         return bounds.getCenter().toJSON();
     }
     return defaultCenter;
-  }, [selectedArea]);
+  }, [selectedArea, isLoaded]);
 
 
   const handleDeleteArea = async () => {
