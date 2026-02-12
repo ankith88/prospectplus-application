@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const containerStyle = {
@@ -52,6 +53,7 @@ const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['pla
 type ProspectingArea = SavedRoute & {
   userName: string;
   userId: string;
+  streets?: { name: string; placeId: string; lat: number; lng: number }[];
 };
 
 export default function ProspectingAreasPage() {
@@ -63,7 +65,7 @@ export default function ProspectingAreasPage() {
   
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
-  const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
+  const [selectedStreet, setSelectedStreet] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
   
   const [filters, setFilters] = useState({
@@ -73,7 +75,7 @@ export default function ProspectingAreasPage() {
   });
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: 'google-map-script-prospecting-areas',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -169,18 +171,23 @@ export default function ProspectingAreasPage() {
 
   const handleLoadArea = (area: ProspectingArea) => {
     setSelectedArea(area);
-    setSelectedLead(null); // Clear any selected lead when loading a new area
+    setSelectedStreet(null);
   };
 
   useEffect(() => {
-    if (map && selectedArea && selectedArea.leads.length > 0) {
+    if (map && selectedArea && selectedArea.streets && selectedArea.streets.length > 0) {
       const bounds = new window.google.maps.LatLngBounds();
-      selectedArea.leads.forEach(lead => {
-        if (lead.latitude && lead.longitude) {
-          bounds.extend(new window.google.maps.LatLng(lead.latitude, lead.longitude));
+      selectedArea.streets.forEach(street => {
+        if (street.lat && street.lng) {
+          bounds.extend(new window.google.maps.LatLng(street.lat, street.lng));
         }
       });
-      map.fitBounds(bounds);
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+      } else if (selectedArea.streets.length === 1 && selectedArea.streets[0].lat && selectedArea.streets[0].lng) {
+        map.setCenter({ lat: selectedArea.streets[0].lat, lng: selectedArea.streets[0].lng });
+        map.setZoom(15);
+      }
     }
   }, [map, selectedArea]);
   
@@ -291,6 +298,11 @@ export default function ProspectingAreasPage() {
         <Card>
           <CardHeader>
             <CardTitle>Map View: {selectedArea.name}</CardTitle>
+             <CardDescription>
+                {selectedArea.streets && selectedArea.streets.length > 0
+                    ? `${selectedArea.streets.length} street(s) in this area.`
+                    : 'No streets defined for this area.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
              <div style={containerStyle}>
@@ -305,26 +317,26 @@ export default function ProspectingAreasPage() {
                           mapTypeControl: false,
                       }}
                   >
-                     {selectedArea.leads.map(lead => (
+                     {selectedArea.streets && selectedArea.streets.map(street => (
                         <MarkerF
-                          key={lead.id}
-                          position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                          onClick={() => setSelectedLead(lead as MapLead)}
+                          key={street.placeId}
+                          position={{ lat: street.lat, lng: street.lng }}
+                          icon={{
+                            url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png',
+                          }}
+                          onClick={() => setSelectedStreet({ name: street.name, lat: street.lat, lng: street.lng })}
                         />
                       ))}
-                      {selectedLead && (
+                      {selectedStreet && (
                         <InfoWindowF
-                            position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
-                            onCloseClick={() => setSelectedLead(null)}
+                            position={{ lat: selectedStreet.lat, lng: selectedStreet.lng }}
+                            onCloseClick={() => setSelectedStreet(null)}
                         >
                            <div className="p-2 max-w-xs space-y-2">
-                               <h3 className="font-bold">{selectedLead.companyName}</h3>
+                               <h3 className="font-bold">{selectedStreet.name.split(',')[0]}</h3>
                                <p className="text-sm text-muted-foreground">
-                                   {(selectedLead.address as any)?.street}, {(selectedLead.address as any)?.city}
+                                   {selectedStreet.name}
                                </p>
-                                <Button size="sm" onClick={() => router.push(`/leads/${selectedLead.id}`)}>
-                                    View Lead
-                                </Button>
                            </div>
                         </InfoWindowF>
                       )}
@@ -335,6 +347,18 @@ export default function ProspectingAreasPage() {
                   <div className="flex h-full items-center justify-center"><Loader /></div>
                 )}
             </div>
+            {selectedArea.streets && selectedArea.streets.length > 0 && (
+              <div className="mt-4">
+                  <h4 className="font-semibold mb-2">Streets in this Area:</h4>
+                  <ScrollArea className="h-32 rounded-md border">
+                      <div className="p-2 text-sm">
+                          {selectedArea.streets.map(street => (
+                              <div key={street.placeId} className="p-1">{street.name}</div>
+                          ))}
+                      </div>
+                  </ScrollArea>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -353,7 +377,7 @@ export default function ProspectingAreasPage() {
                 <TableHead>Area Name</TableHead>
                 <TableHead>Assigned User</TableHead>
                 <TableHead>Creation Date</TableHead>
-                <TableHead>Leads</TableHead>
+                <TableHead>Streets</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -374,7 +398,7 @@ export default function ProspectingAreasPage() {
                             {format(new Date(area.createdAt), 'PPpp')}
                        </div>
                     </TableCell>
-                    <TableCell>{area.leads.length}</TableCell>
+                    <TableCell>{area.streets?.length || 0}</TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
                             <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
@@ -418,4 +442,3 @@ export default function ProspectingAreasPage() {
     </>
   );
 }
-

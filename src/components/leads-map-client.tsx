@@ -496,7 +496,7 @@ export default function LeadsMapClient() {
     if (!isLoaded) return null;
     const geocoder = new window.google.maps.Geocoder();
     return new Promise((resolve) => {
-        geocoder.geocode({ address, componentRestrictions: { country: 'AU' } }, (results, status) => {
+        geocoder.geocode({ address, componentRestrictions: { country: 'au' } }, (results, status) => {
             if (status === 'OK' && results?.[0]?.geometry.location) {
                 resolve(results[0].geometry.location);
             } else {
@@ -1731,260 +1731,258 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
     return (
       <>
-        <div className="flex flex-col h-full gap-4">
-            <Collapsible defaultOpen={!isMobile}>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <MapIcon className="h-5 w-5" />
-                            <CardTitle>Map Controls</CardTitle>
-                            <CardDescription>
-                                Displaying {leadsCount} leads and {signedCustomersCount} signed customers.
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button onClick={handleShowMyLocation} variant="outline" size="sm">
-                            <Locate className="mr-2 h-4 w-4" /> My Location
-                            </Button>
-                            <Button
-                                onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
-                                variant="outline" size="sm"
-                            >
-                            <Satellite className="mr-2 h-4 w-4" />
-                            {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
-                            </Button>
-                            <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                                <SlidersHorizontal className="h-4 w-4" />
-                                <span className="ml-2">Toggle Controls</span>
-                            </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                    </CardHeader>
-                    <CollapsibleContent>
-                    <Tabs defaultValue="filters">
-                        <CardContent>
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="filters">Filters</TabsTrigger>
-                            <TabsTrigger value="actions">Actions</TabsTrigger>
-                        </TabsList>
-                        </CardContent>
-                        <TabsContent value="filters">
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            <div className="space-y-2">
-                                <Label>Company Name</Label>
-                                <Input placeholder="Filter by company name..." value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+      <div className="flex flex-col h-full gap-4">
+          <Collapsible defaultOpen={!isMobile}>
+              <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                      <div className="flex items-center gap-2">
+                          <MapIcon className="h-5 w-5" />
+                          <CardTitle>Map Controls</CardTitle>
+                          <CardDescription>
+                              Displaying {leadsCount} leads and {signedCustomersCount} signed customers.
+                          </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <Button onClick={handleShowMyLocation} variant="outline" size="sm">
+                          <Locate className="mr-2 h-4 w-4" /> My Location
+                          </Button>
+                          <Button
+                              onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
+                              variant="outline" size="sm"
+                          >
+                          <Satellite className="mr-2 h-4 w-4" />
+                          {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                          </Button>
+                          <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                              <SlidersHorizontal className="h-4 w-4" />
+                              <span className="ml-2">Toggle Controls</span>
+                          </Button>
+                          </CollapsibleTrigger>
+                      </div>
+                  </CardHeader>
+                  <CollapsibleContent>
+                  <Tabs defaultValue="filters">
+                      <CardContent>
+                      <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="filters">Filters</TabsTrigger>
+                          <TabsTrigger value="actions">Actions</TabsTrigger>
+                      </TabsList>
+                      </CardContent>
+                      <TabsContent value="filters">
+                      <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          <div className="space-y-2">
+                              <Label>Company Name</Label>
+                              <Input placeholder="Filter by company name..." value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Dialer Assigned</Label>
+                          <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
+                          </div>
+                          <div className="space-y-2">
+                              <Label>Franchisee</Label>
+                              <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
+                          </div>
+                          <div className="space-y-2">
+                              <Label>Status</Label>
+                              <MultiSelectCombobox options={uniqueStatuses} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select Statuses..."/>
+                          </div>
+                          <div className="space-y-2">
+                              <Label>State</Label>
+                              <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Lead Type</Label>
+                          <Select value={filters.fieldSales} onValueChange={(value) => handleFilterChange('fieldSales', value)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                              <SelectItem value="all">All Leads</SelectItem>
+                              <SelectItem value="yes">Field Sales</SelectItem>
+                              <SelectItem value="no">Outbound</SelectItem>
+                              </SelectContent>
+                          </Select>
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Campaign</Label>
+                              <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                      <SelectItem value="all">All Campaigns</SelectItem>
+                                      {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Visit Status</Label>
+                          <Select value={filters.checkInStatus} onValueChange={(value) => handleFilterChange('checkInStatus', value)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                              <SelectItem value="all">All</SelectItem>
+                              <SelectItem value="checked-in">Checked-in</SelectItem>
+                              <SelectItem value="not-checked-in">Not Checked-in</SelectItem>
+                              </SelectContent>
+                          </Select>
+                          </div>
+                          <div className="space-y-2">
+                              <Label>Check-in Date</Label>
+                              <Popover>
+                                  <PopoverTrigger asChild>
+                                      <Button id="checkInDate" variant={'outline'} className="w-full justify-start text-left font-normal">
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
+                                      </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0 z-[11]">
+                                      <Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)}/>
+                                  </PopoverContent>
+                              </Popover>
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Route Status</Label>
+                          <Select value={filters.routeStatus} onValueChange={(value) => handleFilterChange('routeStatus', value)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                              <SelectItem value="all">All</SelectItem>
+                              <SelectItem value="in-route">In a Saved Route</SelectItem>
+                              <SelectItem value="not-in-route">Not in a Route</SelectItem>
+                              </SelectContent>
+                          </Select>
+                          </div>
+                          {hasActiveFilters && (
+                              <div className="space-y-2 col-start-1">
+                                  <Button variant="ghost" onClick={clearFilters}>
+                                      <X className="mr-2 h-4 w-4" /> Clear Filters
+                                  </Button>
+                              </div>
+                          )}
+                      </CardContent>
+                      </TabsContent>
+                      <TabsContent value="actions">
+                      <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                          <Label htmlFor="geo-search-input">Go to Location</Label>
+                          <Input id="geo-search-input" placeholder="Suburb, state, postcode..." ref={geoSearchInputRef} />
+                          </div>
+                          <div className="space-y-2">
+                          <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                          <div className="flex items-center gap-2">
+                              <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={e => setProspectSearchQuery(e.target.value)} />
+                              <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
+                                  {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4" />}
+                              </Button>
+                          </div>
+                          </div>
+                           <div className="space-y-2">
+                            <Label>Create Prospecting Area</Label>
+                            <div className="flex items-center gap-2">
+                               <Input
+                                  placeholder="Search for a street..."
+                                  value={streetSearchInput}
+                                  onChange={handleStreetSearchChange}
+                               />
                             </div>
-                            <div className="space-y-2">
-                            <Label>Dialer Assigned</Label>
-                            <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Franchisee</Label>
-                                <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Status</Label>
-                                <MultiSelectCombobox options={uniqueStatuses} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select Statuses..."/>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>State</Label>
-                                <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
-                            </div>
-                            <div className="space-y-2">
-                            <Label>Lead Type</Label>
-                            <Select value={filters.fieldSales} onValueChange={(value) => handleFilterChange('fieldSales', value)}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                <SelectItem value="all">All Leads</SelectItem>
-                                <SelectItem value="yes">Field Sales</SelectItem>
-                                <SelectItem value="no">Outbound</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            </div>
-                            <div className="space-y-2">
-                            <Label>Campaign</Label>
-                                <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                            <Label>Visit Status</Label>
-                            <Select value={filters.checkInStatus} onValueChange={(value) => handleFilterChange('checkInStatus', value)}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="checked-in">Checked-in</SelectItem>
-                                <SelectItem value="not-checked-in">Not Checked-in</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Check-in Date</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button id="checkInDate" variant={'outline'} className="w-full justify-start text-left font-normal">
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0 z-[11]">
-                                        <Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)}/>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <div className="space-y-2">
-                            <Label>Route Status</Label>
-                            <Select value={filters.routeStatus} onValueChange={(value) => handleFilterChange('routeStatus', value)}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="in-route">In a Saved Route</SelectItem>
-                                <SelectItem value="not-in-route">Not in a Route</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            </div>
-                            {hasActiveFilters && (
-                                <div className="space-y-2 col-start-1">
-                                    <Button variant="ghost" onClick={clearFilters}>
-                                        <X className="mr-2 h-4 w-4" /> Clear Filters
+                           {streetPredictions.length > 0 && (
+                                <Card className="relative z-50 w-full mt-1">
+                                    <CardContent className="p-1">
+                                        {streetPredictions.map((prediction) => (
+                                            <div
+                                                key={prediction.place_id}
+                                                className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
+                                                onClick={() => handleStreetSelect(prediction)}
+                                            >
+                                                {prediction.description}
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            )}
+                            {streetsForArea.length > 0 && (
+                                <div className="space-y-2 pt-2">
+                                    <Label>Selected Streets ({streetsForArea.length})</Label>
+                                    <ScrollArea className="h-24">
+                                        <div className="space-y-1 pr-2">
+                                            {streetsForArea.map(street => (
+                                                <div key={street.place_id} className="flex items-center justify-between text-sm p-1 bg-secondary rounded-md">
+                                                    <span className="truncate">{street.description}</span>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveStreet(street.place_id!)}>
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                    <Button onClick={() => setIsSaveAreaDialogOpen(true)} className="w-full mt-2" disabled={isSavingArea}>
+                                        {isSavingArea ? <Loader /> : 'Save as Prospecting Area'}
                                     </Button>
                                 </div>
                             )}
-                        </CardContent>
-                        </TabsContent>
-                        <TabsContent value="actions">
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                            <Label htmlFor="geo-search-input">Go to Location</Label>
-                            <Input id="geo-search-input" placeholder="Suburb, state, postcode..." ref={geoSearchInputRef} />
-                            </div>
-                            <div className="space-y-2">
-                            <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                            <div className="flex items-center gap-2">
-                                <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={e => setProspectSearchQuery(e.target.value)} />
-                                <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
-                                    {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4" />}
-                                </Button>
-                            </div>
-                            </div>
-                            <div className="space-y-2">
-                            <Label>Selection Mode</Label>
-                                <div className="flex items-center gap-2">
-                                <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
-                                    <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
-                                </Button>
-                                    <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" className="w-full" disabled={isDrawing}>
-                                            <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                    </DropdownMenu>
+                          </div>
+                          <div className="space-y-2">
+                          <Label>Selection Mode</Label>
+                              <div className="flex items-center gap-2">
+                              <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
+                                  <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
+                              </Button>
+                                  <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" className="w-full" disabled={isDrawing}>
+                                          <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
+                                      </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                      <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                  </DropdownMenu>
 
-                                    {isDrawing && (
-                                    <Button onClick={cancelDrawing} variant="destructive">
-                                        <X className="mr-2 h-4 w-4"/>
-                                    </Button>
-                                    )}
-                                </div>
-                            </div>
-                            {canCreateArea && (
-                              <div className="space-y-2">
-                                  <Label>Create Prospecting Area by Street</Label>
-                                  <div className="relative">
-                                      <Input
-                                          placeholder="Search for a street..."
-                                          value={streetSearchInput}
-                                          onChange={handleStreetSearchChange}
-                                      />
-                                      {streetPredictions.length > 0 && (
-                                          <Card className="absolute z-50 w-full mt-1">
-                                              <CardContent className="p-1">
-                                                  {streetPredictions.map((prediction) => (
-                                                      <div
-                                                          key={prediction.place_id}
-                                                          className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
-                                                          onClick={() => handleStreetSelect(prediction)}
-                                                      >
-                                                          {prediction.description}
-                                                      </div>
-                                                  ))}
-                                              </CardContent>
-                                          </Card>
-                                      )}
-                                  </div>
-                                  {streetsForArea.length > 0 && (
-                                      <div className="space-y-2 pt-2">
-                                          <Label>Selected Streets ({streetsForArea.length})</Label>
-                                          <ScrollArea className="h-24">
-                                              <div className="space-y-1 pr-2">
-                                                  {streetsForArea.map(street => (
-                                                      <div key={street.place_id} className="flex items-center justify-between text-sm p-1 bg-secondary rounded-md">
-                                                          <span className="truncate">{street.description}</span>
-                                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveStreet(street.place_id!)}>
-                                                              <X className="h-4 w-4" />
-                                                          </Button>
-                                                      </div>
-                                                  ))}
-                                              </div>
-                                          </ScrollArea>
-                                          <Button onClick={() => setIsSaveAreaDialogOpen(true)} className="w-full mt-2" disabled={isSavingArea}>
-                                              {isSavingArea ? <Loader /> : 'Save as Prospecting Area'}
-                                          </Button>
-                                      </div>
+                                  {isDrawing && (
+                                  <Button onClick={cancelDrawing} variant="destructive">
+                                      <X className="mr-2 h-4 w-4"/>
+                                  </Button>
                                   )}
                               </div>
-                            )}
-                        </CardContent>
-                        </TabsContent>
-                    </Tabs>
-                    {isFieldSalesUser && (
-                        <div className="px-6 pb-4">
-                        <Alert>
-                            <Sparkles className="h-4 w-4" />
-                            <AlertTitle className="text-sm font-semibold">Field Sales View</AlertTitle>
-                            <AlertDescription className="text-xs">
-                            By default, the map shows your assigned leads that have NOT been checked into and are NOT in a saved route.
-                            </AlertDescription>
-                        </Alert>
-                        </div>
-                    )}
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
-            <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
-            <GoogleMap
-                mapContainerStyle={containerStyle}
-                center={center}
-                zoom={4}
-                onLoad={setMap}
-                onClick={onMapClick}
-                options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
-                mapTypeId={mapTypeId}
-            >
-              {streetMarkers.map((marker, index) => (
-                  <MarkerF
-                      key={`street-marker-${index}`}
-                      position={marker}
-                      icon={{
-                          url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png',
-                      }}
-                  />
-              ))}
-            </GoogleMap>
-            </div>
-        </div>
-         <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
+                          </div>
+                      </CardContent>
+                      </TabsContent>
+                  </Tabs>
+                  {isFieldSalesUser && (
+                      <div className="px-6 pb-4">
+                      <Alert>
+                          <Sparkles className="h-4 w-4" />
+                          <AlertTitle className="text-sm font-semibold">Field Sales View</AlertTitle>
+                          <AlertDescription className="text-xs">
+                          By default, the map shows your assigned leads that have NOT been checked into and are NOT in a saved route.
+                          </AlertDescription>
+                      </Alert>
+                      </div>
+                  )}
+                  </CollapsibleContent>
+              </Card>
+          </Collapsible>
+          <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
+          <GoogleMap
+              mapContainerStyle={containerStyle}
+              center={center}
+              zoom={4}
+              onLoad={setMap}
+              onClick={onMapClick}
+              options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
+              mapTypeId={mapTypeId}
+          >
+            {streetMarkers.map((marker, index) => (
+                <MarkerF
+                    key={`street-marker-${index}`}
+                    position={marker}
+                    icon={{
+                        url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png',
+                    }}
+                />
+            ))}
+          </GoogleMap>
+          </div>
+      </div>
+       <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Save Prospecting Area</DialogTitle>
