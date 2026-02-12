@@ -58,7 +58,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 type ProspectingArea = SavedRoute & {
   userName: string;
@@ -98,7 +98,7 @@ export default function ProspectingAreasPage() {
 
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: 'google-map-script-prospecting-areas',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -664,4 +664,3 @@ export default function ProspectingAreasPage() {
   );
 }
 
-    
