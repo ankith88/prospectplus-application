@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        {description && <div className="text-xs text-muted-foreground">{description}</div>}
       </CardContent>
     </Card>
   );
@@ -253,11 +253,11 @@ export default function AdminDashboardPage() {
           <CardContent>
             {user ? (
                 <>
-                    <p className="text-xl font-bold">{user}</p>
-                    <p className="text-xs text-muted-foreground">{metric}</p>
+                    <div className="text-xl font-bold">{user}</div>
+                    <div className="text-xs text-muted-foreground">{metric}</div>
                 </>
             ) : (
-                <p className="text-sm text-muted-foreground">No data available</p>
+                <div className="text-sm text-muted-foreground">No data available</div>
             )}
           </CardContent>
       </Card>
@@ -275,7 +275,7 @@ export default function AdminDashboardPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {userProfile.firstName}. Here's your mission control.</p>
+        <div className="text-muted-foreground">Welcome back, {userProfile.firstName}. Here's your mission control.</div>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No recent visit notes.</p>
+                <div className="text-sm text-muted-foreground text-center py-4">No recent visit notes.</div>
             )}
           </CardContent>
         </Card>
@@ -342,7 +342,7 @@ export default function AdminDashboardPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Company</TableHead>
-                            <TableHead>Date & Time</TableHead>
+                            <TableHead>Date &amp; Time</TableHead>
                             <TableHead className="text-right">Assigned To</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -361,7 +361,7 @@ export default function AdminDashboardPage() {
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No upcoming appointments.</p>
+                <div className="text-sm text-muted-foreground text-center py-4">No upcoming appointments.</div>
             )}
           </CardContent>
         </Card>
@@ -395,7 +395,7 @@ export default function AdminDashboardPage() {
                     </TableBody>
                 </Table>
             ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No recent wins to show.</p>
+                <div className="text-sm text-muted-foreground text-center py-4">No recent wins to show.</div>
             )}
           </CardContent>
         </Card>
@@ -422,8 +422,5 @@ export default function AdminDashboardPage() {
         </Card>
     </div>
   );
-}
-
-    
 
     
