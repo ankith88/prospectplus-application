@@ -1,17 +1,17 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile, MapLead, Address, StorableRoute } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import type { SavedRoute, UserProfile, MapLead, Address } from '@/lib/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Search } from 'lucide-react';
+import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, saveUserRoute, getAllUsers, getLeadsFromFirebase } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, getAllUsers } from '@/services/firebase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,21 +32,10 @@ import {
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// Styles and map options from leads-map-client.tsx
+
 const containerStyle = {
   width: '100%',
   height: '60vh', // Adjust height as needed
@@ -72,30 +61,16 @@ export default function ProspectingAreasPage() {
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
-  // New state for map
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
-  const [allMapData, setAllMapData] = useState<MapLead[]>([]);
-
-  // New state for filters
+  
   const [filters, setFilters] = useState({
     areaName: '',
     assignedUser: [] as string[],
     creationDate: undefined as Date | undefined,
   });
-
-  // State for creating areas
-  const [isCreatingArea, setIsCreatingArea] = useState(false);
-  const [areaLeads, setAreaLeads] = useState<MapLead[]>([]);
-  const [areaName, setAreaName] = useState('');
-  const [areaAssignee, setAreaAssignee] = useState('');
-  const [isSavingArea, setIsSavingArea] = useState(false);
-  const [assignableUsers, setAssignableUsers] = useState<UserProfile[]>([]);
-  const [streetInput, setStreetInput] = useState('');
-  const [isFindingLeadsByStreet, setIsFindingLeadsByStreet] = useState(false);
-
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script-prospecting-areas',
@@ -104,7 +79,6 @@ export default function ProspectingAreasPage() {
   });
 
   const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canCreateArea = userProfile?.role && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -118,24 +92,10 @@ export default function ProspectingAreasPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [allRoutes, users, leads] = await Promise.all([
+        const [allRoutes, users] = await Promise.all([
           getAllUserRoutes(),
           getAllUsers(),
-          getLeadsFromFirebase({summary: true}),
         ]);
-
-        const mapLeads = leads
-          .filter(lead => lead.latitude != null && lead.longitude != null)
-          .map(lead => ({
-              ...lead,
-              latitude: Number(lead.latitude),
-              longitude: Number(lead.longitude),
-              isCompany: false,
-              isProspect: false
-          }));
-        setAllMapData(mapLeads);
-        
-        setAssignableUsers(users.filter(u => u.role === 'Field Sales'));
         
         let routesToProcess = allRoutes.filter(route => (route as any).isProspectingArea);
         
@@ -241,140 +201,6 @@ export default function ProspectingAreasPage() {
       setAreaToDelete(null);
     }
   };
-
-  const handleFindLeadsByStreets = useCallback(async () => {
-    if (!streetInput.trim()) {
-        toast({
-            variant: "destructive",
-            title: "Input Required",
-            description: "Please enter at least one street name.",
-        });
-        return;
-    }
-
-    setIsFindingLeadsByStreet(true);
-
-    try {
-        const searchLines = streetInput.trim().toLowerCase().split('\n').map(l => l.trim()).filter(Boolean);
-        
-        const matchedLeads = allMapData.filter(lead => {
-            if (!lead.address || !lead.address.street) return false;
-
-            const leadAddress = `${lead.address.street}, ${lead.address.city || ''}`.toLowerCase();
-
-            return searchLines.some(line => {
-                const parts = line.split(',').map(p => p.trim());
-                const street = parts[0];
-                const suburb = parts[1];
-
-                if (!street) return false;
-
-                const streetMatch = leadAddress.includes(street);
-                const suburbMatch = suburb ? leadAddress.includes(suburb) : true;
-
-                return streetMatch && suburbMatch;
-            });
-        });
-
-        if (matchedLeads.length > 0) {
-            setAreaLeads(matchedLeads);
-            setIsCreatingArea(true); // Open the save dialog
-            
-            if (map) {
-                const bounds = new window.google.maps.LatLngBounds();
-                matchedLeads.forEach(lead => {
-                    if (lead.latitude && lead.longitude) {
-                        bounds.extend({ lat: lead.latitude, lng: lead.longitude });
-                    }
-                });
-                map.fitBounds(bounds);
-            }
-
-            toast({
-                title: `${matchedLeads.length} Leads Found`,
-                description: 'Review the leads and save your new prospecting area.',
-            });
-        } else {
-            toast({
-                title: 'No Leads Found',
-                description: 'No existing leads match the specified streets. Please check your spelling and format.',
-            });
-        }
-
-    } catch (error) {
-        console.error("Error finding leads by street:", error);
-        toast({ variant: 'destructive', title: "Search Error", description: "An error occurred while searching for leads." });
-    } finally {
-        setIsFindingLeadsByStreet(false);
-    }
-  }, [streetInput, allMapData, map, toast]);
-
-    const handleSaveArea = async () => {
-        let finalAreaName = areaName.trim();
-        if (!finalAreaName) {
-            finalAreaName = `Prospecting Area - ${new Date().toLocaleDateString('en-AU')}`;
-        }
-
-        if (canCreateArea && !areaAssignee) {
-            toast({
-                variant: 'destructive',
-                title: 'Missing Information',
-                description: 'Please select an assignee for the area.',
-            });
-            return;
-        }
-        
-        const assigneeToUse = canCreateArea ? areaAssignee : userProfile?.uid;
-        if (!assigneeToUse) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not determine assignee.' });
-            return;
-        }
-
-        setIsSavingArea(true);
-        try {
-            const newRoute: Omit<StorableRoute, 'id'> = {
-                name: finalAreaName,
-                createdAt: new Date().toISOString(),
-                leads: areaLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! })),
-                travelMode: google.maps.TravelMode.DRIVING,
-                isProspectingArea: true,
-            };
-
-            const savedRouteId = await saveUserRoute(assigneeToUse, newRoute);
-            
-            const assigneeData = assignableUsers.find(u => u.uid === assigneeToUse);
-            const newRouteForState: ProspectingArea = {
-                ...newRoute,
-                id: savedRouteId,
-                userId: assigneeToUse,
-                userName: assigneeData?.displayName || userProfile?.displayName || 'Unknown',
-                directions: null,
-            };
-
-            setProspectingAreas(prev => [newRouteForState, ...prev]);
-
-            toast({
-                title: 'Area Created',
-                description: `Prospecting area "${finalAreaName}" has been created.`,
-            });
-            
-            setIsCreatingArea(false);
-            setAreaName('');
-            setAreaAssignee('');
-            setAreaLeads([]);
-            
-        } catch (error) {
-            console.error('Failed to save prospecting area:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Error Saving Area',
-                description: 'An unexpected error occurred while saving.',
-            });
-        } finally {
-            setIsSavingArea(false);
-        }
-    };
-
 
   if (loading || authLoading || !isLoaded || !hasAccess) {
     return (
@@ -512,29 +338,7 @@ export default function ProspectingAreasPage() {
           </CardContent>
         </Card>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Area by Streets</CardTitle>
-          <CardDescription>
-            Enter street names and suburbs (one per line) to find all existing leads on those streets and create a new prospecting area.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Label htmlFor="street-input">Street Names</Label>
-          <Textarea
-            id="street-input"
-            value={streetInput}
-            onChange={(e) => setStreetInput(e.target.value)}
-            placeholder="e.g., George Street, Sydney\nKing Street, Newtown"
-            rows={5}
-          />
-          <Button onClick={handleFindLeadsByStreets} disabled={isFindingLeadsByStreet}>
-            {isFindingLeadsByStreet ? <Loader /> : 'Find Leads and Create Area'}
-          </Button>
-        </CardContent>
-      </Card>
-
+      
       <Card>
         <CardHeader>
           <CardTitle>Areas</CardTitle>
@@ -595,55 +399,6 @@ export default function ProspectingAreasPage() {
         </CardContent>
       </Card>
     </div>
-    <Dialog open={isCreatingArea} onOpenChange={setIsCreatingArea}>
-        <DialogContent className="max-w-4xl">
-            <DialogHeader>
-                <DialogTitle>Create New Prospecting Area</DialogTitle>
-                <DialogDescription>
-                    You've selected {areaLeads.length} leads. Name your area and assign it to a Field Sales Rep.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="area-name">Area Name</Label>
-                        <Input id="area-name" value={areaName} onChange={(e) => setAreaName(e.target.value)} placeholder={`e.g., North Sydney Industrial Park`} />
-                    </div>
-                     {canCreateArea && (
-                        <div className="space-y-2">
-                            <Label htmlFor="area-assignee">Assign To</Label>
-                            <Select value={areaAssignee} onValueChange={setAreaAssignee}>
-                                <SelectTrigger id="area-assignee"><SelectValue placeholder="Select a Field Sales Rep..." /></SelectTrigger>
-                                <SelectContent>
-                                    {assignableUsers.map(user => (
-                                        <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                </div>
-                <ScrollArea className="h-96 rounded-md border">
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {areaLeads.map(lead => (
-                                <TableRow key={lead.id}>
-                                    <TableCell>{lead.companyName}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreatingArea(false)}>Cancel</Button>
-                <Button onClick={handleSaveArea} disabled={isSavingArea || (canCreateArea && !areaAssignee)}>
-                    {isSavingArea ? <Loader /> : `Save Area (${areaLeads.length} leads)`}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
     <AlertDialog open={!!areaToDelete} onOpenChange={(open) => !open && setAreaToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -663,4 +418,3 @@ export default function ProspectingAreasPage() {
     </>
   );
 }
-
