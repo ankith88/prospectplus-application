@@ -4,14 +4,23 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile, MapLead, Address } from '@/lib/types';
+import type { SavedRoute, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Satellite } from 'lucide-react';
-import { format, startOfDay } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, getAllUsers } from '@/services/firebase';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite } from 'lucide-react';
+import { format } from 'date-fns';
+import { getAllUserRoutes, deleteUserRoute } from '@/services/firebase';
+import {
+  GoogleMap,
+  useJsApiLoader,
+  MarkerF,
+  InfoWindowF,
+  PolygonF,
+  RectangleF,
+} from '@react-google-maps/api';
+import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,61 +31,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useToast } from '@/hooks/use-toast';
-import {
-  GoogleMap,
-  useJsApiLoader,
-  MarkerF,
-  InfoWindowF,
-} from '@react-google-maps/api';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const containerStyle = {
   width: '100%',
-  height: '60vh', // Adjust height as needed
+  height: '400px',
   borderRadius: '0.5rem',
 };
 
-const center = {
-  lat: -25.2744,
-  lng: 133.7751,
+const defaultCenter = {
+  lat: -33.8688,
+  lng: 151.2093,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
+const libraries: ('places' | 'drawing' | 'geometry', 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
-type ProspectingArea = SavedRoute & {
-  userName: string;
-  userId: string;
-  streets?: { name: string; placeId: string; lat: number; lng: number }[];
-};
 
 export default function ProspectingAreasPage() {
-  const [prospectingAreas, setProspectingAreas] = useState<ProspectingArea[]>([]);
+  const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
+  const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
+  const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
+
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
-  const [selectedStreet, setSelectedStreet] = useState<{ name: string; lat: number; lng: number } | null>(null);
-  const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
-  const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
-  
-  const [filters, setFilters] = useState({
-    areaName: '',
-    assignedUser: [] as string[],
-    creationDate: undefined as Date | undefined,
-  });
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-prospecting-areas',
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -92,219 +76,96 @@ export default function ProspectingAreasPage() {
   useEffect(() => {
     if (!userProfile) return;
 
-    const fetchData = async () => {
+    const fetchProspectingAreas = async () => {
       setLoading(true);
       try {
-        const [allRoutes, users] = await Promise.all([
-          getAllUserRoutes(),
-          getAllUsers(),
-        ]);
+        const allRoutes = await getAllUserRoutes();
+        const areas = allRoutes.filter(route => route.isProspectingArea);
         
-        let routesToProcess = allRoutes.filter(route => (route as any).isProspectingArea);
-        
-        if(userProfile.role === 'Field Sales') {
-            routesToProcess = routesToProcess.filter(route => route.userId === userProfile.uid);
+        let userAreas = areas;
+        if (userProfile.role === 'Field Sales') {
+            userAreas = areas.filter(area => area.userId === userProfile.uid);
         }
 
-        const areas = routesToProcess.map(route => {
-            const user = users.find(u => u.uid === route.userId);
-            return {
-              ...route,
-              userName: user?.displayName || 'Unknown User',
-              userId: route.userId || '',
-            };
-        }).filter((area): area is ProspectingArea => area !== null && !!area.userId);
-        
-        areas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setProspectingAreas(areas);
-
+        userAreas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setProspectingAreas(userAreas);
       } catch (error) {
         console.error("Failed to fetch prospecting areas:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch prospecting areas.' });
       } finally {
         setLoading(false);
       }
     };
-
-    if (hasAccess) {
-        fetchData();
+    if(hasAccess) {
+        fetchProspectingAreas();
     }
-  }, [userProfile, hasAccess]);
+  }, [userProfile, hasAccess, toast]);
   
-  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      areaName: '',
-      assignedUser: [],
-      creationDate: undefined,
-    });
-  };
-
-  const userOptions: Option[] = useMemo(() => {
-    const users = new Set(prospectingAreas.map(a => a.userName));
-    return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [prospectingAreas]);
-
-  const filteredProspectingAreas = useMemo(() => {
-    return prospectingAreas.filter(area => {
-        const nameMatch = filters.areaName
-            ? area.name.toLowerCase().includes(filters.areaName.toLowerCase())
-            : true;
-        
-        const userMatch = filters.assignedUser.length === 0
-            ? true
-            : filters.assignedUser.includes(area.userName);
-            
-        let dateMatch = true;
-        if (filters.creationDate) {
-            const areaDate = startOfDay(new Date(area.createdAt));
-            const filterDate = startOfDay(filters.creationDate);
-            dateMatch = areaDate.getTime() === filterDate.getTime();
-        }
-
-        return nameMatch && userMatch && dateMatch;
-    });
-  }, [prospectingAreas, filters]);
-
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
-
-  const handleLoadArea = (area: ProspectingArea) => {
-    setSelectedArea(area);
-    setSelectedStreet(null);
-  };
-
-  useEffect(() => {
-    if (map && selectedArea && selectedArea.streets && selectedArea.streets.length > 0) {
+  const mapCenter = useMemo(() => {
+    if (selectedArea?.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
       const bounds = new window.google.maps.LatLngBounds();
-      selectedArea.streets.forEach(street => {
-        if (street.lat && street.lng) {
-          bounds.extend(new window.google.maps.LatLng(street.lat, street.lng));
-        }
-      });
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds);
-      } else if (selectedArea.streets.length === 1 && selectedArea.streets[0].lat && selectedArea.streets[0].lng) {
-        map.setCenter({ lat: selectedArea.streets[0].lat, lng: selectedArea.streets[0].lng });
-        map.setZoom(15);
-      }
+      selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
+      return bounds.getCenter().toJSON();
     }
-  }, [map, selectedArea]);
-  
-  const handleDelete = async () => {
-    if (!areaToDelete) return;
+    if (selectedArea?.shape?.type === 'rectangle' && selectedArea.shape.bounds) {
+      const bounds = new window.google.maps.LatLngBounds(selectedArea.shape.bounds);
+      return bounds.getCenter().toJSON();
+    }
+    if (selectedArea?.leads && selectedArea.leads.length > 0) {
+        const bounds = new window.google.maps.LatLngBounds();
+        selectedArea.leads.forEach(lead => {
+          if (lead.latitude && lead.longitude) {
+            bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+          }
+        });
+        return bounds.getCenter().toJSON();
+    }
+    return defaultCenter;
+  }, [selectedArea]);
 
-    try {
-      await deleteUserRoute(areaToDelete.userId, areaToDelete.id!);
-      setProspectingAreas(prev => prev.filter(area => area.id !== areaToDelete.id));
-      toast({ title: "Success", description: `Prospecting area "${areaToDelete.name}" has been deleted.` });
-      if (selectedArea?.id === areaToDelete.id) {
-        setSelectedArea(null);
+
+  const handleDeleteArea = async () => {
+      if (!areaToDelete || !areaToDelete.userId) return;
+
+      try {
+          await deleteUserRoute(areaToDelete.userId, areaToDelete.id!);
+          setProspectingAreas(prev => prev.filter(area => area.id !== areaToDelete.id));
+          if (selectedArea?.id === areaToDelete.id) {
+              setSelectedArea(null);
+          }
+          toast({ title: "Success", description: "Prospecting area deleted." });
+      } catch (error) {
+          console.error("Failed to delete area:", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not delete the area." });
+      } finally {
+          setAreaToDelete(null);
       }
-    } catch (error) {
-      console.error("Failed to delete prospecting area:", error);
-      toast({ variant: 'destructive', title: "Error", description: "Could not delete the area." });
-    } finally {
-      setAreaToDelete(null);
-    }
   };
 
-  if (loading || authLoading || !isLoaded || !hasAccess) {
+  if (loading || authLoading || !isLoaded) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
       </div>
     );
   }
+   if (loadError) return <div>Error loading maps</div>;
 
   return (
-    <>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Prospecting Areas</h1>
-        <p className="text-muted-foreground">Manage and review assigned prospecting areas.</p>
+        <p className="text-muted-foreground">Review and manage your team's designated prospecting areas.</p>
       </header>
-
-      {/* Filters Card */}
-      <Collapsible>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" /> Filters
-            </CardTitle>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <SlidersHorizontal className="h-4 w-4" />
-                <span className="ml-2">Toggle Filters</span>
-              </Button>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-              <div className="space-y-2">
-                <Label htmlFor="areaName">Area Name</Label>
-                <Input
-                  id="areaName"
-                  value={filters.areaName}
-                  onChange={(e) => handleFilterChange('areaName', e.target.value)}
-                  placeholder="Filter by name..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="assignedUser">Assigned User</Label>
-                <MultiSelectCombobox
-                  options={userOptions}
-                  selected={filters.assignedUser}
-                  onSelectedChange={(val) => handleFilterChange('assignedUser', val)}
-                  placeholder="Select users..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="creationDate">Creation Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="creationDate"
-                      variant={"outline"}
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.creationDate ? format(filters.creationDate, 'PPP') : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={filters.creationDate}
-                      onSelect={(date) => handleFilterChange('creationDate', date as Date)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {hasActiveFilters && (
-                <div className="space-y-2">
-                  <Button variant="ghost" onClick={clearFilters}>
-                    <X className="mr-2 h-4 w-4" /> Clear Filters
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
 
       {selectedArea && (
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
                 <div>
-                    <CardTitle>Map View: {selectedArea.name}</CardTitle>
+                    <CardTitle>{selectedArea.name}</CardTitle>
                     <CardDescription>
-                        {selectedArea.streets && selectedArea.streets.length > 0
-                            ? `${selectedArea.streets.length} street(s) in this area.`
-                            : 'No streets defined for this area.'}
+                        Created on {format(new Date(selectedArea.createdAt), 'PP')} by {selectedArea.userName}
                     </CardDescription>
                 </div>
                 <Button
@@ -318,70 +179,69 @@ export default function ProspectingAreasPage() {
             </div>
           </CardHeader>
           <CardContent>
-             <div style={containerStyle}>
-                {isLoaded ? (
-                  <GoogleMap
-                      mapContainerStyle={containerStyle}
-                      center={center}
-                      zoom={4}
-                      onLoad={setMap}
-                      options={{
-                          streetViewControl: false,
-                          mapTypeControl: false,
-                      }}
-                      mapTypeId={mapTypeId}
-                  >
-                     {selectedArea.streets && selectedArea.streets.map(street => (
-                        <MarkerF
-                          key={street.placeId}
-                          position={{ lat: street.lat, lng: street.lng }}
-                          icon={{
-                            url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png',
-                          }}
-                          onClick={() => setSelectedStreet({ name: street.name, lat: street.lat, lng: street.lng })}
-                        />
-                      ))}
-                      {selectedStreet && (
-                        <InfoWindowF
-                            position={{ lat: selectedStreet.lat, lng: selectedStreet.lng }}
-                            onCloseClick={() => setSelectedStreet(null)}
-                        >
-                           <div className="p-2 max-w-xs space-y-2">
-                               <h3 className="font-bold">{selectedStreet.name.split(',')[0]}</h3>
-                               <p className="text-sm text-muted-foreground">
-                                   {selectedStreet.name}
-                               </p>
-                           </div>
-                        </InfoWindowF>
-                      )}
-                  </GoogleMap>
-                ) : loadError ? (
-                  <div className="flex h-full items-center justify-center text-destructive">Error loading map.</div>
-                ) : (
-                  <div className="flex h-full items-center justify-center"><Loader /></div>
-                )}
+            <div style={containerStyle}>
+                <GoogleMap
+                    mapContainerStyle={containerStyle}
+                    center={mapCenter}
+                    zoom={14}
+                    mapTypeId={mapTypeId}
+                >
+                  {selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths && (
+                    <PolygonF
+                      paths={selectedArea.shape.paths}
+                      options={{ fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 }}
+                    />
+                  )}
+                  {selectedArea.shape?.type === 'rectangle' && selectedArea.shape.bounds && (
+                    <RectangleF
+                      bounds={selectedArea.shape.bounds}
+                      options={{ fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 }}
+                    />
+                  )}
+                  {(selectedArea.leads || []).map(lead => (
+                      <MarkerF
+                          key={lead.id}
+                          position={{ lat: lead.latitude, lng: lead.longitude }}
+                          title={lead.companyName}
+                      />
+                  ))}
+                </GoogleMap>
             </div>
-            {selectedArea.streets && selectedArea.streets.length > 0 && (
-              <div className="mt-4">
-                  <h4 className="font-semibold mb-2">Streets in this Area:</h4>
-                  <ScrollArea className="h-32 rounded-md border">
-                      <div className="p-2 text-sm">
-                          {selectedArea.streets.map(street => (
-                              <div key={street.placeId} className="p-1">{street.name}</div>
-                          ))}
-                      </div>
-                  </ScrollArea>
-              </div>
-            )}
+            <div className="mt-4 space-y-2">
+                <h4 className="font-semibold">Contents of this Area</h4>
+                <ScrollArea className="h-32 border rounded-md">
+                    <div className="p-2 text-sm">
+                        {selectedArea.leads && selectedArea.leads.length > 0 && (
+                            <div>
+                                <p className="font-medium">Leads ({selectedArea.leads.length}):</p>
+                                <ul className="list-disc list-inside">
+                                    {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
+                                </ul>
+                            </div>
+                        )}
+                        {selectedArea.streets && selectedArea.streets.length > 0 && (
+                            <div className="mt-2">
+                                <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
+                                <ul className="list-disc list-inside">
+                                    {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
+                                </ul>
+                            </div>
+                        )}
+                        {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
+                            <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
+                        )}
+                    </div>
+                </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}
-      
+
       <Card>
         <CardHeader>
-          <CardTitle>Areas</CardTitle>
+          <CardTitle>Saved Areas</CardTitle>
           <CardDescription>
-            Showing {filteredProspectingAreas.length} area(s). {selectedArea && `Currently viewing: ${selectedArea.name}`}
+            A list of all prospecting areas. Select one to view it on the map.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -389,16 +249,16 @@ export default function ProspectingAreasPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Area Name</TableHead>
-                <TableHead>Assigned User</TableHead>
-                <TableHead>Creation Date</TableHead>
-                <TableHead>Streets</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Created At</TableHead>
+                <TableHead>Contents</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProspectingAreas.length > 0 ? (
-                filteredProspectingAreas.map(area => (
-                  <TableRow key={area.id} className={selectedArea?.id === area.id ? 'bg-muted' : ''}>
+              {prospectingAreas.length > 0 ? (
+                prospectingAreas.map(area => (
+                  <TableRow key={area.id} className={selectedArea?.id === area.id ? 'bg-secondary' : ''}>
                     <TableCell className="font-medium">{area.name}</TableCell>
                     <TableCell>
                         <div className="flex items-center gap-2">
@@ -409,16 +269,18 @@ export default function ProspectingAreasPage() {
                     <TableCell>
                        <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground"/>
-                            {format(new Date(area.createdAt), 'PPpp')}
+                            {format(new Date(area.createdAt), 'PP')}
                        </div>
                     </TableCell>
-                    <TableCell>{area.streets?.length || 0}</TableCell>
+                    <TableCell>
+                        {area.streets?.length || 0} streets / {area.leads?.length || 0} leads
+                    </TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
                             <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
                                 <MapPin className="mr-2 h-4 w-4" /> Load on Map
                             </Button>
-                             <Button variant="destructive" size="sm" onClick={() => setAreaToDelete(area)}>
+                             <Button variant="destructive" size="icon" onClick={() => setAreaToDelete(area)}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -428,7 +290,7 @@ export default function ProspectingAreasPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
-                    No prospecting areas found.
+                    No prospecting areas found. Create one from the Territory Map.
                   </TableCell>
                 </TableRow>
               )}
@@ -437,6 +299,7 @@ export default function ProspectingAreasPage() {
         </CardContent>
       </Card>
     </div>
+    
     <AlertDialog open={!!areaToDelete} onOpenChange={(open) => !open && setAreaToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -447,12 +310,11 @@ export default function ProspectingAreasPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                <AlertDialogAction onClick={handleDeleteArea} className="bg-destructive hover:bg-destructive/90">
                     Delete
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
     </>
-  );
-}
+  

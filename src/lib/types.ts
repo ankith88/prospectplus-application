@@ -3,24 +3,25 @@
 
 export type LeadStatus =
   | 'New'
+  | 'Priority Lead'
   | 'Contacted'
-  | 'Qualified'
-  | 'Unqualified'
-  | 'Lost'
-  | 'Won'
-  | 'LPO Review'
   | 'In Progress'
   | 'Connected'
   | 'High Touch'
-  | 'Pre Qualified'
   | 'Trialing ShipMate'
   | 'Reschedule'
-  | 'Priority Lead'
-  | 'Priority Field Lead'
+  | 'Qualified'
+  | 'Pre Qualified'
+  | 'Won'
+  | 'Lost'
+  | 'LPO Review'
+  | 'Unqualified'
   | 'LocalMile Pending'
   | 'Free Trial'
   | 'Prospect Opportunity'
   | 'Customer Opportunity'
+  | 'Priority Field Lead'
+
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
 
@@ -78,6 +79,8 @@ export interface Appointment {
   appointmentDate?: string;
   appointmentStatus?: AppointmentStatus;
   revisit?: boolean;
+  leadId: string;
+  dialerAssigned?: string;
 }
 
 export interface TranscriptAnalysis {
@@ -120,30 +123,26 @@ export interface Address {
 }
 
 export interface DiscoveryData {
-    relevanceCheck?: 'Yes' | 'No';
-    reasonsToLeave?: string[];
-    postOfficeRelationship?: 'Yes-Driver' | 'Yes-Post Office walk up' | 'No';
-    logisticsSetup?: 'Drop-off' | 'Routine collection' | 'Ad-hoc';
-    servicePayment?: 'Yes' | 'No';
-    shippingVolume?: '<5' | '<20' | '20-100' | '100+';
-    expressVsStandard?: 'Mostly Standard (>=80%)' | 'Balanced Mix (20-79% Express)', 'Mostly Express (>=80%)';
-    packageType?: Array<string>;
-    currentProvider?: Array<string>;
-    otherProvider?: string;
-    eCommerceTech?: Array<string>;
-    otherECommerceTech?: string;
-    sameDayCourier?: 'Yes' | 'Occasional' | 'Never';
-    decisionMaker?: 'Owner' | 'Influencer' | 'Gatekeeper';
-    painPoints?: string;
-    score?: number;
-    routingTag?: string;
-    scoringReason?: string;
-    checkInCompleted?: boolean;
-    searchKeywords?: string[];
-    discoverySignals?: string[];
-    inconvenience?: 'Very inconvenient' | 'Somewhat inconvenient' | 'Not a big issue';
-    occurrence?: 'Daily' | 'Weekly' | 'Ad-hoc';
-    recurring?: 'Yes - predictable' | 'Sometimes' | 'One-off';
+  discoverySignals?: string[];
+  inconvenience?: 'Very inconvenient' | 'Somewhat inconvenient' | 'Not a big issue';
+  occurrence?: 'Daily' | 'Weekly' | 'Ad-hoc';
+  recurring?: 'Yes - predictable' | 'Sometimes' | 'One-off';
+  taskOwner?: 'Shared admin responsibility' | 'Dedicated staff role' | 'Ad-hoc / whoever is free';
+  businessType?: 'Retail' | 'B2B';
+  personSpokenWithName?: string;
+  personSpokenWithTitle?: string;
+  personSpokenWithEmail?: string;
+  personSpokenWithPhone?: string;
+  personSpokenWithTags?: string[];
+  decisionMakerName?: string;
+  decisionMakerTitle?: string;
+  decisionMakerEmail?: string;
+  decisionMakerPhone?: string;
+
+  score?: number;
+  routingTag?: string;
+  scoringReason?: string;
+  searchKeywords?: string[];
 }
 
 export interface Invoice {
@@ -199,7 +198,7 @@ export interface VisitNote {
 
 export interface Lead {
   id: string
-  entityId: string
+  entityId?: string
   companyName: string
   status: LeadStatus
   statusReason?: string;
@@ -214,9 +213,7 @@ export interface Lead {
   invoices?: Invoice[]
   services?: ServiceSelection[];
   checkinQuestions?: CheckinQuestion[];
-  checkinScore?: number;
-  checkinScoringReason?: string;
-  checkinRoutingTag?: string;
+  discoveryData?: DiscoveryData;
   contactCount?: number
   address?: Address
   latitude?: number;
@@ -226,7 +223,7 @@ export interface Lead {
   industryCategory?: string
   industrySubCategory?: string
   salesRepAssigned?: string
-  salesRepAssignedCalendlyLink?: string
+  salesRepAssignedCalendlyLink?: string;
   dialerAssigned?: string
   campaign?: string
   customerServiceEmail?: string
@@ -235,7 +232,6 @@ export interface Lead {
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;
-  discoveryData?: DiscoveryData;
   companyDescription?: string;
   leadType?: string;
   demoCompleted?: 'Yes';
@@ -252,7 +248,7 @@ export interface UserProfile {
     email: string;
     firstName: string;
     lastName: string;
-    displayName?: string;
+    displayName: string;
     phoneNumber: string;
     aircallUserId?: string;
     role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin';
@@ -260,27 +256,32 @@ export interface UserProfile {
     linkedSalesRep?: string;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'franchisee' | 'industryCategory' | 'latitude' | 'longitude' | 'websiteUrl' | 'discoveryData' | 'dialerAssigned' | 'customerPhone' | 'fieldSales' | 'lastProspected'> & { isProspect?: boolean, isCompany?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl'> & { isCompany: boolean; isProspect?: boolean };
 
-export type StorableRoute = {
-    id?: string;
-    name: string;
-    createdAt: string;
-    leads: { id: string, latitude: number, longitude: number, companyName: string, address: Address }[];
-    travelMode: google.maps.TravelMode;
-    startPoint?: string;
-    endPoint?: string;
-    directions?: string;
-    scheduledDate?: string;
-    totalDistance?: string | null;
-    totalDuration?: string | null;
-    isProspectingArea?: boolean;
-};
-
+export interface StorableRoute {
+  id?: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  leads: { id: string; companyName: string; latitude: number; longitude: number; address: Address; }[];
+  travelMode: google.maps.TravelMode;
+  startPoint?: string;
+  endPoint?: string;
+  directions?: string; // JSON.stringified google.maps.DirectionsResult
+  scheduledDate?: string;
+  totalDistance?: string | null;
+  totalDuration?: string | null;
+  isProspectingArea?: boolean;
+  streets?: { place_id: string; description: string }[];
+  shape?: {
+    type: 'rectangle' | 'polygon';
+    bounds?: google.maps.LatLngBoundsLiteral;
+    paths?: google.maps.LatLngLiteral[][];
+  };
+}
 
 export type SavedRoute = Omit<StorableRoute, 'directions'> & {
-    directions: google.maps.DirectionsResult | null;
-    scheduledDate?: string | Date;
+  directions: google.maps.DirectionsResult | null;
+  userName: string;
 };
-
-    
+```
