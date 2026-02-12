@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, UserProfile } from '@/lib/types';
@@ -45,7 +45,7 @@ const defaultCenter = {
   lng: 151.2093,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry', 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 
 export default function ProspectingAreasPage() {
@@ -53,6 +53,7 @@ export default function ProspectingAreasPage() {
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
 
   const router = useRouter();
@@ -102,16 +103,16 @@ export default function ProspectingAreasPage() {
   }, [userProfile, hasAccess, toast]);
   
   const mapCenter = useMemo(() => {
-    if (selectedArea?.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
+    if (selectedArea?.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length && window.google) {
       const bounds = new window.google.maps.LatLngBounds();
       selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
       return bounds.getCenter().toJSON();
     }
-    if (selectedArea?.shape?.type === 'rectangle' && selectedArea.shape.bounds) {
+    if (selectedArea?.shape?.type === 'rectangle' && selectedArea.shape.bounds && window.google) {
       const bounds = new window.google.maps.LatLngBounds(selectedArea.shape.bounds);
       return bounds.getCenter().toJSON();
     }
-    if (selectedArea?.leads && selectedArea.leads.length > 0) {
+    if (selectedArea?.leads && selectedArea.leads.length > 0 && window.google) {
         const bounds = new window.google.maps.LatLngBounds();
         selectedArea.leads.forEach(lead => {
           if (lead.latitude && lead.longitude) {
@@ -142,6 +143,21 @@ export default function ProspectingAreasPage() {
       }
   };
 
+  const handleLoadArea = (area: SavedRoute) => {
+    setSelectedArea(area);
+    if(map && window.google) {
+      if (area.shape?.type === 'polygon' && area.shape.paths?.[0]?.length) {
+        const bounds = new window.google.maps.LatLngBounds();
+        area.shape.paths[0].forEach(path => bounds.extend(path));
+        map.fitBounds(bounds);
+      } else if (area.shape?.type === 'rectangle' && area.shape.bounds) {
+        const bounds = new window.google.maps.LatLngBounds(area.shape.bounds);
+        map.fitBounds(bounds);
+      }
+    }
+  }
+
+
   if (loading || authLoading || !isLoaded) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -152,6 +168,7 @@ export default function ProspectingAreasPage() {
    if (loadError) return <div>Error loading maps</div>;
 
   return (
+    <>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Prospecting Areas</h1>
@@ -184,6 +201,7 @@ export default function ProspectingAreasPage() {
                     mapContainerStyle={containerStyle}
                     center={mapCenter}
                     zoom={14}
+                    onLoad={setMap}
                     mapTypeId={mapTypeId}
                 >
                   {selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths && (
@@ -258,7 +276,7 @@ export default function ProspectingAreasPage() {
             <TableBody>
               {prospectingAreas.length > 0 ? (
                 prospectingAreas.map(area => (
-                  <TableRow key={area.id} className={selectedArea?.id === area.id ? 'bg-secondary' : ''}>
+                  <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={selectedArea?.id === area.id ? 'bg-secondary' : 'cursor-pointer'}>
                     <TableCell className="font-medium">{area.name}</TableCell>
                     <TableCell>
                         <div className="flex items-center gap-2">
@@ -277,10 +295,10 @@ export default function ProspectingAreasPage() {
                     </TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => handleLoadArea(area)}>
-                                <MapPin className="mr-2 h-4 w-4" /> Load on Map
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/leads/map?loadArea=${area.id}`)}}>
+                                <MapPin className="mr-2 h-4 w-4" /> Go to Area
                             </Button>
-                             <Button variant="destructive" size="icon" onClick={() => setAreaToDelete(area)}>
+                             <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -317,4 +335,5 @@ export default function ProspectingAreasPage() {
         </AlertDialogContent>
     </AlertDialog>
     </>
-  
+  );
+}

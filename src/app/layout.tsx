@@ -1,13 +1,13 @@
 
 import type { Metadata } from 'next'
-import Script from 'next/script'
+import Script from "next/script";
 import './globals.css'
-import { AppLayout } from '@/components/app-layout'
-import { Toaster } from '@/components/ui/toaster'
+import { AppLayout } from './app-layout'
+import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from '@/hooks/use-auth'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading';
+import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
 
 export const metadata: Metadata = {
   title: 'ProspectPlus',
