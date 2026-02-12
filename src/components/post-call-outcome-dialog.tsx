@@ -55,7 +55,9 @@ const leadGenAdminOutcomes = [
     "Appointment Booked", 
     "Send Quote/Free Trial", 
     "Sign Up",
-    "Move to Outbound"
+    "Move to Outbound",
+    "Not Interested",
+    "No Access/Contact"
 ];
 
 const callOutcomes = [

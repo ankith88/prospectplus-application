@@ -1042,6 +1042,22 @@ async function logCallActivity(
         "Sign Up": { status: "Customer Opportunity" },
     };
 
+    if (callData.outcome === 'No Access/Contact') {
+        const assignees = ['Lachlan Ball', 'Grant Leddy'];
+        const assignee = assignees[Math.floor(Math.random() * assignees.length)];
+        
+        const leadRef = doc(firestore, 'leads', leadId);
+        await updateDoc(leadRef, {
+            dialerAssigned: assignee,
+            fieldSales: false
+        });
+
+        const notesToLog = `Outcome: No Access/Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+        await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
+        
+        return undefined;
+    }
+
     if (callData.outcome === 'Move to Outbound') {
         const assignees = ['Lachlan Ball', 'Grant Leddy'];
         const assignee = assignees[Math.floor(Math.random() * assignees.length)];
