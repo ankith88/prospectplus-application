@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -248,7 +247,7 @@ export default function AdminDashboardPage() {
   const LeaderboardCard = ({ title, user, metric, icon: Icon }: { title: string, user: string | null, metric: string, icon: React.ElementType }) => (
       <Card>
           <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-1"><Icon className="h-4 w-4" />{title}</CardDescription>
+            <div className="flex items-center gap-1"><Icon className="h-4 w-4" /><CardTitle className="text-sm font-medium">{title}</CardTitle></div>
           </CardHeader>
           <CardContent>
             {user ? (
@@ -422,5 +421,4 @@ export default function AdminDashboardPage() {
         </Card>
     </div>
   );
-
-    
+}
