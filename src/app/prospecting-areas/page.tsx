@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Satellite } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getAllUsers } from '@/services/firebase';
 import {
@@ -67,6 +67,7 @@ export default function ProspectingAreasPage() {
   const [selectedArea, setSelectedArea] = useState<ProspectingArea | null>(null);
   const [selectedStreet, setSelectedStreet] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<ProspectingArea | null>(null);
+  const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
   
   const [filters, setFilters] = useState({
     areaName: '',
@@ -297,12 +298,24 @@ export default function ProspectingAreasPage() {
       {selectedArea && (
         <Card>
           <CardHeader>
-            <CardTitle>Map View: {selectedArea.name}</CardTitle>
-             <CardDescription>
-                {selectedArea.streets && selectedArea.streets.length > 0
-                    ? `${selectedArea.streets.length} street(s) in this area.`
-                    : 'No streets defined for this area.'}
-            </CardDescription>
+            <div className="flex justify-between items-center">
+                <div>
+                    <CardTitle>Map View: {selectedArea.name}</CardTitle>
+                    <CardDescription>
+                        {selectedArea.streets && selectedArea.streets.length > 0
+                            ? `${selectedArea.streets.length} street(s) in this area.`
+                            : 'No streets defined for this area.'}
+                    </CardDescription>
+                </div>
+                <Button
+                    onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
+                    variant="outline"
+                    size="sm"
+                >
+                    <Satellite className="mr-2 h-4 w-4" />
+                    {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                </Button>
+            </div>
           </CardHeader>
           <CardContent>
              <div style={containerStyle}>
@@ -316,6 +329,7 @@ export default function ProspectingAreasPage() {
                           streetViewControl: false,
                           mapTypeControl: false,
                       }}
+                      mapTypeId={mapTypeId}
                   >
                      {selectedArea.streets && selectedArea.streets.map(street => (
                         <MarkerF
