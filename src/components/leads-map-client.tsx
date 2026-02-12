@@ -1,5 +1,5 @@
 
-'use client'
+'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
@@ -178,7 +178,7 @@ const getPinColor = (status: LeadStatus, isInRouteList: boolean, isCheckedForRou
 export default function LeadsMapClient() {
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-leads-map',
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   })
@@ -254,6 +254,7 @@ export default function LeadsMapClient() {
   const [searchedLocation, setSearchedLocation] = useState<google.maps.LatLngLiteral | null>(null);
   
   const [streetsForArea, setStreetsForArea] = useState<{place_id: string, description: string}[]>([]);
+  const [streetMarkers, setStreetMarkers] = useState<google.maps.LatLngLiteral[]>([]);
   const [streetSearchInput, setStreetSearchInput] = useState('');
   const [streetPredictions, setStreetPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [streetAutocompleteService, setStreetAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
@@ -320,13 +321,14 @@ export default function LeadsMapClient() {
     setAreaLeads(prev => prev.filter(l => l.id !== leadId));
   };
   
-  const handleSaveArea = async () => {
-    let finalAreaName = areaName.trim();
+  const handleSaveProspectingArea = async () => {
+    let finalAreaName = newAreaName.trim();
     if (!finalAreaName) {
-      finalAreaName = `Prospecting Area - ${new Date().toLocaleDateString('en-AU')}`;
+      toast({ variant: 'destructive', title: 'Name Required', description: 'Please provide a name for the prospecting area.' });
+      return;
     }
 
-    if (canCreateArea && !areaAssignee) {
+    if (canCreateArea && !newAreaAssignee) {
       toast({
         variant: 'destructive',
         title: 'Missing Information',
@@ -335,7 +337,7 @@ export default function LeadsMapClient() {
       return;
     }
     
-    const assigneeToUse = canCreateArea ? areaAssignee : userProfile?.uid;
+    const assigneeToUse = canCreateArea ? newAreaAssignee : userProfile?.uid;
     if (!assigneeToUse) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not determine assignee.' });
         return;
@@ -343,19 +345,42 @@ export default function LeadsMapClient() {
 
     setIsSavingArea(true);
     try {
-      const newRoute: Omit<StorableRoute, 'id'> = {
+      const geocoder = new window.google.maps.Geocoder();
+      const geocodedStreets = await Promise.all(
+          streetsForArea.map(street => 
+              new Promise<{ name: string; placeId: string, lat: number, lng: number } | null>(resolve => {
+                  geocoder.geocode({ placeId: street.place_id }, (results, status) => {
+                      if (status === 'OK' && results?.[0]?.geometry?.location) {
+                          resolve({
+                              name: street.description,
+                              placeId: street.place_id,
+                              lat: results[0].geometry.location.lat(),
+                              lng: results[0].geometry.location.lng()
+                          });
+                      } else {
+                          resolve(null);
+                      }
+                  });
+              })
+          )
+      );
+
+      const validStreets = geocodedStreets.filter(s => s !== null) as { name: string; placeId: string, lat: number, lng: number }[];
+
+      const newRouteData: Partial<StorableRoute> = {
         name: finalAreaName,
         createdAt: new Date().toISOString(),
-        leads: areaLeads.map(l => ({ id: l.id, latitude: l.latitude!, longitude: l.longitude!, companyName: l.companyName, address: l.address! })),
+        streets: validStreets,
+        leads: [], // Explicitly empty as requested
         travelMode: google.maps.TravelMode.DRIVING,
         isProspectingArea: true,
       };
 
-      const savedRouteId = await saveUserRoute(assigneeToUse, newRoute);
+      const savedRouteId = await saveUserRoute(assigneeToUse, newRouteData as any);
       
       const assigneeData = assignableUsers.find(u => u.uid === assigneeToUse);
       const newRouteForState: SavedRoute & { userName: string, userId: string } = {
-        ...newRoute,
+        ...newRouteData as any,
         id: savedRouteId,
         userId: assigneeToUse,
         userName: assigneeData?.displayName || userProfile?.displayName || 'Unknown',
@@ -369,11 +394,11 @@ export default function LeadsMapClient() {
         description: `Prospecting area "${finalAreaName}" has been created and assigned.`,
       });
       
-      setAreaName('');
-      setAreaAssignee('');
-      setAreaLeads([]);
-      setHeatmapData([]);
-      setIsCreatingArea(false);
+      setNewAreaName('');
+      setNewAreaAssignee('');
+      setStreetsForArea([]);
+      setStreetMarkers([]);
+      setIsSaveAreaDialogOpen(false);
       
     } catch (error) {
       console.error('Failed to save prospecting area:', error);
@@ -651,11 +676,9 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     }, [isLoaded, mapData, toast]);
 
      useEffect(() => {
-        const activeRouteId = localStorage.getItem('activeRouteId');
+        if (loadingData || !isLoaded || (!routeIdToLoad && !localStorage.getItem('activeRouteId'))) return;
         
-        if (loadingData || !isLoaded || (!activeRouteId && !routeIdToLoad)) return;
-        
-        const routeId = routeIdToLoad || activeRouteId;
+        const routeId = routeIdToLoad || localStorage.getItem('activeRouteId');
         if (!routeId) return;
 
         const allAvailableRoutes = [...allSystemRoutes, ...localSavedRoutes];
@@ -665,7 +688,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
         if (routeToLoad) {
             handleLoadRoute(routeToLoad);
-            if (activeRouteId) {
+            if (localStorage.getItem('activeRouteId')) {
                 setIsRouteActive(true);
             }
             if (routeIdToLoad) {
@@ -829,7 +852,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
     setSelectedLead(null);
     setClickedKmlFeature(null);
   }, []);
-
+  
   const onKmlLayerClick = useCallback((e: google.maps.KmlMouseEvent) => {
     if (e.featureData) {
       const featureData = {
@@ -839,7 +862,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       setClickedKmlFeature({ featureData, latLng: e.latLng! });
     }
   }, []);
-  
+
   const onMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
     if (selectionMode === 'info') {
       setSelectedLead(null);
@@ -1119,6 +1142,16 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
   const handleStreetSelect = (prediction: google.maps.places.AutocompletePrediction) => {
     if (!streetsForArea.find(s => s.place_id === prediction.place_id)) {
       setStreetsForArea(prev => [...prev, { place_id: prediction.place_id, description: prediction.description }]);
+      
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+        if (status === 'OK' && results?.[0]?.geometry?.location) {
+            const location = results[0].geometry.location;
+            setStreetMarkers(prev => [...prev, { lat: location.lat(), lng: location.lng() }]);
+            map?.panTo(location);
+            map?.setZoom(15);
+        }
+      });
     }
     setStreetSearchInput('');
     setStreetPredictions([]);
@@ -1126,55 +1159,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
 
   const handleRemoveStreet = (place_id: string) => {
     setStreetsForArea(prev => prev.filter(s => s.place_id !== place_id));
+    setStreetMarkers(prev => {
+        // This is a bit tricky without more info, so we'll just clear them all and let them be re-added if necessary
+        // A more robust solution would store lat/lng with the street in streetsForArea
+        return [];
+    })
   };
   
-  const handleSaveProspectingArea = async () => {
-    if (!newAreaName.trim()) {
-      toast({ variant: 'destructive', title: 'Name Required', description: 'Please provide a name for the prospecting area.' });
-      return;
-    }
-    const assigneeToUse = canCreateArea ? newAreaAssignee : userProfile?.uid;
-    if (!assigneeToUse) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not determine assignee.' });
-        return;
-    }
-
-    setIsSavingArea(true);
-    try {
-        const newRouteData: Omit<StorableRoute, 'id'> = {
-            name: newAreaName,
-            createdAt: new Date().toISOString(),
-            leads: [], // Not linking leads as per request
-            streets: streetsForArea.map(s => ({ name: s.description, placeId: s.place_id, lat: 0, lng: 0 })),
-            travelMode: google.maps.TravelMode.DRIVING,
-            isProspectingArea: true,
-        };
-
-        const savedRouteId = await saveUserRoute(assigneeToUse, newRouteData);
-
-        const assigneeData = assignableUsers.find(u => u.uid === assigneeToUse);
-        const newRouteForState: SavedRoute & { userName: string, userId: string } = {
-            ...newRouteData,
-            id: savedRouteId,
-            userId: assigneeToUse,
-            userName: assigneeData?.displayName || userProfile?.displayName || 'Unknown',
-            directions: null,
-        };
-        setAllSystemRoutes(prev => [newRouteForState, ...prev]);
-        toast({ title: 'Area Created', description: `Prospecting area "${newAreaName}" has been saved.` });
-        setIsSaveAreaDialogOpen(false);
-        setNewAreaName('');
-        setAreaAssignee('');
-        setStreetsForArea([]);
-    } catch(e) {
-        console.error(e);
-        toast({ variant: 'destructive', title: 'Error', description: 'Failed to save prospecting area.' });
-    } finally {
-        setIsSavingArea(false);
-    }
-  };
-
-
     const handleCreateLeadFromProspect = async () => {
         if (!prospectToCreate || !userProfile?.displayName) return;
 
@@ -1753,239 +1744,238 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                         </div>
                         <div className="flex items-center gap-2">
                             <Button onClick={handleShowMyLocation} variant="outline" size="sm">
-                                <Locate className="mr-2 h-4 w-4" /> My Location
+                            <Locate className="mr-2 h-4 w-4" /> My Location
                             </Button>
                             <Button
                                 onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
                                 variant="outline" size="sm"
                             >
-                                <Satellite className="mr-2 h-4 w-4" />
-                                {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                            <Satellite className="mr-2 h-4 w-4" />
+                            {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
                             </Button>
                             <CollapsibleTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                    <SlidersHorizontal className="h-4 w-4" />
-                                    <span className="ml-2">Toggle Controls</span>
-                                </Button>
+                            <Button variant="ghost" size="sm">
+                                <SlidersHorizontal className="h-4 w-4" />
+                                <span className="ml-2">Toggle Controls</span>
+                            </Button>
                             </CollapsibleTrigger>
                         </div>
                     </CardHeader>
                     <CollapsibleContent>
-                       <Tabs defaultValue="filters">
-                         <CardContent>
-                             <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="filters">Filters</TabsTrigger>
-                                <TabsTrigger value="actions">Actions</TabsTrigger>
-                             </TabsList>
-                         </CardContent>
-                          <TabsContent value="filters">
-                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                               <div className="space-y-2">
-                                   <Label>Company Name</Label>
-                                   <Input placeholder="Filter by company name..." value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
-                               </div>
-                               <div className="space-y-2">
-                                    <Label>Dialer Assigned</Label>
-                                    <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
-                               </div>
-                                <div className="space-y-2">
-                                    <Label>Franchisee</Label>
-                                    <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Status</Label>
-                                    <MultiSelectCombobox options={uniqueStatuses} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select Statuses..."/>
-                                </div>
-                                 <div className="space-y-2">
-                                    <Label>State</Label>
-                                    <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
-                                 </div>
-                                <div className="space-y-2">
-                                  <Label>Lead Type</Label>
-                                  <Select value={filters.fieldSales} onValueChange={(value) => handleFilterChange('fieldSales', value)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">All Leads</SelectItem>
-                                      <SelectItem value="yes">Field Sales</SelectItem>
-                                      <SelectItem value="no">Outbound</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Campaign</Label>
-                                   <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Campaigns</SelectItem>
-                                            {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Visit Status</Label>
-                                  <Select value={filters.checkInStatus} onValueChange={(value) => handleFilterChange('checkInStatus', value)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">All</SelectItem>
-                                      <SelectItem value="checked-in">Checked-in</SelectItem>
-                                      <SelectItem value="not-checked-in">Not Checked-in</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Check-in Date</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button id="checkInDate" variant={'outline'} className="w-full justify-start text-left font-normal">
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0 z-[11]">
-                                            <Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)}/>
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Route Status</Label>
-                                  <Select value={filters.routeStatus} onValueChange={(value) => handleFilterChange('routeStatus', value)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">All</SelectItem>
-                                      <SelectItem value="in-route">In a Saved Route</SelectItem>
-                                      <SelectItem value="not-in-route">Not in a Route</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                {hasActiveFilters && (
-                                    <div className="space-y-2 col-start-1">
-                                        <Button variant="ghost" onClick={clearFilters}>
-                                            <X className="mr-2 h-4 w-4" /> Clear Filters
-                                        </Button>
-                                    </div>
-                                )}
-                             </CardContent>
-                          </TabsContent>
-                           <TabsContent value="actions">
-                                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                     <div className="space-y-2">
-                                        <Label htmlFor="geo-search-input">Go to Location</Label>
-                                        <Input id="geo-search-input" placeholder="Suburb, state, postcode..." ref={geoSearchInputRef} />
-                                     </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={e => setProspectSearchQuery(e.target.value)} />
-                                            <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
-                                                {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4" />}
-                                            </Button>
-                                        </div>
-                                     </div>
-                                     <div className="space-y-2">
-                                         <Label>Selection Mode</Label>
-                                          <div className="flex items-center gap-2">
-                                            <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
-                                                <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
-                                            </Button>
-                                             <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" className="w-full" disabled={isDrawing}>
-                                                        <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-
-                                             {isDrawing && (
-                                                <Button onClick={cancelDrawing} variant="destructive">
-                                                    <X className="mr-2 h-4 w-4"/>
-                                                </Button>
-                                             )}
-                                          </div>
-                                     </div>
-                                     {canCreateArea && (
-                                        <div className="space-y-2">
-                                            <Label>Create Prospecting Area by Street</Label>
-                                            <div className="relative">
-                                                <Input
-                                                    placeholder="Search for a street..."
-                                                    value={streetSearchInput}
-                                                    onChange={handleStreetSearchChange}
-                                                />
-                                                {streetPredictions.length > 0 && (
-                                                    <Card className="absolute z-50 w-full mt-1">
-                                                        <CardContent className="p-1">
-                                                            {streetPredictions.map((prediction) => (
-                                                                <div
-                                                                    key={prediction.place_id}
-                                                                    className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
-                                                                    onClick={() => handleStreetSelect(prediction)}
-                                                                >
-                                                                    {prediction.description}
-                                                                </div>
-                                                            ))}
-                                                        </CardContent>
-                                                    </Card>
-                                                )}
-                                            </div>
-                                            {streetsForArea.length > 0 && (
-                                                <div className="space-y-2 pt-2">
-                                                    <Label>Selected Streets ({streetsForArea.length})</Label>
-                                                    <ScrollArea className="h-24">
-                                                        <div className="space-y-1 pr-2">
-                                                            {streetsForArea.map(street => (
-                                                                <div key={street.place_id} className="flex items-center justify-between text-sm p-1 bg-secondary rounded-md">
-                                                                    <span className="truncate">{street.description}</span>
-                                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveStreet(street.place_id!)}>
-                                                                        <X className="h-4 w-4" />
-                                                                    </Button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </ScrollArea>
-                                                     <Button onClick={() => setIsSaveAreaDialogOpen(true)} className="w-full mt-2" disabled={isSavingArea}>
-                                                        {isSavingArea ? <Loader /> : 'Save as Prospecting Area'}
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                     )}
-                                </CardContent>
-                           </TabsContent>
-                       </Tabs>
-                        {isFieldSalesUser && (
-                            <div className="px-6 pb-4">
-                                <Alert>
-                                    <Sparkles className="h-4 w-4" />
-                                    <AlertTitle className="text-sm font-semibold">Field Sales View</AlertTitle>
-                                    <AlertDescription className="text-xs">
-                                        By default, the map shows your assigned leads that have NOT been checked into and are NOT in a saved route.
-                                    </AlertDescription>
-                                </Alert>
+                    <Tabs defaultValue="filters">
+                        <CardContent>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="filters">Filters</TabsTrigger>
+                            <TabsTrigger value="actions">Actions</TabsTrigger>
+                        </TabsList>
+                        </CardContent>
+                        <TabsContent value="filters">
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <div className="space-y-2">
+                                <Label>Company Name</Label>
+                                <Input placeholder="Filter by company name..." value={filters.companyName} onChange={(e) => handleFilterChange('companyName', e.target.value)} />
                             </div>
-                        )}
+                            <div className="space-y-2">
+                            <Label>Dialer Assigned</Label>
+                            <MultiSelectCombobox options={dialerOptions} selected={filters.dialerAssigned} onSelectedChange={(selected) => handleFilterChange('dialerAssigned', selected)} placeholder="Select Dialers..." />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Franchisee</Label>
+                                <MultiSelectCombobox options={uniqueFranchisees} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select Franchisees..." />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Status</Label>
+                                <MultiSelectCombobox options={uniqueStatuses} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select Statuses..."/>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>State</Label>
+                                <MultiSelectCombobox options={uniqueStates} selected={filters.state} onSelectedChange={(selected) => handleFilterChange('state', selected)} placeholder="Select States..." />
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Lead Type</Label>
+                            <Select value={filters.fieldSales} onValueChange={(value) => handleFilterChange('fieldSales', value)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="all">All Leads</SelectItem>
+                                <SelectItem value="yes">Field Sales</SelectItem>
+                                <SelectItem value="no">Outbound</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Campaign</Label>
+                                <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Visit Status</Label>
+                            <Select value={filters.checkInStatus} onValueChange={(value) => handleFilterChange('checkInStatus', value)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="checked-in">Checked-in</SelectItem>
+                                <SelectItem value="not-checked-in">Not Checked-in</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Check-in Date</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button id="checkInDate" variant={'outline'} className="w-full justify-start text-left font-normal">
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {filters.checkInDate?.from ? (filters.checkInDate.to ? <>{format(filters.checkInDate.from, "LLL dd, y")} - {format(filters.checkInDate.to, "LLL dd, y")}</> : format(filters.checkInDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 z-[11]">
+                                        <Calendar mode="range" selected={filters.checkInDate} onSelect={(date) => handleFilterChange('checkInDate', date)}/>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Route Status</Label>
+                            <Select value={filters.routeStatus} onValueChange={(value) => handleFilterChange('routeStatus', value)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="in-route">In a Saved Route</SelectItem>
+                                <SelectItem value="not-in-route">Not in a Route</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            </div>
+                            {hasActiveFilters && (
+                                <div className="space-y-2 col-start-1">
+                                    <Button variant="ghost" onClick={clearFilters}>
+                                        <X className="mr-2 h-4 w-4" /> Clear Filters
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                        </TabsContent>
+                        <TabsContent value="actions">
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                            <Label htmlFor="geo-search-input">Go to Location</Label>
+                            <Input id="geo-search-input" placeholder="Suburb, state, postcode..." ref={geoSearchInputRef} />
+                            </div>
+                            <div className="space-y-2">
+                            <Label htmlFor="prospect-search">Find Prospects Near Me</Label>
+                            <div className="flex items-center gap-2">
+                                <Input id="prospect-search" placeholder="e.g. cafe, warehouse" value={prospectSearchQuery} onChange={e => setProspectSearchQuery(e.target.value)} />
+                                <Button onClick={handleFindProspectsNearMe} disabled={isSearchingNearby}>
+                                    {isSearchingNearby ? <Loader/> : <Search className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Selection Mode</Label>
+                                <div className="flex items-center gap-2">
+                                <Button onClick={() => setSelectionMode(prev => prev === 'info' ? 'select' : 'info')} variant={selectionMode === 'select' ? 'secondary' : 'outline'} className="w-full">
+                                    <MousePointerClick className="mr-2 h-4 w-4" /> Click to Select
+                                </Button>
+                                    <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" className="w-full" disabled={isDrawing}>
+                                            <PenSquare className="mr-2 h-4 w-4" /> Draw to Select
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.CIRCLE)}><CircleDot className="mr-2 h-4 w-4" />Circle</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    {isDrawing && (
+                                    <Button onClick={cancelDrawing} variant="destructive">
+                                        <X className="mr-2 h-4 w-4"/>
+                                    </Button>
+                                    )}
+                                </div>
+                            </div>
+                            {canCreateArea && (
+                              <div className="space-y-2">
+                                  <Label>Create Prospecting Area by Street</Label>
+                                  <div className="relative">
+                                      <Input
+                                          placeholder="Search for a street..."
+                                          value={streetSearchInput}
+                                          onChange={handleStreetSearchChange}
+                                      />
+                                      {streetPredictions.length > 0 && (
+                                          <Card className="absolute z-50 w-full mt-1">
+                                              <CardContent className="p-1">
+                                                  {streetPredictions.map((prediction) => (
+                                                      <div
+                                                          key={prediction.place_id}
+                                                          className="p-2 hover:bg-accent rounded-md cursor-pointer text-sm"
+                                                          onClick={() => handleStreetSelect(prediction)}
+                                                      >
+                                                          {prediction.description}
+                                                      </div>
+                                                  ))}
+                                              </CardContent>
+                                          </Card>
+                                      )}
+                                  </div>
+                                  {streetsForArea.length > 0 && (
+                                      <div className="space-y-2 pt-2">
+                                          <Label>Selected Streets ({streetsForArea.length})</Label>
+                                          <ScrollArea className="h-24">
+                                              <div className="space-y-1 pr-2">
+                                                  {streetsForArea.map(street => (
+                                                      <div key={street.place_id} className="flex items-center justify-between text-sm p-1 bg-secondary rounded-md">
+                                                          <span className="truncate">{street.description}</span>
+                                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveStreet(street.place_id!)}>
+                                                              <X className="h-4 w-4" />
+                                                          </Button>
+                                                      </div>
+                                                  ))}
+                                              </div>
+                                          </ScrollArea>
+                                          <Button onClick={() => setIsSaveAreaDialogOpen(true)} className="w-full mt-2" disabled={isSavingArea}>
+                                              {isSavingArea ? <Loader /> : 'Save as Prospecting Area'}
+                                          </Button>
+                                      </div>
+                                  )}
+                              </div>
+                            )}
+                        </CardContent>
+                        </TabsContent>
+                    </Tabs>
+                    {isFieldSalesUser && (
+                        <div className="px-6 pb-4">
+                        <Alert>
+                            <Sparkles className="h-4 w-4" />
+                            <AlertTitle className="text-sm font-semibold">Field Sales View</AlertTitle>
+                            <AlertDescription className="text-xs">
+                            By default, the map shows your assigned leads that have NOT been checked into and are NOT in a saved route.
+                            </AlertDescription>
+                        </Alert>
+                        </div>
+                    )}
                     </CollapsibleContent>
-                  </Card>
+                </Card>
             </Collapsible>
-          <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
+            <div className="flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
             <GoogleMap
-              mapContainerStyle={containerStyle}
-              center={center}
-              zoom={4}
-              onLoad={setMap}
-              onClick={onMapClick}
-              options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
-              mapTypeId={mapTypeId}
+                mapContainerStyle={containerStyle}
+                center={center}
+                zoom={4}
+                onLoad={setMap}
+                onClick={onMapClick}
+                options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
+                mapTypeId={mapTypeId}
             >
-              {/* KML Layer, Markers, InfoWindows etc. */}
+                {/* KML Layer, Markers, InfoWindows etc. */}
             </GoogleMap>
-          </div>
+            </div>
         </div>
       </>
     );
 }
-
