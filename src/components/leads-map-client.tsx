@@ -1972,10 +1972,59 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                 options={{ streetViewControl: false, mapTypeControl: false, clickableIcons: false }}
                 mapTypeId={mapTypeId}
             >
-                {/* KML Layer, Markers, InfoWindows etc. */}
+              {streetMarkers.map((marker, index) => (
+                  <MarkerF
+                      key={`street-marker-${index}`}
+                      position={marker}
+                      icon={{
+                          url: 'http://maps.google.com/mapfiles/ms/icons/blue-pushpin.png',
+                      }}
+                  />
+              ))}
             </GoogleMap>
             </div>
         </div>
+         <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Save Prospecting Area</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="area-name">Area Name</Label>
+                    <Input
+                        id="area-name"
+                        value={newAreaName}
+                        onChange={(e) => setNewAreaName(e.target.value)}
+                        placeholder="e.g. North Sydney Industrial Zone"
+                    />
+                </div>
+                {canCreateArea && (
+                    <div className="space-y-2">
+                        <Label htmlFor="area-assignee">Assign to Field Rep</Label>
+                        <Select value={newAreaAssignee} onValueChange={setNewAreaAssignee}>
+                            <SelectTrigger id="area-assignee">
+                                <SelectValue placeholder="Select a user" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {assignableUsers.map((user) => (
+                                    <SelectItem key={user.uid} value={user.uid}>
+                                        {user.displayName}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveProspectingArea} disabled={isSavingArea || !newAreaName || (canCreateArea && !newAreaAssignee)}>
+                    {isSavingArea ? <Loader /> : 'Save Area'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </>
     );
 }

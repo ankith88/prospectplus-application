@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, UserProfile, MapLead, Address } from '@/lib/types';
@@ -320,7 +320,7 @@ export default function ProspectingAreasPage() {
                            <div className="p-2 max-w-xs space-y-2">
                                <h3 className="font-bold">{selectedLead.companyName}</h3>
                                <p className="text-sm text-muted-foreground">
-                                   {selectedLead.address?.street}, {selectedLead.address?.city}
+                                   {(selectedLead.address as any)?.street}, {(selectedLead.address as any)?.city}
                                </p>
                                 <Button size="sm" onClick={() => router.push(`/leads/${selectedLead.id}`)}>
                                     View Lead
