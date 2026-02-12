@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -188,9 +189,9 @@ export default function CaptureVisitPage() {
     const noteIdToEdit = searchParams.get('noteId');
 
     const { isLoaded } = useJsApiLoader({
-        id: 'google-map-script-capture-visit',
+        id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-        libraries: ['places'],
+        libraries: ['places', 'drawing', 'geometry', 'visualization'],
     });
 
     const captureForm = useForm<z.infer<typeof noteSchema>>({
@@ -929,3 +930,4 @@ export default function CaptureVisitPage() {
         </>
     );
 }
+

@@ -74,7 +74,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 export default function SignedCustomersPage() {
   const [allMapData, setAllMapData] = useState<MapLead[]>([]);
@@ -309,7 +309,7 @@ export default function SignedCustomersPage() {
 
   const handleFindNearbyLeads = useCallback(() => {
     if (!selectedCompany || !selectedCompany.latitude || !selectedCompany.longitude || !window.google?.maps?.geometry) return;
-    const centerLatLng = new google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
+    const centerLatLng = new window.google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
     
     const nearby = allMapData
       .filter(item => {
@@ -329,7 +329,7 @@ export default function SignedCustomersPage() {
     setSelectedCompany(null);
   }, [selectedCompany, allMapData, map, toast]);
 
-    const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
+ const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
     setProspects([]); 
 
@@ -338,65 +338,95 @@ export default function SignedCustomersPage() {
 
     const placesService = new window.google.maps.places.PlacesService(map);
     
+    // Use the core name for a broader match
+    const coreName = keyword.split(' - ')[0];
+
     const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
+      if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-            const detailedProspectsPromises = openProspects.map(async (place) => {
-            if (!place.place_id) return null;
-            
-            const detailedPlace = await getPlaceDetails(place.place_id);
-            if (!detailedPlace) return null;
+        const detailedProspectsPromises = openProspects.map(async (place) => {
+          if (!place.place_id) return null;
+          
+          const detailedPlace = await getPlaceDetails(place.place_id);
+          if (!detailedPlace) return null;
 
-            const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
-            const prospectSuburb = getComponent('locality');
-            const prospectPostcode = getComponent('postal_code');
-            
-            const isDuplicate = allMapData.some(existing => {
-                const isSimilarName = existing.companyName.toLowerCase().includes(detailedPlace.name?.toLowerCase() || 'a-very-unlikely-company-name') || detailedPlace.name?.toLowerCase().includes(existing.companyName.toLowerCase());
-                const isSameLocation = existing.address?.city?.toLowerCase() === prospectSuburb?.toLowerCase() && existing.address?.zip === prospectPostcode;
-                return isSimilarName && isSameLocation;
-            });
+          const getComponent = (type: string) => detailedPlace.address_components?.find(c => c.types.includes(type))?.long_name;
+          const prospectSuburb = (getComponent('locality') || getComponent('postal_town') || '').toLowerCase();
+          const prospectPostcode = (getComponent('postal_code') || '').toLowerCase();
+          
+          const isDuplicate = allMapData.some(existing => {
+              const existingNameLower = existing.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              
+              const coreNameToMatch = coreName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              if (!existingNameLower.includes(coreNameToMatch)) {
+                  return false;
+              }
 
-            if (isDuplicate) {
-                return null;
+              const existingCity = ((existing as any).city || '').trim().toLowerCase();
+              const existingZip = ((existing as any).zip || '').trim().toLowerCase();
+              
+              if (!existingCity || !existingZip) return false;
+
+              const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+              const isPostcodeMatch = existingZip === prospectPostcode;
+
+              return isSuburbMatch && isPostcodeMatch;
+          });
+
+          if (isDuplicate) {
+             const existingLead = allMapData.find(l => {
+                  const existingNameLower = l.companyName.toLowerCase().replace(/[^a-z0-9]/gi, '');
+                  if (!existingNameLower.includes(coreName.toLowerCase().replace(/[^a-z0-9]/gi, ''))) return false;
+                  
+                  const existingCity = ((l as any).city || '').trim().toLowerCase();
+                  const existingZip = ((l as any).zip || '').trim().toLowerCase();
+                  
+                   if (!existingCity || !existingZip) return false;
+
+                   const isSuburbMatch = existingCity.includes(prospectSuburb) || prospectSuburb.includes(existingCity);
+                   const isPostcodeMatch = existingZip === prospectPostcode;
+
+                   return isSuburbMatch && isPostcodeMatch;
+             });
+             return { place: detailedPlace, existingLead: existingLead, classification: 'B2B', description: 'Existing lead/customer.' };
+          }
+
+          let description = 'No website to analyze.';
+          if (detailedPlace.website) {
+            try {
+              const prospectResult = await aiProspectWebsiteTool({
+                leadId: 'new-lead-prospecting',
+                websiteUrl: detailedPlace.website,
+              });
+              description = prospectResult.companyDescription || 'AI analysis of website failed.';
+            } catch (e) {
+              console.error('Error prospecting website for description', e);
+              description = 'AI analysis of website failed.';
             }
+          }
 
-            let description = 'No website to analyze.';
-            if (detailedPlace.website) {
-                try {
-                const prospectResult = await aiProspectWebsiteTool({
-                    leadId: 'new-lead-prospecting',
-                    websiteUrl: detailedPlace.website,
-                });
-                description = prospectResult.companyDescription || 'AI analysis of website failed.';
-                } catch (e) {
-                console.error('Error prospecting website for description', e);
-                description = 'AI analysis of website failed.';
-                }
-            }
+          const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
+          const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
+          
+          return { place: detailedPlace, existingLead: undefined, classification, description };
+        });
 
-            const b2cTypes = ['store', 'clothing_store', 'convenience_store', 'department_store', 'shoe_store', 'supermarket', 'bakery', 'cafe', 'restaurant'];
-            const classification = detailedPlace.types?.some(type => b2cTypes.includes(type)) ? 'B2C' : 'B2B';
-            
-            return { place: detailedPlace, existingLead: undefined, classification, description };
-            });
+        const resolvedProspects = (await Promise.all(detailedProspectsPromises))
+            .filter((p): p is ProspectWithLeadInfo => p !== null);
 
-            const resolvedProspects = (await Promise.all(detailedProspectsPromises))
-                .filter((p): p is ProspectWithLeadInfo => p !== null);
+        setProspects(resolvedProspects);
+        setIsSearchingNearby(false);
 
-            setProspects(resolvedProspects);
-            setIsSearchingNearby(false);
-
-            if (resolvedProspects.length > 0) {
-                setIsProspectsDialogOpen(true);
-            } else {
-                toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
-            }
+        if (resolvedProspects.length > 0) {
+            setIsProspectsDialogOpen(true);
         } else {
-            toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
-            setIsSearchingNearby(false);
+            toast({ variant: "destructive", title: "Search Complete", description: "No new prospects found." });
         }
+      } else {
+        toast({ variant: "destructive", title: "Search Failed", description: "No new prospects found." });
+        setIsSearchingNearby(false);
+      }
     };
     
     if (useTextSearch) {
@@ -413,8 +443,9 @@ export default function SignedCustomersPage() {
         };
         placesService.nearbySearch(request, handleResults);
     }
+    
   }, [map, allMapData, getPlaceDetails, toast]);
-
+  
     const handleBulkFindSimilar = useCallback(async (companyIds: string[]) => {
         if (companyIds.length === 0 || !map) return;
 
@@ -1034,7 +1065,8 @@ export default function SignedCustomersPage() {
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
                                          <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || (selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
-                                            {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar</span></>}
+                                            {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>
                                         <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
                                             <Building className="mr-2 h-4 w-4" /> Find Multi-sites
@@ -1205,7 +1237,7 @@ export default function SignedCustomersPage() {
       </Card>
     </div>
         <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] md:w-full">
+            <DialogContent className="w-[95vw] md:w-full max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Nearby Prospects</DialogTitle>
                     <DialogDescription>

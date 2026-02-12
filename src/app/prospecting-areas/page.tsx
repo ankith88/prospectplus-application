@@ -73,7 +73,7 @@ export default function ProspectingAreasPage() {
   });
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-prospecting-areas',
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -418,3 +418,4 @@ export default function ProspectingAreasPage() {
     </>
   );
 }
+
