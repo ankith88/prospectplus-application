@@ -15,7 +15,6 @@ import {
   HeatmapLayer
 } from '@react-google-maps/api'
 import { createNewLead, getLeadsFromFirebase, getCompaniesFromFirebase, checkForDuplicateLead, logActivity, saveUserRoute, getUserRoutes, deleteUserRoute, updateUserRoute, getAllUsers, getAllUserRoutes, getAllActivities } from '@/services/firebase'
-import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import type { Lead, LeadStatus, Address, UserProfile, Contact, MapLead, SavedRoute, StorableRoute, Activity } from '@/lib/types'
 import { Loader } from './ui/loader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
@@ -178,7 +177,7 @@ const getPinColor = (status: LeadStatus, isInRouteList: boolean, isCheckedForRou
 export default function LeadsMapClient() {
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: 'google-map-script-leads-map',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   })
@@ -371,7 +370,7 @@ export default function LeadsMapClient() {
         name: finalAreaName,
         createdAt: new Date().toISOString(),
         streets: validStreets,
-        leads: [], // Explicitly empty as requested
+        leads: areaLeads,
         travelMode: google.maps.TravelMode.DRIVING,
         isProspectingArea: true,
       };
@@ -396,8 +395,11 @@ export default function LeadsMapClient() {
       
       setNewAreaName('');
       setNewAreaAssignee('');
+      setAreaLeads([]);
       setStreetsForArea([]);
       setStreetMarkers([]);
+      setHeatmapData([]);
+      setIsCreatingArea(false);
       setIsSaveAreaDialogOpen(false);
       
     } catch (error) {
@@ -611,33 +613,41 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     setAllDialers(users);
                     setAssignableUsers(users.filter(u => u.role === 'Field Sales'));
 
-                    let leadsMapData: MapLead[] = [];
+                    const uniqueMap = new Map<string, MapLead>();
+
                     if (mapLeads) {
-                        leadsMapData = mapLeads
+                        mapLeads
                             .filter(lead => lead.latitude != null && lead.longitude != null)
-                            .map(lead => ({
-                                ...lead,
-                                latitude: Number(lead.latitude),
-                                longitude: Number(lead.longitude),
-                                isCompany: false,
-                                isProspect: false
-                            }));
+                            .forEach(lead => {
+                                const mapLead: MapLead = {
+                                    ...lead,
+                                    latitude: Number(lead.latitude),
+                                    longitude: Number(lead.longitude),
+                                    isCompany: false,
+                                    isProspect: false,
+                                };
+                                uniqueMap.set(lead.id, mapLead);
+                            });
                     }
 
-                    let companiesMapData: MapLead[] = [];
                     if (mapCompanies) {
-                        companiesMapData = mapCompanies
+                        mapCompanies
                             .filter(company => company.latitude != null && company.longitude != null)
-                            .map(company => ({
-                                ...company,
-                                latitude: Number(company.latitude),
-                                longitude: Number(company.longitude),
-                                isCompany: true,
-                                isProspect: false
-                            }));
+                            .forEach(company => {
+                                const mapLead: MapLead = {
+                                    ...company,
+                                    latitude: Number(company.latitude),
+                                    longitude: Number(company.longitude),
+                                    isCompany: true,
+                                    isProspect: false,
+                                    status: 'Won' as const,
+                                };
+                                // This will overwrite a lead if it's also a company, ensuring it's treated as a company
+                                uniqueMap.set(company.id, mapLead);
+                            });
                     }
 
-                    setMapData([...leadsMapData, ...companiesMapData]);
+                    setMapData(Array.from(uniqueMap.values()));
 
                 } catch (error) {
                     console.error("Failed to fetch map data:", error);
@@ -1700,13 +1710,13 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
         findProspects(myLocation, prospectSearchQuery);
     }, [myLocation, prospectSearchQuery, findProspects, handleShowMyLocation, toast]);
 
-    if (authLoading || loadingData || !isLoaded) {
+  if (authLoading || loadingData || !isLoaded) {
       return (
           <div className="flex h-full items-center justify-center">
             <Loader />
           </div>
       )
-    }
+  }
   
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
@@ -2014,7 +2024,7 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
                     </Button>
                     {selectedLead.isCompany ? (
                       <>
-                        <Button size="sm" variant="outline" onClick={handleFindNearbyLeads} disabled={isFindingNearby}>
+                        <Button size="sm" variant="outline" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
                           {isFindingNearby ? <Loader /> : <Search className="mr-2 h-4 w-4" />}
                           Nearby Leads
                         </Button>
@@ -2092,3 +2102,5 @@ const handleCreateRoute = useCallback(async (selectedTravelMode: google.maps.Tra
       </>
     );
 }
+
+    
