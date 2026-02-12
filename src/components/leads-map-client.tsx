@@ -103,9 +103,9 @@ function getPinColor(status: LeadStatus, isSelected: boolean, isHovered: boolean
     }
 }
 
-const formatAddress = (address?: Address) => {
+const formatAddressDisplay = (address?: Address) => {
     if (!address) return 'N/A';
-    return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+    return [address?.street, address?.city, address?.state, address?.zip].filter(Boolean).join(', ');
 }
 
 export default function LeadsMapClient() {
@@ -131,7 +131,7 @@ export default function LeadsMapClient() {
     // Routing State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [travelMode, setTravelMode] = useState<string>('DRIVING');
+    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING');
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
     const [routeName, setRouteName] = useState('');
@@ -162,7 +162,7 @@ export default function LeadsMapClient() {
     const [activeProspectingTab, setActiveProspectingTab] = useState("by-drawing");
     const [selectionMode, setSelectionMode] = useState<'info' | 'select'>('info');
     const [isDrawing, setIsDrawing] = useState(false);
-    const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
+    const [drawingMode, setDrawingMode] = useState<string | null>(null);
 
     // Autocomplete Refs
     const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -184,7 +184,7 @@ export default function LeadsMapClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
-
+    
     const infoWindowOptions = useMemo(() => {
         if (!isLoaded) return {};
         return {
@@ -192,7 +192,6 @@ export default function LeadsMapClient() {
         };
     }, [isLoaded]);
     
-
     const setupAutocomplete = useCallback((inputElement: HTMLInputElement | null, onPlaceChanged: (place: google.maps.places.PlaceResult) => void, types: string[] = ['geocode']) => {
         if (!isLoaded || !map || !inputElement || (inputElement as any).autocomplete) return;
 
@@ -275,7 +274,7 @@ export default function LeadsMapClient() {
         
         setDirections(route.directions);
         setLoadedRoute(route);
-        setSelectedRouteLeads(route.leads.map(l => ({ ...l, status: 'New' })));
+        setSelectedRouteLeads(route.leads.map(l => ({ ...l, status: 'New' } as MapLead)));
         setTravelMode(route.travelMode || 'DRIVING');
         setStartPoint(route.startPoint || '');
         setEndPoint(route.endPoint || '');
@@ -367,7 +366,6 @@ export default function LeadsMapClient() {
 
       if (selectionMode === 'select' && map && e.latLng) {
         const latLng = e.latLng;
-        // Find the nearest lead to the click
         let nearestLead: MapLead | null = null;
         let minDistance = Infinity;
 
@@ -382,7 +380,6 @@ export default function LeadsMapClient() {
           }
         });
 
-        // If a lead is found within a reasonable threshold (e.g., 500 meters), toggle its selection
         if (nearestLead && minDistance < 500) {
           setSelectedRouteLeads(prev => {
             const isSelected = prev.some(l => l.id === nearestLead!.id);
@@ -441,21 +438,20 @@ export default function LeadsMapClient() {
         setIsCalculatingRoute(true);
         const directionsService = new window.google.maps.DirectionsService();
 
-        const getWaypoints = () => {
-            if (selectedRouteLeads.length < 2) return [];
-            return selectedRouteLeads.slice(1, -1).map(lead => ({
+        const waypoints = selectedRouteLeads
+            .slice(1, selectedRouteLeads.length - 1)
+            .map(lead => ({
                 location: { lat: lead.latitude!, lng: lead.longitude! },
                 stopover: true,
             }));
-        };
 
-        const origin = startPointRef.current?.value ? { query: startPointRef.current.value } : { lat: selectedRouteLeads[0].latitude!, lng: selectedRouteLeads[0].longitude! };
-        const destination = endPointRef.current?.value ? { query: endPointRef.current.value } : { lat: selectedRouteLeads.slice(-1)[0].latitude!, lng: selectedRouteLeads.slice(-1)[0].longitude! };
+        const origin = startPointRef.current?.value || { lat: selectedRouteLeads[0].latitude!, lng: selectedRouteLeads[0].longitude! };
+        const destination = endPointRef.current?.value || { lat: selectedRouteLeads[selectedRouteLeads.length -1].latitude!, lng: selectedRouteLeads[selectedRouteLeads.length-1].longitude! };
 
         const request: google.maps.DirectionsRequest = {
             origin: origin,
             destination: destination,
-            waypoints: getWaypoints(),
+            waypoints: waypoints,
             travelMode: travelMode as google.maps.TravelMode,
             optimizeWaypoints: true,
         };
@@ -536,14 +532,14 @@ export default function LeadsMapClient() {
         }
     };
 
-    const startDrawing = (mode: google.maps.drawing.OverlayType) => {
+    const startDrawing = (mode: 'rectangle' | 'polygon') => {
         if (!isLoaded) return;
         setIsDrawing(true);
         setDrawingMode(mode);
         setSelectionMode('info'); // Drawing is a separate action
         toast({
             title: "Drawing Mode Activated",
-            description: `Draw a shape on the map to define a prospecting area. Press Esc or click Cancel to exit.`,
+            description: `Draw a ${mode} on the map to define a prospecting area. Press Esc or click Cancel to exit.`,
         });
     };
 
@@ -561,12 +557,12 @@ export default function LeadsMapClient() {
         toast({ title: "Drawing Mode Canceled" });
     };
 
-    const onDrawingComplete = (overlay: google.maps.Polygon | google.maps.Rectangle) => {
+    const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
         if (!isLoaded) return;
         if (drawnOverlay) {
             (drawnOverlay as any).setMap(null);
         }
-        setDrawnOverlay(overlay);
+        setDrawnOverlay(overlay as google.maps.Polygon | google.maps.Rectangle);
         setDrawingMode(null); // Exit drawing mode
         setIsDrawing(false);
         
@@ -657,88 +653,12 @@ export default function LeadsMapClient() {
         }
     };
     
+    if (authLoading || !isLoaded) {
+        return <FullScreenLoader message="Loading map..." />;
+    }
 
-    const MapContent = isLoaded ? (
-        <GoogleMap
-            mapContainerStyle={containerStyle}
-            center={center}
-            zoom={4}
-            onLoad={onMapLoad}
-            onUnmount={onUnmount}
-            options={{
-                streetViewControl: false,
-                mapTypeControl: false,
-                fullscreenControl: false,
-            }}
-            onClick={onMapClick}
-        >
-            {myLocation && <MarkerF position={myLocation} title="Your Location" />}
-            
-            {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, preserveViewport: true }} />}
-
-            {allMapData.map(lead => {
-                const isSelected = selectedRouteLeads.some(sl => sl.id === lead.id) || (selectedLead && selectedLead.id === lead.id);
-                const isHovered = hoveredLeadId === lead.id;
-                
-                return (
-                    <MarkerF
-                        key={lead.id}
-                        position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                        onClick={() => onMarkerClick(lead)}
-                        onMouseOver={() => setHoveredLeadId(lead.id)}
-                        onMouseOut={() => setHoveredLeadId(null)}
-                        icon={{
-                            url: getPinColor(lead.status, isSelected, isHovered),
-                            scaledSize: new window.google.maps.Size(32, 32)
-                        }}
-                    />
-                )
-            })}
-
-            {selectedLead && !isMultiSelectMode && (
-                <InfoWindowF
-                    position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
-                    onCloseClick={onInfoWindowClose}
-                    options={infoWindowOptions}
-                >
-                    <div className="p-2 max-w-sm space-y-2">
-                        <h3 className="font-bold">{selectedLead.companyName}</h3>
-                        <div><LeadStatusBadge status={selectedLead.status} /></div>
-                        <div className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</div>
-                    </div>
-                </InfoWindowF>
-            )}
-
-            {isDrawing && isLoaded && (
-                <DrawingManagerF
-                    onLoad={(dm) => (drawingManagerRef.current = dm)}
-                    onOverlayComplete={(e) => {
-                        onDrawingComplete(e.overlay as any);
-                        if(e.overlay) e.overlay.setMap(null); // Clear the drawing from the manager
-                    }}
-                    drawingMode={drawingMode}
-                    options={{
-                        drawingControl: false,
-                        circleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                        rectangleOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                        polygonOptions: { fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2, clickable: false, editable: false, zIndex: 1, },
-                    }}
-                />
-            )}
-             {drawnOverlay && isLoaded && (
-                <>
-                {drawnOverlay instanceof google.maps.Polygon ? (
-                     <PolygonF paths={(drawnOverlay as google.maps.Polygon).getPaths().getArray().map((p:any) => p.getArray())} options={{ fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2 }} />
-                ) : (
-                     <RectangleF bounds={(drawnOverlay as google.maps.Rectangle).getBounds()!} options={{ fillColor: '#8884d8', fillOpacity: 0.2, strokeColor: '#8884d8', strokeWeight: 2 }} />
-                )}
-                </>
-             )}
-        </GoogleMap>
-    ) : <Loader />;
+    if (loadError) return <div>Error loading maps</div>;
     
-    if (loadError) return <div>Error loading maps. Please refresh the page.</div>;
-
     return (
         <>
             <div className="flex flex-col h-full gap-4">
@@ -746,10 +666,18 @@ export default function LeadsMapClient() {
                      <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                              <CardHeader className="pb-2 flex-shrink-0">
-                                <CardTitle>Map Controls</CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle>Map Controls</CardTitle>
+                                    {isRouteActive && (
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="destructive">Active Route</Badge>
+                                            <Button variant="ghost" size="icon" onClick={handleStopRoute}><XCircle className="h-4 w-4" /></Button>
+                                        </div>
+                                    )}
+                                </div>
                                 <TabsList className="grid w-full grid-cols-2 mt-2">
                                     <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
-                                    <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
+                                    <TabsTrigger value="prospecting">Prospecting</TabsTrigger>
                                 </TabsList>
                             </CardHeader>
                             
@@ -758,12 +686,8 @@ export default function LeadsMapClient() {
                                      <div className="space-y-2">
                                         <Label>Selection Mode</Label>
                                         <div className="flex gap-2">
-                                            <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')} className="w-full">
-                                                <Info className="mr-2 h-4 w-4" /> Info
-                                            </Button>
-                                            <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')} className="w-full">
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Select Stops
-                                            </Button>
+                                            <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')} className="w-full"><Info className="mr-2" /> Info</Button>
+                                            <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')} className="w-full"><PlusCircle className="mr-2" /> Select Stops</Button>
                                         </div>
                                     </div>
                                     <div className="space-y-2">
@@ -776,7 +700,7 @@ export default function LeadsMapClient() {
                                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}><X className="h-3 w-3"/></Button>
                                                 </div>
                                             ))
-                                            ) : <p className="text-sm text-center text-muted-foreground pt-4">Click on the map to add stops.</p>}
+                                            ) : <div className="text-sm text-center text-muted-foreground pt-4">Click on the map to add stops.</div>}
                                         </ScrollArea>
                                         <Button variant="outline" size="sm" onClick={handleClearRoute} disabled={selectedRouteLeads.length === 0}>Clear All Stops</Button>
                                     </div>
@@ -832,22 +756,28 @@ export default function LeadsMapClient() {
                             </TabsContent>
                              <TabsContent value="prospecting" className="flex-grow overflow-hidden flex flex-col">
                                 <CardContent className="flex-grow overflow-y-auto space-y-4">
+                                    <Button className="w-full" onClick={() => router.push('/leads/new')}><PlusCircle className="mr-2 h-4 w-4" /> Manually Add Lead</Button>
+                                    <div className="relative my-4">
+                                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or</span></div>
+                                    </div>
+                                    <h4 className="font-semibold text-center">Create Prospecting Area</h4>
                                      <Tabs defaultValue={activeProspectingTab} onValueChange={setActiveProspectingTab} className="w-full">
                                         <TabsList className="grid w-full grid-cols-2 mt-2">
                                             <TabsTrigger value="by-drawing">By Drawing</TabsTrigger>
                                             <TabsTrigger value="by-street">By Street</TabsTrigger>
                                         </TabsList>
-                                         <TabsContent value="by-drawing" className="space-y-4 pt-4">
+                                        <TabsContent value="by-drawing" className="space-y-4 pt-4">
                                             <div className="flex gap-2">
-                                                <Button variant={drawingMode === google.maps.drawing.OverlayType.RECTANGLE ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing(google.maps.drawing.OverlayType.RECTANGLE)} disabled={isDrawing}>
+                                                <Button variant={drawingMode === 'rectangle' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('rectangle')} disabled={isDrawing}>
                                                     <RectangleHorizontal className="mr-2"/> Rectangle
                                                 </Button>
-                                                <Button variant={drawingMode === google.maps.drawing.OverlayType.POLYGON ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing(google.maps.drawing.OverlayType.POLYGON)} disabled={isDrawing}>
+                                                <Button variant={drawingMode === 'polygon' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('polygon')} disabled={isDrawing}>
                                                     <Spline className="mr-2"/> Polygon
                                                 </Button>
                                                 {isDrawing && <Button variant="ghost" size="icon" onClick={cancelDrawing}><X className="h-4 w-4 text-destructive"/></Button>}
                                             </div>
-                                            {areaLeads.length > 0 && <p className="text-sm text-center font-semibold">{areaLeads.length} leads selected in drawn area.</p>}
+                                             {areaLeads.length > 0 && <p className="text-sm text-center font-semibold">{areaLeads.length} leads selected in drawn area.</p>}
                                         </TabsContent>
                                         <TabsContent value="by-street" className="space-y-4 pt-4">
                                             <div className="space-y-2">
@@ -863,17 +793,17 @@ export default function LeadsMapClient() {
                                                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setStreetsForArea(prev => prev.filter(s => s.place_id !== street.place_id))}><X className="h-3 w-3"/></Button>
                                                         </div>
                                                     ))
-                                                ) : <p className="text-center text-muted-foreground py-4">Add one or more streets.</p>}
+                                                ) : <p className="text-sm text-center text-muted-foreground py-4">Add one or more streets.</p>}
                                                 </div>
                                             </ScrollArea>
                                         </TabsContent>
-                                    </Tabs>
+                                     </Tabs>
                                 </CardContent>
-                                 <CardFooter className="pt-4 border-t flex-shrink-0">
+                                <CardFooter className="pt-4 border-t flex-shrink-0">
                                     <Button onClick={() => setIsSaveAreaDialogOpen(true)} className="w-full" disabled={(!drawnOverlay && streetsForArea.length === 0) || isSavingArea}>
                                         {isSavingArea ? <Loader /> : <><LayoutGrid className="mr-2 h-4 w-4" /> Save as Prospecting Area</>}
                                     </Button>
-                                 </CardFooter>
+                                </CardFooter>
                              </TabsContent>
                         </Tabs>
                     </Card>
@@ -916,7 +846,7 @@ export default function LeadsMapClient() {
                                 <SelectValue placeholder="Select a user (defaults to you)" />
                             </SelectTrigger>
                             <SelectContent>
-                                {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin').map(user => (
+                                {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin').map(user => (
                                     <SelectItem key={user.uid} value={user.uid}>
                                         {user.displayName}
                                     </SelectItem>
@@ -954,11 +884,11 @@ export default function LeadsMapClient() {
                                     <SelectValue placeholder="Select a user (defaults to you)" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin').map(user => (
+                                    {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin').map(user => (
                                         <SelectItem key={user.uid} value={user.uid}>
                                             {user.displayName}
                                         </SelectItem>
-                                ))}
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -967,7 +897,7 @@ export default function LeadsMapClient() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
                         <Button onClick={handleSaveProspectingArea} disabled={isSavingArea || !newAreaName}>
-                            {isSavingArea ? <Loader /> : 'Save Area'}
+                            {isSavingArea ? <Loader /> : <><LayoutGrid className="mr-2 h-4 w-4" /> Save as Prospecting Area</>}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
