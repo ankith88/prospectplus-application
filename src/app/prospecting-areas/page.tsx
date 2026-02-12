@@ -1,16 +1,17 @@
+
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile, MapLead, Address } from '@/lib/types';
+import type { SavedRoute, UserProfile, MapLead, Address, StorableRoute } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Calendar, User, MapPin, Trash2, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Search } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, saveUserRoute, getAllUsers } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, saveUserRoute, getAllUsers, getLeadsFromFirebase } from '@/services/firebase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +44,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Styles and map options from leads-map-client.tsx
 const containerStyle = {
@@ -143,10 +144,11 @@ export default function ProspectingAreasPage() {
         }
 
         const areas = routesToProcess.map(route => {
+            const user = users.find(u => u.uid === route.userId);
             return {
               ...route,
-              userName: (route as any).userName || 'Unknown User',
-              userId: (route as any).userId || '',
+              userName: user?.displayName || 'Unknown User',
+              userId: route.userId || '',
             };
         }).filter((area): area is ProspectingArea => area !== null && !!area.userId);
         
@@ -524,7 +526,7 @@ export default function ProspectingAreasPage() {
             id="street-input"
             value={streetInput}
             onChange={(e) => setStreetInput(e.target.value)}
-            placeholder="e.g., George Street, Sydney&#10;King Street, Newtown"
+            placeholder="e.g., George Street, Sydney\nKing Street, Newtown"
             rows={5}
           />
           <Button onClick={handleFindLeadsByStreets} disabled={isFindingLeadsByStreet}>
@@ -661,3 +663,5 @@ export default function ProspectingAreasPage() {
     </>
   );
 }
+
+    
