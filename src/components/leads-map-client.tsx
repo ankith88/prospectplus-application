@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -53,6 +54,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { cn } from '@/lib/utils';
 import { useJsApiLoader } from '@react-google-maps/api';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
+
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -119,7 +122,7 @@ export default function LeadsMapClient() {
     // Route Planning State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [travelMode, setTravelMode] = useState<google.maps.TravelMode | 'DRIVING'>('DRIVING');
+    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING');
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
     const [routeName, setRouteName] = useState('');
@@ -268,7 +271,7 @@ export default function LeadsMapClient() {
     }, [isLoaded, toast]);
     
     useEffect(() => {
-        if (loadingData || !isLoaded || allRoutes.length === 0) return;
+        if (loadingData || !isLoaded) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         const routeToLoadId = searchParams.get('routeId');
@@ -574,7 +577,7 @@ export default function LeadsMapClient() {
                 toast({ title: "Route Updated", description: "Your route has been successfully updated." });
             } else {
                  // Create new route
-                routeId = await saveUserRoute(storableRoute);
+                routeId = await saveUserRoute(assigneeId, storableRoute);
                 const newRoute: SavedRoute = { ...storableRoute, id: routeId, directions, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' };
                 setSavedRoutes(prev => [newRoute, ...prev]);
                 toast({ title: "Route Saved", description: "Your new route has been saved." });
@@ -633,7 +636,7 @@ export default function LeadsMapClient() {
                 }
             }
 
-            const newId = await saveUserRoute(areaData);
+            const newId = await saveUserRoute(assigneeId, areaData);
             setSavedRoutes(prev => [...prev, { ...areaData, id: newId, directions: null, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' }]);
             
             toast({ title: 'Success', description: 'Prospecting area saved successfully.' });
@@ -681,10 +684,6 @@ export default function LeadsMapClient() {
     return (
         <>
             <div className="flex flex-col h-full gap-4">
-                <header>
-                    <h1 className="text-3xl font-bold tracking-tight">Territory Map</h1>
-                    <p className="text-muted-foreground">Visualize leads, plan routes, and define prospecting areas.</p>
-                </header>
                 <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
                     <Card className="md:col-span-1 flex flex-col">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
@@ -847,17 +846,17 @@ export default function LeadsMapClient() {
                         </Tabs>
                     </Card>
                     <div className="md:col-span-2 flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
-                        <GoogleMap
+                         <GoogleMap
                             mapContainerStyle={containerStyle}
                             center={center}
                             zoom={4}
                             onLoad={onMapLoad}
                             onClick={onMapClick}
                             options={{
-                                mapTypeControlOptions: isLoaded ? {
-                                    style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-                                    position: window.google.maps.ControlPosition.TOP_CENTER,
-                                } : undefined,
+                                mapTypeControlOptions: {
+                                    style: isLoaded ? window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR : undefined,
+                                    position: isLoaded ? window.google.maps.ControlPosition.TOP_CENTER : undefined,
+                                },
                             }}
                         >
                             {allMapMarkers}
@@ -870,7 +869,7 @@ export default function LeadsMapClient() {
                                     <div className="p-1 max-w-xs space-y-2">
                                         <h3 className="font-bold">{selectedLead.companyName}</h3>
                                         <div className="text-sm text-muted-foreground">{selectedLead.address?.street || 'No address'}</div>
-                                        <LeadStatusBadge status={selectedLead.status} />
+                                        <Badge variant="outline">{selectedLead.status}</Badge>
                                         <div className="flex flex-col gap-2 pt-2">
                                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                                 <ExternalLink className="mr-2 h-4 w-4" /> View Profile
@@ -1118,7 +1117,6 @@ export default function LeadsMapClient() {
                         <Button onClick={() => {
                             if (duplicateLeadId) {
                                 router.push(`/leads/${duplicateLeadId}`);
-                                onOpenChange(false);
                             }
                         }}>
                             View Existing Lead
