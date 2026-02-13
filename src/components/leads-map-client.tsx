@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick, FileDigit } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -151,23 +151,17 @@ export default function LeadsMapClient() {
     const [newAreaName, setNewAreaName] = useState('');
     const [newAreaAssignee, setNewAreaAssignee] = useState('');
     const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string }[]>([]);
-    const [drawnOverlay, setDrawnOverlay] = useState<google.maps.Polygon | google.maps.Rectangle | null>(null);
-    const [areaLeads, setAreaLeads] = useState<MapLead[]>([]);
     const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
     const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
     const [isSearchingNearby, setIsSearchingNearby] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState('route-planner');
-    const [activeProspectingTab, setActiveProspectingTab] = useState("by-drawing");
     const [selectionMode, setSelectionMode] = useState<'info' | 'select'>('info');
-    const [isDrawing, setIsDrawing] = useState(false);
-    const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
 
     // Autocomplete Refs
     const startPointRef = useRef<HTMLInputElement | null>(null);
     const endPointRef = useRef<HTMLInputElement | null>(null);
-    const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
     const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
 
     // Dialog & Form State
@@ -356,15 +350,29 @@ export default function LeadsMapClient() {
                 types: ['address'],
                 componentRestrictions: { country: 'au' },
             });
-            autocomplete.setFields(['geometry', 'name']);
+            autocomplete.setFields(['place_id', 'formatted_address', 'geometry']);
     
             autocomplete.addListener('place_changed', () => {
                 const place = autocomplete.getPlace();
-                if (place.geometry?.location) {
-                    const location = place.geometry.location.toJSON();
-                    setSearchedLocation(location);
-                    map.panTo(location);
-                    map.setZoom(17);
+                if (place.place_id && place.formatted_address) {
+                    const newStreet = { place_id: place.place_id, description: place.formatted_address };
+                    
+                    setStreetsForArea(prev => {
+                        if (prev.some(s => s.place_id === newStreet.place_id)) {
+                            return prev;
+                        }
+                        return [...prev, newStreet];
+                    });
+                    
+                    if (place.geometry?.location) {
+                        const location = place.geometry.location.toJSON();
+                        setSearchedLocation(location);
+                        map.panTo(location);
+                        map.setZoom(17);
+                    }
+                    if (node) {
+                        node.value = '';
+                    }
                 }
             });
             (node as any).autocomplete = autocomplete;
@@ -550,62 +558,6 @@ export default function LeadsMapClient() {
         setSelectedLead(null);
     }, []);
 
-    const onDrawingComplete = (overlay: google.maps.Circle | google.maps.Rectangle | google.maps.Polygon) => {
-        if (!isLoaded || !window.google) return;
-
-        setDrawnOverlay(overlay as any);
-
-        const leadsInShape = filteredMapData.filter(lead => {
-            if (lead.latitude && lead.longitude) {
-                const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-                if ((overlay as any).getBounds) { // Rectangle or Circle
-                     return (overlay as any).getBounds().contains(leadLatLng);
-                } else if (typeof google.maps.geometry.poly.containsLocation === 'function') { // Polygon
-                    return google.maps.geometry.poly.containsLocation(leadLatLng, overlay as google.maps.Polygon);
-                }
-            }
-            return false;
-        });
-
-        if (activeTab === 'route-planner') {
-            setSelectedRouteLeads(prev => [...new Set([...prev, ...leadsInShape])]);
-            toast({
-                title: `${leadsInShape.length} Stops Added`,
-                description: "Leads within the drawn area have been added to your route.",
-            });
-        } else {
-            setAreaLeads(leadsInShape);
-            toast({
-                title: `${leadsInShape.length} Leads Selected`,
-                description: "You can now save this as a prospecting area.",
-            });
-        }
-        
-        
-        (overlay as any).setMap(null); // Remove the drawing from the map
-        setDrawingMode(null);
-        setIsDrawing(false);
-    };
-
-     const startDrawing = (mode: 'RECTANGLE' | 'POLYGON') => {
-        if (!isLoaded) return;
-        setIsDrawing(true);
-        setDrawingMode(mode);
-        toast({
-            title: "Drawing Mode Activated",
-            description: `Draw a ${mode.toLowerCase()} on the map. Press Esc or click Cancel to exit.`,
-        });
-    };
-
-    const cancelDrawing = () => {
-        setIsDrawing(false);
-        setDrawingMode(null);
-        if (drawingManagerRef.current) {
-            drawingManagerRef.current.setDrawingMode(null);
-        }
-        toast({ title: "Drawing Mode Canceled" });
-    };
-
     const handleSaveRouteDialog = () => {
         if (selectedRouteLeads.length === 0) {
             toast({ variant: "destructive", title: "Cannot Save", description: "Add at least one stop to save a route." });
@@ -675,6 +627,10 @@ export default function LeadsMapClient() {
             toast({ variant: 'destructive', title: 'Missing Name', description: 'Please provide a name for the prospecting area.' });
             return;
         }
+        if (streetsForArea.length === 0) {
+            toast({ variant: 'destructive', title: 'No Streets', description: 'Please add at least one street to the area.' });
+            return;
+        }
         if (!userProfile?.uid) {
              toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not identify user.' });
              return;
@@ -689,25 +645,11 @@ export default function LeadsMapClient() {
                 userId: assigneeId,
                 name: newAreaName,
                 createdAt: new Date().toISOString(),
-                leads: areaLeads.map(l => ({ id: l.id, companyName: l.companyName, latitude: l.latitude!, longitude: l.longitude!, address: l.address! })),
+                leads: [],
                 travelMode: 'DRIVING',
                 isProspectingArea: true,
                 streets: streetsForArea,
             };
-
-            if (drawnOverlay) {
-                if ((drawnOverlay as any).getBounds) { // Rectangle
-                    areaData.shape = {
-                        type: 'rectangle',
-                        bounds: (drawnOverlay as google.maps.Rectangle).getBounds()!.toJSON(),
-                    }
-                } else { // Polygon
-                     areaData.shape = {
-                        type: 'polygon',
-                        paths: (drawnOverlay as google.maps.Polygon).getPaths().getArray().map(p => p.getArray().map(latLng => latLng.toJSON())),
-                    }
-                }
-            }
 
             const newId = await saveUserRoute(assigneeId, areaData);
             setSavedRoutes(prev => [...prev, { ...areaData, id: newId, directions: null, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' }]);
@@ -717,12 +659,7 @@ export default function LeadsMapClient() {
             // Reset state
             setNewAreaName('');
             setNewAreaAssignee('');
-            setAreaLeads([]);
             setStreetsForArea([]);
-            if (drawnOverlay) {
-                (drawnOverlay as any).setMap(null);
-                setDrawnOverlay(null);
-            }
             setIsSaveAreaDialogOpen(false);
 
         } catch (error) {
@@ -1037,19 +974,17 @@ export default function LeadsMapClient() {
                             </div>
                         </CardHeader>
                         <CollapsibleContent>
-                            <CardContent>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
-                                    <div className="space-y-2">
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1">
+                                    <div className="space-y-2 max-w-sm">
                                         <Label htmlFor="geo-search">Go to Location</Label>
                                         <Input id="geo-search" ref={geoSearchInputRef} placeholder="Enter a location..."/>
                                     </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="map-companyName">Company Name</Label>
                                         <Input id="map-companyName" value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Dialer Assigned</Label>
-                                        <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Franchisee</Label>
@@ -1059,9 +994,11 @@ export default function LeadsMapClient() {
                                         <Label>Status</Label>
                                         <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>State</Label>
-                                        <MultiSelectCombobox options={uniqueStates} selected={mapFilters.state} onSelectedChange={(val) => handleMapFilterChange('state', val)} placeholder="Select states..."/>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div className="space-y-2">
+                                        <Label>Dialer Assigned</Label>
+                                        <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Lead Type</Label>
@@ -1085,7 +1022,7 @@ export default function LeadsMapClient() {
                                         </Select>
                                     </div>
                                 </div>
-                                    {hasActiveMapFilters && (
+                                {hasActiveMapFilters && (
                                     <div className="pt-4">
                                         <Button variant="ghost" onClick={clearMapFilters}>
                                             <X className="mr-2 h-4 w-4" /> Clear All Filters
@@ -1120,18 +1057,6 @@ export default function LeadsMapClient() {
                                     <div className="space-y-2">
                                         <Label>Stops ({selectedRouteLeads.length})</Label>
                                         <div className="flex gap-2">
-                                             <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="icon" disabled={isDrawing}>
-                                                        <PenSquare className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onClick={() => startDrawing('RECTANGLE')}><RectangleHorizontal className="mr-2"/>Rectangle</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => startDrawing('POLYGON')}><Spline className="mr-2"/>Polygon</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                             {isDrawing && (<Button onClick={cancelDrawing} variant="destructive" size="icon"><X className="h-4 w-4"/></Button>)}
                                             <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
                                         </div>
                                         <ScrollArea className="h-48 rounded-md border">
@@ -1179,45 +1104,37 @@ export default function LeadsMapClient() {
                         </TabsContent>
                         <TabsContent value="prospecting" className="flex-grow overflow-hidden flex flex-col">
                             <CardContent className="flex-grow overflow-y-auto space-y-4">
-                               <Tabs defaultValue="by-drawing">
-                                    <TabsList className="grid w-full grid-cols-2">
-                                        <TabsTrigger value="by-drawing">By Drawing</TabsTrigger>
-                                        <TabsTrigger value="by-street">By Street</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="by-drawing" className="space-y-4 pt-4">
-                                        <div className="flex gap-2">
-                                            <Button variant={drawingMode === 'RECTANGLE' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('RECTANGLE')} disabled={isDrawing}>
-                                                <RectangleHorizontal className="mr-2"/> Rectangle
-                                            </Button>
-                                            <Button variant={drawingMode === 'POLYGON' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('POLYGON')} disabled={isDrawing}>
-                                                <Spline className="mr-2"/> Polygon
-                                            </Button>
-                                        </div>
-                                        {isDrawing && (
-                                            <Button onClick={cancelDrawing} variant="destructive" size="sm" className="w-full">
-                                                <X className="mr-2" /> Cancel Drawing
-                                            </Button>
-                                        )}
-                                        <Label>Leads in Area ({areaLeads.length})</Label>
-                                        <ScrollArea className="h-32 rounded-md border">
-                                           {areaLeads.length > 0 ? (
-                                                <div className="p-2 text-sm space-y-1">
-                                                    {areaLeads.map(l => <div key={l.id}>{l.companyName}</div>)}
-                                                </div>
-                                           ): <div className="p-4 text-center text-muted-foreground text-sm">Draw on the map to select leads.</div>}
-                                        </ScrollArea>
-                                    </TabsContent>
-                                    <TabsContent value="by-street" className="space-y-4 pt-4">
+                                <div className="space-y-4 pt-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="street-search">Search by Street</Label>
                                         <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
-                                        <Label>Streets for Area ({streetsForArea.length})</Label>
-                                        <ScrollArea className="h-32 rounded-md border">
-                                            {/* Street results here */}
-                                        </ScrollArea>
-                                    </TabsContent>
-                                </Tabs>
+                                    </div>
+                                    <Label>Streets for Area ({streetsForArea.length})</Label>
+                                    <ScrollArea className="h-40 rounded-md border">
+                                        {streetsForArea.length > 0 ? (
+                                            <div className="p-2 text-sm space-y-1">
+                                                {streetsForArea.map(s => (
+                                                    <div key={s.place_id} className="flex items-center justify-between p-1 rounded-md hover:bg-accent">
+                                                        <span>{s.description}</span>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-6 w-6" 
+                                                            onClick={() => setStreetsForArea(prev => prev.filter(street => street.place_id !== s.place_id))}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
+                                        )}
+                                    </ScrollArea>
+                                </div>
                             </CardContent>
                             <CardFooter className="pt-4 border-t flex-shrink-0">
-                                <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={areaLeads.length === 0 && streetsForArea.length === 0}>
+                                <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
                                     Save Prospecting Area
                                 </Button>
                             </CardFooter>
@@ -1238,16 +1155,6 @@ export default function LeadsMapClient() {
                             fullscreenControl: false
                         }}
                     >
-                        {isLoaded && <DrawingManagerF
-                            onLoad={(dm) => (drawingManagerRef.current = dm)}
-                            onOverlayComplete={(e) => onDrawingComplete(e.overlay!)}
-                            drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode] : null}
-                            options={{
-                                drawingControl: false,
-                                polygonOptions: { fillColor: "#4285F4", fillOpacity: 0.2, strokeColor: "#4285F4", strokeWeight: 2 },
-                                rectangleOptions: { fillColor: "#4285F4", fillOpacity: 0.2, strokeColor: "#4285F4", strokeWeight: 2 },
-                            }}
-                        />}
                         {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
 
                         {filteredMapData.map(lead => (
