@@ -92,7 +92,7 @@ export default function ProspectingAreasPage() {
         setProspectingAreas(userAreas);
       } catch (error) {
         console.error("Failed to fetch prospecting areas:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch prospecting areas.' });
+        toast({ variant: "destructive", title: 'Error', description: 'Could not fetch prospecting areas.' });
       } finally {
         setLoading(false);
       }
@@ -103,25 +103,29 @@ export default function ProspectingAreasPage() {
   }, [userProfile, hasAccess, toast]);
   
   const mapCenter = useMemo(() => {
-    if (!isLoaded) return defaultCenter;
-    if (selectedArea?.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length && window.google) {
-      const bounds = new window.google.maps.LatLngBounds();
-      selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
+    if (!isLoaded || !selectedArea) return defaultCenter;
+
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoints = false;
+    
+    (selectedArea.streets || []).forEach(street => {
+        if(street.latitude && street.longitude) {
+            bounds.extend({ lat: street.latitude, lng: street.longitude });
+            hasPoints = true;
+        }
+    });
+
+    (selectedArea.leads || []).forEach(lead => {
+      if (lead.latitude && lead.longitude) {
+        bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+        hasPoints = true;
+      }
+    });
+
+    if (hasPoints) {
       return bounds.getCenter().toJSON();
     }
-    if (selectedArea?.shape?.type === 'rectangle' && selectedArea.shape.bounds && window.google) {
-      const bounds = new window.google.maps.LatLngBounds(selectedArea.shape.bounds);
-      return bounds.getCenter().toJSON();
-    }
-    if (selectedArea?.leads && selectedArea.leads.length > 0 && window.google) {
-        const bounds = new window.google.maps.LatLngBounds();
-        selectedArea.leads.forEach(lead => {
-          if (lead.latitude && lead.longitude) {
-            bounds.extend({ lat: lead.latitude, lng: lead.longitude });
-          }
-        });
-        return bounds.getCenter().toJSON();
-    }
+    
     return defaultCenter;
   }, [selectedArea, isLoaded]);
 
@@ -144,19 +148,50 @@ export default function ProspectingAreasPage() {
       }
   };
 
-  const handleLoadArea = (area: SavedRoute) => {
+  const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
     if(map && window.google) {
+      const bounds = new window.google.maps.LatLngBounds();
+      let hasBounds = false;
+
       if (area.shape?.type === 'polygon' && area.shape.paths?.[0]?.length) {
-        const bounds = new window.google.maps.LatLngBounds();
         area.shape.paths[0].forEach(path => bounds.extend(path));
-        map.fitBounds(bounds);
+        hasBounds = true;
       } else if (area.shape?.type === 'rectangle' && area.shape.bounds) {
-        const bounds = new window.google.maps.LatLngBounds(area.shape.bounds);
+        const rectBounds = new window.google.maps.LatLngBounds(area.shape.bounds);
+        bounds.union(rectBounds);
+        hasBounds = true;
+      }
+
+      if (area.streets && area.streets.length > 0) {
+        area.streets.forEach(street => {
+            if (street.latitude && street.longitude) {
+                bounds.extend({ lat: street.latitude, lng: street.longitude });
+                hasBounds = true;
+            }
+        });
+      }
+
+      if (area.leads && area.leads.length > 0) {
+        area.leads.forEach(lead => {
+            if (lead.latitude && lead.longitude) {
+                bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+                hasBounds = true;
+            }
+        });
+      }
+      
+      if (hasBounds) {
         map.fitBounds(bounds);
+      } else if (area.leads?.length === 1 && area.leads[0].latitude && area.leads[0].longitude) {
+          map.panTo({ lat: area.leads[0].latitude, lng: area.leads[0].longitude });
+          map.setZoom(15);
+      } else if (area.streets?.length === 1 && area.streets[0].latitude && area.streets[0].longitude) {
+          map.panTo({ lat: area.streets[0].latitude, lng: area.streets[0].longitude });
+          map.setZoom(15);
       }
     }
-  }
+  }, [map]);
 
 
   if (loading || authLoading || !isLoaded) {
@@ -222,6 +257,14 @@ export default function ProspectingAreasPage() {
                           key={lead.id}
                           position={{ lat: lead.latitude, lng: lead.longitude }}
                           title={lead.companyName}
+                      />
+                  ))}
+                  {(selectedArea.streets || []).map(street => (
+                      <MarkerF
+                          key={street.place_id}
+                          position={{ lat: street.latitude, lng: street.longitude }}
+                          title={street.description}
+                          icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
                       />
                   ))}
                 </GoogleMap>

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -8,6 +9,7 @@ import {
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
+  DrawingManagerF,
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
@@ -147,7 +149,7 @@ export default function LeadsMapClient() {
     const [isSavingArea, setIsSavingArea] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
     const [newAreaAssignee, setNewAreaAssignee] = useState('');
-    const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string }[]>([]);
+    const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string; latitude: number; longitude: number; }[]>([]);
     const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
     const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
     const [isSearchingNearby, setIsSearchingNearby] = useState(false);
@@ -177,19 +179,18 @@ export default function LeadsMapClient() {
 
     const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+    
+    const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
+    const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
 
     const [mapFilters, setMapFilters] = useState({
         companyName: '',
         franchisee: [] as string[],
         status: [] as string[],
-        isCompany: 'all' as 'all' | 'yes' | 'no',
+        leadType: 'all',
         dialerAssigned: [] as string[],
         state: [] as string[],
         campaign: 'all',
-        checkInDate: undefined as DateRange | undefined,
-        leadType: 'all',
-        routeStatus: 'all',
-        visitStatus: 'all',
     });
     
     const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
@@ -319,25 +320,25 @@ export default function LeadsMapClient() {
         });
     }, [map]);
 
-    const geoSearchInputRef = useCallback((node: HTMLInputElement | null) => {
-        if (node !== null && isLoaded && map) {
-            const autocomplete = new window.google.maps.places.Autocomplete(node, {
-                types: ['geocode'],
-                componentRestrictions: { country: 'au' },
-            });
-            autocomplete.setFields(['geometry']);
-            
-            autocomplete.addListener('place_changed', () => {
-                const place = autocomplete.getPlace();
-                if (place.geometry?.viewport) {
-                    map.fitBounds(place.geometry.viewport);
-                } else if (place.geometry?.location) {
-                    map.panTo(place.geometry.location);
-                    map.setZoom(15);
-                }
-            });
-        }
-      }, [isLoaded, map]);
+  const geoSearchInputRef = useCallback((node: HTMLInputElement | null) => {
+    if (node !== null && isLoaded && map) {
+        const autocomplete = new window.google.maps.places.Autocomplete(node, {
+            types: ['geocode'],
+            componentRestrictions: { country: 'au' },
+        });
+        autocomplete.setFields(['geometry']);
+        
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.geometry?.viewport) {
+                map.fitBounds(place.geometry.viewport);
+            } else if (place.geometry?.location) {
+                map.panTo(place.geometry.location);
+                map.setZoom(15);
+            }
+        });
+    }
+  }, [isLoaded, map]);
 
     const streetSearchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
         if (node && isLoaded && map) {
@@ -351,8 +352,13 @@ export default function LeadsMapClient() {
     
             autocomplete.addListener('place_changed', () => {
                 const place = autocomplete.getPlace();
-                if (place.place_id && place.formatted_address) {
-                    const newStreet = { place_id: place.place_id, description: place.formatted_address };
+                if (place.place_id && place.formatted_address && place.geometry?.location) {
+                    const newStreet = { 
+                        place_id: place.place_id, 
+                        description: place.formatted_address,
+                        latitude: place.geometry.location.lat(),
+                        longitude: place.geometry.location.lng(),
+                    };
                     
                     setStreetsForArea(prev => {
                         if (prev.some(s => s.place_id === newStreet.place_id)) {
@@ -600,8 +606,8 @@ export default function LeadsMapClient() {
             } else {
                  // Create new route
                 routeId = await saveUserRoute(assigneeId, storableRoute);
-                const newRoute: SavedRoute = { ...storableRoute, id: routeId, directions, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' };
-                setSavedRoutes(prev => [newRoute, ...prev]);
+                const newRoute: SavedRoute = { ...storableRoute, id: routeId, directions, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' }
+                setSavedRoutes(prev => [...prev, newRoute]);
                 toast({ title: "Route Saved", description: "Your new route has been saved." });
             }
     
@@ -921,185 +927,185 @@ export default function LeadsMapClient() {
 
     return (
         <>
-            <div className="flex flex-col h-full gap-4">
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <MapIcon className="h-5 w-5" />
-                                <CardTitle>Territory Map</CardTitle>
-                                <CardDescription>Displaying {filteredMapData.length} items</CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <Collapsible>
-                            <CollapsibleTrigger asChild>
-                                <Button variant="outline" size="sm" className="mb-4">
-                                <SlidersHorizontal className="mr-2 h-4 w-4" /> Toggle Controls
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                                <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                     <div className="space-y-2">
-                                        <Label htmlFor="geo-search">Go to Location</Label>
-                                        <Input id="geo-search" ref={geoSearchInputRef} placeholder="Enter a location..."/>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="map-companyName">Company Name</Label>
-                                        <Input id="map-companyName" value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Franchisee</Label>
-                                        <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Status</Label>
-                                        <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Dialer Assigned</Label>
-                                        <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
-                                    </div>
-                                     <div className="space-y-2">
-                                        <Label>Lead Type</Label>
-                                        <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Items</SelectItem>
-                                                <SelectItem value="customers">Signed Customers</SelectItem>
-                                                <SelectItem value="leads">Leads</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                     <div className="space-y-2">
-                                        <Label>Campaign</Label>
-                                        <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Campaigns</SelectItem>
-                                                {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                {hasActiveMapFilters && (
-                                    <div className="pt-4">
-                                        <Button variant="ghost" onClick={clearMapFilters}>
-                                            <X className="mr-2 h-4 w-4" /> Clear All Filters
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 h-full">
+            <div className="xl:col-span-1 h-full">
+                 <Card className="h-full flex flex-col">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+                        <CardHeader className="pb-2">
+                           <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="map-controls">Map Controls</TabsTrigger>
+                                <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
+                           </TabsList>
+                        </CardHeader>
+                        
+                        <TabsContent value="map-controls" className="flex-grow overflow-hidden">
+                             <CardContent className="h-full overflow-y-auto space-y-4">
+                               <Collapsible>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="outline" size="sm" className="mb-4 w-full">
+                                        <SlidersHorizontal className="mr-2 h-4 w-4" /> Toggle Map Filters
                                         </Button>
-                                    </div>
-                                )}
-                                </div>
-                            </CollapsibleContent>
-                        </Collapsible>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
-                            <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="route-planner">
-                            <div className="p-4 mt-2 space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Route Controls</Label>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')}><Info className="mr-2" /> Info</Button>
-                                            <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')}><PlusCircle className="mr-2" /> Add to Route</Button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label>Go to Location</Label>
+                                                <Input ref={geoSearchInputRef} placeholder="Enter a location..."/>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>Company Name</Label>
+                                                <Input value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Franchisee</Label>
+                                                <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Status</Label>
+                                                <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Assigned Dialer</Label>
+                                                <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Lead Type</Label>
+                                                <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="all">All Items</SelectItem>
+                                                        <SelectItem value="customers">Signed Customers</SelectItem>
+                                                        <SelectItem value="leads">Leads</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                             <div className="space-y-2">
+                                                <Label>Campaign</Label>
+                                                <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            </div>
+                                            {hasActiveMapFilters && (
+                                                <div className="pt-4">
+                                                    <Button variant="ghost" onClick={clearMapFilters}>
+                                                        <X className="mr-2 h-4 w-4" /> Clear All Filters
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Stops ({selectedRouteLeads.length})</Label>
-                                    <div className="flex gap-2">
-                                        <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
-                                    </div>
-                                    <ScrollArea className="h-48 rounded-md border">
-                                        {selectedRouteLeads.length > 0 ? (
-                                            <div className="p-2 space-y-2">
-                                                {selectedRouteLeads.map((lead, index) => (
-                                                    <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
-                                                        <span className="truncate">{index + 1}. {lead.companyName}</span>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
-                                        )}
-                                    </ScrollArea>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Route Options</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <Input ref={startPointRef} placeholder="Start point (optional)" />
-                                        <Input ref={endPointRef} placeholder="End point (optional)" />
-                                    </div>
-                                    <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="DRIVING">Driving</SelectItem>
-                                            <SelectItem value="WALKING">Walking</SelectItem>
-                                            <SelectItem value="BICYCLING">Bicycling</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="w-full">
-                                        {isCalculatingRoute ? <Loader /> : "Calculate Route"}
-                                    </Button>
-                                </div>
-                                    <Button onClick={handleSaveRouteDialog} className="w-full" disabled={selectedRouteLeads.length === 0}>
-                                    Save Route
-                                </Button>
-                            </div>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                             </CardContent>
                         </TabsContent>
-                            <TabsContent value="prospecting">
-                            <div className="p-4 mt-2 space-y-4">
-                                <div className="space-y-4 pt-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="street-search">Search by Street</Label>
-                                        <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
-                                    </div>
-                                    <Label>Streets for Area ({streetsForArea.length})</Label>
-                                    <ScrollArea className="h-40 rounded-md border">
-                                        {streetsForArea.length > 0 ? (
-                                            <div className="p-2 text-sm space-y-1">
-                                                {streetsForArea.map(s => (
-                                                    <div key={s.place_id} className="flex items-center justify-between p-1 rounded-md hover:bg-accent">
-                                                        <span>{s.description}</span>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-6 w-6" 
-                                                            onClick={() => setStreetsForArea(prev => prev.filter(street => street.place_id !== s.place_id))}
-                                                        >
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
+
+                        <TabsContent value="route-planner" className="flex-grow overflow-hidden flex flex-col">
+                             <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
+                                 <Tabs defaultValue="route">
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="route">Route Planner</TabsTrigger>
+                                        <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
+                                    </TabsList>
+                                     <TabsContent value="route" className="pt-4 space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>Route Controls</Label>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')}><Info className="mr-2" /> Info</Button>
+                                                    <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')}><PlusCircle className="mr-2" /> Add to Route</Button>
+                                                </div>
                                             </div>
-                                        ) : (
-                                            <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
-                                        )}
-                                    </ScrollArea>
-                                </div>
-                                <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
-                                    Save Prospecting Area
-                                </Button>
-                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Stops ({selectedRouteLeads.length})</Label>
+                                            <div className="flex gap-2">
+                                                <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
+                                            </div>
+                                            <ScrollArea className="h-48 rounded-md border">
+                                                {selectedRouteLeads.length > 0 ? (
+                                                    <div className="p-2 space-y-2">
+                                                        {selectedRouteLeads.map((lead, index) => (
+                                                            <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
+                                                                <span className="truncate">{index + 1}. {lead.companyName}</span>
+                                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
+                                                                    <X className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
+                                                )}
+                                            </ScrollArea>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Route Options</Label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <Input ref={startPointRef} placeholder="Start point (optional)" />
+                                                <Input ref={endPointRef} placeholder="End point (optional)" />
+                                            </div>
+                                            <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="DRIVING">Driving</SelectItem>
+                                                    <SelectItem value="WALKING">Walking</SelectItem>
+                                                    <SelectItem value="BICYCLING">Bicycling</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="w-full">
+                                                {isCalculatingRoute ? <Loader /> : "Calculate Route"}
+                                            </Button>
+                                        </div>
+                                        <Button onClick={handleSaveRouteDialog} className="w-full" disabled={selectedRouteLeads.length === 0}>
+                                            Save Route
+                                        </Button>
+                                    </TabsContent>
+                                    <TabsContent value="prospecting" className="pt-4 space-y-4">
+                                         <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="street-search">Search by Street</Label>
+                                                <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
+                                            </div>
+                                            <Label>Streets for Area ({streetsForArea.length})</Label>
+                                            <ScrollArea className="h-40 rounded-md border">
+                                                {streetsForArea.length > 0 ? (
+                                                    <div className="p-2 text-sm space-y-1">
+                                                        {streetsForArea.map(s => (
+                                                            <div key={s.place_id} className="flex items-center justify-between p-1 rounded-md hover:bg-accent">
+                                                                <span>{s.description}</span>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-6 w-6" 
+                                                                    onClick={() => setStreetsForArea(prev => prev.filter(street => street.place_id !== s.place_id))}
+                                                                >
+                                                                    <X className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
+                                                )}
+                                            </ScrollArea>
+                                        </div>
+                                        <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
+                                            Save Prospecting Area
+                                        </Button>
+                                    </TabsContent>
+                                 </Tabs>
+                            </CardContent>
                         </TabsContent>
                     </Tabs>
-                  </CardContent>
                 </Card>
-                
-                <div className="flex-grow min-h-[80vh] relative rounded-lg overflow-hidden border">
+            </div>
+            <div className="xl:col-span-2 h-full min-h-[500px]">
+                <div className="h-full w-full relative rounded-lg overflow-hidden border">
                     {isLoaded ? (
                         <GoogleMap
                             mapContainerStyle={containerStyle}
@@ -1132,7 +1138,7 @@ export default function LeadsMapClient() {
                                 <MarkerF
                                     position={searchedLocation}
                                     icon={{
-                                        url: "https://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|000000",
+                                        url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
                                     }}
                                 />
                             )}
@@ -1169,6 +1175,7 @@ export default function LeadsMapClient() {
                     )}
                 </div>
             </div>
+        </div>
              <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -1226,7 +1233,7 @@ export default function LeadsMapClient() {
                             <Label htmlFor="area-name">Area Name</Label>
                             <Input id="area-name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} />
                         </div>
-                        {userProfile?.role !== 'Field Sales' && (
+                        {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
                             <div className="space-y-2">
                                 <Label>Assign To</Label>
                                 <Select value={newAreaAssignee} onValueChange={setNewAreaAssignee}>
@@ -1252,3 +1259,4 @@ export default function LeadsMapClient() {
         </>
     );
 }
+

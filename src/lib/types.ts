@@ -1,6 +1,5 @@
 
 
-
 export type LeadStatus =
   | 'New'
   | 'Priority Lead'
@@ -272,7 +271,7 @@ export interface StorableRoute {
   totalDistance?: string | null;
   totalDuration?: string | null;
   isProspectingArea?: boolean;
-  streets?: { place_id: string; description: string }[];
+  streets?: { place_id: string; description: string; latitude: number; longitude: number; }[];
   shape?: {
     type: 'rectangle' | 'polygon';
     bounds?: google.maps.LatLngBoundsLiteral;
@@ -284,4 +283,3 @@ export type SavedRoute = Omit<StorableRoute, 'directions'> & {
   directions: google.maps.DirectionsResult | null;
   userName: string;
 };
-```
