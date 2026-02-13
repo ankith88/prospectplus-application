@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -55,7 +54,14 @@ import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospec
 import { cn } from '@/lib/utils';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
-
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -110,7 +116,6 @@ export default function LeadsMapClient() {
     const [allMapData, setAllMapData] = useState<MapLead[]>([]);
     const [loadingData, setLoadingData] = useState(true);
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-    const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     
     // Map State
     const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -122,7 +127,7 @@ export default function LeadsMapClient() {
     // Route Planning State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING');
+    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING' as google.maps.TravelMode);
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
     const [routeName, setRouteName] = useState('');
@@ -235,14 +240,14 @@ export default function LeadsMapClient() {
 
             setAllMapData(mapLeads);
             setAllUsers(fetchedUsers);
-            setAllRoutes(fetchedRoutes as SavedRoute[]);
+            setSavedRoutes(fetchedRoutes as SavedRoute[]);
         } catch (error) {
             console.error("Failed to fetch map data:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial map data.' });
         } finally {
             setLoadingData(false);
         }
-    }, [userProfile, toast]);
+    }, [userProfile, toast, setSavedRoutes]);
     
     useEffect(() => {
         if (isLoaded && userProfile) {
@@ -279,7 +284,7 @@ export default function LeadsMapClient() {
         const targetRouteId = routeToLoadId || activeRouteId;
 
         if (targetRouteId) {
-            const routeToLoad = allRoutes.find(r => r.id === targetRouteId);
+            const routeToLoad = savedRoutes.find(r => r.id === targetRouteId);
             if (routeToLoad) {
                 handleLoadRoute(routeToLoad);
                 if (routeToLoadId) {
@@ -287,7 +292,7 @@ export default function LeadsMapClient() {
                 }
             }
         }
-    }, [allRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute]);
+    }, [savedRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute]);
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
@@ -662,24 +667,11 @@ export default function LeadsMapClient() {
     
     // ... other handlers like handleAddLeadClick, handleCreateLeadFromProspect, etc.
     
-    if (loadingData || !isLoaded) {
+    if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
     }
 
     if (loadError) return <div>Error loading maps. Please check your API key and network connection.</div>;
-
-    const allMapMarkers = allMapData.map(lead => (
-        <MarkerF
-            key={lead.id}
-            position={{ lat: lead.latitude!, lng: lead.longitude! }}
-            title={lead.companyName}
-            onClick={() => onMarkerClick(lead)}
-            onMouseOver={() => setHoveredLeadId(lead.id)}
-            onMouseOut={() => setHoveredLeadId(null)}
-            icon={getPinIcon(lead.status, selectedLead?.id === lead.id || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)}
-            visible={true} 
-        />
-    ));
 
     return (
         <>
@@ -859,10 +851,22 @@ export default function LeadsMapClient() {
                                 },
                             }}
                         >
-                            {allMapMarkers}
+                            {allMapData.map(lead => (
+                                <MarkerF
+                                    key={lead.id}
+                                    position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                                    title={lead.companyName}
+                                    onClick={() => onMarkerClick(lead)}
+                                    onMouseOver={() => setHoveredLeadId(lead.id)}
+                                    onMouseOut={() => setHoveredLeadId(null)}
+                                    icon={getPinIcon(lead.status, selectedLead?.id === lead.id || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)}
+                                    visible={true} 
+                                />
+                            ))}
+
                             {selectedLead && (
                                 <InfoWindowF
-                                    position={{ lat: selectedLead.latitude!, lng: selectedLead.longitude! }}
+                                    position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
                                     onCloseClick={onInfoWindowClose}
                                     options={infoWindowOptions}
                                 >
@@ -904,7 +908,7 @@ export default function LeadsMapClient() {
                     </div>
                 </div>
             </div>
-             <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
+            <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Save Route</DialogTitle>
