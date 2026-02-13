@@ -278,7 +278,7 @@ export default function LeadsMapClient() {
     }, [isLoaded, toast]);
     
     useEffect(() => {
-        if (loadingData || !isLoaded || !allRoutes) return;
+        if (loadingData || !isLoaded) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         const routeToLoadId = searchParams.get('routeId');
@@ -294,7 +294,7 @@ export default function LeadsMapClient() {
                 }
             }
         }
-    }, [savedRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute, allRoutes]);
+    }, [savedRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute]);
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
@@ -854,6 +854,46 @@ export default function LeadsMapClient() {
         }
       };
 
+    const escapeCsvCell = (cellData: any) => {
+        if (cellData === null || cellData === undefined) {
+            return '';
+        }
+        const stringData = String(cellData);
+        if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+            return `"${stringData.replace(/"/g, '""')}"`;
+        }
+        return stringData;
+    };
+
+    const handleExportProspects = () => {
+        if (prospects.length === 0) {
+        toast({ variant: 'destructive', title: 'No Data', description: 'There are no prospects to export.' });
+        return;
+        }
+
+        const headers = ['Name', 'Address', 'Classification', 'Description', 'Website', 'Phone'];
+        const rows = prospects.map(p => {
+        return [
+            escapeCsvCell(p.place.name),
+            escapeCsvCell(p.place.vicinity),
+            escapeCsvCell(p.classification),
+            escapeCsvCell(p.description),
+            escapeCsvCell(p.place.website),
+            escapeCsvCell(p.place.formatted_phone_number),
+        ];
+        });
+
+        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute('download', `nearby_prospects_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
     }
@@ -1300,7 +1340,7 @@ export default function LeadsMapClient() {
                     <DialogHeader>
                         <DialogTitle>Duplicate Found</DialogTitle>
                         <DialogDescription>
-                            This business appears to already exist in your system.
+                            A lead with this name or phone number already exists in the system.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
