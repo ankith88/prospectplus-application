@@ -8,9 +8,6 @@ import {
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
-  DrawingManagerF,
-  PolygonF,
-  RectangleF,
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
@@ -638,8 +635,7 @@ export default function LeadsMapClient() {
 
         setIsSavingArea(true);
         try {
-            const assignee = allUsers.find(u => u.uid === newAreaAssignee);
-            const assigneeId = assignee?.uid || userProfile.uid;
+            const assigneeId = (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && newAreaAssignee ? newAreaAssignee : userProfile.uid;
 
             const areaData: Omit<StorableRoute, 'id'> = {
                 userId: assigneeId,
@@ -858,8 +854,6 @@ export default function LeadsMapClient() {
         }
       };
 
-    const handleExportProspects = () => {};
-
     const handleMapFilterChange = (filterName: keyof typeof mapFilters, value: any) => {
         setMapFilters(prev => ({ ...prev, [filterName]: value }));
     };
@@ -889,7 +883,6 @@ export default function LeadsMapClient() {
             const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
             const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
             const campaignMatch = mapFilters.campaign === 'all' || item.campaign === mapFilters.campaign;
-            // Check-in date filter would require fetching activities, which is not done here for performance.
 
             return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch && dialerMatch && stateMatch && campaignMatch;
         });
@@ -929,7 +922,7 @@ export default function LeadsMapClient() {
     return (
         <>
             <div className="flex flex-col h-full gap-4">
-                 <Card>
+                <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -1001,104 +994,109 @@ export default function LeadsMapClient() {
                                 </div>
                             </CollapsibleContent>
                         </Collapsible>
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
-                                <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="route-planner">
-                                <div className="p-4 border rounded-md mt-2 space-y-4">
-                                    <div className="space-y-2">
-                                        <Label>Route Controls</Label>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')} className="w-full"><Info className="mr-2" /> Info</Button>
-                                                <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')} className="w-full"><PlusCircle className="mr-2" /> Add to Route</Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Stops ({selectedRouteLeads.length})</Label>
-                                        <div className="flex gap-2">
-                                            <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
-                                        </div>
-                                        <ScrollArea className="h-48 rounded-md border">
-                                            {selectedRouteLeads.length > 0 ? (
-                                                <div className="p-2 space-y-2">
-                                                    {selectedRouteLeads.map((lead, index) => (
-                                                        <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
-                                                            <span className="truncate">{index + 1}. {lead.companyName}</span>
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
-                                            )}
-                                        </ScrollArea>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Route Options</Label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            <Input ref={startPointRef} placeholder="Start point (optional)" />
-                                            <Input ref={endPointRef} placeholder="End point (optional)" />
-                                        </div>
-                                        <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="DRIVING">Driving</SelectItem>
-                                                <SelectItem value="WALKING">Walking</SelectItem>
-                                                <SelectItem value="BICYCLING">Bicycling</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="w-full">
-                                            {isCalculatingRoute ? <Loader /> : "Calculate Route"}
-                                        </Button>
-                                    </div>
-                                     <Button onClick={handleSaveRouteDialog} className="w-full" disabled={selectedRouteLeads.length === 0}>
-                                        Save Route
-                                    </Button>
-                                </div>
-                            </TabsContent>
-                             <TabsContent value="prospecting">
-                                <div className="p-4 border rounded-md mt-2 space-y-4">
-                                    <div className="space-y-4 pt-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="street-search">Search by Street</Label>
-                                            <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
-                                        </div>
-                                        <Label>Streets for Area ({streetsForArea.length})</Label>
-                                        <ScrollArea className="h-40 rounded-md border">
-                                            {streetsForArea.length > 0 ? (
-                                                <div className="p-2 text-sm space-y-1">
-                                                    {streetsForArea.map(s => (
-                                                        <div key={s.place_id} className="flex items-center justify-between p-1 rounded-md hover:bg-accent">
-                                                            <span>{s.description}</span>
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="h-6 w-6" 
-                                                                onClick={() => setStreetsForArea(prev => prev.filter(street => street.place_id !== s.place_id))}
-                                                            >
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
-                                            )}
-                                        </ScrollArea>
-                                    </div>
-                                    <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
-                                        Save Prospecting Area
-                                    </Button>
-                                </div>
-                            </TabsContent>
-                        </Tabs>
                     </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
+                            <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="route-planner">
+                            <div className="p-4 mt-2 space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Route Controls</Label>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')}><Info className="mr-2" /> Info</Button>
+                                            <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')}><PlusCircle className="mr-2" /> Add to Route</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Stops ({selectedRouteLeads.length})</Label>
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
+                                    </div>
+                                    <ScrollArea className="h-48 rounded-md border">
+                                        {selectedRouteLeads.length > 0 ? (
+                                            <div className="p-2 space-y-2">
+                                                {selectedRouteLeads.map((lead, index) => (
+                                                    <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
+                                                        <span className="truncate">{index + 1}. {lead.companyName}</span>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
+                                        )}
+                                    </ScrollArea>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Route Options</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <Input ref={startPointRef} placeholder="Start point (optional)" />
+                                        <Input ref={endPointRef} placeholder="End point (optional)" />
+                                    </div>
+                                    <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="DRIVING">Driving</SelectItem>
+                                            <SelectItem value="WALKING">Walking</SelectItem>
+                                            <SelectItem value="BICYCLING">Bicycling</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="w-full">
+                                        {isCalculatingRoute ? <Loader /> : "Calculate Route"}
+                                    </Button>
+                                </div>
+                                    <Button onClick={handleSaveRouteDialog} className="w-full" disabled={selectedRouteLeads.length === 0}>
+                                    Save Route
+                                </Button>
+                            </div>
+                        </TabsContent>
+                            <TabsContent value="prospecting">
+                            <div className="p-4 mt-2 space-y-4">
+                                <div className="space-y-4 pt-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="street-search">Search by Street</Label>
+                                        <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
+                                    </div>
+                                    <Label>Streets for Area ({streetsForArea.length})</Label>
+                                    <ScrollArea className="h-40 rounded-md border">
+                                        {streetsForArea.length > 0 ? (
+                                            <div className="p-2 text-sm space-y-1">
+                                                {streetsForArea.map(s => (
+                                                    <div key={s.place_id} className="flex items-center justify-between p-1 rounded-md hover:bg-accent">
+                                                        <span>{s.description}</span>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-6 w-6" 
+                                                            onClick={() => setStreetsForArea(prev => prev.filter(street => street.place_id !== s.place_id))}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
+                                        )}
+                                    </ScrollArea>
+                                </div>
+                                <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
+                                    Save Prospecting Area
+                                </Button>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
+                  </CardContent>
                 </Card>
                 
                 <div className="flex-grow min-h-[80vh] relative rounded-lg overflow-hidden border">
@@ -1134,7 +1132,7 @@ export default function LeadsMapClient() {
                                 <MarkerF
                                     position={searchedLocation}
                                     icon={{
-                                        url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+                                        url: "https://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|000000",
                                     }}
                                 />
                             )}
