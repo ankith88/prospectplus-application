@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -127,7 +127,7 @@ export default function LeadsMapClient() {
     // Route Planning State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING' as google.maps.TravelMode);
+    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING');
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
     const [routeName, setRouteName] = useState('');
@@ -665,8 +665,193 @@ export default function LeadsMapClient() {
         }
     };
     
-    // ... other handlers like handleAddLeadClick, handleCreateLeadFromProspect, etc.
+    const handleAddLeadClick = async (place: google.maps.places.PlaceResult) => {
+        if (!place.website) {
+            openCreateLeadPage(place);
+            return;
+        }
+        
+        try {
+            const prospectResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
+            const hasEmail = prospectResult.contacts?.some(c => c.email);
+            const hasPhone = prospectResult.contacts?.some(c => c.phone && c.phone !== 'N/A') || place.formatted_phone_number;
     
+            if (hasEmail && hasPhone) {
+                setProspectToCreate(place);
+            } else {
+                openCreateLeadPage(place, prospectResult.contacts);
+            }
+    
+        } catch (error) {
+            console.error('Error during prospecting, redirecting to manual entry:', error);
+            openCreateLeadPage(place);
+        }
+      };
+      
+        const openCreateLeadPage = (place: google.maps.places.PlaceResult, contacts?: Contact[]) => {
+            const params = new URLSearchParams();
+            if (place.name) params.set('companyName', place.name);
+            if (place.website) params.set('websiteUrl', place.website);
+            if (place.formatted_phone_number) params.set('phone', place.formatted_phone_number);
+            
+            if (place.address_components) {
+                const get = (type: string) => place.address_components?.find(c => c.types.includes(type))?.long_name || '';
+                const street_number = get('street_number');
+                const route = get('route');
+                params.set('street', `${street_number} ${route}`.trim());
+                params.set('city', get('locality') || get('postal_town'));
+                params.set('state', get('administrative_area_level_1'));
+                params.set('zip', get('postal_code'));
+            } else if (place.vicinity) {
+                params.set('street', place.vicinity);
+            }
+            
+            if (place.geometry?.location) {
+                params.set('lat', place.geometry.location.lat().toString());
+                params.set('lng', place.geometry.location.lng().toString());
+            }
+    
+            const primaryContact = contacts?.[0];
+            if (primaryContact?.email) {
+                // Even if one is missing, we pass what we have. The form will require the rest.
+            }
+    
+            window.open(`/leads/new?${params.toString()}`, '_blank');
+            toast({ title: "Complete Lead Details", description: "Please fill in the missing email or phone number." });
+        };
+    
+    
+      const handleCreateLeadFromProspect = async () => {
+        if (!prospectToCreate || !userProfile?.displayName) return;
+    
+        const place = prospectToCreate;
+        if (!place.name || !place.vicinity || !place.geometry?.location) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
+            return;
+        }
+    
+        const placeId = place.place_id;
+        if (!placeId) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
+            return;
+        }
+    
+        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
+        if (duplicateId) {
+            setDuplicateLeadId(duplicateId);
+            setProspectToCreate(null);
+            return;
+        }
+    
+        setIsCreatingLead(true);
+        setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
+        
+        let leadCampaign = campaign;
+        if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+            leadCampaign = 'Door-to-Door';
+        }
+        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin')) {
+             toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
+             setIsCreatingLead(false);
+             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+             return;
+        }
+    
+        let primaryContact: Omit<Contact, 'id'> | null = null;
+        if (place.website) {
+            try {
+                const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
+                if (hunterResult.contacts && hunterResult.contacts.length > 0) {
+                    const firstContact = hunterResult.contacts[0];
+                    primaryContact = {
+                        name: firstContact.name || 'Info',
+                        title: firstContact.title || 'Primary Contact',
+                        email: firstContact.email || '',
+                        phone: firstContact.phone || place.formatted_phone_number || '',
+                    };
+                    toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
+                }
+            } catch (error) { console.warn('AI prospecting for contact failed.', error); }
+        }
+        
+        if (!primaryContact) {
+            const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+            primaryContact = {
+                name: `Info ${place.name}`,
+                title: 'Primary Contact',
+                email: websiteDomain ? `info@${websiteDomain}` : '',
+                phone: place.formatted_phone_number || '',
+            };
+        }
+        const nameParts = primaryContact.name.split(' ');
+        
+        const addressData: Partial<Address> = { country: 'Australia' };
+        if (place.address_components) {
+            const get = (type: string, useShortName = false) => {
+                const comp = place.address_components?.find(c => c.types.includes(type));
+                return useShortName ? comp?.short_name : comp?.long_name;
+            };
+            addressData.city = get('locality') || get('postal_town') || '';
+            addressData.state = get('administrative_area_level_1', true) || '';
+            addressData.zip = get('postal_code') || '';
+        }
+        addressData.street = place.vicinity;
+    
+        const newLeadData = {
+            companyName: place.name,
+            websiteUrl: place.website || '',
+            campaign: leadCampaign,
+            address: {
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng(),
+                ...addressData,
+            } as Address,
+            contact: {
+                firstName: nameParts[0] || 'Info',
+                lastName: nameParts.slice(1).join(' ') || place.name,
+                title: primaryContact.title,
+                email: primaryContact.email,
+                phone: primaryContact.phone,
+            },
+            initialNotes: initialNotes,
+            dialerAssigned: userProfile.displayName,
+        };
+    
+        try {
+            const result = await createNewLead(newLeadData as any);
+            if (result.success && result.leadId) {
+                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
+                
+                const newMapLead: MapLead = {
+                  id: result.leadId!,
+                  companyName: newLeadData.companyName,
+                  status: 'New',
+                  address: newLeadData.address as Address,
+                  latitude: newLeadData.address.lat,
+                  longitude: newLeadData.address.lng,
+                  dialerAssigned: undefined,
+                  customerPhone: newLeadData.contact.phone,
+                };
+                setAllMapData(prev => [...prev, newMapLead]);
+                setProspects(prev => prev.map(p => p.place.place_id === placeId
+                    ? { ...p, isAdding: false, existingLead: newMapLead }
+                    : p
+                ));
+            } else {
+                toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
+                setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
+            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
+        } finally {
+            setIsCreatingLead(false);
+            setProspectToCreate(null);
+            setInitialNotes('');
+            setCampaign('');
+        }
+      };
+
     if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
     }
@@ -851,6 +1036,21 @@ export default function LeadsMapClient() {
                                 },
                             }}
                         >
+                            {isLoaded && isDrawing && (
+                                <DrawingManagerF
+                                    onLoad={(dm) => (drawingManagerRef.current = dm)}
+                                    onCircleComplete={(c) => onDrawingComplete(c)}
+                                    onRectangleComplete={(r) => onDrawingComplete(r)}
+                                    onPolygonComplete={(p) => onDrawingComplete(p)}
+                                    drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode.toUpperCase() as keyof typeof google.maps.drawing.OverlayType] : null}
+                                    options={{
+                                        drawingControl: false,
+                                        circleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
+                                        rectangleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
+                                        polygonOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
+                                    }}
+                                />
+                            )}
                             {allMapData.map(lead => (
                                 <MarkerF
                                     key={lead.id}
@@ -889,21 +1089,6 @@ export default function LeadsMapClient() {
                                 </InfoWindowF>
                             )}
                             {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, preserveViewport: true }} />}
-                             {isLoaded && isDrawing && (
-                                <DrawingManagerF
-                                    onLoad={(dm) => (drawingManagerRef.current = dm)}
-                                    onCircleComplete={(c) => onDrawingComplete(c)}
-                                    onRectangleComplete={(r) => onDrawingComplete(r)}
-                                    onPolygonComplete={(p) => onDrawingComplete(p)}
-                                    drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode.toUpperCase() as keyof typeof google.maps.drawing.OverlayType] : null}
-                                    options={{
-                                        drawingControl: false,
-                                        circleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
-                                        rectangleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
-                                        polygonOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
-                                    }}
-                                />
-                            )}
                         </GoogleMap>
                     </div>
                 </div>
@@ -1028,7 +1213,7 @@ export default function LeadsMapClient() {
                                                 <Eye className="mr-2 h-4 w-4" /> View
                                             </Button>
                                         ) : (
-                                            <Button size="sm" onClick={() => {}} disabled={prospectInfo.isAdding}>
+                                            <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
                                                 {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                                 Add
                                             </Button>
@@ -1166,7 +1351,7 @@ export default function LeadsMapClient() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                        <Button onClick={() => {}} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
+                        <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
                             {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
                         </Button>
                     </DialogFooter>
