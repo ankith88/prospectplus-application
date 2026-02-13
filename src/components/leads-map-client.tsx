@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -1149,7 +1149,8 @@ export default function LeadsMapClient() {
                         </CollapsibleContent>
                     </Card>
                 </Collapsible>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card className="md:col-span-1 flex flex-col">
                          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                             <CardHeader className="pb-2 flex-shrink-0">
@@ -1177,7 +1178,64 @@ export default function LeadsMapClient() {
                         </Tabs>
                     </Card>
                     <div className="md:col-span-2 flex-grow min-h-[70vh] relative rounded-lg overflow-hidden border">
-                         {/* GoogleMap component here */}
+                         <GoogleMap
+                            mapContainerStyle={containerStyle}
+                            center={center}
+                            zoom={4}
+                            onLoad={onMapLoad}
+                            onClick={onMapClick}
+                            options={{
+                                streetViewControl: false,
+                                mapTypeControl: false,
+                                fullscreenControl: false
+                            }}
+                        >
+                            {isLoaded && <DrawingManagerF
+                                onLoad={(dm) => (drawingManagerRef.current = dm)}
+                                onOverlayComplete={(e) => onDrawingComplete(e.overlay!)}
+                                drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode] : null}
+                                options={{
+                                    drawingControl: false,
+                                }}
+                            />}
+                            {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
+
+                            {filteredMapData.map(lead => (
+                                <MarkerF
+                                    key={lead.id}
+                                    position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                                    onClick={() => onMarkerClick(lead)}
+                                    onMouseOver={() => setHoveredLeadId(lead.id)}
+                                    onMouseOut={() => setHoveredLeadId(null)}
+                                    icon={getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id) || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)}
+                                />
+                            ))}
+
+                            {selectedLead && (
+                                <InfoWindowF
+                                    position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
+                                    onCloseClick={onInfoWindowClose}
+                                    options={infoWindowOptions}
+                                >
+                                    <div className="p-2 max-w-xs space-y-2">
+                                        <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                                        <p className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</p>
+                                        <div className="flex items-center gap-2">
+                                            <LeadStatusBadge status={selectedLead.status} />
+                                            {selectedLead.isCompany && <Badge variant="secondary">Signed Customer</Badge>}
+                                        </div>
+                                        <div className="flex flex-col gap-2 pt-2">
+                                            <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                                                <ExternalLink className="mr-2 h-4 w-4" /> View {selectedLead.isCompany ? 'Profile' : 'Lead'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </InfoWindowF>
+                            )}
+
+                             {myLocation && <MarkerF position={myLocation} title="Your Location" icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green.png" }} />}
+
+                        </GoogleMap>
                     </div>
                 </div>
             </div>
@@ -1185,4 +1243,3 @@ export default function LeadsMapClient() {
         </>
     );
 }
-
