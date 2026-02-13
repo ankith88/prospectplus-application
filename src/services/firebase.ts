@@ -1566,14 +1566,14 @@ async function getAllUsers(): Promise<UserProfile[]> {
     }
 }
 
-async function updateUserDisabledStatus(uid: string, disabled: boolean): Promise<void> {
+async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void> {
     try {
         const userRef = doc(firestore, 'users', uid);
-        await updateDoc(userRef, { disabled: disabled });
-        console.log(`User ${uid} disabled status set to ${disabled} in Firestore.`);
+        await updateDoc(userRef, data);
+        console.log(`User ${uid} updated.`);
     } catch (error) {
-        console.error(`Failed to update user disabled status for ${uid}:`, error);
-        throw new Error('Failed to update user status in Firebase');
+        console.error(`Failed to update user ${uid}:`, error);
+        throw new Error('Failed to update user in Firebase');
     }
 }
 
@@ -2140,7 +2140,7 @@ export {
     addScorecard,
     updateScorecardAnalysis,
     getAllUsers,
-    updateUserDisabledStatus,
+    updateUser,
     bulkUpdateLeadDialerRep,
     addCallReview,
     getLastNote,
