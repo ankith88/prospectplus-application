@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick, FileDigit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -126,6 +126,7 @@ export default function LeadsMapClient() {
     const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
     const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
+    const [searchedLocation, setSearchedLocation] = useState<google.maps.LatLngLiteral | null>(null);
 
     // Route Planning State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
@@ -164,7 +165,6 @@ export default function LeadsMapClient() {
     const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
 
     // Autocomplete Refs
-    const streetInputRef = useRef<HTMLInputElement | null>(null);
     const startPointRef = useRef<HTMLInputElement | null>(null);
     const endPointRef = useRef<HTMLInputElement | null>(null);
     const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
@@ -348,6 +348,29 @@ export default function LeadsMapClient() {
         }
       }, [isLoaded, map]);
 
+    const streetSearchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
+        if (node && isLoaded && map) {
+            if ((node as any).autocomplete) return;
+    
+            const autocomplete = new window.google.maps.places.Autocomplete(node, {
+                types: ['address'],
+                componentRestrictions: { country: 'au' },
+            });
+            autocomplete.setFields(['geometry', 'name']);
+    
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                if (place.geometry?.location) {
+                    const location = place.geometry.location.toJSON();
+                    setSearchedLocation(location);
+                    map.panTo(location);
+                    map.setZoom(17);
+                }
+            });
+            (node as any).autocomplete = autocomplete;
+        }
+    }, [isLoaded, map]);
+
 
     const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
         setMap(mapInstance);
@@ -401,6 +424,7 @@ export default function LeadsMapClient() {
         setTotalDuration(null);
         setStartPoint('');
         setEndPoint('');
+        setSearchedLocation(null);
         if(startPointRef.current) startPointRef.current.value = '';
         if(endPointRef.current) endPointRef.current.value = '';
     };
@@ -896,17 +920,6 @@ export default function LeadsMapClient() {
         }
       };
 
-    const escapeCsvCell = (cellData: any) => {
-        if (cellData === null || cellData === undefined) {
-            return '';
-        }
-        const stringData = String(cellData);
-        if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
-            return `"${stringData.replace(/"/g, '""')}"`;
-        }
-        return stringData;
-    };
-
     const handleExportProspects = () => {
         if (prospects.length === 0) {
         toast({ variant: 'destructive', title: 'No Data', description: 'There are no prospects to export.' });
@@ -1025,99 +1038,65 @@ export default function LeadsMapClient() {
                         </CardHeader>
                         <CollapsibleContent>
                             <CardContent>
-                                <Tabs defaultValue="filters">
-                                    <TabsList>
-                                        <TabsTrigger value="filters">Filters</TabsTrigger>
-                                        <TabsTrigger value="actions">Actions</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="filters" className="pt-4">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="geo-search">Go to Location</Label>
-                                                <Input id="geo-search" ref={geoSearchInputRef} placeholder="Enter a location..."/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="map-companyName">Company Name</Label>
-                                                <Input id="map-companyName" value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Dialer Assigned</Label>
-                                                <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Franchisee</Label>
-                                                <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Status</Label>
-                                                <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>State</Label>
-                                                <MultiSelectCombobox options={uniqueStates} selected={mapFilters.state} onSelectedChange={(val) => handleMapFilterChange('state', val)} placeholder="Select states..."/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Lead Type</Label>
-                                                <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="all">All Items</SelectItem>
-                                                        <SelectItem value="customers">Signed Customers</SelectItem>
-                                                        <SelectItem value="leads">Leads</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Campaign</Label>
-                                                <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                         {hasActiveMapFilters && (
-                                            <div className="pt-4">
-                                                <Button variant="ghost" onClick={clearMapFilters}>
-                                                    <X className="mr-2 h-4 w-4" /> Clear All Filters
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </TabsContent>
-                                    <TabsContent value="actions" className="pt-4">
-                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <Button onClick={() => setIsMultiSelectMode(!isMultiSelectMode)} variant={isMultiSelectMode ? 'secondary' : 'outline'} size="sm">
-                                                <MousePointerClick className="mr-2 h-4 w-4" />
-                                                {isMultiSelectMode ? 'Exit Select Mode' : 'Select on Map'}
-                                            </Button>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="sm" disabled={isDrawing}>
-                                                        <PenSquare className="mr-2 h-4 w-4" />
-                                                        Draw to Select
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem onClick={() => startDrawing('RECTANGLE')}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => startDrawing('POLYGON')}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            {isDrawing && (<Button onClick={cancelDrawing} variant="destructive" size="sm"><X className="mr-2 h-4 w-4" />Cancel Draw</Button>)}
-                                            {mapSelectedCompanyIds.length > 0 && (
-                                                <Button size="sm" onClick={() => handleBulkFindSimilar(mapSelectedCompanyIds)} disabled={isSearchingNearby}>
-                                                    {isSearchingNearby ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Find Similar for Selected ({mapSelectedCompanyIds.length})</span></>}
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TabsContent>
-                                </Tabs>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="geo-search">Go to Location</Label>
+                                        <Input id="geo-search" ref={geoSearchInputRef} placeholder="Enter a location..."/>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="map-companyName">Company Name</Label>
+                                        <Input id="map-companyName" value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Dialer Assigned</Label>
+                                        <MultiSelectCombobox options={uniqueDialers} selected={mapFilters.dialerAssigned} onSelectedChange={(val) => handleMapFilterChange('dialerAssigned', val)} placeholder="Select dialers..."/>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Franchisee</Label>
+                                        <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Status</Label>
+                                        <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>State</Label>
+                                        <MultiSelectCombobox options={uniqueStates} selected={mapFilters.state} onSelectedChange={(val) => handleMapFilterChange('state', val)} placeholder="Select states..."/>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Lead Type</Label>
+                                        <Select value={mapFilters.leadType} onValueChange={(v) => handleMapFilterChange('leadType', v)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Items</SelectItem>
+                                                <SelectItem value="customers">Signed Customers</SelectItem>
+                                                <SelectItem value="leads">Leads</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Campaign</Label>
+                                        <Select value={mapFilters.campaign} onValueChange={(v) => handleMapFilterChange('campaign', v)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Campaigns</SelectItem>
+                                                {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                    {hasActiveMapFilters && (
+                                    <div className="pt-4">
+                                        <Button variant="ghost" onClick={clearMapFilters}>
+                                            <X className="mr-2 h-4 w-4" /> Clear All Filters
+                                        </Button>
+                                    </div>
+                                )}
                             </CardContent>
                         </CollapsibleContent>
                     </Card>
                 </Collapsible>
-                
+
                 <Card>
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                         <CardHeader className="pb-2 flex-shrink-0">
@@ -1127,48 +1106,76 @@ export default function LeadsMapClient() {
                             </TabsList>
                         </CardHeader>
                         <TabsContent value="route-planner" className="flex-grow overflow-hidden flex flex-col">
-                            <CardContent className="flex-grow overflow-y-auto space-y-4">
+                             <CardContent className="flex-grow overflow-y-auto space-y-4">
                                <div className="space-y-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <Input ref={startPointRef} placeholder="Start point (optional)" />
-                                        <Input ref={endPointRef} placeholder="End point (optional)" />
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label>Route Controls</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant={selectionMode === 'info' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('info')} className="w-full"><Info className="mr-2" /> Info</Button>
+                                                <Button variant={selectionMode === 'select' ? 'secondary' : 'outline'} onClick={() => setSelectionMode('select')} className="w-full"><PlusCircle className="mr-2" /> Add to Route</Button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="DRIVING">Driving</SelectItem>
-                                            <SelectItem value="WALKING">Walking</SelectItem>
-                                            <SelectItem value="BICYCLING">Bicycling</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <div className="flex gap-2">
-                                        <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="flex-1">
+                                    <div className="space-y-2">
+                                        <Label>Stops ({selectedRouteLeads.length})</Label>
+                                        <div className="flex gap-2">
+                                             <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="icon" disabled={isDrawing}>
+                                                        <PenSquare className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem onClick={() => startDrawing('RECTANGLE')}><RectangleHorizontal className="mr-2"/>Rectangle</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => startDrawing('POLYGON')}><Spline className="mr-2"/>Polygon</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                             {isDrawing && (<Button onClick={cancelDrawing} variant="destructive" size="icon"><X className="h-4 w-4"/></Button>)}
+                                            <Button onClick={handleClearRoute} variant="destructive" className="w-full">Clear All Stops</Button>
+                                        </div>
+                                        <ScrollArea className="h-48 rounded-md border">
+                                            {selectedRouteLeads.length > 0 ? (
+                                                <div className="p-2 space-y-2">
+                                                    {selectedRouteLeads.map((lead, index) => (
+                                                        <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
+                                                            <span className="truncate">{index + 1}. {lead.companyName}</span>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
+                                            )}
+                                        </ScrollArea>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Route Options</Label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <Input ref={startPointRef} placeholder="Start point (optional)" />
+                                            <Input ref={endPointRef} placeholder="End point (optional)" />
+                                        </div>
+                                        <Select value={travelMode} onValueChange={(v) => setTravelMode(v as google.maps.TravelMode)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="DRIVING">Driving</SelectItem>
+                                                <SelectItem value="WALKING">Walking</SelectItem>
+                                                <SelectItem value="BICYCLING">Bicycling</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Button onClick={handleCalculateRoute} disabled={isCalculatingRoute || selectedRouteLeads.length < 2} className="w-full">
                                             {isCalculatingRoute ? <Loader /> : "Calculate Route"}
                                         </Button>
-                                        <Button onClick={handleSaveRouteDialog} variant="outline" disabled={selectedRouteLeads.length === 0}>Save</Button>
-                                        <Button onClick={handleClearRoute} variant="destructive">Clear</Button>
                                     </div>
-                                    <Label>Stops ({selectedRouteLeads.length})</Label>
-                                    <ScrollArea className="h-48 rounded-md border">
-                                        {selectedRouteLeads.length > 0 ? (
-                                            <div className="p-2 space-y-2">
-                                                {selectedRouteLeads.map((lead, index) => (
-                                                    <div key={lead.id} className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
-                                                        <span className="truncate">{index + 1}. {lead.companyName}</span>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRouteLeads(prev => prev.filter(l => l.id !== lead.id))}>
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="p-4 text-center text-muted-foreground text-sm">Select leads on the map to add them to your route.</div>
-                                        )}
-                                    </ScrollArea>
                                 </div>
                             </CardContent>
+                             <CardFooter className="pt-4 border-t flex-shrink-0">
+                                <Button onClick={handleSaveRouteDialog} className="w-full" disabled={selectedRouteLeads.length === 0}>
+                                  Save Route
+                                </Button>
+                            </CardFooter>
                         </TabsContent>
                         <TabsContent value="prospecting" className="flex-grow overflow-hidden flex flex-col">
                             <CardContent className="flex-grow overflow-y-auto space-y-4">
@@ -1201,7 +1208,7 @@ export default function LeadsMapClient() {
                                         </ScrollArea>
                                     </TabsContent>
                                     <TabsContent value="by-street" className="space-y-4 pt-4">
-                                        <Input ref={streetInputRef} placeholder="Search for a street..."/>
+                                        <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
                                         <Label>Streets for Area ({streetsForArea.length})</Label>
                                         <ScrollArea className="h-32 rounded-md border">
                                             {/* Street results here */}
@@ -1253,6 +1260,15 @@ export default function LeadsMapClient() {
                                 icon={getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id) || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)}
                             />
                         ))}
+                        
+                        {searchedLocation && (
+                            <MarkerF
+                                position={searchedLocation}
+                                icon={{
+                                    url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+                                }}
+                            />
+                        )}
 
                         {selectedLead && (
                             <InfoWindowF
@@ -1282,6 +1298,119 @@ export default function LeadsMapClient() {
                 </div>
             </div>
             {/* Dialogs */}
+             <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+                <DialogContent className="w-[95vw] md:w-full max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>Nearby Prospects</DialogTitle>
+                        <DialogDescription>
+                            Found {prospects.length} potential leads.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                        <div className="md:hidden space-y-4">
+                            {prospects.map(prospectInfo => (
+                                <Card key={prospectInfo.place.place_id} className="p-4">
+                                    <div className="font-medium pr-2">{prospectInfo.place.name}</div>
+                                    <div className="text-sm text-muted-foreground mt-1">
+                                        {prospectInfo.place.vicinity}
+                                    </div>
+                                    {prospectInfo.description && (
+                                        <div>
+                                        <p className="text-sm my-2 text-muted-foreground line-clamp-2">
+                                            {prospectInfo.description}
+                                        </p>
+                                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center mt-2">
+                                        <Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>
+                                            {prospectInfo.classification}
+                                        </Badge>
+                                        {prospectInfo.existingLead ? (
+                                            <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                                <Eye className="mr-2 h-4 w-4" /> View
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                                                Add
+                                            </Button>
+                                        )}
+                                    </div>
+                                     {prospectInfo.place.website && (
+                                        <Button asChild variant="outline" size="sm" className="mt-2 w-full">
+                                            <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer">
+                                                <Globe className="mr-2 h-4 w-4" />
+                                                Visit Website
+                                            </a>
+                                        </Button>
+                                    )}
+                                </Card>
+                            ))}
+                        </div>
+                        <div className="hidden md:block">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Company</TableHead>
+                                        <TableHead>Description</TableHead>
+                                        <TableHead>Address</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {prospects.map(prospectInfo => (
+                                        <TableRow key={prospectInfo.place.place_id}>
+                                            <TableCell>
+                                                <div className="font-medium">{prospectInfo.place.name}</div>
+                                                 {prospectInfo.place.website && (
+                                                    <Button asChild variant="link" size="sm" className="p-0 h-auto">
+                                                        <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1">
+                                                            <Globe className="h-3 w-3" />
+                                                            Website
+                                                        </a>
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                    <div className="flex flex-col items-start max-w-xs">
+                                                        <p className="text-sm text-muted-foreground line-clamp-2">
+                                                            {prospectInfo.description}
+                                                        </p>
+                                                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setViewingDescription(prospectInfo.description || null)}>Read More</Button>
+                                                    </div>
+                                            </TableCell>
+                                            <TableCell>{prospectInfo.place.vicinity}</TableCell>
+                                            <TableCell><Badge variant={prospectInfo.classification === 'B2B' ? 'default' : 'secondary'}>{prospectInfo.classification}</Badge></TableCell>
+                                            <TableCell className="text-right">
+                                                {prospectInfo.existingLead ? (
+                                                    <Button size="sm" variant="outline" onClick={() => window.open(prospectInfo.existingLead!.isCompany ? `/companies/${prospectInfo.existingLead!.id}` : `/leads/${prospectInfo.existingLead!.id}`, '_blank')}>
+                                                        <Eye className="mr-2 h-4 w-4" />
+                                                        View
+                                                    </Button>
+                                                ) : (
+                                                    <Button size="sm" onClick={() => setProspectToCreate(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                                        {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                                                        {prospectInfo.isAdding ? 'Adding...' : 'Add Lead'}
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </ScrollArea>
+                     <DialogFooter>
+                        <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Prospects
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
+                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
