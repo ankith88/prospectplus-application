@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -53,6 +54,14 @@ import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospec
 import { cn } from '@/lib/utils';
 import { useJsApiLoader } from '@react-google-maps/api';
 
+type ProspectWithLeadInfo = {
+    place: google.maps.places.PlaceResult;
+    existingLead?: MapLead;
+    isAdding?: boolean;
+    classification?: 'B2B' | 'B2C' | 'Unknown';
+    description?: string;
+};
+
 const containerStyle = {
   width: '100%',
   height: '100%',
@@ -98,6 +107,7 @@ export default function LeadsMapClient() {
     const [allMapData, setAllMapData] = useState<MapLead[]>([]);
     const [loadingData, setLoadingData] = useState(true);
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+    const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     
     // Map State
     const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -157,6 +167,11 @@ export default function LeadsMapClient() {
     const [campaign, setCampaign] = useState('');
     const [initialNotes, setInitialNotes] = useState('');
     const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
+    const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+    const placesService = useRef<google.maps.places.PlacesService | null>(null);
+
 
     const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -182,11 +197,15 @@ export default function LeadsMapClient() {
     const fetchData = useCallback(async () => {
         setLoadingData(true);
         try {
+             const routesPromise = userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')
+                ? getAllUserRoutes()
+                : userProfile ? getUserRoutes(userProfile.uid) : Promise.resolve([]);
+
             const [fetchedCompanies, fetchedLeads, fetchedUsers, fetchedRoutes] = await Promise.all([
                 getCompaniesFromFirebase(),
                 getLeadsFromFirebase({ summary: true }),
                 getAllUsers(),
-                userProfile ? getUserRoutes(userProfile.uid) : Promise.resolve([]),
+                routesPromise,
             ]);
             
             const combinedData = new Map<string, Lead>();
@@ -213,14 +232,14 @@ export default function LeadsMapClient() {
 
             setAllMapData(mapLeads);
             setAllUsers(fetchedUsers);
-            setSavedRoutes(fetchedRoutes);
+            setAllRoutes(fetchedRoutes as SavedRoute[]);
         } catch (error) {
             console.error("Failed to fetch map data:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial map data.' });
         } finally {
             setLoadingData(false);
         }
-    }, [userProfile, toast, setSavedRoutes]);
+    }, [userProfile, toast]);
     
     useEffect(() => {
         if (isLoaded && userProfile) {
@@ -520,6 +539,60 @@ export default function LeadsMapClient() {
         setRouteDate(new Date());
         setIsSaveRouteDialogOpen(true);
     };
+
+    const handleSaveRoute = async () => {
+        if (!userProfile?.uid || !routeName.trim()) {
+            toast({ variant: 'destructive', title: 'Cannot Save', description: 'Route name is required.' });
+            return;
+        }
+    
+        setIsSavingRoute(true);
+        try {
+            const assigneeId = routeAssignee || userProfile.uid;
+
+            const storableRoute: StorableRoute = {
+                userId: assigneeId,
+                name: routeName,
+                createdAt: new Date().toISOString(),
+                leads: selectedRouteLeads.map(l => ({ id: l.id, companyName: l.companyName, latitude: l.latitude!, longitude: l.longitude!, address: l.address! })),
+                travelMode: travelMode,
+                startPoint: startPoint,
+                endPoint: endPoint,
+                directions: directions ? JSON.stringify(directions) : undefined,
+                scheduledDate: routeDate?.toISOString(),
+                totalDistance,
+                totalDuration,
+            };
+            
+            let routeId: string;
+
+            if (loadedRoute?.id && loadedRoute.userId === assigneeId) {
+                // Update existing route
+                await updateUserRoute(assigneeId, loadedRoute.id, storableRoute);
+                routeId = loadedRoute.id;
+                setSavedRoutes(prev => prev.map(r => r.id === routeId ? { ...r, ...storableRoute, directions } : r));
+                toast({ title: "Route Updated", description: "Your route has been successfully updated." });
+            } else {
+                 // Create new route
+                routeId = await saveUserRoute(storableRoute);
+                const newRoute: SavedRoute = { ...storableRoute, id: routeId, directions, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' };
+                setSavedRoutes(prev => [newRoute, ...prev]);
+                toast({ title: "Route Saved", description: "Your new route has been saved." });
+            }
+    
+            localStorage.setItem('activeRouteId', routeId);
+            setIsSaveRouteDialogOpen(false);
+            setRouteName('');
+            setRouteDate(undefined);
+            setRouteAssignee('');
+    
+        } catch (error) {
+            console.error("Failed to save route:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not save the route.' });
+        } finally {
+            setIsSavingRoute(false);
+        }
+    };
     
     const handleSaveProspectingArea = async () => {
         if (!newAreaName.trim()) {
@@ -706,9 +779,9 @@ export default function LeadsMapClient() {
                                         </Button>
                                     </div>
                                     {isRouteActive && (
-                                         <Button onClick={handleStartRoute} className="w-full bg-green-600 hover:bg-green-700" disabled={!directions}>
+                                         <Button onClick={() => router.push('/saved-routes')} className="w-full bg-green-600 hover:bg-green-700" disabled={!directions}>
                                             <Play className="mr-2 h-4 w-4" />
-                                            Start Active Route
+                                            View Active Route
                                         </Button>
                                     )}
                                 </CardFooter>
@@ -803,9 +876,9 @@ export default function LeadsMapClient() {
                                                 <ExternalLink className="mr-2 h-4 w-4" /> View Profile
                                             </Button>
                                             {selectedLead.isCompany && (
-                                                 <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby}>
+                                                 <Button size="sm" variant="outline" onClick={() => {}} disabled={isSearchingNearby || (selectedLead.lastProspected && isToday(selectedLead.lastProspected))}>
                                                     {isSearchingNearby && selectedLead?.id === selectedLead.id ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                                    AI Find Similar
+                                                    {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                                 </Button>
                                             )}
                                         </div>
@@ -816,8 +889,10 @@ export default function LeadsMapClient() {
                              {isLoaded && isDrawing && (
                                 <DrawingManagerF
                                     onLoad={(dm) => (drawingManagerRef.current = dm)}
-                                    drawingMode={drawingMode}
-                                    onOverlayComplete={(e) => onDrawingComplete(e.overlay!)}
+                                    onCircleComplete={(c) => onDrawingComplete(c)}
+                                    onRectangleComplete={(r) => onDrawingComplete(r)}
+                                    onPolygonComplete={(p) => onDrawingComplete(p)}
+                                    drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode.toUpperCase() as keyof typeof google.maps.drawing.OverlayType] : null}
                                     options={{
                                         drawingControl: false,
                                         circleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
@@ -1098,4 +1173,3 @@ export default function LeadsMapClient() {
         </>
     );
 }
-    
