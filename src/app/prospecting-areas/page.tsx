@@ -339,8 +339,8 @@ export default function ProspectingAreasPage() {
                     </TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/leads/map?loadArea=${area.id}`)}}>
-                                <MapPin className="mr-2 h-4 w-4" /> Go to Area
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
+                                <MapPin className="mr-2 h-4 w-4" /> View on Map
                             </Button>
                              <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
                                 <Trash2 className="h-4 w-4" />
