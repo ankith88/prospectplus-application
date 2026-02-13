@@ -182,6 +182,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 phoneNumber: userData.phoneNumber || null,
                 aircallUserId: userData.aircallUserId || null,
                 disabled: false,
+                linkedSalesRep: userData.linkedSalesRep || null,
+                linkedBDR: userData.linkedBDR || null,
             };
 
             await setDoc(doc(firestore, "users", newUser.uid), userProfileData);

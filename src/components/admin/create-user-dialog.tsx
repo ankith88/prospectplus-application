@@ -38,6 +38,8 @@ const formSchema = z.object({
   role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin']),
   phoneNumber: z.string().optional(),
   aircallUserId: z.string().optional(),
+  linkedSalesRep: z.string().optional(),
+  linkedBDR: z.string().optional(),
 });
 
 interface CreateUserDialogProps {
@@ -61,8 +63,12 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       role: 'user',
       phoneNumber: '',
       aircallUserId: '',
+      linkedSalesRep: '',
+      linkedBDR: '',
     },
   });
+
+  const role = form.watch('role');
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
@@ -126,6 +132,33 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                 </Select>
                 <FormMessage /></FormItem>
             )}/>
+            {role === 'Field Sales' && (
+              <>
+                <FormField control={form.control} name="linkedSalesRep" render={({ field }) => (
+                  <FormItem><FormLabel>Account Manager</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select an Account Manager" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="Kerina Helliwell">Kerina Helliwell</SelectItem>
+                        <SelectItem value="Lee Russell">Lee Russell</SelectItem>
+                        <SelectItem value="Luke Forbes">Luke Forbes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )}/>
+                 <FormField control={form.control} name="linkedBDR" render={({ field }) => (
+                  <FormItem><FormLabel>BDR</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select a BDR" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="Lachlan Ball">Lachlan Ball</SelectItem>
+                        <SelectItem value="Grant Leddy">Grant Leddy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  <FormMessage /></FormItem>
+                )}/>
+              </>
+            )}
             <FormField control={form.control} name="phoneNumber" render={({ field }) => (
                 <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )}/>

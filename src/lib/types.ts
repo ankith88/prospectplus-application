@@ -253,6 +253,7 @@ export interface UserProfile {
     role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin';
     disabled?: boolean;
     linkedSalesRep?: string;
+    linkedBDR?: string;
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl'> & { isCompany: boolean; isProspect?: boolean };
