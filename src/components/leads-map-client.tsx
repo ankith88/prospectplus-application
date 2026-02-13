@@ -62,6 +62,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Textarea } from './ui/textarea';
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -115,6 +116,7 @@ const formatAddress = (address?: Address) => {
 export default function LeadsMapClient() {
     const [allMapData, setAllMapData] = useState<MapLead[]>([]);
     const [loadingData, setLoadingData] = useState(true);
+    const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     
     // Map State
@@ -276,7 +278,7 @@ export default function LeadsMapClient() {
     }, [isLoaded, toast]);
     
     useEffect(() => {
-        if (loadingData || !isLoaded) return;
+        if (loadingData || !isLoaded || !allRoutes) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         const routeToLoadId = searchParams.get('routeId');
@@ -292,7 +294,7 @@ export default function LeadsMapClient() {
                 }
             }
         }
-    }, [savedRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute]);
+    }, [savedRoutes, isLoaded, loadingData, searchParams, router, handleLoadRoute, allRoutes]);
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
@@ -1285,7 +1287,7 @@ export default function LeadsMapClient() {
                         </div>
                     </ScrollArea>
                      <DialogFooter>
-                        <Button onClick={() => {}} variant="outline" disabled={prospects.length === 0}>
+                        <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
                             Export Prospects
                         </Button>
