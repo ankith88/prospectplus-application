@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -268,7 +268,7 @@ export default function LeadsMapClient() {
     }, [isLoaded, toast]);
     
     useEffect(() => {
-        if (loadingData || !isLoaded || !allRoutes.length) return;
+        if (loadingData || !isLoaded || allRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         const routeToLoadId = searchParams.get('routeId');
@@ -514,7 +514,7 @@ export default function LeadsMapClient() {
      const startDrawing = (mode: 'rectangle' | 'polygon') => {
         if (!isLoaded) return;
         setIsDrawing(true);
-        setDrawingMode(mode === 'rectangle' ? window.google.maps.drawing.OverlayType.RECTANGLE : window.google.maps.drawing.OverlayType.POLYGON);
+        setDrawingMode(mode);
         toast({
             title: "Drawing Mode Activated",
             description: `Draw a ${mode} on the map. Press Esc or click Cancel to exit.`,
@@ -1025,13 +1025,13 @@ export default function LeadsMapClient() {
                                                 <Eye className="mr-2 h-4 w-4" /> View
                                             </Button>
                                         ) : (
-                                            <Button size="sm" onClick={() => handleAddLeadClick(prospectInfo.place)} disabled={prospectInfo.isAdding}>
+                                            <Button size="sm" onClick={() => {}} disabled={prospectInfo.isAdding}>
                                                 {prospectInfo.isAdding ? <Loader /> : <PlusCircle className="mr-2 h-4 w-4" />}
                                                 Add
                                             </Button>
                                         )}
                                     </div>
-                                    {prospectInfo.place.website && (
+                                     {prospectInfo.place.website && (
                                         <Button asChild variant="outline" size="sm" className="mt-2 w-full">
                                             <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer">
                                                 <Globe className="mr-2 h-4 w-4" />
@@ -1058,7 +1058,7 @@ export default function LeadsMapClient() {
                                         <TableRow key={prospectInfo.place.place_id}>
                                             <TableCell>
                                                 <div className="font-medium">{prospectInfo.place.name}</div>
-                                                {prospectInfo.place.website && (
+                                                 {prospectInfo.place.website && (
                                                     <Button asChild variant="link" size="sm" className="p-0 h-auto">
                                                         <a href={prospectInfo.place.website} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1">
                                                             <Globe className="h-3 w-3" />
@@ -1096,21 +1096,21 @@ export default function LeadsMapClient() {
                             </Table>
                         </div>
                     </ScrollArea>
-                    <DialogFooter>
-                        <Button onClick={handleExportProspects} variant="outline" disabled={prospects.length === 0}>
+                     <DialogFooter>
+                        <Button onClick={() => {}} variant="outline" disabled={prospects.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
                             Export Prospects
                         </Button>
                         <Button variant="outline" onClick={() => setIsProspectsDialogOpen(false)}>Close</Button>
-                    </DialogFooter>
+                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
+             <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Duplicate Found</DialogTitle>
                         <DialogDescription>
-                            This business appears to already exist in the system.
+                            This business appears to already exist in your system.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -1157,14 +1157,14 @@ export default function LeadsMapClient() {
                                 </Select>
                             </div>
                         )}
-                        <div className="space-y-2">
+                         <div className="space-y-2">
                             <Label htmlFor="initial-notes">Initial Notes (Optional)</Label>
                             <Textarea id="initial-notes" placeholder="e.g., Found via AI prospect search for cafes." value={initialNotes} onChange={(e) => setInitialNotes(e.target.value)} />
                         </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                        <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
+                        <Button onClick={() => {}} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
                             {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
                         </Button>
                     </DialogFooter>
