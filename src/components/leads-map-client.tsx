@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
@@ -63,6 +63,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from './ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+
 
 type ProspectWithLeadInfo = {
     place: google.maps.places.PlaceResult;
@@ -160,7 +162,7 @@ export default function LeadsMapClient() {
     const [activeProspectingTab, setActiveProspectingTab] = useState("by-drawing");
     const [selectionMode, setSelectionMode] = useState<'info' | 'select'>('info');
     const [isDrawing, setIsDrawing] = useState(false);
-    const [drawingMode, setDrawingMode] = useState<'rectangle' | 'polygon' | null>(null);
+    const [drawingMode, setDrawingMode] = useState<'RECTANGLE' | 'POLYGON' | null>(null);
 
     // Autocomplete Refs
     const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -185,6 +187,13 @@ export default function LeadsMapClient() {
 
     const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+    
+    const [mapFilters, setMapFilters] = useState({
+        companyName: '',
+        franchisee: [] as string[],
+        status: [] as string[],
+        isCompany: 'all' as 'all' | 'yes' | 'no',
+    });
     
     const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
     const router = useRouter();
@@ -278,7 +287,7 @@ export default function LeadsMapClient() {
     }, [isLoaded, toast]);
     
     useEffect(() => {
-        if (loadingData || !isLoaded) return;
+        if (loadingData || !isLoaded || savedRoutes.length === 0) return;
 
         const activeRouteId = localStorage.getItem('activeRouteId');
         const routeToLoadId = searchParams.get('routeId');
@@ -467,7 +476,13 @@ export default function LeadsMapClient() {
 
 
     const onMarkerClick = useCallback((lead: MapLead) => {
-        if (selectionMode === 'select') {
+        if (isMultiSelectMode) {
+        setMapSelectedCompanyIds(prev =>
+            prev.includes(lead.id)
+                ? prev.filter(id => id !== lead.id)
+                : [...prev, lead.id]
+        );
+      } else if (selectionMode === 'select') {
             setSelectedRouteLeads(prev => {
                 const isSelected = prev.some(l => l.id === lead.id);
                 if (isSelected) {
@@ -478,7 +493,7 @@ export default function LeadsMapClient() {
         } else {
             setSelectedLead(lead);
         }
-    }, [selectionMode]);
+    }, [selectionMode, isMultiSelectMode]);
 
     const onInfoWindowClose = useCallback(() => {
         setSelectedLead(null);
@@ -489,7 +504,7 @@ export default function LeadsMapClient() {
 
         setDrawnOverlay(overlay as any);
 
-        const leadsInShape = allMapData.filter(lead => {
+        const leadsInShape = filteredMapData.filter(lead => {
             if (lead.latitude && lead.longitude) {
                 const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
                 if ((overlay as any).getBounds) { // Rectangle or Circle
@@ -521,13 +536,13 @@ export default function LeadsMapClient() {
         setIsDrawing(false);
     };
 
-     const startDrawing = (mode: 'rectangle' | 'polygon') => {
+     const startDrawing = (mode: 'RECTANGLE' | 'POLYGON') => {
         if (!isLoaded) return;
         setIsDrawing(true);
         setDrawingMode(mode);
         toast({
             title: "Drawing Mode Activated",
-            description: `Draw a ${mode} on the map. Press Esc or click Cancel to exit.`,
+            description: `Draw a ${mode.toLowerCase()} on the map. Press Esc or click Cancel to exit.`,
         });
     };
 
@@ -894,6 +909,40 @@ export default function LeadsMapClient() {
         document.body.removeChild(link);
     };
 
+    const handleMapFilterChange = (filterName: keyof typeof mapFilters, value: any) => {
+        setMapFilters(prev => ({ ...prev, [filterName]: value }));
+    };
+
+    const clearMapFilters = () => {
+        setMapFilters({
+            companyName: '',
+            franchisee: [],
+            status: [],
+            isCompany: 'all',
+        });
+    };
+
+    const filteredMapData = useMemo(() => {
+        return allMapData.filter(item => {
+            const companyNameMatch = mapFilters.companyName ? item.companyName.toLowerCase().includes(mapFilters.companyName.toLowerCase()) : true;
+            const franchiseeMatch = mapFilters.franchisee.length === 0 || (item.franchisee && mapFilters.franchisee.includes(item.franchisee));
+            const statusMatch = mapFilters.status.length === 0 || mapFilters.status.includes(item.status);
+            const isCompanyMatch = mapFilters.isCompany === 'all' || (mapFilters.isCompany === 'yes' && item.isCompany) || (mapFilters.isCompany === 'no' && !item.isCompany);
+
+            return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch;
+        });
+    }, [allMapData, mapFilters]);
+    
+    const uniqueFranchisees: Option[] = useMemo(() => {
+        const franchisees = new Set(allMapData.map(lead => lead.franchisee).filter(Boolean));
+        return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [allMapData]);
+
+    const allStatuses: LeadStatus[] = [...new Set(allMapData.map(l => l.status))];
+    const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
+    const hasActiveMapFilters = Object.values(mapFilters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== 'all' && v !== ''));
+
+
     if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
     }
@@ -903,13 +952,56 @@ export default function LeadsMapClient() {
     return (
         <>
             <div className="flex flex-col h-full gap-4">
-                <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
-                    <Card className="md:col-span-1 flex flex-col">
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+                
+                <Collapsible>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Map Filters</CardTitle>
+                            <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /><span className="ml-2">Toggle Filters</span></Button>
+                            </CollapsibleTrigger>
+                        </CardHeader>
+                        <CollapsibleContent>
+                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                <div className="space-y-2">
+                                    <Label htmlFor="map-companyName">Company Name</Label>
+                                    <Input id="map-companyName" value={mapFilters.companyName} onChange={e => handleMapFilterChange('companyName', e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Franchisee</Label>
+                                    <MultiSelectCombobox options={uniqueFranchisees} selected={mapFilters.franchisee} onSelectedChange={(val) => handleMapFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Status</Label>
+                                    <MultiSelectCombobox options={statusOptions} selected={mapFilters.status} onSelectedChange={(val) => handleMapFilterChange('status', val)} placeholder="Select statuses..."/>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Type</Label>
+                                    <Select value={mapFilters.isCompany} onValueChange={(value) => handleMapFilterChange('isCompany', value as 'all' | 'yes' | 'no')}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="yes">Signed Customers</SelectItem>
+                                            <SelectItem value="no">Leads</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {hasActiveMapFilters && (
+                                    <div className="space-y-2 col-start-1">
+                                        <Button variant="ghost" onClick={clearMapFilters}>
+                                            <X className="mr-2 h-4 w-4" /> Clear Map Filters
+                                        </Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
+                
+                <Card className="flex-grow flex flex-col md:flex-row gap-4 h-full">
+                    <div className='w-full md:w-1/3 flex flex-col'>
+                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
                             <CardHeader className="pb-2 flex-shrink-0">
-                                <CardTitle>
-                                    {activeTab === 'route-planner' ? 'Route Planner' : 'Prospecting Areas'}
-                                </CardTitle>
                                 <TabsList className="grid w-full grid-cols-2 mt-2">
                                     <TabsTrigger value="route-planner">Route Planner</TabsTrigger>
                                     <TabsTrigger value="prospecting">Prospecting</TabsTrigger>
@@ -936,8 +1028,8 @@ export default function LeadsMapClient() {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent>
-                                                        <DropdownMenuItem onClick={() => startDrawing('rectangle')}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => startDrawing('polygon')}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => startDrawing('RECTANGLE')}><RectangleHorizontal className="mr-2 h-4 w-4" />Rectangle</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => startDrawing('POLYGON')}><Spline className="mr-2 h-4 w-4" />Polygon</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                  </DropdownMenu>
                                                  {isDrawing && (<Button variant="ghost" size="icon" onClick={cancelDrawing}><X className="h-4 w-4 text-destructive"/></Button>)}
@@ -1014,10 +1106,10 @@ export default function LeadsMapClient() {
                                         </TabsList>
                                         <TabsContent value="by-drawing" className="space-y-4 pt-4">
                                             <div className="flex gap-2">
-                                                <Button variant={drawingMode === 'rectangle' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('rectangle')} disabled={isDrawing}>
+                                                <Button variant={drawingMode === 'RECTANGLE' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('RECTANGLE')} disabled={isDrawing}>
                                                     <RectangleHorizontal className="mr-2"/> Rectangle
                                                 </Button>
-                                                <Button variant={drawingMode === 'polygon' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('polygon')} disabled={isDrawing}>
+                                                <Button variant={drawingMode === 'POLYGON' ? 'secondary' : 'outline'} size="sm" className="flex-1" onClick={() => startDrawing('POLYGON')} disabled={isDrawing}>
                                                     <Spline className="mr-2"/> Polygon
                                                 </Button>
                                                 {isDrawing && (<Button variant="ghost" size="icon" onClick={cancelDrawing}><X className="h-4 w-4 text-destructive"/></Button>)}
@@ -1063,8 +1155,9 @@ export default function LeadsMapClient() {
                                 </CardFooter>
                             </TabsContent>
                         </Tabs>
-                    </Card>
-                    <div className="md:col-span-2 flex-grow min-h-[60vh] relative rounded-lg overflow-hidden border">
+                    </div>
+
+                    <div className="md:col-span-2 flex-grow min-h-[70vh] md:min-h-full relative rounded-lg overflow-hidden border">
                          <GoogleMap
                             mapContainerStyle={containerStyle}
                             center={center}
@@ -1081,19 +1174,17 @@ export default function LeadsMapClient() {
                             {isLoaded && isDrawing && (
                                 <DrawingManagerF
                                     onLoad={(dm) => (drawingManagerRef.current = dm)}
-                                    onCircleComplete={(c) => onDrawingComplete(c)}
                                     onRectangleComplete={(r) => onDrawingComplete(r)}
                                     onPolygonComplete={(p) => onDrawingComplete(p)}
-                                    drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode.toUpperCase() as keyof typeof google.maps.drawing.OverlayType] : null}
+                                    drawingMode={drawingMode ? google.maps.drawing.OverlayType[drawingMode] : null}
                                     options={{
                                         drawingControl: false,
-                                        circleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
                                         rectangleOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
                                         polygonOptions: { fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 },
                                     }}
                                 />
                             )}
-                            {allMapData.map(lead => (
+                            {filteredMapData.map(lead => (
                                 <MarkerF
                                     key={lead.id}
                                     position={{ lat: lead.latitude!, lng: lead.longitude! }}
@@ -1120,12 +1211,6 @@ export default function LeadsMapClient() {
                                             <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
                                                 <ExternalLink className="mr-2 h-4 w-4" /> View Profile
                                             </Button>
-                                            {selectedLead.isCompany && (
-                                                 <Button size="sm" variant="outline" onClick={() => {}} disabled={isSearchingNearby || (selectedLead.lastProspected && isToday(selectedLead.lastProspected))}>
-                                                    {isSearchingNearby && selectedLead?.id === selectedLead.id ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                                    {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
-                                                </Button>
-                                            )}
                                         </div>
                                     </div>
                                 </InfoWindowF>
@@ -1133,8 +1218,9 @@ export default function LeadsMapClient() {
                             {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true, preserveViewport: true }} />}
                         </GoogleMap>
                     </div>
-                </div>
+                </Card>
             </div>
+            {/* Dialogs */}
             <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -1185,8 +1271,7 @@ export default function LeadsMapClient() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            
-             <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
+            <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Save Prospecting Area</DialogTitle>
@@ -1222,7 +1307,7 @@ export default function LeadsMapClient() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-             <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
+            <Dialog open={isProspectsDialogOpen} onOpenChange={setIsProspectsDialogOpen}>
                 <DialogContent className="w-[95vw] md:w-full max-w-4xl">
                     <DialogHeader>
                         <DialogTitle>Nearby Prospects</DialogTitle>
@@ -1338,7 +1423,7 @@ export default function LeadsMapClient() {
              <Dialog open={!!duplicateLeadId} onOpenChange={() => setDuplicateLeadId(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Duplicate Found</DialogTitle>
+                        <DialogTitle>Duplicate Lead Found</DialogTitle>
                         <DialogDescription>
                             A lead with this name or phone number already exists in the system.
                         </DialogDescription>
