@@ -1042,36 +1042,56 @@ async function logCallActivity(
         "Sign Up": { status: "Customer Opportunity" },
     };
 
-    if (callData.outcome === 'No Access/Contact') {
-        const assignees = ['Lachlan Ball', 'Grant Leddy'];
-        const assignee = assignees[Math.floor(Math.random() * assignees.length)];
-        
+    if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Move to Outbound') {
         const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, {
+        const leadSnap = await getDoc(leadRef);
+        const leadData = leadSnap.data();
+
+        let assignee = '';
+        if (leadData?.visitNoteID) {
+            const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
+            const noteSnap = await getDoc(noteRef);
+            if (noteSnap.exists()) {
+                const visitNote = noteSnap.data() as VisitNote;
+                if (visitNote.capturedByUid) {
+                    const userRef = doc(firestore, 'users', visitNote.capturedByUid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const fieldSalesRepProfile = userSnap.data() as UserProfile;
+                        if (fieldSalesRepProfile.linkedBDR) {
+                            assignee = fieldSalesRepProfile.linkedBDR;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!assignee) {
+            const assignees = ['Lachlan Ball', 'Grant Leddy'];
+            assignee = assignees[Math.floor(Math.random() * assignees.length)];
+        }
+        
+        const updateData: { dialerAssigned: string, fieldSales: boolean, customerStatus?: LeadStatus } = {
             dialerAssigned: assignee,
             fieldSales: false
-        });
+        };
 
-        const notesToLog = `Outcome: No Access/Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+        let notesToLog = '';
+        let returnStatus: LeadStatus | undefined = undefined;
+
+        if (callData.outcome === 'No Access/Contact') {
+             notesToLog = `Outcome: No Access/Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+             returnStatus = undefined;
+        } else { // Move to Outbound
+            updateData.customerStatus = 'Priority Field Lead';
+            notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+            returnStatus = 'Priority Field Lead';
+        }
+
+        await updateDoc(leadRef, updateData);
         await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
-        
-        return undefined;
-    }
 
-    if (callData.outcome === 'Move to Outbound') {
-        const assignees = ['Lachlan Ball', 'Grant Leddy'];
-        const assignee = assignees[Math.floor(Math.random() * assignees.length)];
-        
-        const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, {
-            dialerAssigned: assignee,
-            customerStatus: 'Priority Field Lead',
-            fieldSales: false
-        });
-
-        const notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
-        await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
-        return 'Priority Field Lead';
+        return returnStatus;
     }
 
 
@@ -1081,7 +1101,6 @@ async function logCallActivity(
     const activityPromise = logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author });
     const statusPromise = status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve();
     
-    // Await Firebase operations
     await Promise.all([activityPromise, statusPromise]);
     
     return status;
