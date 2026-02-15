@@ -272,6 +272,7 @@ export interface StorableRoute {
   totalDistance?: string | null;
   totalDuration?: string | null;
   isProspectingArea?: boolean;
+  notes?: string;
   streets?: { place_id: string; description: string; latitude: number; longitude: number; }[];
   shape?: {
     type: 'rectangle' | 'polygon';

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -148,6 +149,7 @@ export default function LeadsMapClient() {
     const [isSaveAreaDialogOpen, setIsSaveAreaDialogOpen] = useState(false);
     const [isSavingArea, setIsSavingArea] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
+    const [newAreaNotes, setNewAreaNotes] = useState('');
     const [newAreaAssignee, setNewAreaAssignee] = useState('');
     const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string; latitude: number; longitude: number; }[]>([]);
     const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
@@ -651,6 +653,7 @@ export default function LeadsMapClient() {
                 travelMode: 'DRIVING',
                 isProspectingArea: true,
                 streets: streetsForArea,
+                notes: newAreaNotes,
             };
 
             const newId = await saveUserRoute(assigneeId, areaData);
@@ -659,8 +662,8 @@ export default function LeadsMapClient() {
             
             toast({ title: 'Success', description: 'Prospecting area saved successfully.' });
             
-            // Reset state
             setNewAreaName('');
+            setNewAreaNotes('');
             setNewAreaAssignee('');
             setStreetsForArea([]);
             setIsSaveAreaDialogOpen(false);
@@ -1174,6 +1177,44 @@ export default function LeadsMapClient() {
                 </div>
             </div>
         </div>
+        <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Save Prospecting Area</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="area-name">Area Name</Label>
+                        <Input id="area-name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="area-notes">Notes</Label>
+                        <Textarea id="area-notes" value={newAreaNotes} onChange={(e) => setNewAreaNotes(e.target.value)} placeholder="Add any relevant notes for this area..." />
+                    </div>
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                        <div className="space-y-2">
+                            <Label htmlFor="area-assignee">Assign To</Label>
+                            <Select onValueChange={setNewAreaAssignee}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a user (optional)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin').map(u => (
+                                        <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveProspectingArea} disabled={isSavingArea}>
+                        {isSavingArea ? <Loader /> : 'Save Area'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </>
     );
 }

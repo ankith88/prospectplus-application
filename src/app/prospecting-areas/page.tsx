@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -269,31 +270,39 @@ export default function ProspectingAreasPage() {
                   ))}
                 </GoogleMap>
             </div>
-            <div className="mt-4 space-y-2">
-                <h4 className="font-semibold">Contents of this Area</h4>
-                <ScrollArea className="h-32 border rounded-md">
-                    <div className="p-2 text-sm">
-                        {selectedArea.leads && selectedArea.leads.length > 0 && (
-                            <div>
-                                <p className="font-medium">Leads ({selectedArea.leads.length}):</p>
-                                <ul className="list-disc list-inside">
-                                    {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
-                                </ul>
-                            </div>
-                        )}
-                        {selectedArea.streets && selectedArea.streets.length > 0 && (
-                            <div className="mt-2">
-                                <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
-                                <ul className="list-disc list-inside">
-                                    {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
-                                </ul>
-                            </div>
-                        )}
-                        {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
-                            <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
-                        )}
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h4 className="font-semibold">Contents of this Area</h4>
+                    <ScrollArea className="h-32 border rounded-md mt-2">
+                        <div className="p-2 text-sm">
+                            {selectedArea.leads && selectedArea.leads.length > 0 && (
+                                <div>
+                                    <p className="font-medium">Leads ({selectedArea.leads.length}):</p>
+                                    <ul className="list-disc list-inside">
+                                        {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {selectedArea.streets && selectedArea.streets.length > 0 && (
+                                <div className="mt-2">
+                                    <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
+                                    <ul className="list-disc list-inside">
+                                        {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
+                                <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
+                            )}
+                        </div>
+                    </ScrollArea>
+                </div>
+                 {selectedArea.notes && (
+                    <div>
+                        <h4 className="font-semibold">Notes</h4>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap p-3 mt-2 border rounded-md bg-secondary/50 h-32 overflow-y-auto">{selectedArea.notes}</p>
                     </div>
-                </ScrollArea>
+                )}
             </div>
           </CardContent>
         </Card>
