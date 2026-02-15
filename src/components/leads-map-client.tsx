@@ -63,6 +63,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from './ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { LeadStatusBadge } from './lead-status-badge';
 
 
 type ProspectWithLeadInfo = {
@@ -395,8 +396,7 @@ export default function LeadsMapClient() {
                     mapInstance.setZoom(12);
                 }
             },
-            (error) => {
-                console.error("Error getting user location:", error);
+            () => {
                 setLocationError("Could not get your location. Please enable location services in your browser.");
             }
         );
@@ -929,7 +929,7 @@ export default function LeadsMapClient() {
 
     return (
         <>
-        <div className="flex flex-col h-full gap-4">
+        <div className="h-full flex flex-col gap-4">
              <Card>
                 <Collapsible>
                     <CardHeader>
