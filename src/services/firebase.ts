@@ -10,6 +10,7 @@ import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, Tr
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
+import { sendFieldSalesOutcomeToNetSuite } from './netsuite-field-sales-proxy';
 
 async function logActivity(
   leadId: string,
@@ -538,6 +539,7 @@ async function getArchivedLeads(): Promise<Lead[]> {
                     lastProspected: data.lastProspected,
                     dateLeadEntered: data.dateLeadEntered,
                     customerSource: data.customerSource,
+                    visitNoteID: data.visitNoteID,
                 };
                 
                 const lastActivity = await getLastActivity(doc.id);
@@ -1092,6 +1094,42 @@ async function logCallActivity(
         await logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author });
 
         return returnStatus;
+    }
+    
+    if (callData.outcome === "Send Quote/Free Trial" || callData.outcome === "Sign Up") {
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        const leadData = leadSnap.data();
+        let linkedSalesRep = '';
+
+        if (leadData?.visitNoteID) {
+            const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
+            const noteSnap = await getDoc(noteRef);
+            if (noteSnap.exists()) {
+                const visitNote = noteSnap.data() as VisitNote;
+                if (visitNote.capturedByUid) {
+                    const userRef = doc(firestore, 'users', visitNote.capturedByUid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const fieldSalesRepProfile = userSnap.data() as UserProfile;
+                        if (fieldSalesRepProfile.linkedSalesRep) {
+                            linkedSalesRep = fieldSalesRepProfile.linkedSalesRep;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!linkedSalesRep) {
+             console.warn(`[logCallActivity] Could not find linkedSalesRep for lead ${leadId}. NetSuite API call will be skipped.`);
+        } else {
+            // Call the new NetSuite API
+            await sendFieldSalesOutcomeToNetSuite({
+                leadId,
+                outcome: callData.outcome,
+                linkedSalesRep,
+            });
+        }
     }
 
 
