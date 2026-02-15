@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -926,7 +925,7 @@ export default function LeadsMapClient() {
 
     return (
         <>
-        <div className="flex flex-col gap-4 h-full">
+        <div className="flex flex-col gap-4">
              <Card>
                 <Collapsible>
                     <CardHeader>
@@ -998,7 +997,7 @@ export default function LeadsMapClient() {
                 </Collapsible>
             </Card>
             <Card>
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <Tabs defaultValue="prospecting" value={activeTab} onValueChange={setActiveTab}>
                     <CardHeader>
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
@@ -1096,156 +1095,70 @@ export default function LeadsMapClient() {
                     </TabsContent>
                 </Tabs>
              </Card>
-            <div className="relative rounded-lg overflow-hidden border h-[60vh] xl:h-auto xl:flex-grow">
-                {isLoaded ? (
-                    <GoogleMap
-                        mapContainerStyle={containerStyle}
-                        center={center}
-                        zoom={4}
-                        onLoad={onMapLoad}
-                        onClick={onMapClick}
-                        options={{
-                            streetViewControl: false,
-                            mapTypeControl: false,
-                            fullscreenControl: false
-                        }}
-                    >
-                        {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
+            <div className="relative rounded-lg overflow-hidden border h-[80vh]">
+                <GoogleMap
+                    mapContainerStyle={containerStyle}
+                    center={center}
+                    zoom={4}
+                    onLoad={onMapLoad}
+                    onClick={onMapClick}
+                    options={{
+                        streetViewControl: false,
+                        mapTypeControl: false,
+                        fullscreenControl: false
+                    }}
+                >
+                    {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
 
-                        {filteredMapData.map(lead => (
-                            <MarkerF
-                                key={lead.id}
-                                position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                                onClick={() => onMarkerClick(lead)}
-                                onMouseOver={() => setHoveredLeadId(lead.id)}
-                                onMouseOut={() => setHoveredLeadId(null)}
-                                icon={{
-                                    url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id) || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)
-                                }}
-                            />
-                        ))}
-                        
-                        {searchedLocation && (
-                            <MarkerF
-                                position={searchedLocation}
-                                icon={{
-                                    url: "http://maps.google.com/mapfiles/kml/paddle/black-dot.png",
-                                }}
-                            />
-                        )}
+                    {filteredMapData.map(lead => (
+                        <MarkerF
+                            key={lead.id}
+                            position={{ lat: lead.latitude!, lng: lead.longitude! }}
+                            onClick={() => onMarkerClick(lead)}
+                            onMouseOver={() => setHoveredLeadId(lead.id)}
+                            onMouseOut={() => setHoveredLeadId(null)}
+                            icon={{
+                                url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id) || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)
+                            }}
+                        />
+                    ))}
+                    
+                    {searchedLocation && (
+                        <MarkerF
+                            position={searchedLocation}
+                            icon={{
+                                url: "http://maps.google.com/mapfiles/ms/icons/black_small.png",
+                            }}
+                        />
+                    )}
 
-                        {selectedLead && (
-                            <InfoWindowF
-                                position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
-                                onCloseClick={onInfoWindowClose}
-                                options={infoWindowOptions}
-                            >
-                                <div className="p-2 max-w-xs space-y-2">
-                                    <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</p>
-                                    <div className="flex items-center gap-2">
-                                        <LeadStatusBadge status={selectedLead.status} />
-                                        {selectedLead.isCompany && <Badge variant="secondary">Signed Customer</Badge>}
-                                    </div>
-                                    <div className="flex flex-col gap-2 pt-2">
-                                        <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
-                                            <ExternalLink className="mr-2 h-4 w-4" /> View {selectedLead.isCompany ? 'Profile' : 'Lead'}
-                                        </Button>
-                                    </div>
+                    {selectedLead && (
+                        <InfoWindowF
+                            position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
+                            onCloseClick={onInfoWindowClose}
+                            options={infoWindowOptions}
+                        >
+                            <div className="p-2 max-w-xs space-y-2">
+                                <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
+                                <p className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</p>
+                                <div className="flex items-center gap-2">
+                                    <LeadStatusBadge status={selectedLead.status} />
+                                    {selectedLead.isCompany && <Badge variant="secondary">Signed Customer</Badge>}
                                 </div>
-                            </InfoWindowF>
-                        )}
+                                <div className="flex flex-col gap-2 pt-2">
+                                    <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
+                                        <ExternalLink className="mr-2 h-4 w-4" /> View {selectedLead.isCompany ? 'Profile' : 'Lead'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </InfoWindowF>
+                    )}
 
-                         {myLocation && <MarkerF position={myLocation} title="Your Location" icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green.png" }} />}
+                     {myLocation && <MarkerF position={myLocation} title="Your Location" icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green.png" }} />}
 
-                    </GoogleMap>
-                ) : loadError ? (
-                  <div className="flex h-full items-center justify-center text-destructive">Error loading map.</div>
-                ) : (
-                  <div className="flex h-full items-center justify-center"><Loader /></div>
-                )}
+                </GoogleMap>
             </div>
         </div>
-            <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Save Route</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                         <div className="space-y-2">
-                            <Label htmlFor="route-name">Route Name</Label>
-                            <Input id="route-name" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Schedule For</Label>
-                             <Popover>
-                                <PopoverTrigger asChild>
-                                <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}
-                                </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                        {userProfile?.role !== 'Field Sales' && (
-                            <div className="space-y-2">
-                                <Label>Assign To</Label>
-                                <Select value={routeAssignee} onValueChange={setRouteAssignee}>
-                                    <SelectTrigger><SelectValue placeholder="Select a Field Sales Rep" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={userProfile?.uid || ''}>Myself</SelectItem>
-                                        {allUsers.filter(u => u.role === 'Field Sales').map(user => (
-                                            <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsSaveRouteDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSaveRoute} disabled={isSavingRoute || !routeName.trim()}>
-                            {isSavingRoute ? <Loader/> : 'Save Route'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-             <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Save Prospecting Area</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                         <div className="space-y-2">
-                            <Label htmlFor="area-name">Area Name</Label>
-                            <Input id="area-name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} />
-                        </div>
-                        {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
-                            <div className="space-y-2">
-                                <Label>Assign To</Label>
-                                <Select value={newAreaAssignee} onValueChange={setNewAreaAssignee}>
-                                    <SelectTrigger><SelectValue placeholder="Select a Field Sales Rep" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={userProfile?.uid || ''}>Myself ({userProfile?.displayName})</SelectItem>
-                                        {allUsers.filter(u => u.role === 'Field Sales').map(user => (
-                                            <SelectItem key={user.uid} value={user.uid}>{user.displayName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSaveProspectingArea} disabled={isSavingArea || !newAreaName.trim()}>
-                            {isSavingArea ? <Loader /> : 'Save Area'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }
