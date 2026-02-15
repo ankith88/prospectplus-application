@@ -477,7 +477,7 @@ export function NewLeadForm() {
     }
 
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined, visitNoteId: visitNoteId || undefined });
+      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined, visitNoteID: visitNoteId || undefined });
 
       if (result.success && result.leadId) {
         if (visitNoteId) {
