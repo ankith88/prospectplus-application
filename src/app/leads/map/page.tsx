@@ -1,5 +1,5 @@
 
-"use client";
+'use client';
 
 import LeadsMapClient from '@/components/leads-map-client';
 import { useAuth } from '@/hooks/use-auth';
@@ -28,7 +28,7 @@ export default function TerritoryMapPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 h-full">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Territory Map</h1>
         <p className="text-muted-foreground">Visualize your leads and signed customers on the map.</p>
