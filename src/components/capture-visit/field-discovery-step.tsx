@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -115,7 +116,7 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                         name="inconvenience"
                         render={({ field }) => (
                             <FormItem className="space-y-3">
-                                <FormLabel>How inconvenient is this today?</FormLabel>
+                                <FormLabel>How inconvenient is this?</FormLabel>
                                 <FormControl>
                                     <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
                                         <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Very inconvenient" /></FormControl><FormLabel className="font-normal">Very inconvenient</FormLabel></FormItem>
@@ -149,7 +150,7 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                         name="taskOwner"
                         render={({ field }) => (
                             <FormItem className="space-y-3">
-                                <FormLabel>Who owns this task today?</FormLabel>
+                                <FormLabel>Who owns this task?</FormLabel>
                                 <FormControl>
                                     <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
                                         <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Shared admin responsibility" /></FormControl><FormLabel className="font-normal">Shared admin responsibility</FormLabel></FormItem>
