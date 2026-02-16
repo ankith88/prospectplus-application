@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -6,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, FormProvider } from 'react-hook-form';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -20,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -410,6 +409,34 @@ export default function CaptureVisitPage() {
         }
     };
     
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                 toast({
+                    title: 'Uploading images...',
+                    description: `Processing ${files.length} image(s).`,
+                });
+            }
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    if (typeof reader.result === 'string') {
+                        setImages(prev => [...prev, reader.result as string]);
+                    }
+                };
+                reader.onerror = () => {
+                    toast({
+                        variant: 'destructive',
+                        title: 'Upload Failed',
+                        description: `Could not read file: ${file.name}`,
+                    });
+                }
+                reader.readAsDataURL(file);
+            });
+        }
+    };
+
     const handleCaptureImage = () => {
         if (!videoRef.current || !canvasRef.current) return;
         const canvas = canvasRef.current;
@@ -667,6 +694,11 @@ export default function CaptureVisitPage() {
                                             onChange={handleInputChange}
                                         />
                                         <Button type="button" variant="outline" size="icon" onClick={() => { setPreviousStep('search'); setStep('camera'); }}><Camera className="h-4 w-4" /></Button>
+                                        <Label htmlFor="image-upload" className={cn(buttonVariants({ variant: "outline", size: "icon" }), "cursor-pointer")}>
+                                            <Upload className="h-4 w-4" />
+                                            <span className="sr-only">Upload images</span>
+                                        </Label>
+                                        <Input id="image-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
                                     </div>
                                 </div>
                                 { (selectedPlace || images.length > 0) && (
@@ -775,6 +807,11 @@ export default function CaptureVisitPage() {
                                             <div className="relative">
                                                 <Textarea placeholder="Why is this a good lead? What are their pain points? e.g. 'Good lead, they send 20 parcels/week and are unhappy with their current courier. Interested in a free trial.'" {...field} rows={10} />
                                                 <div className="absolute bottom-2 right-2 flex gap-1">
+                                                    <Label htmlFor="image-upload-capture" className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "cursor-pointer")}>
+                                                        <Upload />
+                                                        <span className="sr-only">Upload images</span>
+                                                    </Label>
+                                                    <Input id="image-upload-capture" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
                                                     <Button type="button" variant="ghost" size="icon" onClick={() => { setPreviousStep('capture'); setStep('camera'); }}><Camera /></Button>
                                                     <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                         {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
@@ -930,4 +967,3 @@ export default function CaptureVisitPage() {
         </>
     );
 }
-
