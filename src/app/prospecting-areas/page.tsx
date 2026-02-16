@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -33,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
+import { Input } from '@/components/ui/input';
 
 
 const containerStyle = {
@@ -56,7 +56,7 @@ const formatAddressDisplay = (address?: Address) => {
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
   const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
-  const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
+  const [nearbyCompanies, setNearbyCompanies] = useState<(Lead & { distance: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
@@ -64,6 +64,7 @@ export default function ProspectingAreasPage() {
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
   const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
   const [hoveredCompanyId, setHoveredCompanyId] = useState<string | null>(null);
+  const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -196,18 +197,34 @@ export default function ProspectingAreasPage() {
     }
     
     if (areaCenter) {
-        const nearby = allCompanies.filter(company => {
-            if (!company.latitude || !company.longitude) return false;
-            const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, companyLatLng);
-            return distance <= 5000; // 5km
-        });
-        setNearbyCompanies(nearby);
+        const nearbyWithDistance = allCompanies
+            .map(company => {
+                if (!company.latitude || !company.longitude) return null;
+                const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, companyLatLng);
+                if (distance <= 5000) {
+                    return { ...company, distance };
+                }
+                return null;
+            })
+            .filter((c): c is Lead & { distance: number } => c !== null);
+        
+        nearbyWithDistance.sort((a, b) => a.distance - b.distance);
+        setNearbyCompanies(nearbyWithDistance);
     } else {
         setNearbyCompanies([]);
     }
 
   }, [selectedArea, map, allCompanies]);
+
+  const filteredNearbyCompanies = useMemo(() => {
+    if (!searchNearbyQuery) {
+      return nearbyCompanies;
+    }
+    return nearbyCompanies.filter(company =>
+      company.companyName.toLowerCase().includes(searchNearbyQuery.toLowerCase())
+    );
+  }, [nearbyCompanies, searchNearbyQuery]);
 
 
   const handleDeleteArea = async () => {
@@ -307,7 +324,7 @@ export default function ProspectingAreasPage() {
                           icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
                       />
                   ))}
-                  {nearbyCompanies.map(company => (
+                  {filteredNearbyCompanies.map(company => (
                         <MarkerF
                             key={`company-${company.id}`}
                             position={{ lat: company.latitude!, lng: company.longitude! }}
@@ -372,8 +389,15 @@ export default function ProspectingAreasPage() {
         {nearbyCompanies.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Nearby Signed Customers ({nearbyCompanies.length})</CardTitle>
-                <CardDescription>Customers within a 5km radius of the prospecting area.</CardDescription>
+                <CardTitle>Nearby Signed Customers ({filteredNearbyCompanies.length})</CardTitle>
+                <CardDescription>Customers within a 5km radius of the prospecting area, sorted by proximity.</CardDescription>
+                 <div className="pt-2">
+                    <Input
+                        placeholder="Search nearby customers..."
+                        value={searchNearbyQuery}
+                        onChange={(e) => setSearchNearbyQuery(e.target.value)}
+                    />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="max-h-96 overflow-y-auto">
@@ -383,11 +407,12 @@ export default function ProspectingAreasPage() {
                         <TableHead>Company Name</TableHead>
                         <TableHead>Address</TableHead>
                         <TableHead>Franchisee</TableHead>
+                        <TableHead>Distance</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {nearbyCompanies.map(company => (
+                        {filteredNearbyCompanies.map(company => (
                         <TableRow
                             key={company.id}
                             onMouseEnter={() => setHoveredCompanyId(company.id)}
@@ -396,6 +421,7 @@ export default function ProspectingAreasPage() {
                             <TableCell>{company.companyName}</TableCell>
                             <TableCell>{formatAddressDisplay(company.address as Address)}</TableCell>
                             <TableCell>{company.franchisee || 'N/A'}</TableCell>
+                            <TableCell>{(company.distance / 1000).toFixed(2)} km</TableCell>
                             <TableCell className="text-right">
                             <Button asChild size="sm" variant="outline">
                                 <Link href={`/companies/${company.id}`} target="_blank">
