@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -33,6 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import Link from 'next/link';
 
 
 const containerStyle = {
@@ -63,6 +63,7 @@ export default function ProspectingAreasPage() {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
   const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
+  const [hoveredCompanyId, setHoveredCompanyId] = useState<string | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -250,6 +251,7 @@ export default function ProspectingAreasPage() {
       </header>
 
       {selectedArea && (
+        <>
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -310,7 +312,7 @@ export default function ProspectingAreasPage() {
                             key={`company-${company.id}`}
                             position={{ lat: company.latitude!, lng: company.longitude! }}
                             title={company.companyName}
-                            icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
+                            icon={{ url: hoveredCompanyId === company.id ? "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" : "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
                             onClick={() => setSelectedCompany(company)}
                         />
                     ))}
@@ -367,6 +369,50 @@ export default function ProspectingAreasPage() {
             </div>
           </CardContent>
         </Card>
+        {nearbyCompanies.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Nearby Signed Customers ({nearbyCompanies.length})</CardTitle>
+                <CardDescription>Customers within a 5km radius of the prospecting area.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-96 overflow-y-auto">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead>Company Name</TableHead>
+                        <TableHead>Address</TableHead>
+                        <TableHead>Franchisee</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {nearbyCompanies.map(company => (
+                        <TableRow
+                            key={company.id}
+                            onMouseEnter={() => setHoveredCompanyId(company.id)}
+                            onMouseLeave={() => setHoveredCompanyId(null)}
+                        >
+                            <TableCell>{company.companyName}</TableCell>
+                            <TableCell>{formatAddressDisplay(company.address as Address)}</TableCell>
+                            <TableCell>{company.franchisee || 'N/A'}</TableCell>
+                            <TableCell className="text-right">
+                            <Button asChild size="sm" variant="outline">
+                                <Link href={`/companies/${company.id}`} target="_blank">
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View Profile
+                                </Link>
+                            </Button>
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                </div>
+              </CardContent>
+            </Card>
+        )}
+      </>
       )}
 
       <Card>
