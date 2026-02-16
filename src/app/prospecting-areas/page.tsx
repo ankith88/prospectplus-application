@@ -5,14 +5,14 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile } from '@/lib/types';
+import type { SavedRoute, UserProfile, Lead, Address } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase } from '@/services/firebase';
 import {
   GoogleMap,
   useJsApiLoader,
@@ -48,14 +48,21 @@ const defaultCenter = {
 
 const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
+const formatAddressDisplay = (address?: Address) => {
+    if (!address) return '';
+    return [address.address1, address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+};
 
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
+  const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
+  const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
+  const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -81,7 +88,10 @@ export default function ProspectingAreasPage() {
     const fetchProspectingAreas = async () => {
       setLoading(true);
       try {
-        const allRoutes = await getAllUserRoutes();
+        const [allRoutes, companies] = await Promise.all([
+          getAllUserRoutes(),
+          getCompaniesFromFirebase()
+        ]);
         const areas = allRoutes.filter(route => route.isProspectingArea);
         
         let userAreas = areas;
@@ -91,6 +101,7 @@ export default function ProspectingAreasPage() {
 
         userAreas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setProspectingAreas(userAreas);
+        setAllCompanies(companies);
       } catch (error) {
         console.error("Failed to fetch prospecting areas:", error);
         toast({ variant: "destructive", title: 'Error', description: 'Could not fetch prospecting areas.' });
@@ -151,6 +162,7 @@ export default function ProspectingAreasPage() {
 
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
+    setNearbyCompanies([]);
     if(map && window.google) {
       const bounds = new window.google.maps.LatLngBounds();
       let hasBounds = false;
@@ -184,15 +196,41 @@ export default function ProspectingAreasPage() {
       
       if (hasBounds) {
         map.fitBounds(bounds);
+        const areaCenter = bounds.getCenter();
+        const nearby = allCompanies.filter(company => {
+            if (!company.latitude || !company.longitude) return false;
+            const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
+            return distance <= 5000; // 5km
+        });
+        setNearbyCompanies(nearby);
       } else if (area.leads?.length === 1 && area.leads[0].latitude && area.leads[0].longitude) {
-          map.panTo({ lat: area.leads[0].latitude, lng: area.leads[0].longitude });
+          const center = { lat: area.leads[0].latitude, lng: area.leads[0].longitude };
+          map.panTo(center);
           map.setZoom(15);
+           const areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+           const nearby = allCompanies.filter(company => {
+               if (!company.latitude || !company.longitude) return false;
+               const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+               const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
+               return distance <= 5000;
+           });
+           setNearbyCompanies(nearby);
       } else if (area.streets?.length === 1 && area.streets[0].latitude && area.streets[0].longitude) {
-          map.panTo({ lat: area.streets[0].latitude, lng: area.streets[0].longitude });
+          const center = { lat: area.streets[0].latitude, lng: area.streets[0].longitude };
+          map.panTo(center);
           map.setZoom(15);
+           const areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+           const nearby = allCompanies.filter(company => {
+               if (!company.latitude || !company.longitude) return false;
+               const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+               const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
+               return distance <= 5000;
+           });
+           setNearbyCompanies(nearby);
       }
     }
-  }, [map]);
+  }, [map, allCompanies]);
 
 
   if (loading || authLoading || !isLoaded) {
@@ -268,6 +306,30 @@ export default function ProspectingAreasPage() {
                           icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
                       />
                   ))}
+                  {nearbyCompanies.map(company => (
+                        <MarkerF
+                            key={`company-${company.id}`}
+                            position={{ lat: company.latitude!, lng: company.longitude! }}
+                            title={company.companyName}
+                            icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
+                            onClick={() => setSelectedCompany(company)}
+                        />
+                    ))}
+
+                    {selectedCompany && (
+                        <InfoWindowF
+                            position={{ lat: Number(selectedCompany.latitude!), lng: Number(selectedCompany.longitude!) }}
+                            onCloseClick={() => setSelectedCompany(null)}
+                        >
+                            <div className="p-2 max-w-xs space-y-2">
+                                <h3 className="font-bold text-lg">{selectedCompany.companyName}</h3>
+                                <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedCompany.address as Address)}</p>
+                                <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
+                                    <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                </Button>
+                            </div>
+                        </InfoWindowF>
+                    )}
                 </GoogleMap>
             </div>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
