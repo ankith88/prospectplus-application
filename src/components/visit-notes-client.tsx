@@ -334,7 +334,7 @@ export default function VisitNotesClient() {
           onProcessed={handleNoteProcessed}
         />
       )}
-      <AlertDialog open={!!noteToDelete} onOpenChange={(open) => !open && setNoteToDelete(null)}>
+      <AlertDialog open={!!noteToDelete} onOpenChange={(open) => {if (!open) setNoteToDelete(null)}}>
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -346,7 +346,7 @@ export default function VisitNotesClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-       <Dialog open={!!viewingImages} onOpenChange={(open) => !open && setViewingImages(null)}>
+       <Dialog open={!!viewingImages} onOpenChange={(open) => {if (!open) setViewingImages(null)}}>
         <DialogContent className="max-w-4xl">
             <DialogHeader>
                 <DialogTitle>Captured Images</DialogTitle>
