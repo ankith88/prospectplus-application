@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -300,7 +301,7 @@ export default function CaptureVisitPage() {
     useEffect(() => {
         if (isAdminOrLeadGen) {
             getAllUsers().then(users => {
-                const fsUsers = users.filter(u => u.role === 'Field Sales');
+                const fsUsers = users.filter(u => u.role === 'Field Sales' && !u.disabled);
                 setFieldSalesUsers(fsUsers);
             });
         }
