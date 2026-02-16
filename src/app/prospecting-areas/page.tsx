@@ -119,7 +119,7 @@ export default function ProspectingAreasPage() {
 
     const bounds = new window.google.maps.LatLngBounds();
     let hasPoints = false;
-    
+
     (selectedArea.streets || []).forEach(street => {
         if(street.latitude && street.longitude) {
             bounds.extend({ lat: street.latitude, lng: street.longitude });
@@ -140,6 +140,73 @@ export default function ProspectingAreasPage() {
     
     return defaultCenter;
   }, [selectedArea, isLoaded]);
+
+  useEffect(() => {
+    if (!selectedArea || !map || !window.google) {
+        setNearbyCompanies([]);
+        return;
+    }
+    
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasBounds = false;
+
+    if (selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
+        selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
+        hasBounds = true;
+    } else if (selectedArea.shape?.type === 'rectangle' && selectedArea.shape.bounds) {
+        const rectBounds = new window.google.maps.LatLngBounds(selectedArea.shape.bounds);
+        bounds.union(rectBounds);
+        hasBounds = true;
+    }
+
+    if (selectedArea.streets && selectedArea.streets.length > 0) {
+        selectedArea.streets.forEach(street => {
+            if (street.latitude && street.longitude) {
+                bounds.extend({ lat: street.latitude, lng: street.longitude });
+                hasBounds = true;
+            }
+        });
+    }
+
+    if (selectedArea.leads && selectedArea.leads.length > 0) {
+        selectedArea.leads.forEach(lead => {
+            if (lead.latitude && lead.longitude) {
+                bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+                hasBounds = true;
+            }
+        });
+    }
+
+    let areaCenter: google.maps.LatLng | null = null;
+
+    if (hasBounds) {
+        map.fitBounds(bounds);
+        areaCenter = bounds.getCenter();
+    } else if (selectedArea.leads?.length === 1 && selectedArea.leads[0].latitude && selectedArea.leads[0].longitude) {
+        const center = { lat: selectedArea.leads[0].latitude, lng: selectedArea.leads[0].longitude };
+        map.panTo(center);
+        map.setZoom(15);
+        areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+    } else if (selectedArea.streets?.length === 1 && selectedArea.streets[0].latitude && selectedArea.streets[0].longitude) {
+        const center = { lat: selectedArea.streets[0].latitude, lng: selectedArea.streets[0].longitude };
+        map.panTo(center);
+        map.setZoom(15);
+        areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+    }
+    
+    if (areaCenter) {
+        const nearby = allCompanies.filter(company => {
+            if (!company.latitude || !company.longitude) return false;
+            const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
+            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, companyLatLng);
+            return distance <= 5000; // 5km
+        });
+        setNearbyCompanies(nearby);
+    } else {
+        setNearbyCompanies([]);
+    }
+
+  }, [selectedArea, map, allCompanies]);
 
 
   const handleDeleteArea = async () => {
@@ -162,75 +229,7 @@ export default function ProspectingAreasPage() {
 
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
-    setNearbyCompanies([]);
-    if(map && window.google) {
-      const bounds = new window.google.maps.LatLngBounds();
-      let hasBounds = false;
-
-      if (area.shape?.type === 'polygon' && area.shape.paths?.[0]?.length) {
-        area.shape.paths[0].forEach(path => bounds.extend(path));
-        hasBounds = true;
-      } else if (area.shape?.type === 'rectangle' && area.shape.bounds) {
-        const rectBounds = new window.google.maps.LatLngBounds(area.shape.bounds);
-        bounds.union(rectBounds);
-        hasBounds = true;
-      }
-
-      if (area.streets && area.streets.length > 0) {
-        area.streets.forEach(street => {
-            if (street.latitude && street.longitude) {
-                bounds.extend({ lat: street.latitude, lng: street.longitude });
-                hasBounds = true;
-            }
-        });
-      }
-
-      if (area.leads && area.leads.length > 0) {
-        area.leads.forEach(lead => {
-            if (lead.latitude && lead.longitude) {
-                bounds.extend({ lat: lead.latitude, lng: lead.longitude });
-                hasBounds = true;
-            }
-        });
-      }
-      
-      if (hasBounds) {
-        map.fitBounds(bounds);
-        const areaCenter = bounds.getCenter();
-        const nearby = allCompanies.filter(company => {
-            if (!company.latitude || !company.longitude) return false;
-            const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
-            return distance <= 5000; // 5km
-        });
-        setNearbyCompanies(nearby);
-      } else if (area.leads?.length === 1 && area.leads[0].latitude && area.leads[0].longitude) {
-          const center = { lat: area.leads[0].latitude, lng: area.leads[0].longitude };
-          map.panTo(center);
-          map.setZoom(15);
-           const areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
-           const nearby = allCompanies.filter(company => {
-               if (!company.latitude || !company.longitude) return false;
-               const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-               const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
-               return distance <= 5000;
-           });
-           setNearbyCompanies(nearby);
-      } else if (area.streets?.length === 1 && area.streets[0].latitude && area.streets[0].longitude) {
-          const center = { lat: area.streets[0].latitude, lng: area.streets[0].longitude };
-          map.panTo(center);
-          map.setZoom(15);
-           const areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
-           const nearby = allCompanies.filter(company => {
-               if (!company.latitude || !company.longitude) return false;
-               const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-               const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter, companyLatLng);
-               return distance <= 5000;
-           });
-           setNearbyCompanies(nearby);
-      }
-    }
-  }, [map, allCompanies]);
+  }, []);
 
 
   if (loading || authLoading || !isLoaded) {
