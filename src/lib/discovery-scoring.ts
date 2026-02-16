@@ -9,16 +9,16 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       if (data.discoverySignals?.includes('Pays for Australia Post')) {
           groupA_score = 6;
           reasonParts.push('+6 for paying for AP services.');
-      } else if (data.discoverySignals?.includes('Staff handle post')) {
+      } else if (data.discoverySignals?.includes('Staff Handle Post')) {
           groupA_score = 5;
           reasonParts.push('+5 for staff handling post.');
       }
       
       let groupB_score = 0;
       if (data.discoverySignals?.includes('Drop-off is a hassle')) { groupB_score += 6; reasonParts.push('+6 for drop-off hassle.'); }
-      if (data.discoverySignals?.includes('Banking runs')) { groupB_score += 4; reasonParts.push('+4 for banking runs.'); }
-      if (data.discoverySignals?.includes('Inter-office deliveries')) { groupB_score += 4; reasonParts.push('+4 for inter-office deliveries.'); }
-      if (data.discoverySignals?.includes('Needs same-day delivery')) { groupB_score += 3; reasonParts.push('+3 for same-day needs.'); }
+      if (data.discoverySignals?.includes('Banking Runs')) { groupB_score += 4; reasonParts.push('+4 for banking runs.'); }
+      if (data.discoverySignals?.includes('Inter-office Deliveries')) { groupB_score += 4; reasonParts.push('+4 for inter-office deliveries.'); }
+      if (data.discoverySignals?.includes('Needs same-day Delivery')) { groupB_score += 3; reasonParts.push('+3 for same-day needs.'); }
 
       let groupC_score = 0;
       if (data.discoverySignals?.includes('Uses Australia Post')) { groupC_score += 3; reasonParts.push('+3 for using AP products.'); }
@@ -59,7 +59,7 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       // --- Final Score & Routing ---
       const finalScore = Math.round(discoveryScore * (qualificationScore / 10));
 
-      const servicePoints = (data.discoverySignals?.filter(s => ['Pays for Australia Post', 'Staff handle post', 'Drop-off is a hassle', 'Banking runs', 'Inter-office deliveries', 'Needs same-day delivery'].includes(s)).length || 0) > 0;
+      const servicePoints = (data.discoverySignals?.filter(s => ['Pays for Australia Post', 'Staff Handle Post', 'Drop-off is a hassle', 'Banking Runs', 'Inter-office Deliveries', 'Needs same-day Delivery'].includes(s)).length || 0) > 0;
       const productPoints = (data.discoverySignals?.filter(s => ['Uses Australia Post', 'Uses other couriers (<5kg)', 'Uses other couriers (100+ per week)', 'Shopify / WooCommerce', 'Other label platforms'].includes(s)).length || 0) > 0;
 
       let routingTag = 'Service'; // Default

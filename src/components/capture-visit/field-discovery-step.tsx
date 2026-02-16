@@ -14,19 +14,40 @@ import {
 } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-const discoverySignals = [
-  { id: 'pays_aus_post', label: 'Pays for Australia Post', description: 'They currently pay for Australia Post services.' },
-  { id: 'staff_handle_post', label: 'Staff handle post', description: 'Staff leave the office to lodge mail/parcels.' },
-  { id: 'drop_off_hassle', label: 'Drop-off is a hassle', description: 'They find dropping off items inconvenient.' },
-  { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'They use AP products like MyPost Business.' },
-  { id: 'uses_couriers_lt_5kg', label: 'Uses other couriers (<5kg)', description: 'They use other couriers for small parcels.' },
-  { id: 'uses_couriers_100_plus', label: 'Uses other couriers (100+ per week)', description: 'They are a high-volume shipper with other couriers.' },
-  { id: 'banking_runs', label: 'Banking runs', description: 'Staff leave the office for banking errands.' },
-  { id: 'needs_same_day', label: 'Needs same-day delivery', description: 'They have a need for same-day delivery services.' },
-  { id: 'inter_office', label: 'Inter-office deliveries', description: 'They move items between their own offices.' },
-  { id: 'shopify_woo', label: 'Shopify / WooCommerce', description: 'They use Shopify or WooCommerce for e-commerce.' },
-  { id: 'other_label_platform', label: 'Other label platforms', description: 'They use other platforms like Starshipit.' },
-];
+const discoverySignalGroups = {
+    postOffice: {
+        question: "Who currently runs items back & forth to the Post Office?",
+        signals: [
+            { id: 'pays_aus_post', label: 'Pays for Australia Post', description: 'They currently pay for Australia Post services.' },
+            { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge mail/parcels.' },
+        ],
+        conditional: { id: 'drop_off_hassle', label: 'Drop-off is a hassle', description: 'They find dropping off items inconvenient.', dependsOn: ['Pays for Australia Post', 'Staff Handle Post'] }
+    },
+    shipping: {
+        question: "Who are you Shipping with?",
+        signals: [
+            { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'They use AP products like MyPost Business.' },
+            { id: 'uses_couriers_lt_5kg', label: 'Uses other couriers (<5kg)', description: 'They use other couriers for small parcels.' },
+            { id: 'uses_couriers_100_plus', label: 'Uses other couriers (100+ per week)', description: 'They are a high-volume shipper with other couriers.' },
+        ]
+    },
+    website: {
+        question: "What is your website built on?",
+        signals: [
+            { id: 'shopify_woo', label: 'Shopify / WooCommerce', description: 'They use Shopify or WooCommerce for e-commerce.' },
+            { id: 'other_label_platform', label: 'Other label platforms', description: 'They use other platforms like Starshipit.' },
+        ]
+    },
+    errands: {
+        question: "Is there anything else you leave the office for?",
+        signals: [
+            { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking errands.' },
+            { id: 'needs_same_day', label: 'Needs same-day Delivery', description: 'They have a need for same-day delivery services.' },
+            { id: 'inter_office', label: 'Inter-office Deliveries', description: 'They move items between their own offices.' },
+        ]
+    }
+}
+
 
 const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
@@ -35,8 +56,31 @@ const discoverySchema = z.object({
   taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
 });
 
+const SignalButton = ({ signal, field }: { signal: { id: string; label: string; description: string; }, field: any }) => {
+    const isSelected = field.value?.includes(signal.label);
+    return (
+        <Button
+            key={signal.id}
+            type="button"
+            variant={isSelected ? 'default' : 'outline'}
+            className="h-auto flex flex-col items-start p-3 text-left"
+            onClick={() => {
+                const newValue = isSelected
+                    ? field.value?.filter((v: string) => v !== signal.label)
+                    : [...(field.value || []), signal.label];
+                field.onChange(newValue);
+            }}
+        >
+            <span className="font-semibold">{signal.label}</span>
+            <span className="text-xs font-normal opacity-70">{signal.description}</span>
+        </Button>
+    );
+};
+
 export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-    const { control } = useFormContext<z.infer<typeof discoverySchema>>();
+    const { control, watch } = useFormContext<z.infer<typeof discoverySchema>>();
+    const watchedSignals = watch('discoverySignals') || [];
+    const showDropOffHassle = watchedSignals.some(s => discoverySignalGroups.postOffice.conditional.dependsOn.includes(s));
 
     return (
         <div className="space-y-8">
@@ -44,31 +88,20 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                 control={control}
                 name="discoverySignals"
                 render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className="text-lg font-semibold">Discovery Signals</FormLabel>
-                        <FormDescription>Capture observable behaviour and decision context.</FormDescription>
-                        <div className="flex flex-wrap gap-2 pt-2">
-                            {discoverySignals.map((signal) => {
-                                const isSelected = field.value?.includes(signal.label);
-                                return (
-                                    <Button
-                                        key={signal.id}
-                                        type="button"
-                                        variant={isSelected ? 'default' : 'outline'}
-                                        className="h-auto flex flex-col items-start p-3 text-left"
-                                        onClick={() => {
-                                            const newValue = isSelected
-                                                ? field.value?.filter((v) => v !== signal.label)
-                                                : [...(field.value || []), signal.label];
-                                            field.onChange(newValue);
-                                        }}
-                                    >
-                                        <span className="font-semibold">{signal.label}</span>
-                                        <span className="text-xs font-normal opacity-70">{signal.description}</span>
-                                    </Button>
-                                );
-                            })}
-                        </div>
+                    <FormItem className="space-y-6">
+                        {Object.values(discoverySignalGroups).map(group => (
+                            <div key={group.question} className="space-y-3">
+                                <FormLabel className="text-base font-semibold">{group.question}</FormLabel>
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                    {group.signals.map(signal => (
+                                        <SignalButton key={signal.id} signal={signal} field={field} />
+                                    ))}
+                                    {group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
+                                        <SignalButton signal={group.conditional} field={field} />
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                         <FormMessage />
                     </FormItem>
                 )}
