@@ -348,36 +348,41 @@ export default function LeadsMapClient() {
             if ((node as any).autocomplete) return;
     
             const autocomplete = new window.google.maps.places.Autocomplete(node, {
-                types: ['address'],
+                types: ['geocode', 'establishment'],
                 componentRestrictions: { country: 'au' },
             });
-            autocomplete.setFields(['place_id', 'formatted_address', 'geometry']);
+            autocomplete.setFields(['place_id', 'name', 'types', 'formatted_address', 'geometry']);
     
             autocomplete.addListener('place_changed', () => {
                 const place = autocomplete.getPlace();
-                if (place.place_id && place.formatted_address && place.geometry?.location) {
-                    const newStreet = { 
-                        place_id: place.place_id, 
-                        description: place.formatted_address,
-                        latitude: place.geometry.location.lat(),
-                        longitude: place.geometry.location.lng(),
-                    };
-                    
-                    setStreetsForArea(prev => {
-                        if (prev.some(s => s.place_id === newStreet.place_id)) {
-                            return prev;
+                if (place.place_id && place.geometry?.location) {
+                    const isBusiness = place.types?.includes('establishment');
+                    const description = isBusiness ? place.name : place.formatted_address;
+
+                    if (description) {
+                        const newStreet = { 
+                            place_id: place.place_id, 
+                            description: description,
+                            latitude: place.geometry.location.lat(),
+                            longitude: place.geometry.location.lng(),
+                        };
+                        
+                        setStreetsForArea(prev => {
+                            if (prev.some(s => s.place_id === newStreet.place_id)) {
+                                return prev;
+                            }
+                            return [...prev, newStreet];
+                        });
+                        
+                        if (place.geometry?.location) {
+                            const location = place.geometry.location.toJSON();
+                            setSearchedLocation(location);
+                            map.panTo(location);
+                            map.setZoom(17);
                         }
-                        return [...prev, newStreet];
-                    });
-                    
-                    if (place.geometry?.location) {
-                        const location = place.geometry.location.toJSON();
-                        setSearchedLocation(location);
-                        map.panTo(location);
-                        map.setZoom(17);
-                    }
-                    if (node) {
-                        node.value = '';
+                        if (node) {
+                            node.value = '';
+                        }
                     }
                 }
             });
@@ -1144,7 +1149,7 @@ export default function LeadsMapClient() {
                             <MarkerF
                                 position={searchedLocation}
                                 icon={{
-                                    url: "http://maps.google.com/mapfiles/ms/icons/black_small.png",
+                                    url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
                                 }}
                             />
                         )}
@@ -1218,3 +1223,4 @@ export default function LeadsMapClient() {
         </>
     );
 }
+
