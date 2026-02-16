@@ -925,6 +925,37 @@ export default function LeadsMapClient() {
     const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
     const hasActiveMapFilters = Object.values(mapFilters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== 'all' && v !== ''));
 
+    const Legend = () => (
+      <div className="p-4 border-t">
+        <h4 className="font-medium mb-2 text-base">Legend</h4>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Signed Customer" className="h-4 w-4" />
+            <span>Signed Customer</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/ltblue-dot.png" alt="Lead (New)" className="h-4 w-4" />
+            <span>Lead (New)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Lead (In Progress)" className="h-4 w-4" />
+            <span>Lead (In Progress)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" alt="Lead (Qualified/Trial)" className="h-4 w-4" />
+            <span>Lead (Qualified/Trial)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lead (Lost/Unqualified)" className="h-4 w-4" />
+            <span>Lead (Lost/Unqualified)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img src="http://maps.google.com/mapfiles/ms/icons/purple-dot.png" alt="Selected for Route" className="h-4 w-4" />
+            <span>Selected for Route</span>
+          </div>
+        </div>
+      </div>
+    );
 
     if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
@@ -1017,7 +1048,7 @@ export default function LeadsMapClient() {
             </Card>
             <div className="flex-grow flex flex-col md:flex-row gap-4">
                 <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
-                    <Tabs defaultValue="prospecting" value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+                    <Tabs defaultValue="prospecting" value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-grow">
                          <CardHeader className="pb-2 flex-shrink-0">
                             <TabsList className="grid w-full grid-cols-2 mt-2">
                                 <TabsTrigger value="prospecting">Prospecting Area</TabsTrigger>
@@ -1115,6 +1146,7 @@ export default function LeadsMapClient() {
                             </CardContent>
                         </TabsContent>
                     </Tabs>
+                    <Legend />
                 </Card>
                 <div className="relative rounded-lg overflow-hidden border h-[80vh] flex-grow">
                     <GoogleMap
@@ -1223,4 +1255,3 @@ export default function LeadsMapClient() {
         </>
     );
 }
-
