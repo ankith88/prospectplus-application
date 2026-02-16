@@ -59,6 +59,10 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       // --- Final Score & Routing ---
       const finalScore = Math.round(discoveryScore * (qualificationScore / 10));
 
+      if (data.discoverySignals?.includes('Decisions made at Head Office')) {
+        return { ...data, score: Math.min(finalScore, 100), routingTag: 'Corporate', scoringReason: 'Lead routed to Corporate because decisions are made at Head Office.' };
+      }
+
       const servicePoints = (data.discoverySignals?.filter(s => ['Pays for Australia Post', 'Staff Handle Post', 'Drop-off is a hassle', 'Banking Runs', 'Inter-office Deliveries', 'Needs same-day Delivery'].includes(s)).length || 0) > 0;
       const productPoints = (data.discoverySignals?.filter(s => ['Uses Australia Post', 'Uses other couriers (<5kg)', 'Uses other couriers (100+ per week)', 'Shopify / WooCommerce', 'Other label platforms'].includes(s)).length || 0) > 0;
 

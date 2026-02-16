@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -45,6 +44,12 @@ const discoverySignalGroups = {
             { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking errands.' },
             { id: 'needs_same_day', label: 'Needs same-day Delivery', description: 'They have a need for same-day delivery services.' },
             { id: 'inter_office', label: 'Inter-office Deliveries', description: 'They move items between their own offices.' },
+        ]
+    },
+    decisionMaking: {
+        question: "Where are decisions made?",
+        signals: [
+            { id: 'ho_decisions', label: 'Decisions made at Head Office', description: 'Financial or shipping decisions are not made at this location.' },
         ]
     }
 }
@@ -97,7 +102,7 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                                     {group.signals.map(signal => (
                                         <SignalButton key={signal.id} signal={signal} field={field} />
                                     ))}
-                                    {group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
+                                    {'conditional' in group && group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
                                         <SignalButton signal={group.conditional} field={field} />
                                     )}
                                 </div>
