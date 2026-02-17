@@ -139,7 +139,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isFieldSales = userProfile?.role === 'Field Sales';
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
@@ -343,34 +343,48 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>History</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
+                  {!isFieldSales && (
+                    <>
+                      <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
+                          <Link href="/appointments">
+                              <Calendar />
+                              <span>All Appointments</span>
+                          </Link>
+                          </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      {(userProfile?.role !== 'Field Sales Admin') && (
+                      <>
+                          <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
+                              <Link href="/calls">
+                                  <Phone />
+                                  <span>All Calls</span>
+                              </Link>
+                              </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
+                              <Link href="/transcripts">
+                                  <FileText />
+                                  <span>All Transcripts</span>
+                              </Link>
+                              </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                      </>
+                      )}
+                    </>
+                  )}
+                  {canViewD2D && (
                     <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
-                        <Link href="/appointments">
-                            <Calendar />
-                            <span>All Appointments</span>
+                        <SidebarMenuSubButton asChild isActive={isActive("/check-ins")}>
+                        <Link href="/check-ins">
+                            <CheckSquare />
+                            <span>Check-ins</span>
                         </Link>
                         </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.role !== 'Field Sales Admin' && userProfile?.role !== 'Field Sales') && (
-                    <>
-                        <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/calls")}>
-                            <Link href="/calls">
-                                <Phone />
-                                <span>All Calls</span>
-                            </Link>
-                            </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/transcripts")}>
-                            <Link href="/transcripts">
-                                <FileText />
-                                <span>All Transcripts</span>
-                            </Link>
-                            </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                    </>
-                    )}
+                  )}
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}

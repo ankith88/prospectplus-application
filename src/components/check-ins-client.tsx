@@ -1,8 +1,7 @@
 
+'use client';
 
-"use client";
-
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
@@ -18,18 +17,17 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers, getAllActivities } from '@/services/firebase';
+import { getAllLeadsForReport, getAllUsers } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
 import { Badge } from './ui/badge';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 
-type CheckedInLead = Lead & { checkInActivity: Activity };
-type SortableKeys = 'checkInDate' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned';
+type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned';
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [allCheckInActivities, setAllCheckInActivities] = useState<Activity[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -42,24 +40,21 @@ export default function CheckinsClientPage() {
     user: [] as string[],
     franchisee: [] as string[],
     status: [] as string[],
+    hasVisitNote: 'yes' as 'all' | 'yes' | 'no',
   });
   
-  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'checkInDate', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'dateLeadEntered', direction: 'descending' });
 
 
   const fetchData = async () => {
     setLoading(true);
-    toast({ title: 'Loading Data...', description: 'Fetching check-in records.' });
+    toast({ title: 'Loading Data...', description: 'Fetching lead records.' });
     try {
-        const [refreshedLeads, refreshedUsers, refreshedActivities] = await Promise.all([
+        const [refreshedLeads, refreshedUsers] = await Promise.all([
             getAllLeadsForReport(),
             getAllUsers(),
-            getAllActivities(true),
         ]);
-        
-
         setAllLeads(refreshedLeads);
-        setAllCheckInActivities(refreshedActivities);
         setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
     } catch (error) {
         console.error("Failed to refresh data:", error);
@@ -84,32 +79,17 @@ export default function CheckinsClientPage() {
       user: [],
       franchisee: [],
       status: [],
+      hasVisitNote: 'yes',
     });
   };
 
-  const filteredCheckedInLeads = useMemo(() => {
-    const checkInLeadIds = new Map<string, Activity>();
+  const filteredLeads = useMemo(() => {
+    let leads = allLeads;
 
-    allCheckInActivities.forEach(activity => {
-        if (!checkInLeadIds.has(activity.leadId) || new Date(activity.date) > new Date(checkInLeadIds.get(activity.leadId)!.date)) {
-            checkInLeadIds.set(activity.leadId, activity);
-        }
-    });
-
-    let leads = allLeads
-        .filter(lead => checkInLeadIds.has(lead.id))
-        .map(lead => ({
-            ...lead,
-            checkInActivity: checkInLeadIds.get(lead.id)!
-        }));
-
-    // Apply filters
     if (userProfile?.role === 'Field Sales') {
         leads = leads.filter(l => l.dialerAssigned === userProfile.displayName);
-    } else {
-         if (filters.user.length > 0) {
-            leads = leads.filter(l => l.dialerAssigned && filters.user.includes(l.dialerAssigned));
-        }
+    } else if (filters.user.length > 0) {
+        leads = leads.filter(l => l.dialerAssigned && filters.user.includes(l.dialerAssigned));
     }
     
     if (filters.franchisee.length > 0) {
@@ -120,30 +100,35 @@ export default function CheckinsClientPage() {
         leads = leads.filter(l => filters.status.includes(l.status));
     }
 
+    if (filters.hasVisitNote !== 'all') {
+        leads = leads.filter(l => filters.hasVisitNote === 'yes' ? !!l.visitNoteID : !l.visitNoteID);
+    }
+
     if (filters.date?.from) {
         const fromDate = startOfDay(filters.date.from);
         const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
         leads = leads.filter(l => {
-            const checkInDate = new Date(l.checkInActivity.date);
-            return checkInDate >= fromDate && checkInDate <= toDate;
+            if (!l.dateLeadEntered) return false;
+            const leadDate = new Date(l.dateLeadEntered);
+            return leadDate >= fromDate && leadDate <= toDate;
         });
     }
 
     return leads;
 
-  }, [allCheckInActivities, allLeads, filters, userProfile]);
+  }, [allLeads, filters, userProfile]);
 
-  const sortedCheckedInLeads = useMemo(() => {
-    let sortableItems: CheckedInLead[] = [...filteredCheckedInLeads];
+  const sortedLeads = useMemo(() => {
+    let sortableItems: Lead[] = [...filteredLeads];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         let aValue: any;
         let bValue: any;
 
         switch (sortConfig.key) {
-            case 'checkInDate':
-                aValue = new Date(a.checkInActivity.date).getTime();
-                bValue = new Date(b.checkInActivity.date).getTime();
+            case 'dateLeadEntered':
+                aValue = a.dateLeadEntered ? new Date(a.dateLeadEntered).getTime() : 0;
+                bValue = b.dateLeadEntered ? new Date(b.dateLeadEntered).getTime() : 0;
                 break;
             case 'leadId':
                 aValue = a.id;
@@ -154,8 +139,8 @@ export default function CheckinsClientPage() {
                 bValue = b.entityId || '';
                 break;
             default:
-                aValue = a[sortConfig.key] ?? '';
-                bValue = b[sortConfig.key] ?? '';
+                aValue = a[sortConfig.key as keyof Lead] ?? '';
+                bValue = b[sortConfig.key as keyof Lead] ?? '';
         }
         
         if (aValue < bValue) {
@@ -168,7 +153,7 @@ export default function CheckinsClientPage() {
       });
     }
     return sortableItems;
-  }, [filteredCheckedInLeads, sortConfig]);
+  }, [filteredLeads, sortConfig]);
 
   const requestSort = (key: SortableKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -199,7 +184,7 @@ export default function CheckinsClientPage() {
     return Array.from(statuses).map(s => ({ value: s, label: s}));
   }, [allLeads]);
 
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || !!val);
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (val && val !== 'yes'));
 
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
@@ -213,14 +198,14 @@ export default function CheckinsClientPage() {
   };
   
   const handleExport = () => {
-    if (sortedCheckedInLeads.length === 0) {
+    if (sortedLeads.length === 0) {
         toast({ title: 'No Data', description: 'There is no data to export.'});
         return;
     }
 
-    const headers = ['Check-in Date', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales'];
-    const rows = sortedCheckedInLeads.map(lead => [
-        escapeCsvCell(format(new Date(lead.checkInActivity.date), 'PPpp')),
+    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales Rep'];
+    const rows = sortedLeads.map(lead => [
+        escapeCsvCell(lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'),
         escapeCsvCell(lead.id),
         escapeCsvCell(lead.entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
@@ -234,7 +219,7 @@ export default function CheckinsClientPage() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.setAttribute('download', `check-in-history_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `field_sourced_leads_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -248,8 +233,8 @@ export default function CheckinsClientPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Check-in History</h1>
-        <p className="text-muted-foreground">A log of all physical lead check-ins.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Field-Sourced Leads</h1>
+        <p className="text-muted-foreground">A log of all leads generated from visit notes.</p>
       </header>
         <Collapsible>
             <Card>
@@ -302,11 +287,22 @@ export default function CheckinsClientPage() {
                                 placeholder="Select statuses..."
                             />
                         </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="hasVisitNote">Source</Label>
+                            <Select value={filters.hasVisitNote} onValueChange={(value) => handleFilterChange('hasVisitNote', value)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="yes">With Visit Note</SelectItem>
+                                    <SelectItem value="no">Without Visit Note</SelectItem>
+                                    <SelectItem value="all">All</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="space-y-2">
-                            <Label htmlFor="date">Check-in Date</Label>
+                            <Label htmlFor="date">Date Created</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                <Button id="date" variant="outline" className="w-full justify-start text-left font-normal">
+                                <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {filters.date?.from ? (
                                     filters.date.to ? (
@@ -343,10 +339,10 @@ export default function CheckinsClientPage() {
         <Card>
             <CardHeader className="flex flex-row justify-between items-center">
               <div>
-                <CardTitle>Checked-in Leads</CardTitle>
-                <CardDescription>Found {sortedCheckedInLeads.length} check-in(s) matching your criteria.</CardDescription>
+                <CardTitle>Field-Sourced Leads</CardTitle>
+                <CardDescription>Found {sortedLeads.length} lead(s) matching your criteria.</CardDescription>
               </div>
-              <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedCheckedInLeads.length === 0}>
+              <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
                 <Download className="mr-2 h-4 w-4" /> Export
               </Button>
             </CardHeader>
@@ -354,25 +350,25 @@ export default function CheckinsClientPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('checkInDate')} className="group -ml-4">Check-in Date{getSortIndicator('checkInDate')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('dateLeadEntered')} className="group -ml-4">Date Created{getSortIndicator('dateLeadEntered')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
-                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales Rep{getSortIndicator('dialerAssigned')}</Button></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {sortedCheckedInLeads.length > 0 ? (
-                            sortedCheckedInLeads.map(lead => (
+                        {sortedLeads.length > 0 ? (
+                            sortedLeads.map(lead => (
                                 <TableRow key={lead.id}>
-                                    <TableCell>{format(new Date(lead.checkInActivity.date), 'PPpp')}</TableCell>
+                                    <TableCell>{lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'}</TableCell>
                                     <TableCell>{lead.id}</TableCell>
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Button variant="link" asChild className="p-0 h-auto">
-                                            <Link href={`/leads/${lead.id}`}>{lead.companyName}</Link>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
                                         </Button>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                                             <MapPin className="h-3 w-3"/>
@@ -387,7 +383,7 @@ export default function CheckinsClientPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={7} className="h-24 text-center">
-                                    No check-ins found for the selected filters.
+                                    No leads found for the selected filters.
                                 </TableCell>
                             </TableRow>
                         )}
@@ -398,5 +394,3 @@ export default function CheckinsClientPage() {
     </div>
   );
 }
-
-    
