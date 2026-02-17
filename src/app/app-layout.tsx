@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -138,10 +139,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
+  const isFieldSales = userProfile?.role === 'Field Sales';
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin'].includes(userProfile.role);
-  const canCreateLead = userProfile?.role && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales Admin'].includes(userProfile.role);
+  const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
   const canViewVisits = canCaptureVisit || canProcessVisits;
@@ -220,14 +222,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>Routes</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/saved-routes")}>
-                      <Link href="/saved-routes">
-                        <Save />
-                        <span>Saved Routes</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+                  {!isFieldSales && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/saved-routes")}>
+                        <Link href="/saved-routes">
+                          <Save />
+                          <span>Saved Routes</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
                    <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive('/prospecting-areas')}>
                         <Link href="/prospecting-areas">
@@ -236,14 +240,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
-                      <Link href="/completed-routes">
-                        <CheckCircle2 />
-                        <span>Completed Routes</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+                   {!isFieldSales && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
+                        <Link href="/completed-routes">
+                          <CheckCircle2 />
+                          <span>Completed Routes</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                   )}
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
@@ -267,51 +273,63 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Territory Map">
-                <Link href="/leads/map">
-                  <Map />
-                  <span>Territory Map</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {canViewReporting && (
+            {!isFieldSales && (
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <BarChart2 />
-                  <span>Reporting</span>
-                </SidebarMenuButton>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
-                      <Link href="/reports">
-                        <BarChart2 />
-                        <span>Outbound Reporting</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
-                      <Link href="/field-activity-report">
-                        <BarChart3 />
-                        <span>Field Activity</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </SidebarMenuItem>
-            )}
-            {canViewReporting && userProfile?.role === 'user' && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
-                  <Link href="/reports">
-                    <BarChart2 />
-                    <span>Outbound Reporting</span>
+                <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Territory Map">
+                  <Link href="/leads/map">
+                    <Map />
+                    <span>Territory Map</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales') && (
+            {canViewReporting && (
+                isFieldSales ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/field-activity-report")} tooltip="Field Activity">
+                      <Link href="/field-activity-report">
+                        <BarChart3 />
+                        <span>Field Activity</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : userProfile?.role === 'user' ? (
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
+                        <Link href="/reports">
+                            <BarChart2 />
+                            <span>Outbound Reporting</span>
+                        </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                ) : (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton>
+                      <BarChart2 />
+                      <span>Reporting</span>
+                    </SidebarMenuButton>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
+                          <Link href="/reports">
+                            <BarChart2 />
+                            <span>Outbound Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                          <Link href="/field-activity-report">
+                            <BarChart3 />
+                            <span>Field Activity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </SidebarMenuItem>
+                )
+            )}
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin') && (
                  <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                     <Link href="/signed-customers">
@@ -359,7 +377,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {!userProfile?.role?.includes('Lead Gen') && (
+            {!userProfile?.role?.includes('Lead Gen') && !isFieldSales && (
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">
