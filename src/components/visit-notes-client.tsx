@@ -306,7 +306,10 @@ export default function VisitNotesClient() {
                                         <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
                                             <Edit className="mr-2 h-4 w-4" /> Edit
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem disabled={!note.imageUrls || note.imageUrls.length === 0} onClick={() => openImageViewer(note.imageUrls || [])}>
+                                        <DropdownMenuItem
+                                            disabled={!note.imageUrls || note.imageUrls.length === 0}
+                                            onSelect={(e) => e.preventDefault()}
+                                            onClick={() => openImageViewer(note.imageUrls || [])}>
                                             <Camera className="mr-2 h-4 w-4" /> View Images
                                         </DropdownMenuItem>
                                         {canDelete && (
