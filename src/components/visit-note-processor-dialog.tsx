@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -178,7 +177,13 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                         <ScrollArea className="h-40">
                             <div className="flex gap-4 flex-wrap p-1">
                                 {note.imageUrls.map((url, index) => (
-                                    <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={200} height={120} className="rounded-md border object-cover"/>
+                                    <div 
+                                      key={index} 
+                                      className="relative w-[200px] h-[120px] rounded-md overflow-hidden border bg-background group cursor-pointer"
+                                      onClick={() => window.open(url, '_blank')}
+                                    >
+                                      <Image src={url} alt={`Visit image ${index + 1}`} fill className="object-cover transition-transform group-hover:scale-105"/>
+                                    </div>
                                 ))}
                             </div>
                         </ScrollArea>

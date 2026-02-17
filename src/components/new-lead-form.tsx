@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -581,8 +580,12 @@ export function NewLeadForm() {
                   <h3 className="text-lg font-medium flex items-center gap-2"><Camera className="w-5 h-5" />Captured Images from Visit</h3>
                   <div className="flex flex-wrap gap-4">
                     {imageUrls.map((url, index) => (
-                      <div key={index}>
-                        <Image src={url} alt={`Visit image ${index + 1}`} width={200} height={120} className="rounded-md border object-cover"/>
+                      <div 
+                        key={index}
+                        className="relative w-[200px] h-[120px] rounded-md overflow-hidden border bg-background group cursor-pointer"
+                        onClick={() => window.open(url, '_blank')}
+                      >
+                        <Image src={url} alt={`Visit image ${index + 1}`} fill className="object-cover transition-transform group-hover:scale-105"/>
                       </div>
                     ))}
                   </div>
@@ -710,10 +713,10 @@ export function NewLeadForm() {
                         <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.email" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="john.d@example.com" /></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name="contact.phone" render={({ field }) => (
-                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} type="tel" placeholder="0412 345 678" /></FormControl><FormMessage /></FormItem>
                     )}/>
                 </div>
             </div>

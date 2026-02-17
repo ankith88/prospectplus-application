@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -291,7 +290,7 @@ export default function CaptureVisitPage() {
                     console.error(e);
                     toast({ variant: 'destructive', title: 'Error', description: 'Failed to load visit note.' });
                 } finally {
-                    setIsLoadingNote(false);
+                    setIsLoadingFromNote(false);
                 }
             }
             fetchNote();
@@ -716,9 +715,16 @@ export default function CaptureVisitPage() {
                                                 <Label>Captured Images</Label>
                                                 <div className="flex gap-2 flex-wrap">
                                                     {images.map((img, index) => (
-                                                        <div key={index} className="relative">
-                                                            <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover" />
-                                                            <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
+                                                        <div key={index} className="relative cursor-pointer group" onClick={() => window.open(img, '_blank')}>
+                                                            <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover transition-opacity group-hover:opacity-80" />
+                                                            <Button 
+                                                              variant="destructive" 
+                                                              size="icon" 
+                                                              className="absolute -top-1 -right-1 h-5 w-5" 
+                                                              onClick={(e) => { e.stopPropagation(); handleDeleteImage(index); }}
+                                                            >
+                                                              <X className="h-3 w-3" />
+                                                            </Button>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -791,9 +797,16 @@ export default function CaptureVisitPage() {
                                             <Label>Captured Images</Label>
                                             <div className="flex gap-2 flex-wrap items-center">
                                                 {images.map((img, index) => (
-                                                    <div key={index} className="relative">
-                                                        <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover" />
-                                                        <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5" onClick={() => handleDeleteImage(index)}><X className="h-3 w-3" /></Button>
+                                                    <div key={index} className="relative cursor-pointer group" onClick={() => window.open(img, '_blank')}>
+                                                        <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover transition-opacity group-hover:opacity-80" />
+                                                        <Button 
+                                                          variant="destructive" 
+                                                          size="icon" 
+                                                          className="absolute -top-1 -right-1 h-5 w-5" 
+                                                          onClick={(e) => { e.stopPropagation(); handleDeleteImage(index); }}
+                                                        >
+                                                          <X className="h-3 w-3" />
+                                                        </Button>
                                                     </div>
                                                 ))}
                                             </div>
