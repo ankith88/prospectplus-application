@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, UserProfile } from '@/lib/types';
@@ -13,11 +12,11 @@ import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers, getVisitNotes } from '@/services/firebase';
+import { getAllLeadsForReport, getCompaniesFromFirebase, getAllUsers, getVisitNotes } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
@@ -50,11 +49,13 @@ export default function CheckinsClientPage() {
     setLoading(true);
     toast({ title: 'Loading Data...', description: 'Fetching lead and visit note records.' });
     try {
-        const [refreshedLeads, visitNotes] = await Promise.all([
+        const [refreshedLeads, companies, visitNotes] = await Promise.all([
             getAllLeadsForReport(),
+            getCompaniesFromFirebase(),
             getVisitNotes(),
         ]);
-        setAllLeads(refreshedLeads);
+        const allItems = [...refreshedLeads, ...companies];
+        setAllLeads(allItems);
         setAllVisitNotes(visitNotes);
     } catch (error) {
         console.error("Failed to refresh data:", error);
@@ -272,61 +273,28 @@ export default function CheckinsClientPage() {
                         {userProfile?.role !== 'Field Sales' && (
                             <div className="space-y-2">
                                 <Label htmlFor="user">Field Sales User</Label>
-                                <MultiSelectCombobox
-                                    options={userOptions}
-                                    selected={filters.user}
-                                    onSelectedChange={(selected) => handleFilterChange('user', selected)}
-                                    placeholder="Select users..."
-                                />
+                                <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(selected) => handleFilterChange('user', selected)} placeholder="Select users..." />
                             </div>
                         )}
                         <div className="space-y-2">
                             <Label htmlFor="franchisee">Franchisee</Label>
-                            <MultiSelectCombobox
-                                options={franchiseeOptions}
-                                selected={filters.franchisee}
-                                onSelectedChange={(selected) => handleFilterChange('franchisee', selected)}
-                                placeholder="Select franchisees..."
-                            />
+                            <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(selected) => handleFilterChange('franchisee', selected)} placeholder="Select franchisees..." />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
-                            <MultiSelectCombobox
-                                options={statusOptions}
-                                selected={filters.status}
-                                onSelectedChange={(selected) => handleFilterChange('status', selected)}
-                                placeholder="Select statuses..."
-                            />
+                            <MultiSelectCombobox options={statusOptions} selected={filters.status} onSelectedChange={(selected) => handleFilterChange('status', selected)} placeholder="Select statuses..." />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="date">Date Created</Label>
                             <Popover>
-                                <PopoverTrigger asChild>
-                                <Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal">
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {filters.date?.from ? (
-                                    filters.date.to ? (
-                                        <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</>
-                                    ) : (
-                                        format(filters.date.from, "LLL dd, y")
-                                    )
-                                    ) : (
-                                    <span>Pick a date range</span>
-                                    )}
-                                </Button>
-                                </PopoverTrigger>
+                                <PopoverTrigger asChild><Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 flex" align="start">
-                                    <Calendar
-                                    mode="range"
-                                    selected={filters.date}
-                                    onSelect={(date) => handleFilterChange('date', date)}
-                                    initialFocus
-                                    />
+                                    <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        {hasActiveFilters && (
-                            <div className="space-y-2">
+                         {hasActiveFilters && (
+                            <div className="space-y-2 col-start-1">
                                 <Button variant="ghost" onClick={clearFilters}>
                                     <X className="mr-2 h-4 w-4" /> Clear Filters
                                 </Button>
@@ -361,9 +329,11 @@ export default function CheckinsClientPage() {
                     </TableHeader>
                     <TableBody>
                         {sortedLeads.length > 0 ? (
-                            sortedLeads.map(lead => (
+                            sortedLeads.map(lead => {
+                                const visitDate = lead.visitNote?.createdAt ? parseISO(lead.visitNote.createdAt) : null;
+                                return (
                                 <TableRow key={lead.id}>
-                                    <TableCell>{lead.visitNote?.createdAt && !isNaN(new Date(lead.visitNote.createdAt).getTime()) ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'}</TableCell>
+                                    <TableCell>{visitDate && isValid(visitDate) ? format(visitDate, 'PPpp') : 'N/A'}</TableCell>
                                     <TableCell>{lead.id}</TableCell>
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
@@ -379,7 +349,7 @@ export default function CheckinsClientPage() {
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
                                     <TableCell>{lead.visitNote?.capturedBy || 'N/A'}</TableCell>
                                 </TableRow>
-                            ))
+                            )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={7} className="h-24 text-center">
