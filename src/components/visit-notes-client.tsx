@@ -244,7 +244,9 @@ export default function VisitNotesClient() {
                 <Table>
                 <TableHeader>
                     <TableRow>
-                    <TableHead className="hidden md:table-cell">Captured By</TableHead>
+                    {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                        <TableHead>Captured By</TableHead>
+                    )}
                     <TableHead>Date</TableHead>
                     <TableHead>Company Name</TableHead>
                     <TableHead className="hidden sm:table-cell">Address</TableHead>
@@ -266,7 +268,9 @@ export default function VisitNotesClient() {
                         const canDelete = userProfile?.role === 'admin';
                         return (
                         <TableRow key={note.id}>
-                        <TableCell className="hidden md:table-cell">{note.capturedBy}</TableCell>
+                        {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                            <TableCell>{note.capturedBy}</TableCell>
+                        )}
                         <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
                         <TableCell>{note.companyName || 'N/A'}</TableCell>
                         <TableCell className="hidden sm:table-cell">{note.address ? `${note.address.street}, ${note.address.city}` : 'N/A'}</TableCell>
@@ -337,7 +341,7 @@ export default function VisitNotesClient() {
       <AlertDialog open={!!noteToDelete} onOpenChange={(open) => {if (!open) setNoteToDelete(null)}}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>This will permanently delete the visit note. This action cannot be undone.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
