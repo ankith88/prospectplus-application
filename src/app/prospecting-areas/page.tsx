@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -8,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute } from '@/services/firebase';
 import {
   GoogleMap,
   useJsApiLoader,
@@ -33,6 +34,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 
 const containerStyle = {
@@ -244,6 +246,23 @@ export default function ProspectingAreasPage() {
           setAreaToDelete(null);
       }
   };
+  
+    const handleMarkAsComplete = async (area: SavedRoute) => {
+        if (!area.userId || !area.id) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Area information is missing.' });
+            return;
+        }
+        try {
+            await updateUserRoute(area.userId, area.id, { status: 'Completed' });
+            setProspectingAreas(prevAreas => 
+                prevAreas.map(a => a.id === area.id ? { ...a, status: 'Completed' } : a)
+            );
+            toast({ title: 'Success', description: `"${area.name}" marked as complete.` });
+        } catch (error) {
+            console.error("Failed to mark area as complete:", error);
+            toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update the area status.' });
+        }
+    };
 
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
@@ -456,6 +475,7 @@ export default function ProspectingAreasPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Created At</TableHead>
                 <TableHead>Contents</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -479,8 +499,22 @@ export default function ProspectingAreasPage() {
                     <TableCell>
                         {area.streets?.length || 0} streets / {area.leads?.length || 0} leads
                     </TableCell>
+                    <TableCell>
+                        <Badge variant={area.status === 'Completed' ? 'default' : 'outline'}>
+                            {area.status || 'Active'}
+                        </Badge>
+                    </TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleMarkAsComplete(area); }}
+                                disabled={area.status === 'Completed'}
+                            >
+                                <CheckSquare className="mr-2 h-4 w-4" />
+                                Complete
+                            </Button>
                             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
                                 <MapPin className="mr-2 h-4 w-4" /> View on Map
                             </Button>
