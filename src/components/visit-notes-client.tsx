@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -54,7 +53,7 @@ export default function VisitNotesClient() {
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<VisitNote | null>(null);
-  const [viewingImages, setViewingImages] = useState<string[] | null>(null);
+  const [viewingImages, setViewingImages] = useState<string[]>([]);
   const router = useRouter();
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -350,14 +349,14 @@ export default function VisitNotesClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-       <Dialog open={!!viewingImages} onOpenChange={(open) => {if (!open) setViewingImages(null)}}>
+       <Dialog open={viewingImages.length > 0} onOpenChange={(open) => {if (!open) setViewingImages([])}}>
         <DialogContent className="max-w-4xl">
             <DialogHeader>
                 <DialogTitle>Captured Images</DialogTitle>
             </DialogHeader>
             <ScrollArea className="max-h-[70vh]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4">
-                    {viewingImages?.map((url, index) => (
+                    {viewingImages.map((url, index) => (
                         <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={400} height={240} className="rounded-md border object-cover"/>
                     ))}
                 </div>
