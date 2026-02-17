@@ -34,7 +34,8 @@ import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from './ui/input';
 import { Search } from 'lucide-react';
-
+import { doc, updateDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -125,7 +126,13 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
     setIsLinking(true);
     try {
+      // Update the visit note
       await updateVisitNote(note.id, { status: 'Converted', leadId: selectedLead.id });
+      
+      // Update the existing lead with the visitNoteID
+      const leadRef = doc(firestore, 'leads', selectedLead.id);
+      await updateDoc(leadRef, { visitNoteID: note.id });
+
       onProcessed(note.id, 'Converted', selectedLead.id);
       toast({
         title: 'Note Linked Successfully',
