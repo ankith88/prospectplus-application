@@ -53,7 +53,8 @@ export default function VisitNotesClient() {
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<VisitNote | null>(null);
-  const [viewingImages, setViewingImages] = useState<string[]>([]);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [imagesToView, setImagesToView] = useState<string[]>([]);
   const router = useRouter();
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -158,6 +159,11 @@ export default function VisitNotesClient() {
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notes, filters]);
+
+  const openImageViewer = (urls: string[]) => {
+    setImagesToView(urls);
+    setIsImageViewerOpen(true);
+  };
 
 
   const statusColorMap: Record<VisitNote['status'], string> = {
@@ -300,7 +306,7 @@ export default function VisitNotesClient() {
                                         <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
                                             <Edit className="mr-2 h-4 w-4" /> Edit
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem disabled={!note.imageUrls || note.imageUrls.length === 0} onClick={() => setViewingImages(note.imageUrls || [])}>
+                                        <DropdownMenuItem disabled={!note.imageUrls || note.imageUrls.length === 0} onClick={() => openImageViewer(note.imageUrls || [])}>
                                             <Camera className="mr-2 h-4 w-4" /> View Images
                                         </DropdownMenuItem>
                                         {canDelete && (
@@ -349,14 +355,14 @@ export default function VisitNotesClient() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-       <Dialog open={viewingImages.length > 0} onOpenChange={(open) => {if (!open) setViewingImages([])}}>
+       <Dialog open={isImageViewerOpen} onOpenChange={setIsImageViewerOpen}>
         <DialogContent className="max-w-4xl">
             <DialogHeader>
                 <DialogTitle>Captured Images</DialogTitle>
             </DialogHeader>
             <ScrollArea className="max-h-[70vh]">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4">
-                    {viewingImages.map((url, index) => (
+                    {imagesToView.map((url, index) => (
                         <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={400} height={240} className="rounded-md border object-cover"/>
                     ))}
                 </div>
