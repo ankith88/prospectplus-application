@@ -184,7 +184,7 @@ export default function CheckinsClientPage() {
     return Array.from(statuses).map(s => ({ value: s, label: s}));
   }, [allLeads]);
 
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (val && val !== 'yes'));
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
@@ -363,7 +363,7 @@ export default function CheckinsClientPage() {
                         {sortedLeads.length > 0 ? (
                             sortedLeads.map(lead => (
                                 <TableRow key={lead.id}>
-                                    <TableCell>{lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'}</TableCell>
+                                    <TableCell>{lead.dateLeadEntered && !isNaN(new Date(lead.dateLeadEntered).getTime()) ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'}</TableCell>
                                     <TableCell>{lead.id}</TableCell>
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
