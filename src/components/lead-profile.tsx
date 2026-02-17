@@ -285,7 +285,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
-  const [visitNoteDiscovery, setVisitNoteDiscovery] = useState<Partial<DiscoveryData> | null>(null);
+  const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
 
 
@@ -308,10 +308,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 const noteRef = doc(firestore, 'visitnotes', visitNoteId);
                 const noteSnap = await getDoc(noteRef);
                 if (noteSnap.exists()) {
-                    const visitNote = noteSnap.data() as VisitNote;
-                    if (visitNote.discoveryData) {
-                        setVisitNoteDiscovery(visitNote.discoveryData);
-                    }
+                    const visitNote = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
+                    setLinkedVisitNote(visitNote);
                 }
             } catch (error) {
                 console.error("Failed to fetch visit note discovery data:", error);
@@ -825,7 +823,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
 
-  const formatAddress = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
+  const formatAddressLine = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
     if (!address) return 'Address not available';
     if (typeof address === 'string') return address;
     return [
@@ -873,7 +871,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {nearbyCompanies.map(company => (
                                 <TableRow key={company.id}>
                                     <TableCell className="font-semibold">{company.companyName}</TableCell>
-                                    <TableCell>{formatAddress(company.address as Address)}</TableCell>
+                                    <TableCell>{formatAddressLine(company.address as Address)}</TableCell>
                                     <TableCell>{company.industryCategory || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
@@ -1071,7 +1069,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.customerPhone!)}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
                                 <PhoneCall className="w-3 h-3" />
                             </Button>
                             </>
@@ -1141,7 +1139,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardContent>
            </Card>
           
-          {visitNoteDiscovery && (
+          {linkedVisitNote && (
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -1149,7 +1147,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         Field Discovery from Visit Note
                     </CardTitle>
                     <CardDescription>
-                        The following discovery data was captured during the initial visit.
+                        The following discovery data and notes were captured during the initial visit.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1157,31 +1155,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="flex justify-center p-8"><Loader /></div>
                     ) : (
                         <div className="flex flex-col gap-4">
+                            {linkedVisitNote.content && (
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm">Original Visit Note:</h4>
+                                    <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground">
+                                        {linkedVisitNote.content}
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
                                 <div className="flex flex-col items-center">
                                     <p className="text-sm text-muted-foreground">Score</p>
-                                    <p className="text-2xl font-bold">{visitNoteDiscovery.score}</p>
+                                    <p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p>
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                    <Badge variant="outline">{visitNoteDiscovery.routingTag}</Badge>
+                                    <Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge>
                                 </div>
                             </div>
-                            <DiscoveryRadarChart discoveryData={visitNoteDiscovery as DiscoveryData} />
-                            {visitNoteDiscovery.scoringReason && (
+                            {linkedVisitNote.discoveryData && (
+                                <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />
+                            )}
+                            {linkedVisitNote.discoveryData?.scoringReason && (
                                 <div className="text-xs text-muted-foreground p-2 border-t">
-                                    <strong>Scoring Rationale:</strong> {visitNoteDiscovery.scoringReason}
+                                    <strong>Scoring Rationale:</strong> {linkedVisitNote.discoveryData.scoringReason}
                                 </div>
                             )}
                              <div className="text-sm space-y-2 pt-4 border-t">
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
-                                    {visitNoteDiscovery.discoverySignals && visitNoteDiscovery.discoverySignals.length > 0 && (
-                                        <li><strong>Signals:</strong> {visitNoteDiscovery.discoverySignals.join(', ')}</li>
+                                    {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
+                                        <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
                                     )}
-                                    {visitNoteDiscovery.inconvenience && <li><strong>Inconvenience:</strong> {visitNoteDiscovery.inconvenience}</li>}
-                                    {visitNoteDiscovery.occurrence && <li><strong>Occurrence:</strong> {visitNoteDiscovery.occurrence}</li>}
-                                    {(visitNoteDiscovery as any).taskOwner && <li><strong>Task Owner:</strong> {(visitNoteDiscovery as any).taskOwner}</li>}
+                                    {linkedVisitNote.discoveryData?.inconvenience && <li><strong>Inconvenience:</strong> {linkedVisitNote.discoveryData.inconvenience}</li>}
+                                    {linkedVisitNote.discoveryData?.occurrence && <li><strong>Occurrence:</strong> {linkedVisitNote.discoveryData.occurrence}</li>}
+                                    {(linkedVisitNote.discoveryData as any)?.taskOwner && <li><strong>Task Owner:</strong> {(linkedVisitNote.discoveryData as any).taskOwner}</li>}
                                 </ul>
                             </div>
                         </div>
@@ -1257,7 +1265,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                           <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
                                           <div className="flex items-center gap-1">
                                               <span className="break-all">{contact.phone}</span>
-                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}>
                                                   <PhoneCall className="w-3 h-3" />
                                               </Button>
                                           </div>
@@ -1621,5 +1629,3 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </>
   )
 }
-
-    
