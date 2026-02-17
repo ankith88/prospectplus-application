@@ -1,40 +1,19 @@
+
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
 import { getVisitNotes, deleteVisitNote } from '@/services/firebase';
-import type { VisitNote } from '@/lib/types';
+import type { VisitNote, Address } from '@/lib/types';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -52,9 +31,12 @@ export default function VisitNotesClient() {
   const [loading, setLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
-  const [noteToDelete, setNoteToDelete] = useState<VisitNote | null>(null);
-  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
-  const [imagesToView, setImagesToView] = useState<string[]>([]);
+  
+  // Inline states
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const router = useRouter();
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -88,17 +70,27 @@ export default function VisitNotesClient() {
     setNotes(prev => prev.map(n => n.id === noteId ? {...n, status, leadId} : n));
   };
 
-  const handleDeleteNote = async () => {
-    if (!noteToDelete) return;
+  const handleExecuteDelete = async (noteId: string) => {
+    setIsDeleting(true);
     try {
-      await deleteVisitNote(noteToDelete.id);
-      setNotes(prev => prev.filter(n => n.id !== noteToDelete.id));
+      await deleteVisitNote(noteId);
+      setNotes(prev => prev.filter(n => n.id !== noteId));
       toast({ title: 'Success', description: 'Visit note deleted.' });
     } catch (e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the note.' });
     } finally {
-      setNoteToDelete(null);
+      setIsDeleting(false);
+      setConfirmDeleteId(null);
     }
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedNoteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
@@ -159,12 +151,6 @@ export default function VisitNotesClient() {
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notes, filters]);
-
-  const openImageViewer = (urls: string[]) => {
-    setImagesToView(urls);
-    setIsImageViewerOpen(true);
-  };
-
 
   const statusColorMap: Record<VisitNote['status'], string> = {
     'New': 'bg-blue-100 text-blue-800',
@@ -271,8 +257,12 @@ export default function VisitNotesClient() {
                     filteredNotes.map((note) => {
                         const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
                         const canDelete = userProfile?.role === 'admin';
+                        const isExpanded = expandedNoteIds.has(note.id);
+                        const isAwaitingDelete = confirmDeleteId === note.id;
+
                         return (
-                        <TableRow key={note.id}>
+                        <Fragment key={note.id}>
+                        <TableRow className={cn(isExpanded && "bg-muted/30")}>
                         {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
                             <TableCell>{note.capturedBy}</TableCell>
                         )}
@@ -298,31 +288,55 @@ export default function VisitNotesClient() {
                                     </Button>
                                 ) : null}
                             {canManage && (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
-                                            <Edit className="mr-2 h-4 w-4" /> Edit
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            disabled={!note.imageUrls || note.imageUrls.length === 0}
-                                            onSelect={(e) => e.preventDefault()}
-                                            onClick={() => openImageViewer(note.imageUrls || [])}>
-                                            <Camera className="mr-2 h-4 w-4" /> View Images
-                                        </DropdownMenuItem>
-                                        {canDelete && (
-                                            <DropdownMenuItem className="text-destructive" onSelect={() => setNoteToDelete(note)}>
-                                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                            </DropdownMenuItem>
-                                        )}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                <>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className={cn("h-8 w-8", isExpanded && "bg-accent")} 
+                                        disabled={!note.imageUrls || note.imageUrls.length === 0}
+                                        onClick={() => toggleExpand(note.id)}
+                                    >
+                                        <ImageIcon className="h-4 w-4" />
+                                    </Button>
+                                    {canDelete && (
+                                        isAwaitingDelete ? (
+                                            <div className="flex items-center gap-1">
+                                                <Button size="sm" variant="destructive" onClick={() => handleExecuteDelete(note.id)} disabled={isDeleting}>
+                                                    {isDeleting ? <Loader /> : "Confirm"}
+                                                </Button>
+                                                <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                                            </div>
+                                        ) : (
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setConfirmDeleteId(note.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )
+                                    )}
+                                </>
                             )}
                             </div>
                         </TableCell>
                         </TableRow>
+                        {isExpanded && (
+                            <TableRow className="bg-muted/30 border-b-0">
+                                <TableCell colSpan={7} className="p-4">
+                                    <div className="space-y-4">
+                                        <h4 className="font-semibold text-sm">Attached Images ({note.imageUrls?.length})</h4>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                            {note.imageUrls?.map((url, i) => (
+                                                <div key={i} className="relative aspect-video rounded-md overflow-hidden border bg-background group cursor-pointer" onClick={() => window.open(url, '_blank')}>
+                                                    <Image src={url} alt="Visit image" fill className="object-cover transition-transform group-hover:scale-105" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        </Fragment>
                     )})
                     ) : (
                     <TableRow>
@@ -346,32 +360,6 @@ export default function VisitNotesClient() {
           onProcessed={handleNoteProcessed}
         />
       )}
-      <AlertDialog open={!!noteToDelete} onOpenChange={(open) => {if (!open) setNoteToDelete(null)}}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>This will permanently delete the visit note. This action cannot be undone.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-       <Dialog open={isImageViewerOpen} onOpenChange={setIsImageViewerOpen}>
-        <DialogContent className="max-w-4xl">
-            <DialogHeader>
-                <DialogTitle>Captured Images</DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="max-h-[70vh]">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4">
-                    {imagesToView.map((url, index) => (
-                        <Image key={index} src={url} alt={`Visit image ${index + 1}`} width={400} height={240} className="rounded-md border object-cover"/>
-                    ))}
-                </div>
-            </ScrollArea>
-        </DialogContent>
-    </Dialog>
     </>
   );
 }
