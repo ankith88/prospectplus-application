@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile } from '@/lib/types';
+import type { Lead, VisitNote, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,7 +17,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getAllLeadsForReport, getAllUsers } from '@/services/firebase';
+import { getAllLeadsForReport, getAllUsers, getVisitNotes } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { LeadStatusBadge } from './lead-status-badge';
 import Link from 'next/link';
@@ -25,10 +25,11 @@ import { Badge } from './ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 
 type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned';
+type LeadWithVisitNote = Lead & { visitNote: VisitNote };
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
+  const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
@@ -40,7 +41,6 @@ export default function CheckinsClientPage() {
     user: [] as string[],
     franchisee: [] as string[],
     status: [] as string[],
-    hasVisitNote: 'yes' as 'all' | 'yes' | 'no',
   });
   
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'dateLeadEntered', direction: 'descending' });
@@ -48,14 +48,14 @@ export default function CheckinsClientPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    toast({ title: 'Loading Data...', description: 'Fetching lead records.' });
+    toast({ title: 'Loading Data...', description: 'Fetching lead and visit note records.' });
     try {
-        const [refreshedLeads, refreshedUsers] = await Promise.all([
+        const [refreshedLeads, visitNotes] = await Promise.all([
             getAllLeadsForReport(),
-            getAllUsers(),
+            getVisitNotes(),
         ]);
         setAllLeads(refreshedLeads);
-        setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
+        setAllVisitNotes(visitNotes);
     } catch (error) {
         console.error("Failed to refresh data:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest data.' });
@@ -79,17 +79,27 @@ export default function CheckinsClientPage() {
       user: [],
       franchisee: [],
       status: [],
-      hasVisitNote: 'yes',
     });
   };
+  
+  const leadsWithVisitNotes = useMemo(() => {
+    const visitNotesMap = new Map(allVisitNotes.map(note => [note.id, note]));
+    
+    return allLeads
+      .filter(lead => lead.visitNoteID && visitNotesMap.has(lead.visitNoteID))
+      .map(lead => ({
+        ...lead,
+        visitNote: visitNotesMap.get(lead.visitNoteID!),
+      }));
+  }, [allLeads, allVisitNotes]);
 
   const filteredLeads = useMemo(() => {
-    let leads = allLeads;
+    let leads = leadsWithVisitNotes;
 
     if (userProfile?.role === 'Field Sales') {
-        leads = leads.filter(l => l.dialerAssigned === userProfile.displayName);
+        leads = leads.filter(l => l.visitNote?.capturedBy === userProfile.displayName);
     } else if (filters.user.length > 0) {
-        leads = leads.filter(l => l.dialerAssigned && filters.user.includes(l.dialerAssigned));
+        leads = leads.filter(l => l.visitNote && filters.user.includes(l.visitNote.capturedBy));
     }
     
     if (filters.franchisee.length > 0) {
@@ -100,26 +110,22 @@ export default function CheckinsClientPage() {
         leads = leads.filter(l => filters.status.includes(l.status));
     }
 
-    if (filters.hasVisitNote !== 'all') {
-        leads = leads.filter(l => filters.hasVisitNote === 'yes' ? !!l.visitNoteID : !l.visitNoteID);
-    }
-
     if (filters.date?.from) {
         const fromDate = startOfDay(filters.date.from);
         const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
         leads = leads.filter(l => {
-            if (!l.dateLeadEntered) return false;
-            const leadDate = new Date(l.dateLeadEntered);
-            return leadDate >= fromDate && leadDate <= toDate;
+            if (!l.visitNote?.createdAt) return false;
+            const noteDate = new Date(l.visitNote.createdAt);
+            return noteDate >= fromDate && noteDate <= toDate;
         });
     }
 
     return leads;
 
-  }, [allLeads, filters, userProfile]);
+  }, [leadsWithVisitNotes, filters, userProfile]);
 
   const sortedLeads = useMemo(() => {
-    let sortableItems: Lead[] = [...filteredLeads];
+    let sortableItems: LeadWithVisitNote[] = [...filteredLeads];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         let aValue: any;
@@ -127,8 +133,12 @@ export default function CheckinsClientPage() {
 
         switch (sortConfig.key) {
             case 'dateLeadEntered':
-                aValue = a.dateLeadEntered ? new Date(a.dateLeadEntered).getTime() : 0;
-                bValue = b.dateLeadEntered ? new Date(b.dateLeadEntered).getTime() : 0;
+                aValue = a.visitNote?.createdAt ? new Date(a.visitNote.createdAt).getTime() : 0;
+                bValue = b.visitNote?.createdAt ? new Date(b.visitNote.createdAt).getTime() : 0;
+                break;
+            case 'dialerAssigned':
+                aValue = a.visitNote?.capturedBy || '';
+                bValue = b.visitNote?.capturedBy || '';
                 break;
             case 'leadId':
                 aValue = a.id;
@@ -171,8 +181,9 @@ export default function CheckinsClientPage() {
   };
 
   const userOptions: Option[] = useMemo(() => {
-    return allFieldSalesUsers.map(u => ({ value: u.displayName!, label: u.displayName! }));
-  }, [allFieldSalesUsers]);
+    const users = new Set(allVisitNotes.map(n => n.capturedBy));
+    return Array.from(users).map(u => ({ value: u, label: u }));
+  }, [allVisitNotes]);
 
   const franchiseeOptions: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
@@ -205,13 +216,13 @@ export default function CheckinsClientPage() {
 
     const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales Rep'];
     const rows = sortedLeads.map(lead => [
-        escapeCsvCell(lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'),
+        escapeCsvCell(lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'),
         escapeCsvCell(lead.id),
         escapeCsvCell(lead.entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
         escapeCsvCell(lead.status),
         escapeCsvCell(lead.franchisee || 'N/A'),
-        escapeCsvCell(lead.dialerAssigned || 'N/A'),
+        escapeCsvCell(lead.visitNote?.capturedBy || 'N/A'),
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -287,17 +298,6 @@ export default function CheckinsClientPage() {
                                 placeholder="Select statuses..."
                             />
                         </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="hasVisitNote">Source</Label>
-                            <Select value={filters.hasVisitNote} onValueChange={(value) => handleFilterChange('hasVisitNote', value)}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="yes">With Visit Note</SelectItem>
-                                    <SelectItem value="no">Without Visit Note</SelectItem>
-                                    <SelectItem value="all">All</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="date">Date Created</Label>
                             <Popover>
@@ -363,7 +363,7 @@ export default function CheckinsClientPage() {
                         {sortedLeads.length > 0 ? (
                             sortedLeads.map(lead => (
                                 <TableRow key={lead.id}>
-                                    <TableCell>{lead.dateLeadEntered && !isNaN(new Date(lead.dateLeadEntered).getTime()) ? format(new Date(lead.dateLeadEntered), 'PPpp') : 'N/A'}</TableCell>
+                                    <TableCell>{lead.visitNote?.createdAt && !isNaN(new Date(lead.visitNote.createdAt).getTime()) ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'}</TableCell>
                                     <TableCell>{lead.id}</TableCell>
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
@@ -377,7 +377,7 @@ export default function CheckinsClientPage() {
                                     </TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{lead.visitNote?.capturedBy || 'N/A'}</TableCell>
                                 </TableRow>
                             ))
                         ) : (
