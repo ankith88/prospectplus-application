@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -25,8 +24,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, deleteUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Calendar } from './ui/calendar';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
@@ -44,6 +43,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -151,7 +151,7 @@ export default function LeadsMapClient() {
     const [isSavingArea, setIsSavingArea] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
     const [newAreaNotes, setNewAreaNotes] = useState('');
-    const [newAreaAssignee, setNewAreaAssignee] = useState('');
+    const [newAreaAssignee, setNewAreaAssignee] = useState<string[]>([]);
     const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string; latitude: number; longitude: number; }[]>([]);
     const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
     const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
@@ -649,10 +649,12 @@ export default function LeadsMapClient() {
 
         setIsSavingArea(true);
         try {
-            const assigneeId = (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && newAreaAssignee ? newAreaAssignee : userProfile.uid;
+            const assigneeIds = (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && newAreaAssignee.length > 0 
+                ? newAreaAssignee 
+                : [userProfile.uid];
 
-            const areaData: Omit<StorableRoute, 'id'> = {
-                userId: assigneeId,
+            const baseAreaData: Omit<StorableRoute, 'id'> = {
+                userId: '', // Placeholder
                 name: newAreaName,
                 createdAt: new Date().toISOString(),
                 leads: [],
@@ -662,15 +664,21 @@ export default function LeadsMapClient() {
                 notes: newAreaNotes,
             };
 
-            const newId = await saveUserRoute(assigneeId, areaData);
-            const newRoute: SavedRoute = { ...areaData, id: newId, directions: null, userName: allUsers.find(u => u.uid === assigneeId)?.displayName || 'Unknown' }
-            setSavedRoutes(prev => [...prev, newRoute]);
+            const savePromises = assigneeIds.map(uid => {
+                const areaData = { ...baseAreaData, userId: uid };
+                return saveUserRoute(uid, areaData);
+            });
+
+            await Promise.all(savePromises);
             
-            toast({ title: 'Success', description: 'Prospecting area saved successfully.' });
+            toast({ title: 'Success', description: `Prospecting area saved successfully for ${assigneeIds.length} user(s).` });
+            
+            // Refetch data to update local lists if necessary
+            fetchData();
             
             setNewAreaName('');
             setNewAreaNotes('');
-            setNewAreaAssignee('');
+            setNewAreaAssignee([]);
             setStreetsForArea([]);
             setIsSaveAreaDialogOpen(false);
 
@@ -925,6 +933,13 @@ export default function LeadsMapClient() {
         const campaigns = new Set(allMapData.map(lead => lead.campaign).filter(Boolean));
         return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
     }, [allMapData]);
+
+    const activeFieldSalesUserOptions: Option[] = useMemo(() => {
+        return allUsers
+            .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
+            .map(u => ({ value: u.uid, label: u.displayName || u.email }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [allUsers]);
 
     const allStatuses: LeadStatus[] = [...new Set(allMapData.map(l => l.status))];
     const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
@@ -1246,17 +1261,13 @@ export default function LeadsMapClient() {
                     </div>
                     {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
                         <div className="space-y-2">
-                            <Label htmlFor="area-assignee">Assign To</Label>
-                            <Select onValueChange={setNewAreaAssignee}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a user (optional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {allUsers.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin').map(u => (
-                                        <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Label htmlFor="area-assignee">Assign To Active Field Sales Users</Label>
+                            <MultiSelectCombobox 
+                                options={activeFieldSalesUserOptions}
+                                selected={newAreaAssignee}
+                                onSelectedChange={setNewAreaAssignee}
+                                placeholder="Select users..."
+                            />
                         </div>
                     )}
                 </div>
