@@ -194,6 +194,7 @@ export default function LeadsMapClient() {
         dialerAssigned: [] as string[],
         state: [] as string[],
         campaign: 'all',
+        hasVisitNote: 'all' as 'all' | 'yes' | 'no',
     });
     
     const { userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
@@ -881,6 +882,7 @@ export default function LeadsMapClient() {
             dialerAssigned: [],
             state: [],
             campaign: 'all',
+            hasVisitNote: 'all',
         });
         if (geoSearchInputNodeRef.current) {
             geoSearchInputNodeRef.current.value = '';
@@ -896,8 +898,11 @@ export default function LeadsMapClient() {
             const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
             const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
             const campaignMatch = mapFilters.campaign === 'all' || item.campaign === mapFilters.campaign;
+            const hasVisitNoteMatch = mapFilters.hasVisitNote === 'all' ||
+                                      (mapFilters.hasVisitNote === 'yes' && !!item.visitNoteID) ||
+                                      (mapFilters.hasVisitNote === 'no' && !item.visitNoteID);
 
-            return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch && dialerMatch && stateMatch && campaignMatch;
+            return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch && dialerMatch && stateMatch && campaignMatch && hasVisitNoteMatch;
         });
     }, [allMapData, mapFilters]);
     
@@ -988,7 +993,7 @@ export default function LeadsMapClient() {
                     </CardHeader>
                     <CollapsibleContent>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-2">
                                     <Label>Go to Location</Label>
                                     <Input ref={geoSearchInputRef} placeholder="Enter a location..."/>
@@ -1033,6 +1038,17 @@ export default function LeadsMapClient() {
                                 <div className="space-y-2">
                                     <Label>State</Label>
                                     <MultiSelectCombobox options={uniqueStates} selected={mapFilters.state} onSelectedChange={(val) => handleMapFilterChange('state', val)} placeholder="Select states..."/>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Visit Note</Label>
+                                    <Select value={mapFilters.hasVisitNote} onValueChange={(v) => handleMapFilterChange('hasVisitNote', v)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="yes">With Visit Note</SelectItem>
+                                            <SelectItem value="no">Without Visit Note</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                              {hasActiveMapFilters && (

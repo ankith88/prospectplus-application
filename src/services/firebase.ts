@@ -305,6 +305,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource,
+          visitNoteID: data.visitNoteID,
         };
         
         if (includeSubCollections) {
@@ -488,6 +489,7 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
                     lastProspected: data.lastProspected,
                     dateLeadEntered: data.dateLeadEntered,
                     customerSource: data.customerSource,
+                    visitNoteID: data.visitNoteID,
                 };
 
                 return transformedCompany;
