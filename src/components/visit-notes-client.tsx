@@ -25,6 +25,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ScrollArea } from './ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
