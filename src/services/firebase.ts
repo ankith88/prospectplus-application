@@ -592,6 +592,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
                 lastProspected: data.lastProspected,
                 dateLeadEntered: data.dateLeadEntered,
                 customerSource: data.customerSource,
+                visitNoteID: data.visitNoteID,
             } as Lead;
         });
 
