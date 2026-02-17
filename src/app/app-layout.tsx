@@ -110,9 +110,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       const rep = salesReps.find(r => r.name === userProfile.linkedSalesRep);
       if (rep) {
         const url = new URL(rep.url);
-        if (userProfile.email) {
-          url.searchParams.set('email', userProfile.email);
-        }
         window.open(url.toString(), '_blank');
       }
     }
