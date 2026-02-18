@@ -24,9 +24,10 @@ import {
   ClipboardEdit,
   Tag,
   ExternalLink,
+  Info,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Lead, Contact, Activity, Note, Address, Invoice } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -45,8 +46,10 @@ import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { ScrollArea } from './ui/scroll-area'
 import { LogNoteDialog } from './log-note-dialog'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, getDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
+import { Badge } from './ui/badge'
+import { DiscoveryRadarChart } from './discovery-radar-chart'
 
 
 interface CompanyProfileProps {
@@ -61,6 +64,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+  const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -68,6 +73,17 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   
   useEffect(() => {
     setCompany(initialCompany);
+    
+    const visitNoteId = initialCompany.visitNoteID;
+    if (visitNoteId) {
+        setIsDiscoveryLoading(true);
+        const noteRef = doc(firestore, 'visitnotes', visitNoteId);
+        getDoc(noteRef).then(noteSnap => {
+            if (noteSnap.exists()) {
+                setLinkedVisitNote({ id: noteSnap.id, ...noteSnap.data() } as VisitNote);
+            }
+        }).finally(() => setIsDiscoveryLoading(false));
+    }
   }, [initialCompany]);
 
   useEffect(() => {
@@ -157,8 +173,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         </div>
       </header>
 
-      <main className="grid grid-cols-1 gap-6">
-        <div className="flex flex-col gap-6">
+      <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                <CardTitle className="flex items-center gap-2">
@@ -307,6 +323,65 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
              </CardContent>
            </Card>
           
+          {linkedVisitNote && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Info className="w-5 h-5 text-muted-foreground" />
+                        Field Discovery from Visit Note
+                    </CardTitle>
+                    <CardDescription>
+                        The following discovery data and notes were captured during the initial visit.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isDiscoveryLoading ? (
+                        <div className="flex justify-center p-8"><Loader /></div>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            {linkedVisitNote.content && (
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm">Original Visit Notes:</h4>
+                                    <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground italic">
+                                        "{linkedVisitNote.content}"
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Score</p>
+                                    <p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
+                                    <Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge>
+                                </div>
+                            </div>
+                            {linkedVisitNote.discoveryData && (
+                                <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />
+                            )}
+                            {linkedVisitNote.discoveryData?.scoringReason && (
+                                <div className="text-xs text-muted-foreground p-2 border-t">
+                                    <strong>Scoring Rationale:</strong> {linkedVisitNote.discoveryData.scoringReason}
+                                </div>
+                            )}
+                             <div className="text-sm space-y-2 pt-4 border-t">
+                                <h4 className="font-semibold">Captured Answers:</h4>
+                                <ul className="list-disc pl-5 text-muted-foreground">
+                                    {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
+                                        <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
+                                    )}
+                                    {linkedVisitNote.discoveryData?.inconvenience && <li><strong>Inconvenience:</strong> {linkedVisitNote.discoveryData.inconvenience}</li>}
+                                    {linkedVisitNote.discoveryData?.occurrence && <li><strong>Occurrence:</strong> {linkedVisitNote.discoveryData.occurrence}</li>}
+                                    {(linkedVisitNote.discoveryData as any)?.taskOwner && <li><strong>Task Owner:</strong> {(linkedVisitNote.discoveryData as any).taskOwner}</li>}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+          )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
                     <CardHeader>
