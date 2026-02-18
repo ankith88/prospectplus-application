@@ -1,5 +1,3 @@
-
-
 "use client"
 
 import {
@@ -30,7 +28,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { Calendar as CalendarPicker } from '@/components/ui/calendar'
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, parseISO } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
@@ -48,7 +46,7 @@ export default function AllAppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState<{ key: SortableAppointmentKeys; direction: 'ascending' | 'descending' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableAppointmentKeys; direction: 'ascending' | 'descending' } | null>({ key: 'duedate', direction: 'descending' });
   const [filters, setFilters] = useState({
     user: [] as string[],
     leadAssignedTo: [] as string[],
@@ -193,14 +191,17 @@ export default function AllAppointmentsPage() {
     let sortableItems = [...filteredAppointments];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        let aValue, bValue;
+        let aValue: any, bValue: any;
         
         if (sortConfig.key === 'appointmentDate') {
             aValue = parseDateString(a.appointmentDate)?.getTime() || 0;
             bValue = parseDateString(b.appointmentDate)?.getTime() || 0;
         } else if (sortConfig.key === 'duedate' || sortConfig.key === 'starttime') {
-            aValue = new Date(a[sortConfig.key]).getTime();
-            bValue = new Date(b[sortConfig.key]).getTime();
+            // Ensure we compare numeric timestamps for dates
+            const dateA = a[sortConfig.key] ? new Date(a[sortConfig.key]) : null;
+            const dateB = b[sortConfig.key] ? new Date(b[sortConfig.key]) : null;
+            aValue = dateA && !isNaN(dateA.getTime()) ? dateA.getTime() : 0;
+            bValue = dateB && !isNaN(dateB.getTime()) ? dateB.getTime() : 0;
         } else if (sortConfig.key === 'appointmentStatus') {
             aValue = a.appointmentStatus || 'Pending';
             bValue = b.appointmentStatus || 'Pending';
