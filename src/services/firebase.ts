@@ -1,5 +1,3 @@
-
-
 'use server';
 
 /**
@@ -1242,7 +1240,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
     const leadRef = doc(firestore, 'leads', leadId);
     const leadDoc = await getDoc(leadRef);
     const currentCount = leadDoc.data()?.contactCount || 0;
-    await updateDoc(leadRef, { contactCount: Math.max(0, currentCount - 1) });
+    await updateDoc(leadRef, { contactCount: currentCount + 1 });
     
     console.log(`Contact ${contactId} deleted from lead ${leadId}`);
   } catch (error) {
@@ -1968,29 +1966,32 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
 
 async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string; userId: string }>> {
     try {
-        const usersSnapshot = await getDocs(collection(firestore, 'users'));
-        const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() as Omit<UserProfile, 'uid'> }));
+        // Use collectionGroup to fetch all routes across all users
+        const routesQuery = collectionGroup(firestore, 'routes');
+        const snapshot = await getDocs(routesQuery);
 
-        const allRoutes: Array<SavedRoute & { userName: string; userId: string }> = [];
-
-        for (const user of users) {
-             const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Unknown User';
-            if (!user.uid) continue;
-
-            const userRoutes = await getUserRoutes(user.uid);
-            const routesWithUserName = userRoutes.map(route => ({
-                ...route,
-                userName: userName,
-                userId: user.uid,
-            }));
-            allRoutes.push(...routesWithUserName);
+        if (snapshot.empty) {
+            return [];
         }
+
+        const allRoutes = snapshot.docs.map(docSnapshot => {
+            const data = docSnapshot.data() as StorableRoute;
+            return {
+                ...data,
+                id: docSnapshot.id,
+                userId: docSnapshot.ref.parent.parent!.id,
+                userName: data.userName || 'Unknown User',
+                directions: data.directions ? JSON.parse(data.directions) : null,
+            } as SavedRoute & { userId: string };
+        });
         
+        // Sort client-side by createdAt to avoid needing a composite index
         allRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return allRoutes;
     } catch (error) {
-        console.error('Failed to fetch all user routes:', error);
+        console.error('Failed to fetch all routes via collectionGroup:', error);
+        // Fallback to the safer (but potentially incomplete if rules are strict) sequential fetch if needed
         return [];
     }
 }

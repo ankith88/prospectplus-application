@@ -1,14 +1,11 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import Link from 'next/link';
 import {
   GoogleMap,
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
-  DrawingManagerF,
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
@@ -16,18 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarPickerIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, deleteUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase';
+import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Calendar } from './ui/calendar';
-import { format, startOfDay, endOfDay } from 'date-fns';
-import type { DateRange } from 'react-day-picker';
+import { Calendar as CalendarPicker } from './ui/calendar';
+import { format } from 'date-fns';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import {
   Dialog,
@@ -37,33 +32,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { cn } from '@/lib/utils';
 import { useJsApiLoader } from '@react-google-maps/api';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Textarea } from './ui/textarea';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
-import { LeadStatusBadge } from './lead-status-badge';
+import { collection, doc, getDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 
 
 type ProspectWithLeadInfo = {
@@ -151,11 +127,8 @@ export default function LeadsMapClient() {
     const [isSavingArea, setIsSavingArea] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
     const [newAreaNotes, setNewAreaNotes] = useState('');
-    const [newAreaAssignee, setNewAreaAssignee] = useState<string[]>([]);
+    const [newAreaAssignees, setNewAreaAssignees] = useState<string[]>([]);
     const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string; latitude: number; longitude: number; }[]>([]);
-    const [prospects, setProspects] = useState<ProspectWithLeadInfo[]>([])
-    const [isProspectsDialogOpen, setIsProspectsDialogOpen] = useState(false);
-    const [isSearchingNearby, setIsSearchingNearby] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState('prospecting');
@@ -166,26 +139,7 @@ export default function LeadsMapClient() {
     const endPointRef = useRef<HTMLInputElement | null>(null);
     const geoSearchInputNodeRef = useRef<HTMLInputElement | null>(null);
 
-    // Dialog & Form State
-    const [duplicateLeadId, setDuplicateLeadId] = useState<string | null>(null);
-    const [viewingDescription, setViewingDescription] = useState<string | null>(null);
-    const [prospectToCreate, setProspectToCreate] = useState<google.maps.places.PlaceResult | null>(null);
-    const [isCreatingLead, setIsCreatingLead] = useState(false);
-    const [campaign, setCampaign] = useState('');
-    const [initialNotes, setInitialNotes] = useState('');
-    const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
-    const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
-    const placesService = useRef<google.maps.places.PlacesService | null>(null);
-
-
-    const [mapSelectedCompanyIds, setMapSelectedCompanyIds] = useState<string[]>([]);
-    const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-    
-    const [drawingMode, setDrawingMode] = useState<google.maps.drawing.OverlayType | null>(null);
-    const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
-
+    // Filter state
     const [mapFilters, setMapFilters] = useState({
         companyName: '',
         franchisee: [] as string[],
@@ -267,6 +221,31 @@ export default function LeadsMapClient() {
             fetchData();
         }
     }, [isLoaded, userProfile, fetchData]);
+
+    // Handle editing an existing route/area from URL params
+    useEffect(() => {
+        const routeId = searchParams.get('editArea');
+        if (routeId && isLoaded && savedRoutes.length > 0) {
+            const area = savedRoutes.find(r => r.id === routeId);
+            if (area && area.isProspectingArea) {
+                setLoadedRoute(area);
+                setNewAreaName(area.name);
+                setNewAreaNotes(area.notes || '');
+                setStreetsForArea(area.streets || []);
+                if (area.userId) {
+                    setNewAreaAssignees([area.userId]);
+                }
+                setActiveTab('prospecting');
+                
+                // Focus map on the area
+                if (map && area.streets?.length) {
+                    const bounds = new window.google.maps.LatLngBounds();
+                    area.streets.forEach(s => bounds.extend({ lat: s.latitude, lng: s.longitude }));
+                    map.fitBounds(bounds);
+                }
+            }
+        }
+    }, [searchParams, isLoaded, savedRoutes, map]);
 
     const handleLoadRoute = useCallback((route: SavedRoute) => {
         if (!isLoaded) return;
@@ -408,34 +387,6 @@ export default function LeadsMapClient() {
         );
     }, [searchParams]);
 
-    const handlePredictionSelect = useCallback(async (prediction: google.maps.places.AutocompletePrediction) => {
-        const place = await getPlaceDetails(prediction.place_id);
-        if (place) {
-            setSelectedPlace(place);
-            setSearchQuery(place.name || '');
-            setPredictions([]);
-
-            if (map && place.geometry?.location) {
-                map.panTo(place.geometry.location);
-                map.setZoom(17);
-            }
-        }
-    }, [getPlaceDetails, map]);
-
-    const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        setSearchQuery(value);
-        if (value) {
-            autocompleteService.current?.getPlacePredictions({ input: value, componentRestrictions: { country: 'au' } }, (preds, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
-                    setPredictions(preds);
-                }
-            });
-        } else {
-            setPredictions([]);
-        }
-    }, []);
-
     const handleClearRoute = () => {
         setSelectedRouteLeads([]);
         setDirections(null);
@@ -447,20 +398,6 @@ export default function LeadsMapClient() {
         if(startPointRef.current) startPointRef.current.value = '';
         if(endPointRef.current) endPointRef.current.value = '';
     };
-
-    const geocodeAddress = useCallback(async (address: string): Promise<google.maps.LatLng | null> => {
-        if (!isLoaded) return null;
-        const geocoder = new window.google.maps.Geocoder();
-        return new Promise((resolve) => {
-            geocoder.geocode({ address, componentRestrictions: { country: 'AU' } }, (results, status) => {
-                if (status === 'OK' && results?.[0]?.geometry.location) {
-                    resolve(results[0].geometry.location);
-                } else {
-                    resolve(null);
-                }
-            });
-        });
-    }, [isLoaded]);
 
     const handleCalculateRoute = async () => {
         if (selectedRouteLeads.length < 2) {
@@ -546,13 +483,7 @@ export default function LeadsMapClient() {
 
 
     const onMarkerClick = useCallback((lead: MapLead) => {
-      if (isMultiSelectMode) {
-        setMapSelectedCompanyIds(prev =>
-            prev.includes(lead.id)
-                ? prev.filter(id => id !== lead.id)
-                : [...prev, lead.id]
-        );
-      } else if (selectionMode === 'select') {
+      if (selectionMode === 'select') {
             setSelectedRouteLeads(prev => {
                 const isSelected = prev.some(l => l.id === lead.id);
                 if (isSelected) {
@@ -563,7 +494,7 @@ export default function LeadsMapClient() {
         } else {
             setSelectedLead(lead);
         }
-    }, [selectionMode, isMultiSelectMode]);
+    }, [selectionMode]);
 
     const onInfoWindowClose = useCallback(() => {
         setSelectedLead(null);
@@ -649,38 +580,44 @@ export default function LeadsMapClient() {
 
         setIsSavingArea(true);
         try {
-            const assigneeIds = (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && newAreaAssignee.length > 0 
-                ? newAreaAssignee 
-                : [userProfile.uid];
+            // Determine if it's unassigned or assigned to specific users
+            const isUnassigned = newAreaAssignees.length === 0;
+            const assigneeIds = isUnassigned ? [userProfile.uid] : newAreaAssignees;
 
             const baseAreaData: Omit<StorableRoute, 'id'> = {
-                userId: '', // Placeholder
+                userId: '', // Set per assignee
+                userName: userProfile.displayName,
                 name: newAreaName,
                 createdAt: new Date().toISOString(),
                 leads: [],
                 travelMode: 'DRIVING',
                 isProspectingArea: true,
+                isUnassigned: isUnassigned,
                 streets: streetsForArea,
                 notes: newAreaNotes,
             };
 
-            const savePromises = assigneeIds.map(uid => {
-                const areaData = { ...baseAreaData, userId: uid };
-                return saveUserRoute(uid, areaData);
-            });
-
-            await Promise.all(savePromises);
+            if (loadedRoute?.id && !isUnassigned && assigneeIds.length === 1 && assigneeIds[0] === loadedRoute.userId) {
+                // Update existing single assigned area
+                await updateUserRoute(loadedRoute.userId, loadedRoute.id, { ...baseAreaData, userId: loadedRoute.userId });
+                toast({ title: 'Success', description: 'Prospecting area updated.' });
+            } else {
+                // Save new areas or copies for each assignee
+                const savePromises = assigneeIds.map(uid => {
+                    const areaData = { ...baseAreaData, userId: uid };
+                    return saveUserRoute(uid, areaData);
+                });
+                await Promise.all(savePromises);
+                toast({ title: 'Success', description: `Prospecting area saved for ${assigneeIds.length} user(s).` });
+            }
             
-            toast({ title: 'Success', description: `Prospecting area saved successfully for ${assigneeIds.length} user(s).` });
-            
-            // Refetch data to update local lists if necessary
             fetchData();
-            
             setNewAreaName('');
             setNewAreaNotes('');
-            setNewAreaAssignee([]);
+            setNewAreaAssignees([]);
             setStreetsForArea([]);
             setIsSaveAreaDialogOpen(false);
+            setLoadedRoute(null);
 
         } catch (error) {
             console.error("Failed to save prospecting area:", error);
@@ -690,193 +627,6 @@ export default function LeadsMapClient() {
         }
     };
     
-    const handleAddLeadClick = async (place: google.maps.places.PlaceResult) => {
-        if (!place.website) {
-            openCreateLeadPage(place);
-            return;
-        }
-        
-        try {
-            const prospectResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
-            const hasEmail = prospectResult.contacts?.some(c => c.email);
-            const hasPhone = prospectResult.contacts?.some(c => c.phone && c.phone !== 'N/A') || place.formatted_phone_number;
-    
-            if (hasEmail && hasPhone) {
-                setProspectToCreate(place);
-            } else {
-                openCreateLeadPage(place, prospectResult.contacts);
-            }
-    
-        } catch (error) {
-            console.error('Error during prospecting, redirecting to manual entry:', error);
-            openCreateLeadPage(place);
-        }
-      };
-      
-        const openCreateLeadPage = (place: google.maps.places.PlaceResult, contacts?: Contact[]) => {
-            const params = new URLSearchParams();
-            if (place.name) params.set('companyName', place.name);
-            if (place.website) params.set('websiteUrl', place.website);
-            if (place.formatted_phone_number) params.set('phone', place.formatted_phone_number);
-            
-            if (place.address_components) {
-                const get = (type: string) => place.address_components?.find(c => c.types.includes(type))?.long_name || '';
-                const street_number = get('street_number');
-                const route = get('route');
-                params.set('street', `${street_number} ${route}`.trim());
-                params.set('city', get('locality') || get('postal_town'));
-                params.set('state', get('administrative_area_level_1'));
-                params.set('zip', get('postal_code'));
-            } else if (place.vicinity) {
-                params.set('street', place.vicinity);
-            }
-            
-            if (place.geometry?.location) {
-                params.set('lat', place.geometry.location.lat().toString());
-                params.set('lng', place.geometry.location.lng().toString());
-            }
-    
-            const primaryContact = contacts?.[0];
-            if (primaryContact?.email) {
-                // Even if one is missing, we pass what we have. The form will require the rest.
-            }
-    
-            window.open(`/leads/new?${params.toString()}`, '_blank');
-            toast({ title: "Complete Lead Details", description: "Please fill in the missing email or phone number." });
-        };
-    
-    
-      const handleCreateLeadFromProspect = async () => {
-        if (!prospectToCreate || !userProfile?.displayName) return;
-    
-        const place = prospectToCreate;
-        if (!place.name || !place.vicinity || !place.geometry?.location) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing required information (name, address, location).' });
-            return;
-        }
-    
-        const placeId = place.place_id;
-        if (!placeId) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Prospect is missing a Place ID.' });
-            return;
-        }
-    
-        const duplicateId = await checkForDuplicateLead(place.name, place.formatted_phone_number || '');
-        if (duplicateId) {
-            setDuplicateLeadId(duplicateId);
-            setProspectToCreate(null);
-            return;
-        }
-    
-        setIsCreatingLead(true);
-        setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
-        
-        let leadCampaign = campaign;
-        if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
-            leadCampaign = 'Door-to-Door';
-        }
-        if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin')) {
-             toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
-             setIsCreatingLead(false);
-             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-             return;
-        }
-    
-        let primaryContact: Omit<Contact, 'id'> | null = null;
-        if (place.website) {
-            try {
-                const hunterResult = await aiProspectWebsiteTool({ leadId: 'new-lead-prospecting', websiteUrl: place.website });
-                if (hunterResult.contacts && hunterResult.contacts.length > 0) {
-                    const firstContact = hunterResult.contacts[0];
-                    primaryContact = {
-                        name: firstContact.name || 'Info',
-                        title: firstContact.title || 'Primary Contact',
-                        email: firstContact.email || '',
-                        phone: firstContact.phone || place.formatted_phone_number || '',
-                    };
-                    toast({ title: 'Contact Found!', description: `Automatically found contact: ${primaryContact.name}.` });
-                }
-            } catch (error) { console.warn('AI prospecting for contact failed.', error); }
-        }
-        
-        if (!primaryContact) {
-            const websiteDomain = (place.website || '').replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-            primaryContact = {
-                name: `Info ${place.name}`,
-                title: 'Primary Contact',
-                email: websiteDomain ? `info@${websiteDomain}` : '',
-                phone: place.formatted_phone_number || '',
-            };
-        }
-        const nameParts = primaryContact.name.split(' ');
-        
-        const addressData: Partial<Address> = { country: 'Australia' };
-        if (place.address_components) {
-            const get = (type: string, useShortName = false) => {
-                const comp = place.address_components?.find(c => c.types.includes(type));
-                return useShortName ? comp?.short_name : comp?.long_name;
-            };
-            addressData.city = get('locality') || get('postal_town') || '';
-            addressData.state = get('administrative_area_level_1', true) || '';
-            addressData.zip = get('postal_code') || '';
-        }
-        addressData.street = place.vicinity;
-    
-        const newLeadData = {
-            companyName: place.name,
-            websiteUrl: place.website || '',
-            campaign: leadCampaign,
-            address: {
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng(),
-                ...addressData,
-            } as Address,
-            contact: {
-                firstName: nameParts[0] || 'Info',
-                lastName: nameParts.slice(1).join(' ') || place.name,
-                title: primaryContact.title,
-                email: primaryContact.email,
-                phone: primaryContact.phone,
-            },
-            initialNotes: initialNotes,
-            dialerAssigned: userProfile.displayName,
-        };
-    
-        try {
-            const result = await createNewLead(newLeadData as any);
-            if (result.success && result.leadId) {
-                toast({ title: 'Lead Created', description: `${newLeadData.companyName} has been created successfully.` });
-                
-                const newMapLead: MapLead = {
-                  id: result.leadId!,
-                  companyName: newLeadData.companyName,
-                  status: 'New',
-                  address: newLeadData.address as Address,
-                  latitude: newLeadData.address.lat,
-                  longitude: newLeadData.address.lng,
-                  dialerAssigned: undefined,
-                  customerPhone: newLeadData.contact.phone,
-                };
-                setAllMapData(prev => [...prev, newMapLead]);
-                setProspects(prev => prev.map(p => p.place.place_id === placeId
-                    ? { ...p, isAdding: false, existingLead: newMapLead }
-                    : p
-                ));
-            } else {
-                toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
-                setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-            }
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message || 'An unexpected error occurred.' });
-            setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
-        } finally {
-            setIsCreatingLead(false);
-            setProspectToCreate(null);
-            setInitialNotes('');
-            setCampaign('');
-        }
-      };
-      
     const handleMapFilterChange = (filterName: keyof typeof mapFilters, value: any) => {
         setMapFilters(prev => ({ ...prev, [filterName]: value }));
     };
@@ -892,9 +642,6 @@ export default function LeadsMapClient() {
             campaign: 'all',
             hasVisitNote: 'all',
         });
-        if (geoSearchInputNodeRef.current) {
-            geoSearchInputNodeRef.current.value = '';
-        }
     };
 
     const filteredMapData = useMemo(() => {
@@ -1116,7 +863,7 @@ export default function LeadsMapClient() {
                                     )}
                                 </ScrollArea>
                                 <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
-                                    Save Prospecting Area
+                                    {loadedRoute ? 'Update Prospecting Area' : 'Save Prospecting Area'}
                                 </Button>
                             </CardContent>
                         </TabsContent>
@@ -1203,7 +950,7 @@ export default function LeadsMapClient() {
                                 onMouseOver={() => setHoveredLeadId(lead.id)}
                                 onMouseOut={() => setHoveredLeadId(null)}
                                 icon={{
-                                    url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id) || mapSelectedCompanyIds.includes(lead.id), hoveredLeadId === lead.id)
+                                    url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id), hoveredLeadId === lead.id)
                                 }}
                             />
                         ))}
@@ -1248,7 +995,7 @@ export default function LeadsMapClient() {
         <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Save Prospecting Area</DialogTitle>
+                    <DialogTitle>{loadedRoute ? 'Update' : 'Save'} Prospecting Area</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
@@ -1261,11 +1008,14 @@ export default function LeadsMapClient() {
                     </div>
                     {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
                         <div className="space-y-2">
-                            <Label htmlFor="area-assignee">Assign To Active Field Sales Users</Label>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="area-assignees">Assign To Field Sales Users (Leave empty for Unassigned)</Label>
+                                <Button variant="link" size="sm" onClick={() => setNewAreaAssignees(activeFieldSalesUserOptions.map(o => o.value))}>Select All</Button>
+                            </div>
                             <MultiSelectCombobox 
                                 options={activeFieldSalesUserOptions}
-                                selected={newAreaAssignee}
-                                onSelectedChange={setNewAreaAssignee}
+                                selected={newAreaAssignees}
+                                onSelectedChange={setNewAreaAssignees}
                                 placeholder="Select users..."
                             />
                         </div>
@@ -1275,6 +1025,57 @@ export default function LeadsMapClient() {
                     <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
                     <Button onClick={handleSaveProspectingArea} disabled={isSavingArea}>
                         {isSavingArea ? <Loader /> : 'Save Area'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={isSaveRouteDialogOpen} onOpenChange={setIsSaveRouteDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Save Route</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="route-name">Route Name</Label>
+                        <Input id="route-name" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="route-date">Scheduled Date</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                    <CalendarPickerIcon className="mr-2 h-4 w-4" />
+                                    {routeDate ? format(routeDate, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 z-[51]">
+                                <CalendarPicker mode="single" selected={routeDate} onSelect={setRouteDate} initialFocus />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                        <div className="space-y-2">
+                            <Label htmlFor="route-assignee">Assign To</Label>
+                            <Select value={routeAssignee} onValueChange={setRouteAssignee}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a user" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {allUsers
+                                        .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
+                                        .map(u => (
+                                            <SelectItem key={u.uid} value={u.uid}>{u.displayName || u.email}</SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsSaveRouteDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveRoute} disabled={isSavingRoute}>
+                        {isSavingRoute ? <Loader /> : 'Save Route'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

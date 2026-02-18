@@ -1,5 +1,3 @@
-
-
 export type LeadStatus =
   | 'New'
   | 'Priority Lead'
@@ -261,6 +259,7 @@ export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | '
 export interface StorableRoute {
   id?: string;
   userId: string;
+  userName?: string;
   name: string;
   createdAt: string;
   leads: { id: string; companyName: string; latitude: number; longitude: number; address: Address; }[];
@@ -272,6 +271,7 @@ export interface StorableRoute {
   totalDistance?: string | null;
   totalDuration?: string | null;
   isProspectingArea?: boolean;
+  isUnassigned?: boolean;
   notes?: string;
   streets?: { place_id: string; description: string; latitude: number; longitude: number; }[];
   shape?: {

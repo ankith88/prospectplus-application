@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -9,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute } from '@/services/firebase';
 import {
@@ -80,43 +79,37 @@ export default function ProspectingAreasPage() {
 
   const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
 
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
-  useEffect(() => {
+  const fetchProspectingAreas = useCallback(async () => {
     if (!userProfile) return;
-
-    const fetchProspectingAreas = async () => {
-      setLoading(true);
-      try {
-        const [allRoutes, companies] = await Promise.all([
-          getAllUserRoutes(),
-          getCompaniesFromFirebase()
-        ]);
-        const areas = allRoutes.filter(route => route.isProspectingArea);
-        
-        let userAreas = areas;
-        if (userProfile.role === 'Field Sales') {
-            userAreas = areas.filter(area => area.userId === userProfile.uid);
-        }
-
-        userAreas.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setProspectingAreas(userAreas);
-        setAllCompanies(companies);
-      } catch (error) {
-        console.error("Failed to fetch prospecting areas:", error);
-        toast({ variant: "destructive", title: 'Error', description: 'Could not fetch prospecting areas.' });
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const [allRoutes, companies] = await Promise.all([
+        getAllUserRoutes(),
+        getCompaniesFromFirebase()
+      ]);
+      const areas = allRoutes.filter(route => route.isProspectingArea);
+      
+      let filteredAreas = areas;
+      if (userProfile.role === 'Field Sales') {
+          // Field sales see their assigned areas OR unassigned ones
+          filteredAreas = areas.filter(area => area.userId === userProfile.uid || area.isUnassigned);
       }
-    };
-    if(hasAccess) {
+
+      setProspectingAreas(filteredAreas);
+      setAllCompanies(companies);
+    } catch (error) {
+      console.error("Failed to fetch prospecting areas:", error);
+      toast({ variant: "destructive", title: 'Error', description: 'Could not fetch prospecting areas.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile, toast]);
+
+  useEffect(() => {
+    if (userProfile && hasAccess) {
         fetchProspectingAreas();
     }
-  }, [userProfile, hasAccess, toast]);
+  }, [userProfile, hasAccess, fetchProspectingAreas]);
   
   const mapCenter = useMemo(() => {
     if (!isLoaded || !selectedArea) return defaultCenter;
@@ -241,7 +234,7 @@ export default function ProspectingAreasPage() {
           toast({ title: "Success", description: "Prospecting area deleted." });
       } catch (error) {
           console.error("Failed to delete area:", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not delete the area." });
+          toast({ variant: "destructive", title: 'Error', description: "Could not delete the area." });
       } finally {
           setAreaToDelete(null);
       }
@@ -297,14 +290,16 @@ export default function ProspectingAreasPage() {
                         Created on {format(new Date(selectedArea.createdAt), 'PP')} by {selectedArea.userName}
                     </CardDescription>
                 </div>
-                <Button
-                    onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
-                    variant="outline"
-                    size="sm"
-                >
-                    <Satellite className="mr-2 h-4 w-4" />
-                    {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
+                        variant="outline"
+                        size="sm"
+                    >
+                        <Satellite className="mr-2 h-4 w-4" />
+                        {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                    </Button>
+                </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -487,7 +482,9 @@ export default function ProspectingAreasPage() {
                     <TableCell>
                         <div className="flex items-center gap-2">
                            <User className="h-4 w-4 text-muted-foreground"/>
-                           {area.userName}
+                           {area.isUnassigned ? (
+                               <Badge variant="secondary">Unassigned</Badge>
+                           ) : area.userName}
                         </div>
                     </TableCell>
                     <TableCell>
@@ -506,6 +503,15 @@ export default function ProspectingAreasPage() {
                     </TableCell>
                     <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
+                            {userProfile && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role!) && (
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={(e) => { e.stopPropagation(); router.push(`/leads/map?editArea=${area.id}`) }}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -527,7 +533,7 @@ export default function ProspectingAreasPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     No prospecting areas found. Create one from the Territory Map.
                   </TableCell>
                 </TableRow>

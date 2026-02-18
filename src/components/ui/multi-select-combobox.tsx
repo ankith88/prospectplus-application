@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -71,7 +70,7 @@ export function MultiSelectCombobox({
                     {option?.label || value}
                     <div
                       role="button"
-                      aria-label={`Remove ${option?.label}`}
+                      aria-label={`Remove ${option?.label || value}`}
                       tabIndex={0}
                       className="appearance-none rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onKeyDown={(e) => {
@@ -86,7 +85,7 @@ export function MultiSelectCombobox({
                       }}
                     >
                       <X className="h-3 w-3" />
-                      <span className="sr-only">Remove {option?.label}</span>
+                      <span className="sr-only">Remove {option?.label || value}</span>
                     </div>
                   </Badge>
                 );
@@ -98,7 +97,7 @@ export function MultiSelectCombobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[60]">
         <Command>
           <CommandInput placeholder="Search..." />
           <CommandList>
@@ -107,7 +106,9 @@ export function MultiSelectCombobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
+                  value={option.value}
                   onSelect={() => handleSelect(option.value)}
+                  onPointerDown={(e) => e.preventDefault()}
                   className="cursor-pointer"
                 >
                   <Check

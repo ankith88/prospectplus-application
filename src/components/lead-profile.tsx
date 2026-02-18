@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -1158,8 +1157,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {linkedVisitNote.content && (
                                 <div className="space-y-2">
                                     <h4 className="font-semibold text-sm">Original Visit Note:</h4>
-                                    <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground">
-                                        {linkedVisitNote.content}
+                                    <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground italic">
+                                        "{linkedVisitNote.content}"
                                     </div>
                                 </div>
                             )}
@@ -1617,6 +1616,66 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <ListTodo className="w-5 h-5 text-muted-foreground" />
+                        Tasks
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <form onSubmit={handleAddTask} className="flex flex-col gap-2">
+                            <Input
+                                placeholder="New task title..."
+                                value={newTaskTitle}
+                                onChange={(e) => setNewTaskTitle(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className={cn("flex-1 justify-start text-left font-normal", !newTaskDueDate && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick a due date"}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setNewTaskDueDate} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                <Button type="submit" size="icon">
+                                    <PlusCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </form>
+                        <div className="space-y-2">
+                            {tasks.length > 0 ? (
+                                tasks.map((task) => (
+                                    <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
+                                        <Checkbox
+                                            checked={task.isCompleted}
+                                            onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <p className={cn("text-sm font-medium truncate", task.isCompleted && "line-through text-muted-foreground")}>
+                                                {task.title}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Due: {format(new Date(task.dueDate), "dd MMM")}
+                                            </p>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-center py-4 text-sm text-muted-foreground">No tasks scheduled.</p>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
       </main>
     </div>
@@ -1626,6 +1685,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         address={selectedAddress || ''}
       />
       <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
+    <MoveLeadDialog
+        lead={lead}
+        isOpen={isMoveLeadDialogOpen}
+        onOpenChange={setIsMoveLeadDialogOpen}
+        onLeadMoved={() => router.refresh()}
+    />
     </>
   )
 }
