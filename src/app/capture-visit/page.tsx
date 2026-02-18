@@ -495,7 +495,8 @@ export default function CaptureVisitPage() {
             .filter(Boolean)
             .join('\n');
             
-        const fullNote = `${captureForm.getValues('content')}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
+        const rawNote = captureForm.getValues('content');
+        const fullNote = `${rawNote}\n\n---\nOutcome: ${outcomeType}\n${detailsString}`;
     
         let addressData: Address | undefined;
         if (selectedPlace?.address_components) {
@@ -512,7 +513,7 @@ export default function CaptureVisitPage() {
         if (editingNote) {
             try {
                 await updateVisitNote(editingNote.id, {
-                    content: fullNote,
+                    content: rawNote,
                     companyName: selectedPlace?.name,
                     address: addressData,
                     websiteUrl: selectedPlace?.website,
@@ -535,7 +536,7 @@ export default function CaptureVisitPage() {
 
         try {
             await addVisitNote({
-                content: fullNote,
+                content: rawNote,
                 capturedBy: captureUser.displayName || 'Unknown User',
                 capturedByUid: captureUser.uid,
                 imageUrls: images,

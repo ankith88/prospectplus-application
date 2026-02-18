@@ -26,16 +26,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { createNewLead, updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
-import { useAuth } from '@/hooks/use-auth';
+import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
+import { firestore } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { Search, Star } from 'lucide-react';
+import { Input } from './ui/input';
+import { Badge } from './ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Input } from './ui/input';
-import { Search, Star } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase';
-import { Badge } from './ui/badge';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -151,6 +150,10 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         title: 'Note Linked Successfully',
         description: `The visit note has been linked to ${selectedItem.companyName}.`,
       });
+      
+      // Redirect to the linked item
+      const destination = selectedItem.isCompanyResult ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`;
+      router.push(destination);
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to link visit note:', error);
