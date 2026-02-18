@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute } from '@/services/firebase';
 import {
@@ -87,15 +87,10 @@ export default function ProspectingAreasPage() {
         getAllUserRoutes(),
         getCompaniesFromFirebase()
       ]);
+      // All users see all prospecting areas
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
-      let filteredAreas = areas;
-      if (userProfile.role === 'Field Sales') {
-          // Field sales see their assigned areas OR unassigned ones
-          filteredAreas = areas.filter(area => area.userId === userProfile.uid || area.isUnassigned);
-      }
-
-      setProspectingAreas(filteredAreas);
+      setProspectingAreas(areas);
       setAllCompanies(companies);
     } catch (error) {
       console.error("Failed to fetch prospecting areas:", error);
@@ -276,7 +271,7 @@ export default function ProspectingAreasPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Prospecting Areas</h1>
-        <p className="text-muted-foreground">Review and manage your team's designated prospecting areas.</p>
+        <p className="text-muted-foreground">Review and manage designated prospecting areas across the team.</p>
       </header>
 
       {selectedArea && (
@@ -298,6 +293,9 @@ export default function ProspectingAreasPage() {
                     >
                         <Satellite className="mr-2 h-4 w-4" />
                         {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedArea(null)}>
+                        <X className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
@@ -457,9 +455,9 @@ export default function ProspectingAreasPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Saved Areas</CardTitle>
+          <CardTitle>All Saved Areas</CardTitle>
           <CardDescription>
-            A list of all prospecting areas. Select one to view it on the map.
+            A list of all prospecting areas defined in the system. Select one to view it on the map.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -467,7 +465,6 @@ export default function ProspectingAreasPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Area Name</TableHead>
-                <TableHead>User</TableHead>
                 <TableHead>Created At</TableHead>
                 <TableHead>Contents</TableHead>
                 <TableHead>Status</TableHead>
@@ -479,14 +476,6 @@ export default function ProspectingAreasPage() {
                 prospectingAreas.map(area => (
                   <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={selectedArea?.id === area.id ? 'bg-secondary' : 'cursor-pointer'}>
                     <TableCell className="font-medium">{area.name}</TableCell>
-                    <TableCell>
-                        <div className="flex items-center gap-2">
-                           <User className="h-4 w-4 text-muted-foreground"/>
-                           {area.isUnassigned ? (
-                               <Badge variant="secondary">Unassigned</Badge>
-                           ) : area.userName}
-                        </div>
-                    </TableCell>
                     <TableCell>
                        <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground"/>
@@ -522,18 +511,20 @@ export default function ProspectingAreasPage() {
                                 Complete
                             </Button>
                             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
-                                <MapPin className="mr-2 h-4 w-4" /> View on Map
+                                <MapPin className="mr-2 h-4 w-4" /> View
                             </Button>
-                             <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
+                             {userProfile && ['admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                                <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                             )}
                         </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={5} className="h-24 text-center">
                     No prospecting areas found. Create one from the Territory Map.
                   </TableCell>
                 </TableRow>

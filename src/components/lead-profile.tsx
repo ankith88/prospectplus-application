@@ -469,10 +469,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleInitiateCall = (phoneNumber: string) => {
-    if (!lead) return;
+  const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
-    logActivity(lead.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.`, date: new Date().toISOString() });
+    logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
     toast({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
@@ -822,23 +821,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
 
-  const formatAddressLine = (address?: { street?: string; city?: string; state?: string, franchisee?: string } | string) => {
-    if (!address) return 'Address not available';
-    if (typeof address === 'string') return address;
-    return [
-        address.street,
-        address.city,
-        address.state,
-    ].filter(Boolean).join(', ');
-  }
-
   return (
     <>
     <MoveLeadDialog
         lead={lead}
         isOpen={isMoveLeadDialogOpen}
         onOpenChange={setIsMoveLeadDialogOpen}
-        onLeadMoved={() => router.refresh()} // Refresh page data after moving
+        onLeadMoved={() => router.refresh()}
     />
      {isScheduleAppointmentOpen && (
         <ScheduleAppointmentDialog
@@ -870,7 +859,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {nearbyCompanies.map(company => (
                                 <TableRow key={company.id}>
                                     <TableCell className="font-semibold">{company.companyName}</TableCell>
-                                    <TableCell>{formatAddressLine(company.address as Address)}</TableCell>
+                                    <TableCell>{formatAddress(company.address as Address)}</TableCell>
                                     <TableCell>{company.industryCategory || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
@@ -1156,7 +1145,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="flex flex-col gap-4">
                             {linkedVisitNote.content && (
                                 <div className="space-y-2">
-                                    <h4 className="font-semibold text-sm">Original Visit Note:</h4>
+                                    <h4 className="font-semibold text-sm">Original Visit Notes:</h4>
                                     <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground italic">
                                         "{linkedVisitNote.content}"
                                     </div>

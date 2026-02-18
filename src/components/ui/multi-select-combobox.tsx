@@ -108,7 +108,11 @@ export function MultiSelectCombobox({
                   key={option.value}
                   value={option.value}
                   onSelect={() => handleSelect(option.value)}
-                  onPointerDown={(e) => e.preventDefault()}
+                  onPointerDown={(e) => {
+                    // Prevent focus management from closing the dropdown prematurely when in a Dialog
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   className="cursor-pointer"
                 >
                   <Check
