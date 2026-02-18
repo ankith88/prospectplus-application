@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -290,7 +291,7 @@ export default function CaptureVisitPage() {
                     console.error(e);
                     toast({ variant: 'destructive', title: 'Error', description: 'Failed to load visit note.' });
                 } finally {
-                    setIsLoadingFromNote(false);
+                    setIsLoadingNote(false);
                 }
             }
             fetchNote();
