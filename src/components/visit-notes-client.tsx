@@ -13,7 +13,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -27,6 +27,8 @@ import Image from 'next/image';
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
 
+type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'outcome' | 'status';
+
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,7 @@ export default function VisitNotesClient() {
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'createdAt', direction: 'descending' });
 
   const router = useRouter();
   const { userProfile } = useAuth();
@@ -107,24 +110,29 @@ export default function VisitNotesClient() {
       status: [],
     });
   };
+
+  const requestSort = (key: SortableKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: SortableKeys) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
+
+  const formatAddressString = (address?: Address) => {
+    if (!address) return '';
+    return `${address.street || ''} ${address.city || ''}`.trim();
+  };
   
-  const capturedByOptions: Option[] = useMemo(() => {
-    const users = new Set(notes.map(n => n.capturedBy));
-    return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [notes]);
-
-  const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
-    return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [notes]);
-
-  const statusOptions: Option[] = useMemo(() => {
-    const statuses = new Set(notes.map(n => n.status));
-    return Array.from(statuses).map(s => ({ value: s, label: s }));
-  }, [notes]);
-
   const filteredNotes = useMemo(() => {
-    return notes.filter(note => {
+    let result = notes.filter(note => {
       const companyNameMatch = filters.companyName
         ? note.companyName?.toLowerCase().includes(filters.companyName.toLowerCase())
         : true;
@@ -150,8 +158,58 @@ export default function VisitNotesClient() {
       }
 
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [notes, filters]);
+    });
+
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortConfig.key) {
+          case 'createdAt':
+            aValue = new Date(a.createdAt).getTime();
+            bValue = new Date(b.createdAt).getTime();
+            break;
+          case 'address':
+            aValue = formatAddressString(a.address);
+            bValue = formatAddressString(b.address);
+            break;
+          case 'outcome':
+            aValue = a.outcome?.type || '';
+            bValue = b.outcome?.type || '';
+            break;
+          default:
+            aValue = (a as any)[sortConfig.key] || '';
+            bValue = (b as any)[sortConfig.key] || '';
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [notes, filters, sortConfig]);
+
+  const capturedByOptions: Option[] = useMemo(() => {
+    const users = new Set(notes.map(n => n.capturedBy));
+    return Array.from(users).map(u => ({ value: u, label: u }));
+  }, [notes]);
+
+  const outcomeOptions: Option[] = useMemo(() => {
+    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
+    return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
+  }, [notes]);
+
+  const statusOptions: Option[] = useMemo(() => {
+    const statuses = new Set(notes.map(n => n.status));
+    return Array.from(statuses).map(s => ({ value: s, label: s }));
+  }, [notes]);
 
   const statusColorMap: Record<VisitNote['status'], string> = {
     'New': 'bg-blue-100 text-blue-800',
@@ -228,7 +286,7 @@ export default function VisitNotesClient() {
           <CardHeader>
             <CardTitle>Visit Notes</CardTitle>
             <CardDescription>
-              Displaying {filteredNotes.length} of {notes.length} notes.
+              Displaying {filteredNotes.length} of {notes.length} notes. Click column headers to sort.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -237,13 +295,37 @@ export default function VisitNotesClient() {
                 <TableHeader>
                     <TableRow>
                     {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
-                        <TableHead>Captured By</TableHead>
+                        <TableHead>
+                          <Button variant="ghost" onClick={() => requestSort('capturedBy')} className="group -ml-4">
+                            Captured By{getSortIndicator('capturedBy')}
+                          </Button>
+                        </TableHead>
                     )}
-                    <TableHead>Date</TableHead>
-                    <TableHead>Company Name</TableHead>
-                    <TableHead className="hidden sm:table-cell">Address</TableHead>
-                    <TableHead>Outcome</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <Button variant="ghost" onClick={() => requestSort('createdAt')} className="group -ml-4">
+                        Date{getSortIndicator('createdAt')}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
+                        Company Name{getSortIndicator('companyName')}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      <Button variant="ghost" onClick={() => requestSort('address')} className="group -ml-4">
+                        Address{getSortIndicator('address')}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button variant="ghost" onClick={() => requestSort('outcome')} className="group -ml-4">
+                        Outcome{getSortIndicator('outcome')}
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">
+                        Status{getSortIndicator('status')}
+                      </Button>
+                    </TableHead>
                     <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                 </TableHeader>
