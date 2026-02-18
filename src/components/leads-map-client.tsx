@@ -40,6 +40,7 @@ import { useJsApiLoader } from '@react-google-maps/api';
 import { Textarea } from './ui/textarea';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 type ProspectWithLeadInfo = {
