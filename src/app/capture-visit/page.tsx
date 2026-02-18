@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import Image from 'next/image';
-import type { Address, UserProfile, DiscoveryData, VisitNote } from '@/lib/types';
+import type { Address, UserProfile, DiscoveryData, VisitNote, Lead } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -959,6 +959,9 @@ export default function CaptureVisitPage() {
                                     </AccordionItem>
                                 </Accordion>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Email Interested', details: {} }); handleNextStep(); }}>
+                                        Email Interested
+                                    </Button>
                                     <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Needs Follow-up', details: {} }); handleNextStep(); }}>
                                         Needs Follow-up
                                     </Button>

@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -782,7 +783,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
             allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
         }
         
-        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
