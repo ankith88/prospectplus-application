@@ -26,15 +26,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { createNewLead, updateVisitNote, getLeadsFromFirebase } from '@/services/firebase';
+import { createNewLead, updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from './ui/input';
-import { Search } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import { Badge } from './ui/badge';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -53,9 +54,9 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
   const [isRejecting, setIsRejecting] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Lead[]>([]);
+  const [searchResults, setSearchResults] = useState<(Lead & { isCompanyResult?: boolean })[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedItem, setSelectedItem] = useState<(Lead & { isCompanyResult?: boolean }) | null>(null);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -64,24 +65,35 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     if (!isOpen) {
         setSearchQuery('');
         setSearchResults([]);
-        setSelectedLead(null);
+        setSelectedItem(null);
     }
   }, [isOpen]);
 
-  const handleSearchLeads = async (query: string) => {
+  const handleSearch = async (query: string) => {
     if (query.length < 3) {
       setSearchResults([]);
       return;
     }
     setIsSearching(true);
     try {
-      const allLeads = await getLeadsFromFirebase({ summary: true });
-      const filteredLeads = allLeads.filter(lead =>
-        lead.companyName.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(filteredLeads.slice(0, 10)); // Limit results
+      const [allLeads, allCompanies] = await Promise.all([
+        getLeadsFromFirebase({ summary: true }),
+        getCompaniesFromFirebase()
+      ]);
+
+      const normalizedQuery = query.toLowerCase();
+      
+      const filteredLeads = allLeads
+        .filter(l => l.companyName.toLowerCase().includes(normalizedQuery))
+        .map(l => ({ ...l, isCompanyResult: false }));
+
+      const filteredCompanies = allCompanies
+        .filter(c => c.companyName.toLowerCase().includes(normalizedQuery))
+        .map(c => ({ ...c, isCompanyResult: true }));
+
+      setSearchResults([...filteredLeads, ...filteredCompanies].slice(0, 15));
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not search for leads.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not search for existing records.' });
     } finally {
       setIsSearching(false);
     }
@@ -89,12 +101,12 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
   useEffect(() => {
     const timer = setTimeout(() => {
-        if (searchQuery && !selectedLead) {
-            handleSearchLeads(searchQuery);
+        if (searchQuery && !selectedItem) {
+            handleSearch(searchQuery);
         }
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedLead]);
+  }, [searchQuery, selectedItem]);
 
 
   const handleCreateLead = () => {
@@ -120,22 +132,24 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     }
   }
 
-  const handleLinkToLead = async () => {
-    if (!selectedLead || !note) return;
+  const handleLinkToItem = async () => {
+    if (!selectedItem || !note) return;
 
     setIsLinking(true);
     try {
-      // Update the visit note
-      await updateVisitNote(note.id, { status: 'Converted', leadId: selectedLead.id });
+      const collectionName = selectedItem.isCompanyResult ? 'companies' : 'leads';
       
-      // Update the existing lead with the visitNoteID
-      const leadRef = doc(firestore, 'leads', selectedLead.id);
-      await updateDoc(leadRef, { visitNoteID: note.id });
+      // 1. Update the visit note with the link
+      await updateVisitNote(note.id, { status: 'Converted', leadId: selectedItem.id });
+      
+      // 2. Update the target lead/company with the visitNoteID
+      const docRef = doc(firestore, collectionName, selectedItem.id);
+      await updateDoc(docRef, { visitNoteID: note.id });
 
-      onProcessed(note.id, 'Converted', selectedLead.id);
+      onProcessed(note.id, 'Converted', selectedItem.id);
       toast({
         title: 'Note Linked Successfully',
-        description: `The visit note has been linked to ${selectedLead.companyName}.`,
+        description: `The visit note has been linked to ${selectedItem.companyName}.`,
       });
       onOpenChange(false);
     } catch (error) {
@@ -228,9 +242,9 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Link to Existing Lead</CardTitle>
+                        <CardTitle>Link to Existing Lead or Customer</CardTitle>
                         <CardDescription>
-                        If this business already exists, search for it and link this note.
+                        Search for a Lead or Signed Customer to link this note.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -244,36 +258,46 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                         />
                         </div>
                         {isSearching && <div className="flex justify-center"><Loader /></div>}
-                        {searchResults.length > 0 && !selectedLead && (
-                        <ScrollArea className="h-40 rounded-md border">
+                        {searchResults.length > 0 && !selectedItem && (
+                        <ScrollArea className="h-48 rounded-md border">
                             <div className="p-2">
-                            {searchResults.map(lead => (
-                                <div key={lead.id} className="p-2 hover:bg-accent rounded cursor-pointer" onClick={() => {
-                                    setSelectedLead(lead);
-                                    setSearchQuery(lead.companyName);
+                            {searchResults.map(item => (
+                                <div key={item.id} className="p-2 hover:bg-accent rounded cursor-pointer flex items-center justify-between gap-2" onClick={() => {
+                                    setSelectedItem(item);
+                                    setSearchQuery(item.companyName);
                                     setSearchResults([]);
                                 }}>
-                                <p className="font-semibold">{lead.companyName}</p>
-                                <p className="text-sm text-muted-foreground">{lead.address?.city}, {lead.address?.state}</p>
+                                    <div>
+                                        <p className="font-semibold">{item.companyName}</p>
+                                        <p className="text-sm text-muted-foreground">{item.address?.city}, {item.address?.state}</p>
+                                    </div>
+                                    {item.isCompanyResult && (
+                                        <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+                                            <Star className="h-3 w-3" /> Signed Customer
+                                        </Badge>
+                                    )}
                                 </div>
                             ))}
                             </div>
                         </ScrollArea>
                         )}
-                        {selectedLead && (
+                        {selectedItem && (
                         <div className="p-3 border rounded-md bg-secondary/50 text-sm">
-                            <p className="font-semibold">{selectedLead.companyName}</p>
-                            <p className="text-muted-foreground">{selectedLead.address?.street}, {selectedLead.address?.city}</p>
+                            <div className="flex items-center justify-between">
+                                <p className="font-semibold">{selectedItem.companyName}</p>
+                                {selectedItem.isCompanyResult && <Badge variant="secondary">Signed Customer</Badge>}
+                            </div>
+                            <p className="text-muted-foreground">{selectedItem.address?.street}, {selectedItem.address?.city}</p>
                             <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => {
-                            setSelectedLead(null);
-                            setSearchQuery('');
+                                setSelectedItem(null);
+                                setSearchQuery('');
                             }}>Clear selection</Button>
                         </div>
                         )}
                     </CardContent>
                     <CardFooter>
-                        <Button onClick={handleLinkToLead} disabled={isLinking || !selectedLead} className="w-full">
-                            {isLinking ? <Loader /> : 'Link to this Lead'}
+                        <Button onClick={handleLinkToItem} disabled={isLinking || !selectedItem} className="w-full">
+                            {isLinking ? <Loader /> : 'Link to this Record'}
                         </Button>
                     </CardFooter>
                 </Card>

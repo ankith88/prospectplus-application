@@ -97,9 +97,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AddContactForm } from '@/components/add-contact-form'
-import { EditContactForm } from '@/components/edit-contact-form'
-import { LogNoteDialog } from '@/components/log-note-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'

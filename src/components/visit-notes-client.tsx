@@ -359,7 +359,7 @@ export default function VisitNotesClient() {
                             <div className="flex items-center justify-end gap-2">
                             {note.status === 'Converted' && note.leadId ? (
                                     <Button asChild size="sm" variant="outline">
-                                        <Link href={`/leads/${note.leadId}`} target="_blank">View Lead</Link>
+                                        <Link href={note.leadId.startsWith('signed-') || notes.some(n => n.id === note.id && n.leadId && n.leadId.includes('Signed')) ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">View {note.leadId.startsWith('signed-') ? 'Customer' : 'Lead'}</Link>
                                     </Button>
                                 ) : canProcess ? (
                                     <Button
