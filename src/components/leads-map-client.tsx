@@ -205,8 +205,8 @@ export default function LeadsMapClient() {
             const allItems = Array.from(combinedData.values());
 
             const mapLeads = allItems
-                .filter(item => typeof item.latitude === 'number' && typeof item.longitude === 'number')
-                .map(item => ({ ...item, latitude: item.latitude!, longitude: item.longitude!, isCompany: item.status === 'Won', isProspect: false } as MapLead));
+                .filter(item => !isNaN(Number(item.latitude)) && !isNaN(Number(item.longitude)))
+                .map(item => ({ ...item, latitude: Number(item.latitude), longitude: Number(item.longitude), isCompany: item.status === 'Won', isProspect: false } as MapLead));
 
 
             setAllMapData(mapLeads);
@@ -415,10 +415,10 @@ export default function LeadsMapClient() {
 
         const waypoints = selectedRouteLeads
             .slice(1, -1)
-            .map(l => ({ location: { lat: l.latitude!, lng: l.longitude! }, stopover: true }));
+            .map(l => ({ location: { lat: Number(l.latitude), lng: Number(l.longitude) }, stopover: true }));
         
-        const origin = startPoint ? { query: startPoint } : { lat: selectedRouteLeads[0].latitude!, lng: selectedRouteLeads[0].longitude! };
-        const destination = endPoint ? { query: endPoint } : { lat: selectedRouteLeads[selectedRouteLeads.length - 1].latitude!, lng: selectedRouteLeads[selectedRouteLeads.length - 1].longitude! };
+        const origin = startPoint ? { query: startPoint } : { lat: Number(selectedRouteLeads[0].latitude), lng: Number(selectedRouteLeads[0].longitude) };
+        const destination = endPoint ? { query: endPoint } : { lat: Number(selectedRouteLeads[selectedRouteLeads.length - 1].latitude), lng: Number(selectedRouteLeads[selectedRouteLeads.length - 1].longitude) };
 
         directionsService.route(
             {
@@ -458,8 +458,10 @@ export default function LeadsMapClient() {
             let minDistance = Infinity;
 
             allMapData.forEach(lead => {
-                if (lead.latitude && lead.longitude) {
-                    const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
+                const lat = Number(lead.latitude);
+                const lng = Number(lead.longitude);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    const leadLatLng = new window.google.maps.LatLng(lat, lng);
                     const distance = window.google.maps.geometry.spherical.computeDistanceBetween(clickedLatLng, leadLatLng);
                     
                     if (distance < 500 && distance < minDistance) { 
@@ -947,11 +949,13 @@ export default function LeadsMapClient() {
                          {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
 
                         {filteredMapData.map(lead => {
-                            if (typeof lead.latitude !== 'number' || typeof lead.longitude !== 'number') return null;
+                            const lat = Number(lead.latitude);
+                            const lng = Number(lead.longitude);
+                            if (isNaN(lat) || isNaN(lng)) return null;
                             return (
                                 <MarkerF
                                     key={lead.id}
-                                    position={{ lat: lead.latitude, lng: lead.longitude }}
+                                    position={{ lat, lng }}
                                     onClick={() => onMarkerClick(lead)}
                                     onMouseOver={() => setHoveredLeadId(lead.id)}
                                     onMouseOut={() => setHoveredLeadId(null)}

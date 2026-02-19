@@ -105,7 +105,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             handleSearch(searchQuery);
         }
     }, 500);
-    return () => setTimeout(() => clearTimeout(timer), 0);
+    return () => clearTimeout(timer);
   }, [searchQuery, selectedItem]);
 
 

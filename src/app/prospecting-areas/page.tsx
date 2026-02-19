@@ -128,15 +128,15 @@ export default function ProspectingAreasPage() {
     let hasPoints = false;
 
     (selectedArea.streets || []).forEach(street => {
-        if(typeof street.latitude === 'number' && typeof street.longitude === 'number') {
-            bounds.extend({ lat: street.latitude, lng: street.longitude });
+        if(!isNaN(Number(street.latitude)) && !isNaN(Number(street.longitude))) {
+            bounds.extend({ lat: Number(street.latitude), lng: Number(street.longitude) });
             hasPoints = true;
         }
     });
 
     (selectedArea.leads || []).forEach(lead => {
-      if (typeof lead.latitude === 'number' && typeof lead.longitude === 'number') {
-        bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+      if (!isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))) {
+        bounds.extend({ lat: Number(lead.latitude), lng: Number(lead.longitude) });
         hasPoints = true;
       }
     });
@@ -159,7 +159,7 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
         selectedArea.shape.paths[0].forEach(path => {
-            if (typeof path.lat === 'number' && typeof path.lng === 'number') {
+            if (!isNaN(Number(path.lat)) && !isNaN(Number(path.lng))) {
                 bounds.extend(path);
                 hasBounds = true;
             }
@@ -172,8 +172,8 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.streets && selectedArea.streets.length > 0) {
         selectedArea.streets.forEach(street => {
-            if (typeof street.latitude === 'number' && typeof street.longitude === 'number') {
-                bounds.extend({ lat: street.latitude, lng: street.longitude });
+            if (!isNaN(Number(street.latitude)) && !isNaN(Number(street.longitude))) {
+                bounds.extend({ lat: Number(street.latitude), lng: Number(street.longitude) });
                 hasBounds = true;
             }
         });
@@ -181,8 +181,8 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.leads && selectedArea.leads.length > 0) {
         selectedArea.leads.forEach(lead => {
-            if (typeof lead.latitude === 'number' && typeof lead.longitude === 'number') {
-                bounds.extend({ lat: lead.latitude, lng: lead.longitude });
+            if (!isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))) {
+                bounds.extend({ lat: Number(lead.latitude), lng: Number(lead.longitude) });
                 hasBounds = true;
             }
         });
@@ -193,13 +193,13 @@ export default function ProspectingAreasPage() {
     if (hasBounds) {
         map.fitBounds(bounds);
         areaCenter = bounds.getCenter();
-    } else if (selectedArea.leads?.length === 1 && typeof selectedArea.leads[0].latitude === 'number' && typeof selectedArea.leads[0].longitude === 'number') {
-        const center = { lat: selectedArea.leads[0].latitude, lng: selectedArea.leads[0].longitude };
+    } else if (selectedArea.leads?.length === 1 && !isNaN(Number(selectedArea.leads[0].latitude)) && !isNaN(Number(selectedArea.leads[0].longitude))) {
+        const center = { lat: Number(selectedArea.leads[0].latitude), lng: Number(selectedArea.leads[0].longitude) };
         map.panTo(center);
         map.setZoom(15);
         areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
-    } else if (selectedArea.streets?.length === 1 && typeof selectedArea.streets[0].latitude === 'number' && typeof selectedArea.streets[0].longitude === 'number') {
-        const center = { lat: selectedArea.streets[0].latitude, lng: selectedArea.streets[0].longitude };
+    } else if (selectedArea.streets?.length === 1 && !isNaN(Number(selectedArea.streets[0].latitude)) && !isNaN(Number(selectedArea.streets[0].longitude))) {
+        const center = { lat: Number(selectedArea.streets[0].latitude), lng: Number(selectedArea.streets[0].longitude) };
         map.panTo(center);
         map.setZoom(15);
         areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
@@ -208,8 +208,10 @@ export default function ProspectingAreasPage() {
     if (areaCenter) {
         const nearbyWithDistance = allMapItems
             .map(item => {
-                if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') return null;
-                const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
+                const lat = Number(item.latitude);
+                const lng = Number(item.longitude);
+                if (isNaN(lat) || isNaN(lng)) return null;
+                const itemLatLng = new window.google.maps.LatLng(lat, lng);
                 const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, itemLatLng);
                 if (distance <= 5000) {
                     return { ...item, distance };
@@ -353,28 +355,35 @@ export default function ProspectingAreasPage() {
                     />
                   )}
                   {(selectedArea.leads || []).map(lead => {
-                      if (typeof lead.latitude !== 'number' || typeof lead.longitude !== 'number') return null;
+                      const lat = Number(lead.latitude);
+                      const lng = Number(lead.longitude);
+                      if (isNaN(lat) || isNaN(lng)) return null;
                       return (
                         <MarkerF
                             key={`lead-${lead.id}`}
-                            position={{ lat: lead.latitude, lng: lead.longitude }}
+                            position={{ lat, lng }}
                             title={lead.companyName}
                         />
                       );
                   })}
                   {(selectedArea.streets || []).map(street => {
-                      if (typeof street.latitude !== 'number' || typeof street.longitude !== 'number') return null;
+                      const lat = Number(street.latitude);
+                      const lng = Number(street.longitude);
+                      if (isNaN(lat) || isNaN(lng)) return null;
                       return (
                         <MarkerF
                             key={`street-${street.place_id}`}
-                            position={{ lat: street.latitude, lng: street.longitude }}
+                            position={{ lat, lng }}
                             title={street.description}
                             icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
                         />
                       );
                   })}
                   {filteredNearbyItems.map(item => {
-                        if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') return null;
+                        const lat = Number(item.latitude);
+                        const lng = Number(item.longitude);
+                        if (isNaN(lat) || isNaN(lng)) return null;
+                        
                         const hasVisit = !!item.visitNoteID;
                         const isCompany = item.status === 'Won';
                         let iconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"; // Default lead
@@ -386,7 +395,7 @@ export default function ProspectingAreasPage() {
                         return (
                             <MarkerF
                                 key={`item-${item.id}`}
-                                position={{ lat: item.latitude, lng: item.longitude }}
+                                position={{ lat, lng }}
                                 title={item.companyName}
                                 icon={{ url: iconUrl }}
                                 onClick={() => setSelectedItem(item)}
