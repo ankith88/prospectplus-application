@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -127,14 +128,14 @@ export default function ProspectingAreasPage() {
     let hasPoints = false;
 
     (selectedArea.streets || []).forEach(street => {
-        if(street.latitude && street.longitude) {
+        if(typeof street.latitude === 'number' && typeof street.longitude === 'number') {
             bounds.extend({ lat: street.latitude, lng: street.longitude });
             hasPoints = true;
         }
     });
 
     (selectedArea.leads || []).forEach(lead => {
-      if (lead.latitude && lead.longitude) {
+      if (typeof lead.latitude === 'number' && typeof lead.longitude === 'number') {
         bounds.extend({ lat: lead.latitude, lng: lead.longitude });
         hasPoints = true;
       }
@@ -157,8 +158,12 @@ export default function ProspectingAreasPage() {
     let hasBounds = false;
 
     if (selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
-        selectedArea.shape.paths[0].forEach(path => bounds.extend(path));
-        hasBounds = true;
+        selectedArea.shape.paths[0].forEach(path => {
+            if (typeof path.lat === 'number' && typeof path.lng === 'number') {
+                bounds.extend(path);
+                hasBounds = true;
+            }
+        });
     } else if (selectedArea.shape?.type === 'rectangle' && selectedArea.shape.bounds) {
         const rectBounds = new window.google.maps.LatLngBounds(selectedArea.shape.bounds);
         bounds.union(rectBounds);
@@ -167,7 +172,7 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.streets && selectedArea.streets.length > 0) {
         selectedArea.streets.forEach(street => {
-            if (street.latitude && street.longitude) {
+            if (typeof street.latitude === 'number' && typeof street.longitude === 'number') {
                 bounds.extend({ lat: street.latitude, lng: street.longitude });
                 hasBounds = true;
             }
@@ -176,7 +181,7 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.leads && selectedArea.leads.length > 0) {
         selectedArea.leads.forEach(lead => {
-            if (lead.latitude && lead.longitude) {
+            if (typeof lead.latitude === 'number' && typeof lead.longitude === 'number') {
                 bounds.extend({ lat: lead.latitude, lng: lead.longitude });
                 hasBounds = true;
             }
@@ -188,12 +193,12 @@ export default function ProspectingAreasPage() {
     if (hasBounds) {
         map.fitBounds(bounds);
         areaCenter = bounds.getCenter();
-    } else if (selectedArea.leads?.length === 1 && selectedArea.leads[0].latitude && selectedArea.leads[0].longitude) {
+    } else if (selectedArea.leads?.length === 1 && typeof selectedArea.leads[0].latitude === 'number' && typeof selectedArea.leads[0].longitude === 'number') {
         const center = { lat: selectedArea.leads[0].latitude, lng: selectedArea.leads[0].longitude };
         map.panTo(center);
         map.setZoom(15);
         areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
-    } else if (selectedArea.streets?.length === 1 && selectedArea.streets[0].latitude && selectedArea.streets[0].longitude) {
+    } else if (selectedArea.streets?.length === 1 && typeof selectedArea.streets[0].latitude === 'number' && typeof selectedArea.streets[0].longitude === 'number') {
         const center = { lat: selectedArea.streets[0].latitude, lng: selectedArea.streets[0].longitude };
         map.panTo(center);
         map.setZoom(15);
@@ -203,7 +208,7 @@ export default function ProspectingAreasPage() {
     if (areaCenter) {
         const nearbyWithDistance = allMapItems
             .map(item => {
-                if (!item.latitude || !item.longitude) return null;
+                if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') return null;
                 const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
                 const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, itemLatLng);
                 if (distance <= 5000) {
@@ -347,22 +352,29 @@ export default function ProspectingAreasPage() {
                       options={{ fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 }}
                     />
                   )}
-                  {(selectedArea.leads || []).map(lead => (
-                      <MarkerF
-                          key={`lead-${lead.id}`}
-                          position={{ lat: lead.latitude, lng: lead.longitude }}
-                          title={lead.companyName}
-                      />
-                  ))}
-                  {(selectedArea.streets || []).map(street => (
-                      <MarkerF
-                          key={`street-${street.place_id}`}
-                          position={{ lat: street.latitude, lng: street.longitude }}
-                          title={street.description}
-                          icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
-                      />
-                  ))}
+                  {(selectedArea.leads || []).map(lead => {
+                      if (typeof lead.latitude !== 'number' || typeof lead.longitude !== 'number') return null;
+                      return (
+                        <MarkerF
+                            key={`lead-${lead.id}`}
+                            position={{ lat: lead.latitude, lng: lead.longitude }}
+                            title={lead.companyName}
+                        />
+                      );
+                  })}
+                  {(selectedArea.streets || []).map(street => {
+                      if (typeof street.latitude !== 'number' || typeof street.longitude !== 'number') return null;
+                      return (
+                        <MarkerF
+                            key={`street-${street.place_id}`}
+                            position={{ lat: street.latitude, lng: street.longitude }}
+                            title={street.description}
+                            icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
+                        />
+                      );
+                  })}
                   {filteredNearbyItems.map(item => {
+                        if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') return null;
                         const hasVisit = !!item.visitNoteID;
                         const isCompany = item.status === 'Won';
                         let iconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"; // Default lead
@@ -374,7 +386,7 @@ export default function ProspectingAreasPage() {
                         return (
                             <MarkerF
                                 key={`item-${item.id}`}
-                                position={{ lat: item.latitude!, lng: item.longitude! }}
+                                position={{ lat: item.latitude, lng: item.longitude }}
                                 title={item.companyName}
                                 icon={{ url: iconUrl }}
                                 onClick={() => setSelectedItem(item)}

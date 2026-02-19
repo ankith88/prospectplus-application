@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -204,8 +205,8 @@ export default function LeadsMapClient() {
             const allItems = Array.from(combinedData.values());
 
             const mapLeads = allItems
-                .filter(item => item.latitude != null && item.longitude != null)
-                .map(item => ({ ...item, latitude: Number(item.latitude), longitude: Number(item.longitude), isCompany: item.status === 'Won', isProspect: false } as MapLead));
+                .filter(item => typeof item.latitude === 'number' && typeof item.longitude === 'number')
+                .map(item => ({ ...item, latitude: item.latitude!, longitude: item.longitude!, isCompany: item.status === 'Won', isProspect: false } as MapLead));
 
 
             setAllMapData(mapLeads);
@@ -945,18 +946,21 @@ export default function LeadsMapClient() {
                     >
                          {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
 
-                        {filteredMapData.map(lead => (
-                            <MarkerF
-                                key={lead.id}
-                                position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                                onClick={() => onMarkerClick(lead)}
-                                onMouseOver={() => setHoveredLeadId(lead.id)}
-                                onMouseOut={() => setHoveredLeadId(null)}
-                                icon={{
-                                    url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id), hoveredLeadId === lead.id)
-                                }}
-                            />
-                        ))}
+                        {filteredMapData.map(lead => {
+                            if (typeof lead.latitude !== 'number' || typeof lead.longitude !== 'number') return null;
+                            return (
+                                <MarkerF
+                                    key={lead.id}
+                                    position={{ lat: lead.latitude, lng: lead.longitude }}
+                                    onClick={() => onMarkerClick(lead)}
+                                    onMouseOver={() => setHoveredLeadId(lead.id)}
+                                    onMouseOut={() => setHoveredLeadId(null)}
+                                    icon={{
+                                        url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id), hoveredLeadId === lead.id)
+                                    }}
+                                />
+                            );
+                        })}
                         
                         {searchedLocation && (
                             <MarkerF

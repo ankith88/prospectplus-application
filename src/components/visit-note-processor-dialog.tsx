@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -104,7 +105,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
             handleSearch(searchQuery);
         }
     }, 500);
-    return () => clearTimeout(timer);
+    return () => setTimeout(() => clearTimeout(timer), 0);
   }, [searchQuery, selectedItem]);
 
 

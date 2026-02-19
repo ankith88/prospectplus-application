@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -1918,7 +1919,7 @@ async function bulkDeleteSubCollectionItems(leadId: string, subCollectionName: '
         console.log(`Successfully bulk deleted ${itemIds.length} items from ${subCollectionName} in lead ${leadId}.`);
     } catch (error) {
         console.error(`Failed to bulk delete items from lead ${leadId}:`, error);
-        throw new Error(`Failed to bulk delete items from ${subCollectionName} in Firebase`);
+        throw new Error(`Failed to bulk delete items from subCollectionName in Firebase`);
     }
 }
 
