@@ -76,7 +76,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { collection, onSnapshot, query, where, orderBy, getDocs, limit, doc, getDoc } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, orderBy, getDocs, limit, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { TranscriptViewer } from './transcript-viewer'
@@ -99,6 +99,15 @@ import { salesReps } from '@/lib/constants'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
 import { LogNoteDialog } from './log-note-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 
 
 interface LeadProfileProps {
@@ -463,7 +472,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       return;
     }
     if (!lead.dialerAssigned) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Lead has no assigned dialer to attribute the transcript to.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Lead has no assigned dialer to address the transcript to.' });
       return;
     }
     try {
@@ -737,7 +746,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
     
     const scorecardButton = (
-        <ColdCallScorecardDialog lead={lead} dialerName={lead.dialerAssigned || userProfile.displayName || ''} onScorecardSubmit={() => {}} />
+        <ColdCallScorecardDialog lead={lead} dialerName={lead.dialerAssigned || userProfile?.displayName || ''} onScorecardSubmit={() => {}} />
     );
     
     const moveLeadButton = (
@@ -1059,13 +1068,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 Assign a Sales Rep <ChevronDown className="ml-2 h-4 w-4" />
                              </Button>
                            </DropdownMenuTrigger>
-                           <DropdownContent>
+                           <DropdownMenuContent>
                                 {salesReps.map(rep => (
                                     <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
                                         {rep.name}
                                     </DropdownMenuItem>
                                 ))}
-                           </DropdownContent>
+                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
                     </div>
