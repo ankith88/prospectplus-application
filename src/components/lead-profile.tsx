@@ -53,7 +53,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -129,6 +129,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ServiceSelectionDialog } from './service-selection-dialog'
+import { LocalMileAccessDialog } from './localmile-access-dialog'
+import { ShipMateAccessDialog } from './shipmate-access-dialog'
+import { initiateLocalMileTrial, initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy'
 
 
 interface LeadProfileProps {
@@ -284,6 +288,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+  const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
+  const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
+  const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
 
 
   const router = useRouter();
@@ -695,6 +703,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead, toast]);
 
+  const handleLocalMileConfirm = async () => {
+    const result = await initiateLocalMileTrial({ leadId: lead.id });
+    if (result.success) {
+      toast({ title: 'Success', description: 'LocalMile trial initiated.' });
+      setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+      throw new Error(result.message);
+    }
+  };
+
+  const handleShipMateConfirm = async () => {
+    const result = await initiateMPProductsTrial({ leadId: lead.id });
+    if (result.success) {
+      toast({ title: 'Success', description: 'ShipMate trial initiated.' });
+      setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result.message });
+      throw new Error(result.message);
+    }
+  };
+
 
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
@@ -711,7 +741,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
 
     const signupButton = (
-      <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"} onClick={() => router.push(`/check-in/${lead.id}/select-services?mode=signup`)}>
+      <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>
         <Briefcase className="mr-2 h-4 w-4" />
         Signup
       </Button>
@@ -726,9 +756,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=service-trial`)}>Service</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=shipmate-trial`)}>ShipMate</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => router.push(`/check-in/${lead.id}/select-services?mode=localmile-trial`)}>LocalMile</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsShipMateDialogOpen(true)}>ShipMate</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsLocalMileDialogOpen(true)}>LocalMile</DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );
@@ -805,16 +835,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
   }
   
-  const fullAddress = lead.address
+  const fullAddressStr = lead.address
     ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
     : 'No address available';
 
-  const primaryContact = contacts && contacts.length > 0 ? contacts[0] : null;
-  
-  const callHistory = useMemo(() => {
-    return (activities || []).filter(a => a.type === 'Call' && a.callId);
-  }, [activities]);
-  
   const contactAttempts = useMemo(() => {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
@@ -1320,18 +1344,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <div className="flex items-start gap-3">
                                 <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                                 <div className="flex-1">
-                                    <p className="text-muted-foreground break-words">{fullAddress}</p>
+                                    <p className="text-muted-foreground break-words">{fullAddressStr}</p>
                                     <div className="flex items-center gap-1 mt-1">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => setSelectedAddress(fullAddress)}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddressStr === 'No address available'} onClick={() => setSelectedAddress(fullAddressStr)}>
                                             <Search className="w-3 h-3" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddress === 'No address available'} onClick={() => handleCopy(fullAddress, 'Address')}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddressStr === 'No address available'} onClick={() => handleCopy(fullAddressStr, 'Address')}>
                                             <Clipboard className="w-3 h-3" />
                                         </Button>
                                     </div>
                                 </div>
                             </div>
-                            {fullAddress !== 'No address available' && (
+                            {fullAddressStr !== 'No address available' && (
                                 <div className="h-48 w-full rounded-md overflow-hidden border">
                                     <iframe
                                         width="100%"
@@ -1339,7 +1363,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         frameBorder="0"
                                         style={{ border: 0 }}
                                         src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                            fullAddress
+                                            fullAddressStr
                                         )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
                                         allowFullScreen
                                         aria-hidden="false"
@@ -1360,6 +1384,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </DialogHeader>
                                     <AddressAutocomplete
                                     />
+                                    <DialogFooter>
+                                        <Button onClick={() => setIsEditAddressDialogOpen(false)}>Done</Button>
+                                    </DialogFooter>
                                 </DialogContent>
                             </Dialog>
                         </div>
@@ -1677,6 +1704,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         isOpen={isMoveLeadDialogOpen}
         onOpenChange={setIsMoveLeadDialogOpen}
         onLeadMoved={() => router.refresh()}
+    />
+    <ServiceSelectionDialog
+        isOpen={isServiceSelectionOpen}
+        onOpenChange={setIsServiceSelectionOpen}
+        lead={lead}
+        mode={serviceSelectionMode}
+    />
+    <LocalMileAccessDialog
+        isOpen={isLocalMileDialogOpen}
+        onOpenChange={setIsLocalMileDialogOpen}
+        lead={lead}
+        onConfirm={handleLocalMileConfirm}
+    />
+    <ShipMateAccessDialog
+        isOpen={isShipMateDialogOpen}
+        onOpenChange={setIsShipMateDialogOpen}
+        lead={lead}
+        onConfirm={handleShipMateConfirm}
     />
     </>
   )

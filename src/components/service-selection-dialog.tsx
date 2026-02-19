@@ -1,12 +1,12 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -55,12 +55,14 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface ServiceSelectionDialogProps {
+  isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
   mode: 'Free Trial' | 'Signup';
 }
 
 export function ServiceSelectionDialog({
+  isOpen,
   onOpenChange,
   lead,
   mode,
@@ -85,12 +87,14 @@ export function ServiceSelectionDialog({
   }, [lead]);
 
   useEffect(() => {
-    form.reset({
-        selectedServices: [],
-        frequencies: {},
-    });
-    setIsAddingContact(false);
-  }, [onOpenChange, form]);
+    if (!isOpen) {
+        form.reset({
+            selectedServices: [],
+            frequencies: {},
+        });
+        setIsAddingContact(false);
+    }
+  }, [isOpen, form]);
 
 
   const selectedServices = form.watch('selectedServices');
@@ -104,7 +108,7 @@ export function ServiceSelectionDialog({
         toast({
           variant: 'destructive',
           title: 'Invalid Date Range',
-          description: 'Free trial period cannot exceed 5 days.',
+          description: 'Free trial period cannot exceed 5 business days.',
         });
         return;
       }
@@ -157,13 +161,14 @@ export function ServiceSelectionDialog({
         const trialDates = eachDayOfInterval({
           start: values.trialDateRange!.from!,
           end: values.trialDateRange!.to || values.trialDateRange!.from!,
-        }).map(date => format(date, 'dd/MM/yyyy'));
+        }).filter(d => !isWeekend(d)).map(date => format(date, 'dd/MM/yyyy'));
 
         const nsResponse = await initiateServicesTrial({
           leadId: lead.id,
           services: serviceSelections.map(s => ({
             service: s.name,
             frequency: s.frequency,
+            rate: 0, // Default for trial
           })),
           trialPeriod: trialDates,
         });
@@ -196,278 +201,286 @@ export function ServiceSelectionDialog({
     }
   };
 
-  if (!lead) {
-    return (
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      {!lead ? (
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Loading...</DialogTitle>
-                <div className="py-8"><Loader /></div>
+                <div className="py-8 flex justify-center"><Loader /></div>
             </DialogHeader>
         </DialogContent>
-    );
-  }
+      ) : (
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+              <DialogTitle>{mode} for Services</DialogTitle>
+              <DialogDescription>
+              Configure the required services, their frequency, and other details for {lead.companyName}.
+              </DialogDescription>
+          </DialogHeader>
+          
+          {isAddingContact ? (
+              <div className="py-4">
+              <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
+              <Button variant="ghost" size="sm" className="w-full mt-4" onClick={() => setIsAddingContact(false)}>Cancel</Button>
+              </div>
+          ) : (
+              <Form {...form}>
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                    <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                      <div className="space-y-6">
+                        {mode === 'Free Trial' && (
+                            <FormField
+                            control={form.control}
+                            name="selectedContactId"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Send Commencement Form To</FormLabel>
+                                <ScrollArea className="max-h-32 w-full rounded-md border">
+                                    <RadioGroup
+                                    onValueChange={field.onChange}
+                                    value={field.value}
+                                    className="p-4"
+                                    >
+                                    {(contacts || []).map((contact) => (
+                                        <FormItem key={contact.id} className="flex items-center space-x-3">
+                                        <FormControl>
+                                            <RadioGroupItem value={contact.id} />
+                                        </FormControl>
+                                        <FormLabel className="font-normal flex flex-col">
+                                            <span>{contact.name}</span>
+                                            <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                        </FormLabel>
+                                        </FormItem>
+                                    ))}
+                                    </RadioGroup>
+                                </ScrollArea>
+                                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
+                                    <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
+                                </Button>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                        )}
 
-  return (
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-            <DialogTitle>{mode} for Services</DialogTitle>
-            <DialogDescription>
-            Configure the required services, their frequency, and other details for {lead.companyName}.
-            </DialogDescription>
-        </DialogHeader>
-        
-        {isAddingContact ? (
-            <div className="py-4">
-            <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
-            </div>
-        ) : (
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                  <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                    <div className="space-y-6">
-                      {mode === 'Free Trial' && (
-                          <FormField
-                          control={form.control}
-                          name="selectedContactId"
-                          render={({ field }) => (
-                              <FormItem>
-                              <FormLabel>Send Commencement Form To</FormLabel>
-                              <ScrollArea className="max-h-32 w-full rounded-md border">
-                                  <RadioGroup
-                                  onValueChange={field.onChange}
-                                  value={field.value}
-                                  className="p-4"
-                                  >
-                                  {(contacts || []).map((contact) => (
-                                      <FormItem key={contact.id} className="flex items-center space-x-3">
-                                      <FormControl>
-                                          <RadioGroupItem value={contact.id} />
-                                      </FormControl>
-                                      <FormLabel className="font-normal flex flex-col">
-                                          <span>{contact.name}</span>
-                                          <span className="text-xs text-muted-foreground">{contact.email}</span>
-                                      </FormLabel>
-                                      </FormItem>
-                                  ))}
-                                  </RadioGroup>
-                              </ScrollArea>
-                              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
-                                  <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
-                              </Button>
-                              <FormMessage />
-                              </FormItem>
-                          )}
-                          />
-                      )}
+                        <FormField
+                            control={form.control}
+                            name="selectedServices"
+                            render={() => (
+                            <FormItem>
+                                <FormLabel>Services</FormLabel>
+                                <div className="space-y-2">
+                                {services.map((service) => (
+                                    <FormField
+                                    key={service.id}
+                                    control={form.control}
+                                    name="selectedServices"
+                                    render={({ field }) => (
+                                        <FormItem className="flex items-center space-x-3">
+                                        <FormControl>
+                                            <Checkbox
+                                            checked={field.value?.includes(service.label)}
+                                            onCheckedChange={(checked) => {
+                                                const newSelected = checked
+                                                ? [...(field.value || []), service.label]
+                                                : field.value?.filter((value) => value !== service.label);
+                                                field.onChange(newSelected);
+                                                
+                                                if (checked) {
+                                                    form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                                }
+                                            }}
+                                            />
+                                        </FormControl>
+                                        <FormLabel className="font-normal">{service.label}</FormLabel>
+                                        </FormItem>
+                                    )}
+                                    />
+                                ))}
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
 
-                      <FormField
-                          control={form.control}
-                          name="selectedServices"
-                          render={() => (
-                          <FormItem>
-                              <FormLabel>Services</FormLabel>
-                              <div className="space-y-2">
-                              {services.map((service) => (
-                                  <FormField
-                                  key={service.id}
-                                  control={form.control}
-                                  name="selectedServices"
-                                  render={({ field }) => (
-                                      <FormItem className="flex items-center space-x-3">
-                                      <FormControl>
-                                          <Checkbox
-                                          checked={field.value?.includes(service.label)}
-                                          onCheckedChange={(checked) => {
-                                              return checked
-                                              ? field.onChange([...(field.value || []), service.label])
-                                              : field.onChange(
-                                                  field.value?.filter((value) => value !== service.label)
-                                                  );
-                                          }}
-                                          />
-                                      </FormControl>
-                                      <FormLabel className="font-normal">{service.label}</FormLabel>
-                                      </FormItem>
-                                  )}
-                                  />
-                              ))}
-                              </div>
-                              <FormMessage />
-                          </FormItem>
-                          )}
-                      />
+                        {selectedServices.length > 0 && <hr />}
 
-                      {selectedServices.length > 0 && <hr />}
-
-                      {selectedServices.map((serviceName) => (
-                          <div key={serviceName} className="space-y-4 rounded-md border p-4">
-                          <h3 className="font-medium">{serviceName} - Frequency</h3>
-                          <FormField
-                              control={form.control}
-                              name={`frequencies.${serviceName}`}
-                              render={({ field }) => (
-                              <FormItem>
-                                  <RadioGroup
-                                  onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : [])}
-                                  defaultValue={field.value === 'Adhoc' ? 'Adhoc' : 'Daily'}
-                                  className="mb-2"
-                                  >
-                                  <FormItem className="flex items-center space-x-2">
-                                      <FormControl>
-                                      <RadioGroupItem value="Daily" />
-                                      </FormControl>
-                                      <FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel>
-                                  </FormItem>
-                                  <FormItem className="flex items-center space-x-2">
-                                      <FormControl>
-                                      <RadioGroupItem value="Adhoc" />
-                                      </FormControl>
-                                      <FormLabel className="font-normal">Adhoc (On Demand)</FormLabel>
-                                  </FormItem>
-                                  </RadioGroup>
-                                  
-                                  {field.value !== 'Adhoc' && (
-                                  <div className="flex flex-wrap gap-4 pt-2">
-                                      {days.map((day) => (
-                                      <FormField
-                                          key={day}
-                                          control={form.control}
-                                          name={`frequencies.${serviceName}`}
-                                          render={({ field: dayField }) => (
-                                          <FormItem className="flex items-center space-x-2">
-                                              <FormControl>
-                                              <Checkbox
-                                                  checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
-                                                  onCheckedChange={(checked) => {
-                                                  const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
-                                                  const newDays = checked
-                                                      ? [...currentDays, day]
-                                                      : currentDays.filter((d) => d !== day);
-                                                  dayField.onChange(newDays);
-                                                  }}
-                                              />
-                                              </FormControl>
-                                              <FormLabel className="font-normal">{day}</FormLabel>
-                                          </FormItem>
-                                          )}
-                                      />
-                                      ))}
-                                  </div>
-                                  )}
-                                  <FormMessage />
-                              </FormItem>
-                              )}
-                          />
-                          </div>
-                      ))}
-                      
-                      {mode === 'Free Trial' && (
-                          <FormField
-                          control={form.control}
-                          name="trialDateRange"
-                          render={({ field }) => (
-                              <FormItem className="flex flex-col">
-                              <FormLabel>Free Trial Period (max 5 days, no weekends)</FormLabel>
-                              <Popover>
-                                  <PopoverTrigger asChild>
-                                      <FormControl>
-                                          <Button
-                                              variant={"outline"}
-                                              className={cn(
-                                                  "w-[300px] justify-start text-left font-normal",
-                                                  !field.value?.from && "text-muted-foreground"
-                                              )}
-                                          >
-                                              <CalendarIcon className="mr-2 h-4 w-4" />
-                                              {field.value?.from ? (
-                                                  field.value.to ? (
-                                                      <>
-                                                          {format(field.value.from, "LLL dd, y")} -{" "}
-                                                          {format(field.value.to, "LLL dd, y")}
-                                                      </>
-                                                  ) : (
-                                                      format(field.value.from, "LLL dd, y")
-                                                  )
-                                              ) : (
-                                                  <span>Pick a date range</span>
-                                              )}
-                                          </Button>
-                                      </FormControl>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                      <Calendar
-                                          initialFocus
-                                          mode="range"
-                                          defaultMonth={field.value?.from}
-                                          selected={field.value}
-                                          onSelect={(range) => handleDateSelect(range, field.onChange)}
-                                          numberOfMonths={2}
-                                          disabled={(date) => isWeekend(date) || date < new Date()}
-                                      />
-                                  </PopoverContent>
-                              </Popover>
-                              <FormMessage />
-                              </FormItem>
-                          )}
-                          />
-                      )}
-                      
-                      {mode === 'Signup' && (
-                          <FormField
-                          control={form.control}
-                          name="startDate"
-                          render={({ field }) => (
-                              <FormItem className="flex flex-col">
-                              <FormLabel>Service Start Date</FormLabel>
-                              <Popover>
-                                  <PopoverTrigger asChild>
-                                  <FormControl>
-                                      <Button
-                                      variant={"outline"}
-                                      className={cn(
-                                          "w-[240px] pl-3 text-left font-normal",
-                                          !field.value && "text-muted-foreground"
-                                      )}
-                                      >
-                                      {field.value ? (
-                                          format(field.value, "PPP")
-                                      ) : (
-                                          <span>Pick a date</span>
-                                      )}
-                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                      </Button>
-                                  </FormControl>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                  <Calendar
-                                      mode="single"
-                                      selected={field.value}
-                                      onSelect={field.onChange}
-                                      disabled={(date) =>
-                                      date < new Date() || isWeekend(date)
-                                      }
-                                      initialFocus
-                                  />
-                                  </PopoverContent>
-                              </Popover>
-                              <FormMessage />
-                              </FormItem>
-                          )}
-                          />
-                      )}
-                    </div>
-                  </ScrollArea>
-                <DialogFooter className="flex-shrink-0 pt-4 border-t">
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                    Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader /> : 'Submit'}
-                    </Button>
-                </DialogFooter>
-                </form>
-            </Form>
-        )}
-      </DialogContent>
+                        {selectedServices.map((serviceName) => (
+                            <div key={serviceName} className="space-y-4 rounded-md border p-4">
+                            <h3 className="font-medium">{serviceName} - Frequency</h3>
+                            <FormField
+                                control={form.control}
+                                name={`frequencies.${serviceName}`}
+                                render={({ field }) => (
+                                <FormItem>
+                                    <RadioGroup
+                                    onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])}
+                                    value={
+                                        Array.isArray(field.value) && field.value.length === 5 ? 'Daily'
+                                        : field.value === 'Adhoc' ? 'Adhoc'
+                                        : 'Custom'
+                                    }
+                                    className="mb-2"
+                                    >
+                                    <FormItem className="flex items-center space-x-2">
+                                        <FormControl>
+                                        <RadioGroupItem value="Daily" />
+                                        </FormControl>
+                                        <FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel>
+                                    </FormItem>
+                                    <FormItem className="flex items-center space-x-2">
+                                        <FormControl>
+                                        <RadioGroupItem value="Adhoc" />
+                                        </FormControl>
+                                        <FormLabel className="font-normal">Adhoc (On Demand)</FormLabel>
+                                    </FormItem>
+                                    </RadioGroup>
+                                    
+                                    {field.value !== 'Adhoc' && (
+                                    <div className="flex flex-wrap gap-4 pt-2">
+                                        {days.map((day) => (
+                                        <FormField
+                                            key={day}
+                                            control={form.control}
+                                            name={`frequencies.${serviceName}`}
+                                            render={({ field: dayField }) => (
+                                            <FormItem className="flex items-center space-x-2">
+                                                <FormControl>
+                                                <Checkbox
+                                                    checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
+                                                    onCheckedChange={(checked) => {
+                                                    const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
+                                                    const newDays = checked
+                                                        ? [...currentDays, day]
+                                                        : currentDays.filter((d) => d !== day);
+                                                    dayField.onChange(newDays);
+                                                    }}
+                                                />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">{day}</FormLabel>
+                                            </FormItem>
+                                            )}
+                                        />
+                                        ))}
+                                    </div>
+                                    )}
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                            </div>
+                        ))}
+                        
+                        {mode === 'Free Trial' && (
+                            <FormField
+                            control={form.control}
+                            name="trialDateRange"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                <FormLabel>Free Trial Period (max 5 days, no weekends)</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                    "w-[300px] justify-start text-left font-normal",
+                                                    !field.value?.from && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {field.value?.from ? (
+                                                    field.value.to ? (
+                                                        <>
+                                                            {format(field.value.from, "LLL dd, y")} -{" "}
+                                                            {format(field.value.to, "LLL dd, y")}
+                                                        </>
+                                                    ) : (
+                                                        format(field.value.from, "LLL dd, y")
+                                                    )
+                                                ) : (
+                                                    <span>Pick a date range</span>
+                                                )}
+                                            </Button>
+                                        </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={field.value?.from}
+                                            selected={field.value}
+                                            onSelect={(range) => handleDateSelect(range, field.onChange)}
+                                            numberOfMonths={2}
+                                            disabled={(date) => isWeekend(date) || date < new Date()}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                        )}
+                        
+                        {mode === 'Signup' && (
+                            <FormField
+                            control={form.control}
+                            name="startDate"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                <FormLabel>Service Start Date</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-[240px] pl-3 text-left font-normal",
+                                            !field.value && "text-muted-foreground"
+                                        )}
+                                        >
+                                        {field.value ? (
+                                            format(field.value, "PPP")
+                                        ) : (
+                                            <span>Pick a date</span>
+                                        )}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={field.onChange}
+                                        disabled={(date) =>
+                                        date < new Date() || isWeekend(date)
+                                        }
+                                        initialFocus
+                                    />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                        )}
+                      </div>
+                    </ScrollArea>
+                  <DialogFooter className="flex-shrink-0 pt-4 border-t">
+                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                      Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader /> : 'Submit'}
+                      </Button>
+                  </DialogFooter>
+                  </form>
+              </Form>
+          )}
+        </DialogContent>
+      )}
+    </Dialog>
   );
 }

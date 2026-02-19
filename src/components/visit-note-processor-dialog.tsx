@@ -94,7 +94,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not search for existing records.' });
     } finally {
-      setIsSearching(false);
+      setLoading(false);
     }
   };
 
@@ -169,6 +169,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
 
   return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Process Visit Note</DialogTitle>
@@ -328,5 +329,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
           </AlertDialog>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
   );
 }
