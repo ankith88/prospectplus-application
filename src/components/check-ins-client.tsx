@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -57,7 +56,15 @@ export default function CheckinsClientPage() {
     const newFilters = { ...filters };
     if (userParam) newFilters.user = userParam.split(',');
     if (franchiseeParam) newFilters.franchisee = franchiseeParam.split(',');
-    if (statusParam) newFilters.status = statusParam.split(',');
+    
+    if (statusParam) {
+        // If statusParam is "Converted", we don't want to filter by the Lead status
+        // but it acts as a signal that we're looking at all visits that became records.
+        if (statusParam !== 'Converted') {
+            newFilters.status = statusParam.split(',');
+        }
+    }
+
     if (dateFrom) {
         newFilters.date = {
             from: parseISO(dateFrom),
@@ -130,12 +137,7 @@ export default function CheckinsClientPage() {
     }
     
     if (filters.status.length > 0) {
-        if (filters.status.includes('Converted')) {
-            // "Converted" is a meta-status for visits, but here we show the current lead status
-            // Unless specifically filtering for visit notes status
-        } else {
-            leads = leads.filter(l => filters.status.includes(l.status));
-        }
+        leads = leads.filter(l => filters.status.includes(l.status));
     }
 
     if (filters.date?.from) {
@@ -365,7 +367,7 @@ export default function CheckinsClientPage() {
                                     <TableCell>{lead.entityId || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Button variant="link" asChild className="p-0 h-auto">
-                                            <Link href={`/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
+                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
                                         </Button>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                                             <MapPin className="h-3 w-3"/>

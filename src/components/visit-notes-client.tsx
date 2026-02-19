@@ -34,7 +34,6 @@ export default function VisitNotesClient() {
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
   
-  // Inline states
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -341,6 +340,8 @@ export default function VisitNotesClient() {
                         const canDelete = userProfile?.role === 'admin';
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
+                        
+                        const isSignedLead = note.leadId ? (String(note.leadId).startsWith('signed-') || String(note.leadId).toLowerCase().includes('signed')) : false;
 
                         return (
                         <Fragment key={note.id}>
@@ -359,7 +360,7 @@ export default function VisitNotesClient() {
                             <div className="flex items-center justify-end gap-2">
                             {note.status === 'Converted' && note.leadId ? (
                                     <Button asChild size="sm" variant="outline">
-                                        <Link href={note.leadId.startsWith('signed-') || notes.some(n => n.id === note.id && n.leadId && n.leadId.includes('Signed')) ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">View Profile</Link>
+                                        <Link href={isSignedLead ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">View Profile</Link>
                                     </Button>
                                 ) : canProcess ? (
                                     <Button
