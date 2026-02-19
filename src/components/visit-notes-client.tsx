@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
@@ -6,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
-import { getVisitNotes, deleteVisitNote } from '@/services/firebase';
+import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase } from '@/services/firebase';
 import type { VisitNote, Address } from '@/lib/types';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
@@ -30,6 +31,7 @@ type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'ou
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
+  const [companyIds, setCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
@@ -53,14 +55,18 @@ export default function VisitNotesClient() {
 
   useEffect(() => {
     if (!userProfile) return;
-    const fetchNotes = async () => {
+    const fetchData = async () => {
       setLoading(true);
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!);
-      const fetchedNotes = canSeeAll ? await getVisitNotes() : await getVisitNotes(userProfile.uid);
+      const [fetchedNotes, companies] = await Promise.all([
+        canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid),
+        getCompaniesFromFirebase()
+      ]);
       setNotes(fetchedNotes);
+      setCompanyIds(new Set(companies.map(c => c.id)));
       setLoading(false);
     };
-    fetchNotes();
+    fetchData();
   }, [userProfile]);
 
   const handleProcessNote = (note: VisitNote) => {
@@ -341,9 +347,7 @@ export default function VisitNotesClient() {
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
                         
-                        // Safety: Handle leadId string operations carefully
-                        const safeLeadId = note.leadId ? String(note.leadId) : '';
-                        const isSignedLead = safeLeadId.startsWith('signed-') || safeLeadId.toLowerCase().includes('signed');
+                        const isCompanyTarget = note.leadId && companyIds.has(note.leadId);
 
                         return (
                         <Fragment key={note.id}>
@@ -362,7 +366,7 @@ export default function VisitNotesClient() {
                             <div className="flex items-center justify-end gap-2">
                             {note.status === 'Converted' && note.leadId ? (
                                     <Button asChild size="sm" variant="outline">
-                                        <Link href={isSignedLead ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">View Profile</Link>
+                                        <Link href={isCompanyTarget ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">View Profile</Link>
                                     </Button>
                                 ) : canProcess ? (
                                     <Button

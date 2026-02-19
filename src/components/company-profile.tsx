@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -25,6 +26,7 @@ import {
   Tag,
   ExternalLink,
   Info,
+  TrendingUp,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Contact, Activity, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -50,6 +52,7 @@ import { collection, getDocs, orderBy, query, doc, getDoc } from 'firebase/fires
 import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
+import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 
 
 interface CompanyProfileProps {
@@ -66,6 +69,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+  const [isUpselling, setIsUpselling] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -133,6 +137,23 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     router.push('/signed-customers');
   };
 
+  const handleUpsell = async () => {
+    if (!company.id) return;
+    setIsUpselling(true);
+    try {
+      const result = await sendUpsellToNetSuite({ leadId: company.id });
+      if (result.success) {
+        toast({ title: 'Upsell Synced', description: 'NetSuite has been notified of this upsell.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Sync Failed', description: result.message });
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to sync upsell.' });
+    } finally {
+      setIsUpselling(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
@@ -166,6 +187,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           </div>
         </div>
          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleUpsell} disabled={isUpselling}>
+                {isUpselling ? <Loader /> : <TrendingUp className="mr-2 h-4 w-4" />}
+                Upsell
+            </Button>
             <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                 <ClipboardEdit className="mr-2 h-4 w-4" />
                 Log a Note
