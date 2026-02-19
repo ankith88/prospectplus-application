@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -65,7 +64,7 @@ type ExpandedLeadDetails = {
 };
 
 const LEADS_PER_PAGE = 100;
-const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity'];
+const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
 
 export default function ArchivedLeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -858,17 +857,3 @@ export default function ArchivedLeadsClientPage() {
     </>
   )
 }
-    
-
-
-
-
-
-
-
-    
-
-
-
-
-

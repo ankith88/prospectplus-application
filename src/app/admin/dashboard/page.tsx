@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -110,7 +111,7 @@ export default function AdminDashboardPage() {
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
 
         // Calculate KPIs
-        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified', 'Qualified', 'Pre Qualified', 'LPO Review', 'Trialing ShipMate', 'LocalMile Pending'].includes(l.status));
+        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified', 'Qualified', 'Pre Qualified', 'LPO Review', 'Trialing ShipMate', 'LocalMile Pending', 'Email Brush Off'].includes(l.status));
         const totalLeads = activeLeads.length;
         const activeFieldSalesLeads = activeLeads.filter(l => l.fieldSales === true).length;
         const activeOutboundLeads = activeLeads.filter(l => l.fieldSales !== true).length;
@@ -242,6 +243,24 @@ export default function AdminDashboardPage() {
         {description && <div className="text-xs text-muted-foreground">{description}</div>}
       </CardContent>
     </Card>
+  );
+
+  const ArcherLeaderboardCard = ({ title, user, metric, icon: Icon }: { title: string, user: string | null, metric: string, icon: React.ElementType }) => (
+      <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-1"><Icon className="h-4 w-4" /><CardTitle className="text-sm font-medium">{title}</CardTitle></div>
+          </CardHeader>
+          <CardContent>
+            {user ? (
+                <>
+                    <div className="text-xl font-bold">{user}</div>
+                    <div className="text-xs text-muted-foreground">{metric}</div>
+                </>
+            ) : (
+                <div className="text-sm text-muted-foreground">No data available</div>
+            )}
+          </CardContent>
+      </Card>
   );
 
   const LeaderboardCard = ({ title, user, metric, icon: Icon }: { title: string, user: string | null, metric: string, icon: React.ElementType }) => (

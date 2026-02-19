@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -288,7 +287,7 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
-      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity'].includes(lead.status);
+      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true && lead.status !== 'Priority Field Lead';
 
       let campaignMatch = true;

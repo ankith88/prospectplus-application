@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -962,6 +963,10 @@ export default function CaptureVisitPage() {
                                     <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Email Interested', details: {} }); handleNextStep(); }}>
                                         <Mail className="mr-2 h-4 w-4" />
                                         Email Interested
+                                    </Button>
+                                    <Button className="w-full bg-slate-500 hover:bg-slate-600 text-white" onClick={() => { setOutcomeData({ type: 'Email Brush Off', details: {} }); handleNextStep(); }}>
+                                        <Mail className="mr-2 h-4 w-4" />
+                                        Email Brush Off
                                     </Button>
                                     <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Needs Follow-up', details: {} }); handleNextStep(); }}>
                                         Needs Follow-up
