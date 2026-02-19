@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -54,6 +53,7 @@ const leadGenAdminOutcomes = [
     "Appointment Booked", 
     "Send Quote/Free Trial", 
     "Sign Up",
+    "Upsell",
     "Email Interested",
     "Email Brush Off",
     "Move to Outbound",

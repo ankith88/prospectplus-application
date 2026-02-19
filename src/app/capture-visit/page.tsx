@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -20,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -963,6 +962,10 @@ export default function CaptureVisitPage() {
                                     <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Email Interested', details: {} }); handleNextStep(); }}>
                                         <Mail className="mr-2 h-4 w-4" />
                                         Email Interested
+                                    </Button>
+                                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { setOutcomeData({ type: 'Upsell', details: {} }); handleNextStep(); }}>
+                                        <TrendingUp className="mr-2 h-4 w-4" />
+                                        Upsell
                                     </Button>
                                     <Button className="w-full bg-slate-500 hover:bg-slate-600 text-white" onClick={() => { setOutcomeData({ type: 'Email Brush Off', details: {} }); handleNextStep(); }}>
                                         <Mail className="mr-2 h-4 w-4" />

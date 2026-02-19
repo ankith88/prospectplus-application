@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -756,7 +755,7 @@ async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
                 leadId: leadId,
             };
         });
-        allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
+        allNotes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allNotes;
     } catch (error) {
         console.error('Failed to fetch all notes:', error);
@@ -847,7 +846,7 @@ async function getAllTranscripts(): Promise<Transcript[]> {
             } as Transcript;
         }).filter((t): t is Transcript => !!t);
         
-        allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(b.date).getTime());
+        allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allTranscripts;
 
     } catch (error) {
@@ -1045,6 +1044,7 @@ async function logCallActivity(
         "Send Quote/Free Trial": { status: "Prospect Opportunity" },
         "Sign Up": { status: "Customer Opportunity" },
         "Email Brush Off": { status: "Email Brush Off" },
+        "Upsell": { status: "Won" },
     };
 
     if (callData.outcome === "Send Quote/Free Trial" || callData.outcome === "Sign Up") {
@@ -1091,6 +1091,11 @@ async function logCallActivity(
                 linkedSalesRep,
             });
         }
+    } else if (callData.outcome === 'Upsell') {
+        const { sendUpsellToNetSuite } = await import('./netsuite-upsell-proxy');
+        await sendUpsellToNetSuite({ leadId });
+        await logActivity(leadId, { type: 'Update', notes: `Outcome: Upsell. Notes: ${callData.notes || 'N/A'}`, author: callData.author });
+        return 'Won';
     } else if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Move to Outbound') {
         const leadRef = doc(firestore, 'leads', leadId);
         const leadSnap = await getDoc(leadRef);
