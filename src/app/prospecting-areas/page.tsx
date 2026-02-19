@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History } from 'lucide-react';
+import { Route, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
@@ -95,7 +95,6 @@ export default function ProspectingAreasPage() {
       
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
-      // Deduplicate leads/companies based on ID to fix React duplicate key issues
       const deduplicatedMap = new Map<string, Lead>();
       [...companies, ...leads].forEach(item => {
           if (!deduplicatedMap.has(item.id)) {
@@ -248,6 +247,10 @@ export default function ProspectingAreasPage() {
         .sort((a, b) => new Date(b.visitNote!.createdAt).getTime() - new Date(a.visitNote!.createdAt).getTime());
   }, [filteredNearbyItems, allVisitNotes]);
 
+  const signedCustomersInArea = useMemo(() => {
+    return filteredNearbyItems.filter(item => item.status === 'Won');
+  }, [filteredNearbyItems]);
+
 
   const handleDeleteArea = async () => {
       if (!areaToDelete || !areaToDelete.userId) return;
@@ -369,7 +372,7 @@ export default function ProspectingAreasPage() {
                       );
                   })}
 
-                  {/* ONLY show leads that have been visited */}
+                  {/* Show Visited Items (Orange) */}
                   {visitedItemsInArea.map(item => {
                         const lat = Number(item.latitude);
                         const lng = Number(item.longitude);
@@ -384,6 +387,24 @@ export default function ProspectingAreasPage() {
                                 position={{ lat, lng }}
                                 title={item.companyName}
                                 icon={{ url: iconUrl }}
+                                onClick={() => setSelectedItem(item)}
+                            />
+                        )
+                    })}
+
+                    {/* Show Signed Customers (Green) */}
+                    {signedCustomersInArea.map(item => {
+                        if (visitedItemsInArea.some(v => v.id === item.id)) return null; // Already shown as visited
+                        const lat = Number(item.latitude);
+                        const lng = Number(item.longitude);
+                        if (isNaN(lat) || isNaN(lng)) return null;
+
+                        return (
+                            <MarkerF
+                                key={`signed-customer-${item.id}`}
+                                position={{ lat, lng }}
+                                title={item.companyName}
+                                icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
                                 onClick={() => setSelectedItem(item)}
                             />
                         )
@@ -486,6 +507,50 @@ export default function ProspectingAreasPage() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No leads in this area have been visited yet.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <div className="flex items-center gap-2">
+                    <Star className="h-5 w-5 text-green-500" />
+                    <CardTitle>Nearby Signed Customers ({signedCustomersInArea.length})</CardTitle>
+                </div>
+                <CardDescription>Signed customer records within a 5km radius of the area center.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="max-h-96 overflow-y-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Address</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {signedCustomersInArea.length > 0 ? (
+                                signedCustomersInArea.map(item => (
+                                    <TableRow key={`nearby-signed-${item.id}`}>
+                                        <TableCell className="font-medium">{item.companyName}</TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">{formatAddressDisplay(item.address as Address)}</TableCell>
+                                        <TableCell>{item.franchisee || 'N/A'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button asChild size="sm" variant="outline">
+                                                <Link href={`/companies/${item.id}`} target="_blank">View Profile</Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No signed customers found in this radius.</TableCell>
                                 </TableRow>
                             )}
                         </TableBody>

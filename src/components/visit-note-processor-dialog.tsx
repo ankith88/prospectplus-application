@@ -169,166 +169,164 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
 
   return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Process Visit Note</DialogTitle>
-            <DialogDescription>
-              For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
-              <br />
-              Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Process Visit Note</DialogTitle>
+          <DialogDescription>
+            For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
+            <br />
+            Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            <div className="space-y-4">
-               <div>
-                  <h4 className="font-semibold mb-2">Original Note</h4>
-                  <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
-                  <p className="whitespace-pre-wrap text-sm">{note.content}</p>
-                  </ScrollArea>
-               </div>
-               {note.imageUrls && note.imageUrls.length > 0 && (
-                    <div>
-                        <h4 className="font-semibold mb-2">Attached Images</h4>
-                        <ScrollArea className="h-40">
-                            <div className="flex gap-4 flex-wrap p-1">
-                                {note.imageUrls.map((url, index) => (
-                                    <div 
-                                      key={index} 
-                                      className="relative w-[200px] h-[120px] rounded-md overflow-hidden border bg-background group cursor-pointer"
-                                      onClick={() => window.open(url, '_blank')}
-                                    >
-                                      <Image src={url} alt={`Visit image ${index + 1}`} fill className="object-cover transition-transform group-hover:scale-105"/>
-                                    </div>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                    </div>
-                )}
-                {note.discoveryData && Object.keys(note.discoveryData).length > 0 && (
-                    <div>
-                        <h4 className="font-semibold mb-2">Field Discovery Data</h4>
-                        <ScrollArea className="h-32 rounded-md border p-4 text-sm">
-                            <ul className="list-disc pl-5 space-y-1">
-                            {Object.entries(note.discoveryData).map(([key, value]) => {
-                                if (!value || (Array.isArray(value) && value.length === 0)) return null;
-                                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-                                const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
-                                return (
-                                <li key={key}>
-                                    <span className="font-semibold">{formattedKey}:</span>{' '}
-                                    <span className="text-muted-foreground">{formattedValue}</span>
-                                </li>
-                                )
-                            })}
-                            </ul>
-                        </ScrollArea>
-                    </div>
-                )}
-            </div>
-            
-             <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Create New Lead</CardTitle>
-                        <CardDescription>
-                        Create a new lead in the system based on this visit note.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardFooter>
-                        <Button onClick={handleCreateLead} disabled={isCreating || isRejecting} className="w-full">
-                        {isCreating ? <Loader /> : 'Create Lead'}
-                        </Button>
-                    </CardFooter>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Link to Existing Lead or Customer</CardTitle>
-                        <CardDescription>
-                        Search for a Lead or Signed Customer to link this note.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search by company name..."
-                            className="pl-8"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        </div>
-                        {isSearching && <div className="flex justify-center"><Loader /></div>}
-                        {searchResults.length > 0 && !selectedItem && (
-                        <ScrollArea className="h-48 rounded-md border">
-                            <div className="p-2">
-                            {searchResults.map(item => (
-                                <div key={item.id} className="p-2 hover:bg-accent rounded cursor-pointer flex items-center justify-between gap-2" onClick={() => {
-                                    setSelectedItem(item);
-                                    setSearchQuery(item.companyName);
-                                    setSearchResults([]);
-                                }}>
-                                    <div>
-                                        <p className="font-semibold">{item.companyName}</p>
-                                        <p className="text-sm text-muted-foreground">{item.address?.city}, {item.address?.state}</p>
-                                    </div>
-                                    {item.isCompanyResult && (
-                                        <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
-                                            <Star className="h-3 w-3" /> Signed Customer
-                                        </Badge>
-                                    )}
-                                </div>
-                            ))}
-                            </div>
-                        </ScrollArea>
-                        )}
-                        {selectedItem && (
-                        <div className="p-3 border rounded-md bg-secondary/50 text-sm">
-                            <div className="flex items-center justify-between">
-                                <p className="font-semibold">{selectedItem.companyName}</p>
-                                {selectedItem.isCompanyResult && <Badge variant="secondary">Signed Customer</Badge>}
-                            </div>
-                            <p className="text-muted-foreground">{selectedItem.address?.street}, {selectedItem.address?.city}</p>
-                            <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => {
-                                setSelectedItem(null);
-                                setSearchQuery('');
-                            }}>Clear selection</Button>
-                        </div>
-                        )}
-                    </CardContent>
-                    <CardFooter>
-                        <Button onClick={handleLinkToItem} disabled={isLinking || !selectedItem} className="w-full">
-                            {isLinking ? <Loader /> : 'Link to this Record'}
-                        </Button>
-                    </CardFooter>
-                </Card>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+          <div className="space-y-4">
+             <div>
+                <h4 className="font-semibold mb-2">Original Note</h4>
+                <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
+                <p className="whitespace-pre-wrap text-sm">{note.content}</p>
+                </ScrollArea>
+             </div>
+             {note.imageUrls && note.imageUrls.length > 0 && (
+                  <div>
+                      <h4 className="font-semibold mb-2">Attached Images</h4>
+                      <ScrollArea className="h-40">
+                          <div className="flex gap-4 flex-wrap p-1">
+                              {note.imageUrls.map((url, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="relative w-[200px] h-[120px] rounded-md overflow-hidden border bg-background group cursor-pointer"
+                                    onClick={() => window.open(url, '_blank')}
+                                  >
+                                    <Image src={url} alt={`Visit image ${index + 1}`} fill className="object-cover transition-transform group-hover:scale-105"/>
+                                  </div>
+                              ))}
+                          </div>
+                      </ScrollArea>
+                  </div>
+              )}
+              {note.discoveryData && Object.keys(note.discoveryData).length > 0 && (
+                  <div>
+                      <h4 className="font-semibold mb-2">Field Discovery Data</h4>
+                      <ScrollArea className="h-32 rounded-md border p-4 text-sm">
+                          <ul className="list-disc pl-5 space-y-1">
+                          {Object.entries(note.discoveryData).map(([key, value]) => {
+                              if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                              const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                              const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
+                              return (
+                              <li key={key}>
+                                  <span className="font-semibold">{formattedKey}:</span>{' '}
+                                  <span className="text-muted-foreground">{formattedValue}</span>
+                              </li>
+                              )
+                          })}
+                          </ul>
+                      </ScrollArea>
+                  </div>
+              )}
           </div>
+          
+           <div className="space-y-6">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Create New Lead</CardTitle>
+                      <CardDescription>
+                      Create a new lead in the system based on this visit note.
+                      </CardDescription>
+                  </CardHeader>
+                  <CardFooter>
+                      <Button onClick={handleCreateLead} disabled={isCreating || isRejecting} className="w-full">
+                      {isCreating ? <Loader /> : 'Create Lead'}
+                      </Button>
+                  </CardFooter>
+              </Card>
 
-          <DialogFooter>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                  <Button variant="destructive" disabled={isRejecting || isCreating}>
-                      {isRejecting ? <Loader /> : 'Reject Note'}
-                  </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                          This will mark the note as rejected and remove it from the active queue.
-                      </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleReject}>Confirm Rejection</AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Link to Existing Lead or Customer</CardTitle>
+                      <CardDescription>
+                      Search for a Lead or Signed Customer to link this note.
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                      <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                          placeholder="Search by company name..."
+                          className="pl-8"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      </div>
+                      {isSearching && <div className="flex justify-center"><Loader /></div>}
+                      {searchResults.length > 0 && !selectedItem && (
+                      <ScrollArea className="h-48 rounded-md border">
+                          <div className="p-2">
+                          {searchResults.map(item => (
+                              <div key={item.id} className="p-2 hover:bg-accent rounded cursor-pointer flex items-center justify-between gap-2" onClick={() => {
+                                  setSelectedItem(item);
+                                  setSearchQuery(item.companyName);
+                                  setSearchResults([]);
+                              }}>
+                                  <div>
+                                      <p className="font-semibold">{item.companyName}</p>
+                                      <p className="text-sm text-muted-foreground">{item.address?.city}, {item.address?.state}</p>
+                                  </div>
+                                  {item.isCompanyResult && (
+                                      <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+                                          <Star className="h-3 w-3" /> Signed Customer
+                                      </Badge>
+                                  )}
+                              </div>
+                          ))}
+                          </div>
+                      </ScrollArea>
+                      )}
+                      {selectedItem && (
+                      <div className="p-3 border rounded-md bg-secondary/50 text-sm">
+                          <div className="flex items-center justify-between">
+                              <p className="font-semibold">{selectedItem.companyName}</p>
+                              {selectedItem.isCompanyResult && <Badge variant="secondary">Signed Customer</Badge>}
+                          </div>
+                          <p className="text-muted-foreground">{selectedItem.address?.street}, {selectedItem.address?.city}</p>
+                          <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => {
+                              setSelectedItem(null);
+                              setSearchQuery('');
+                          }}>Clear selection</Button>
+                      </div>
+                      )}
+                  </CardContent>
+                  <CardFooter>
+                      <Button onClick={handleLinkToItem} disabled={isLinking || !selectedItem} className="w-full">
+                          {isLinking ? <Loader /> : 'Link to this Record'}
+                      </Button>
+                  </CardFooter>
+              </Card>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isRejecting || isCreating}>
+                    {isRejecting ? <Loader /> : 'Reject Note'}
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will mark the note as rejected and remove it from the active queue.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleReject}>Confirm Rejection</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </DialogFooter>
+      </DialogContent>
   );
 }
