@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
@@ -342,7 +341,9 @@ export default function VisitNotesClient() {
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
                         
-                        const isSignedLead = note.leadId ? (String(note.leadId).startsWith('signed-') || String(note.leadId).toLowerCase().includes('signed')) : false;
+                        // Safety: Handle leadId string operations carefully
+                        const safeLeadId = note.leadId ? String(note.leadId) : '';
+                        const isSignedLead = safeLeadId.startsWith('signed-') || safeLeadId.toLowerCase().includes('signed');
 
                         return (
                         <Fragment key={note.id}>

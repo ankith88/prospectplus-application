@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -292,7 +291,7 @@ export default function LeadsMapClient() {
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
-        const placesService = new window.google.maps.places.PlacesService(map);
+        const placesService = new window.google.maps.PlacesService(map);
         return new Promise((resolve) => {
             placesService.getDetails({
                 placeId,

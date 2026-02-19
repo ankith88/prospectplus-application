@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
@@ -95,13 +95,11 @@ export default function ProspectingAreasPage() {
       
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
-      // Deduplicate items sharing the same ID before rendering markers
       const deduplicatedMap = new Map<string, Lead>();
       [...companies, ...leads].forEach(item => {
           if (!deduplicatedMap.has(item.id)) {
               deduplicatedMap.set(item.id, item);
           } else {
-              // Prefer 'Won' status items (companies) if a duplicate ID exists
               const existing = deduplicatedMap.get(item.id)!;
               if (item.status === 'Won' && existing.status !== 'Won') {
                   deduplicatedMap.set(item.id, item);
@@ -314,6 +312,7 @@ export default function ProspectingAreasPage() {
 
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
+    setSearchNearbyQuery(''); // Reset search when loading new area
   }, []);
 
 
@@ -419,7 +418,7 @@ export default function ProspectingAreasPage() {
 
                     {/* Show Signed Customers (Green) */}
                     {signedCustomersInArea.map(item => {
-                        if (visitedItemsInArea.some(v => v.id === item.id)) return null; // Already shown as visited
+                        if (visitedItemsInArea.some(v => v.id === item.id)) return null;
                         const lat = Number(item.latitude);
                         const lng = Number(item.longitude);
                         if (isNaN(lat) || isNaN(lng)) return null;
@@ -455,133 +454,158 @@ export default function ProspectingAreasPage() {
                     )}
                 </GoogleMap>
             </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <h4 className="font-semibold">Contents of this Area</h4>
-                    <ScrollArea className="h-32 border rounded-md mt-2">
-                        <div className="p-2 text-sm">
-                            {selectedArea.leads && selectedArea.leads.length > 0 && (
-                                <div>
-                                    <p className="font-medium">Designated Leads ({selectedArea.leads.length}):</p>
-                                    <ul className="list-disc list-inside">
-                                        {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                            {selectedArea.streets && selectedArea.streets.length > 0 && (
-                                <div className="mt-2">
-                                    <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
-                                    <ul className="list-disc list-inside">
-                                        {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                            {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
-                                <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
-                            )}
-                        </div>
-                    </ScrollArea>
-                </div>
-                 {selectedArea.notes && (
-                    <div>
-                        <h4 className="font-semibold">Notes</h4>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap p-3 mt-2 border rounded-md bg-secondary/50 h-32 overflow-y-auto">{selectedArea.notes}</p>
+            
+            <div className="mt-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="relative flex-grow max-w-md">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search company names in this area..."
+                            className="pl-8"
+                            value={searchNearbyQuery}
+                            onChange={(e) => setSearchNearbyQuery(e.target.value)}
+                        />
+                        {searchNearbyQuery && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 h-8 w-8"
+                                onClick={() => setSearchNearbyQuery('')}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
                     </div>
-                )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h4 className="font-semibold">Contents of this Area</h4>
+                        <ScrollArea className="h-32 border rounded-md mt-2">
+                            <div className="p-2 text-sm">
+                                {selectedArea.leads && selectedArea.leads.length > 0 && (
+                                    <div>
+                                        <p className="font-medium">Designated Leads ({selectedArea.leads.length}):</p>
+                                        <ul className="list-disc list-inside">
+                                            {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                {selectedArea.streets && selectedArea.streets.length > 0 && (
+                                    <div className="mt-2">
+                                        <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
+                                        <ul className="list-disc list-inside">
+                                            {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
+                                    <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                    {selectedArea.notes && (
+                        <div>
+                            <h4 className="font-semibold">Notes</h4>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap p-3 mt-2 border rounded-md bg-secondary/50 h-32 overflow-y-auto">{selectedArea.notes}</p>
+                        </div>
+                    )}
+                </div>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <History className="h-5 w-5 text-orange-500" />
+                            <CardTitle>Recent Visits in Area ({visitedItemsInArea.length})</CardTitle>
+                        </div>
+                        <CardDescription>History of field sales activity within this prospecting territory.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="max-h-96 overflow-y-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Lead Name</TableHead>
+                                        <TableHead>Visited When</TableHead>
+                                        <TableHead>Visited By</TableHead>
+                                        <TableHead>Lead Status</TableHead>
+                                        <TableHead>Visit Outcome</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {visitedItemsInArea.length > 0 ? (
+                                        visitedItemsInArea.map(item => (
+                                            <TableRow key={`visited-${item.id}`}>
+                                                <TableCell className="font-medium">
+                                                    <Button asChild variant="link" className="p-0 h-auto">
+                                                        <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
+                                                            {item.companyName}
+                                                        </Link>
+                                                    </Button>
+                                                </TableCell>
+                                                <TableCell>{format(new Date(item.visitNote!.createdAt), 'PPpp')}</TableCell>
+                                                <TableCell>{item.visitNote!.capturedBy}</TableCell>
+                                                <TableCell><LeadStatusBadge status={item.status} /></TableCell>
+                                                <TableCell>{item.visitNote!.outcome?.type || 'N/A'}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No leads in this area match the search or have been visited.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <Star className="h-5 w-5 text-green-500" />
+                            <CardTitle>Nearby Signed Customers ({signedCustomersInArea.length})</CardTitle>
+                        </div>
+                        <CardDescription>Signed customer records within a 5km radius of the area center.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="max-h-96 overflow-y-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Company Name</TableHead>
+                                        <TableHead>Address</TableHead>
+                                        <TableHead>Franchisee</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {signedCustomersInArea.length > 0 ? (
+                                        signedCustomersInArea.map(item => (
+                                            <TableRow key={`nearby-signed-${item.id}`}>
+                                                <TableCell className="font-medium">{item.companyName}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{formatAddressDisplay(item.address as Address)}</TableCell>
+                                                <TableCell>{item.franchisee || 'N/A'}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button asChild size="sm" variant="outline">
+                                                        <Link href={`/companies/${item.id}`} target="_blank">View Profile</Link>
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No signed customers match the search in this radius.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
           </CardContent>
-        </Card>
-
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <History className="h-5 w-5 text-orange-500" />
-                    <CardTitle>Recent Visits in Area ({visitedItemsInArea.length})</CardTitle>
-                </div>
-                <CardDescription>History of field sales activity within this prospecting territory.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="max-h-96 overflow-y-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Lead Name</TableHead>
-                                <TableHead>Visited When</TableHead>
-                                <TableHead>Visited By</TableHead>
-                                <TableHead>Lead Status</TableHead>
-                                <TableHead>Visit Outcome</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {visitedItemsInArea.length > 0 ? (
-                                visitedItemsInArea.map(item => (
-                                    <TableRow key={`visited-${item.id}`}>
-                                        <TableCell className="font-medium">
-                                            <Button asChild variant="link" className="p-0 h-auto">
-                                                <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
-                                                    {item.companyName}
-                                                </Link>
-                                            </Button>
-                                        </TableCell>
-                                        <TableCell>{format(new Date(item.visitNote!.createdAt), 'PPpp')}</TableCell>
-                                        <TableCell>{item.visitNote!.capturedBy}</TableCell>
-                                        <TableCell><LeadStatusBadge status={item.status} /></TableCell>
-                                        <TableCell>{item.visitNote!.outcome?.type || 'N/A'}</TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No leads in this area have been visited yet.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
-
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-green-500" />
-                    <CardTitle>Nearby Signed Customers ({signedCustomersInArea.length})</CardTitle>
-                </div>
-                <CardDescription>Signed customer records within a 5km radius of the area center.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="max-h-96 overflow-y-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Company Name</TableHead>
-                                <TableHead>Address</TableHead>
-                                <TableHead>Franchisee</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {signedCustomersInArea.length > 0 ? (
-                                signedCustomersInArea.map(item => (
-                                    <TableRow key={`nearby-signed-${item.id}`}>
-                                        <TableCell className="font-medium">{item.companyName}</TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">{formatAddressDisplay(item.address as Address)}</TableCell>
-                                        <TableCell>{item.franchisee || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button asChild size="sm" variant="outline">
-                                                <Link href={`/companies/${item.id}`} target="_blank">View Profile</Link>
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No signed customers found in this radius.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
         </Card>
       </>
       )}

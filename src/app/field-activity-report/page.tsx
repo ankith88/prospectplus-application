@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -190,7 +189,7 @@ export default function FieldActivityReportPage() {
     }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
 
     const statusOfConvertedLeadsData = convertedNotes.reduce((acc, note) => {
-        const lead = leadsMap.get(note.leadId!);
+        const lead = note.leadId ? leadsMap.get(note.leadId) : null;
         const status = lead?.status || 'Unknown';
         const existing = acc.find(item => item.name === status);
         if (existing) existing.value++;
