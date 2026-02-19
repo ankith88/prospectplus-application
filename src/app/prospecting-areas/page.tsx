@@ -3,14 +3,14 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile, Lead, Address } from '@/lib/types';
+import type { SavedRoute, UserProfile, Lead, Address, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X } from 'lucide-react';
+import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History } from 'lucide-react';
 import { format } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
   GoogleMap,
   useJsApiLoader,
@@ -34,6 +34,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { LeadStatusBadge } from '@/components/lead-status-badge';
 
 
 const containerStyle = {
@@ -56,15 +57,16 @@ const formatAddressDisplay = (address?: Address) => {
 
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
-  const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
-  const [nearbyCompanies, setNearbyCompanies] = useState<(Lead & { distance: number })[]>([]);
+  const [allMapItems, setAllMapItems] = useState<Lead[]>([]);
+  const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
+  const [nearbyMapItems, setNearbyMapItems] = useState<(Lead & { distance: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
-  const [selectedCompany, setSelectedCompany] = useState<Lead | null>(null);
-  const [hoveredCompanyId, setHoveredCompanyId] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Lead | null>(null);
+  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
 
   const router = useRouter();
@@ -83,15 +85,18 @@ export default function ProspectingAreasPage() {
     if (!userProfile) return;
     setLoading(true);
     try {
-      const [allRoutes, companies] = await Promise.all([
+      const [allRoutes, companies, leads, visitNotes] = await Promise.all([
         getAllUserRoutes(),
-        getCompaniesFromFirebase()
+        getCompaniesFromFirebase(),
+        getLeadsFromFirebase({ summary: true }),
+        getVisitNotes()
       ]);
-      // All users see all prospecting areas
+      
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
       setProspectingAreas(areas);
-      setAllCompanies(companies);
+      setAllMapItems([...companies, ...leads]);
+      setAllVisitNotes(visitNotes);
     } catch (error) {
       console.error("Failed to fetch prospecting areas:", error);
       toast({ variant: "destructive", title: 'Error', description: 'Could not fetch prospecting areas.' });
@@ -135,7 +140,7 @@ export default function ProspectingAreasPage() {
 
   useEffect(() => {
     if (!selectedArea || !map || !window.google) {
-        setNearbyCompanies([]);
+        setNearbyMapItems([]);
         return;
     }
     
@@ -187,34 +192,46 @@ export default function ProspectingAreasPage() {
     }
     
     if (areaCenter) {
-        const nearbyWithDistance = allCompanies
-            .map(company => {
-                if (!company.latitude || !company.longitude) return null;
-                const companyLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, companyLatLng);
+        const nearbyWithDistance = allMapItems
+            .map(item => {
+                if (!item.latitude || !item.longitude) return null;
+                const itemLatLng = new window.google.maps.LatLng(item.latitude, item.longitude);
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, itemLatLng);
                 if (distance <= 5000) {
-                    return { ...company, distance };
+                    return { ...item, distance };
                 }
                 return null;
             })
             .filter((c): c is Lead & { distance: number } => c !== null);
         
         nearbyWithDistance.sort((a, b) => a.distance - b.distance);
-        setNearbyCompanies(nearbyWithDistance);
+        setNearbyMapItems(nearbyWithDistance);
     } else {
-        setNearbyCompanies([]);
+        setNearbyMapItems([]);
     }
 
-  }, [selectedArea, map, allCompanies]);
+  }, [selectedArea, map, allMapItems]);
 
-  const filteredNearbyCompanies = useMemo(() => {
-    if (!searchNearbyQuery) {
-      return nearbyCompanies;
+  const filteredNearbyItems = useMemo(() => {
+    let items = nearbyMapItems;
+    if (searchNearbyQuery) {
+      items = items.filter(item =>
+        item.companyName.toLowerCase().includes(searchNearbyQuery.toLowerCase())
+      );
     }
-    return nearbyCompanies.filter(company =>
-      company.companyName.toLowerCase().includes(searchNearbyQuery.toLowerCase())
-    );
-  }, [nearbyCompanies, searchNearbyQuery]);
+    return items;
+  }, [nearbyMapItems, searchNearbyQuery]);
+
+  const visitedItemsInArea = useMemo(() => {
+    const visitNotesMap = new Map(allVisitNotes.map(note => [note.id, note]));
+    return filteredNearbyItems
+        .filter(item => !!item.visitNoteID && visitNotesMap.has(item.visitNoteID))
+        .map(item => ({
+            ...item,
+            visitNote: visitNotesMap.get(item.visitNoteID!)
+        }))
+        .sort((a, b) => new Date(b.visitNote!.createdAt).getTime() - new Date(a.visitNote!.createdAt).getTime());
+  }, [filteredNearbyItems, allVisitNotes]);
 
 
   const handleDeleteArea = async () => {
@@ -336,25 +353,39 @@ export default function ProspectingAreasPage() {
                           icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
                       />
                   ))}
-                  {filteredNearbyCompanies.map(company => (
-                        <MarkerF
-                            key={`company-${company.id}`}
-                            position={{ lat: company.latitude!, lng: company.longitude! }}
-                            title={company.companyName}
-                            icon={{ url: hoveredCompanyId === company.id ? "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" : "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
-                            onClick={() => setSelectedCompany(company)}
-                        />
-                    ))}
+                  {filteredNearbyItems.map(item => {
+                        const hasVisit = !!item.visitNoteID;
+                        const isCompany = item.status === 'Won';
+                        let iconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"; // Default lead
+                        if (hasVisit) iconUrl = "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
+                        else if (isCompany) iconUrl = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+                        
+                        if (hoveredItemId === item.id) iconUrl = "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
 
-                    {selectedCompany && (
+                        return (
+                            <MarkerF
+                                key={`item-${item.id}`}
+                                position={{ lat: item.latitude!, lng: item.longitude! }}
+                                title={item.companyName}
+                                icon={{ url: iconUrl }}
+                                onClick={() => setSelectedItem(item)}
+                            />
+                        )
+                    })}
+
+                    {selectedItem && (
                         <InfoWindowF
-                            position={{ lat: Number(selectedCompany.latitude!), lng: Number(selectedCompany.longitude!) }}
-                            onCloseClick={() => setSelectedCompany(null)}
+                            position={{ lat: Number(selectedItem.latitude!), lng: Number(selectedItem.longitude!) }}
+                            onCloseClick={() => setSelectedItem(null)}
                         >
                             <div className="p-2 max-w-xs space-y-2">
-                                <h3 className="font-bold text-lg">{selectedCompany.companyName}</h3>
-                                <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedCompany.address as Address)}</p>
-                                <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
+                                <h3 className="font-bold text-lg">{selectedItem.companyName}</h3>
+                                <div className="flex items-center gap-2">
+                                    <LeadStatusBadge status={selectedItem.status} />
+                                    {selectedItem.visitNoteID && <Badge variant="secondary" className="bg-orange-100 text-orange-800">Visited</Badge>}
+                                </div>
+                                <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedItem.address as Address)}</p>
+                                <Button size="sm" onClick={() => window.open(selectedItem.status === 'Won' ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`, '_blank')}>
                                     <ExternalLink className="mr-2 h-4 w-4" /> View Profile
                                 </Button>
                             </div>
@@ -398,14 +429,63 @@ export default function ProspectingAreasPage() {
             </div>
           </CardContent>
         </Card>
-        {nearbyCompanies.length > 0 && (
+
+        <Card>
+            <CardHeader>
+                <div className="flex items-center gap-2">
+                    <History className="h-5 w-5 text-orange-500" />
+                    <CardTitle>Recent Visits in Area ({visitedItemsInArea.length})</CardTitle>
+                </div>
+                <CardDescription>History of field sales activity within this prospecting territory.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="max-h-96 overflow-y-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Lead Name</TableHead>
+                                <TableHead>Visited When</TableHead>
+                                <TableHead>Visited By</TableHead>
+                                <TableHead>Lead Status</TableHead>
+                                <TableHead>Visit Outcome</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {visitedItemsInArea.length > 0 ? (
+                                visitedItemsInArea.map(item => (
+                                    <TableRow key={`visited-${item.id}`}>
+                                        <TableCell className="font-medium">
+                                            <Button asChild variant="link" className="p-0 h-auto">
+                                                <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
+                                                    {item.companyName}
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>{format(new Date(item.visitNote!.createdAt), 'PPpp')}</TableCell>
+                                        <TableCell>{item.visitNote!.capturedBy}</TableCell>
+                                        <TableCell><LeadStatusBadge status={item.status} /></TableCell>
+                                        <TableCell>{item.visitNote!.outcome?.type || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No leads in this area have been visited yet.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+
+        {nearbyMapItems.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Nearby Signed Customers ({filteredNearbyCompanies.length})</CardTitle>
-                <CardDescription>Customers within a 5km radius of the prospecting area, sorted by proximity.</CardDescription>
+                <CardTitle>Nearby Signed Customers & Leads ({filteredNearbyItems.length})</CardTitle>
+                <CardDescription>Items within a 5km radius of the prospecting territory.</CardDescription>
                  <div className="pt-2">
                     <Input
-                        placeholder="Search nearby customers..."
+                        placeholder="Search nearby items..."
                         value={searchNearbyQuery}
                         onChange={(e) => setSearchNearbyQuery(e.target.value)}
                     />
@@ -418,25 +498,25 @@ export default function ProspectingAreasPage() {
                         <TableRow>
                         <TableHead>Company Name</TableHead>
                         <TableHead>Address</TableHead>
-                        <TableHead>Franchisee</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Distance</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredNearbyCompanies.map(company => (
+                        {filteredNearbyItems.map(item => (
                         <TableRow
-                            key={company.id}
-                            onMouseEnter={() => setHoveredCompanyId(company.id)}
-                            onMouseLeave={() => setHoveredCompanyId(null)}
+                            key={item.id}
+                            onMouseEnter={() => setHoveredItemId(item.id)}
+                            onMouseLeave={() => setHoveredItemId(null)}
                         >
-                            <TableCell>{company.companyName}</TableCell>
-                            <TableCell>{formatAddressDisplay(company.address as Address)}</TableCell>
-                            <TableCell>{company.franchisee || 'N/A'}</TableCell>
-                            <TableCell>{(company.distance / 1000).toFixed(2)} km</TableCell>
+                            <TableCell className="font-medium">{item.companyName}</TableCell>
+                            <TableCell>{formatAddressDisplay(item.address as Address)}</TableCell>
+                            <TableCell><LeadStatusBadge status={item.status} /></TableCell>
+                            <TableCell>{(item.distance / 1000).toFixed(2)} km</TableCell>
                             <TableCell className="text-right">
                             <Button asChild size="sm" variant="outline">
-                                <Link href={`/companies/${company.id}`} target="_blank">
+                                <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
                                 <ExternalLink className="mr-2 h-4 w-4" />
                                 View Profile
                                 </Link>
@@ -474,7 +554,7 @@ export default function ProspectingAreasPage() {
             <TableBody>
               {prospectingAreas.length > 0 ? (
                 prospectingAreas.map(area => (
-                  <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={selectedArea?.id === area.id ? 'bg-secondary' : 'cursor-pointer'}>
+                  <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
                     <TableCell className="font-medium">{area.name}</TableCell>
                     <TableCell>
                        <div className="flex items-center gap-2">

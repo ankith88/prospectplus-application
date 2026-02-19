@@ -240,21 +240,7 @@ export interface Lead {
   visitNoteID?: string;
 }
 
-export interface UserProfile {
-    uid: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    displayName: string;
-    phoneNumber: string;
-    aircallUserId?: string;
-    role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin';
-    disabled?: boolean;
-    linkedSalesRep?: string;
-    linkedBDR?: string;
-}
-
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl'> & { isCompany: boolean; isProspect?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID'> & { isCompany: boolean; isProspect?: boolean };
 
 export interface StorableRoute {
   id?: string;
