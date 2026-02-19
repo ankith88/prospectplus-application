@@ -14,7 +14,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { getAllLeadsForReport, getCompaniesFromFirebase, getAllUsers, getVisitNotes } from '@/services/firebase';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { Badge } from './ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 
-type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned';
+type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'outcome';
 type LeadWithVisitNote = Lead & { visitNote: VisitNote };
 
 export default function CheckinsClientPage() {
@@ -178,6 +178,10 @@ export default function CheckinsClientPage() {
                 aValue = a.entityId || '';
                 bValue = b.entityId || '';
                 break;
+            case 'outcome':
+                aValue = a.visitNote?.outcome?.type || '';
+                bValue = b.visitNote?.outcome?.type || '';
+                break;
             default:
                 aValue = (a as any)[sortConfig.key] ?? '';
                 bValue = (b as any)[sortConfig.key] ?? '';
@@ -244,7 +248,7 @@ export default function CheckinsClientPage() {
         return;
     }
 
-    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales Rep'];
+    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales Rep', 'Visit Outcome'];
     const rows = sortedLeads.map(lead => [
         escapeCsvCell(lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'),
         escapeCsvCell(lead.id),
@@ -253,6 +257,7 @@ export default function CheckinsClientPage() {
         escapeCsvCell(lead.status),
         escapeCsvCell(lead.franchisee || 'N/A'),
         escapeCsvCell(lead.visitNote?.capturedBy || 'N/A'),
+        escapeCsvCell(lead.visitNote?.outcome?.type || 'N/A'),
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -354,6 +359,7 @@ export default function CheckinsClientPage() {
                             <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales Rep{getSortIndicator('dialerAssigned')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('outcome')} className="group -ml-4">Visit Outcome{getSortIndicator('outcome')}</Button></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -377,11 +383,12 @@ export default function CheckinsClientPage() {
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell><Badge variant="outline">{lead.franchisee || 'N/A'}</Badge></TableCell>
                                     <TableCell>{lead.visitNote?.capturedBy || 'N/A'}</TableCell>
+                                    <TableCell>{lead.visitNote?.outcome?.type || 'N/A'}</TableCell>
                                 </TableRow>
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center">
+                                <TableCell colSpan={8} className="h-24 text-center">
                                     No leads found for the selected filters.
                                 </TableCell>
                             </TableRow>
