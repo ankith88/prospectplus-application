@@ -35,6 +35,7 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import { cn } from '@/lib/utils';
 
 
 const containerStyle = {

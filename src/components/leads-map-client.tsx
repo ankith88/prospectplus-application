@@ -6,6 +6,7 @@ import {
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
+  DrawingManagerF,
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
@@ -40,7 +41,8 @@ import { useJsApiLoader } from '@react-google-maps/api';
 import { Textarea } from './ui/textarea';
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { LeadStatusBadge } from './lead-status-badge';
 
 
 type ProspectWithLeadInfo = {
@@ -825,7 +827,7 @@ export default function LeadsMapClient() {
                     </CollapsibleContent>
                 </Collapsible>
             </Card>
-            <div className="flex-grow flex flex-col md:flex-row gap-4">
+            <div className="flex-grow flex-col md:flex-row flex gap-4">
                 <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                     <Tabs defaultValue="prospecting" value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-grow">
                          <CardHeader className="pb-2 flex-shrink-0">

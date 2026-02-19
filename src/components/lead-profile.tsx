@@ -128,6 +128,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Label } from './ui/label'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { salesReps } from '@/lib/constants'
+import { AddContactForm } from './add-contact-form'
+import { EditContactForm } from './edit-contact-form'
 
 
 interface LeadProfileProps {
