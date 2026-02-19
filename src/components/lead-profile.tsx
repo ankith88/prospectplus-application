@@ -7,7 +7,6 @@ import {
   Building,
   Building2,
   Calendar,
-  CheckCircle,
   Clipboard,
   Edit,
   Globe,
@@ -1050,7 +1049,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <div className="flex items-center gap-1">
-                        <span className="font-medium break-all">{lead.customerPhone ?? 'N/A'}</span>
+                        <span className="break-all">{lead.customerPhone ?? 'N/A'}</span>
                         {lead.customerPhone && (
                             <>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>

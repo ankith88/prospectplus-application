@@ -3,12 +3,12 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, UserProfile, Lead, Address, VisitNote } from '@/lib/types';
+import type { SavedRoute, Lead, Address, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Clock, Route, Calendar, User, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History } from 'lucide-react';
+import { Route, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
@@ -95,8 +95,16 @@ export default function ProspectingAreasPage() {
       
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
+      // Deduplicate leads/companies based on ID to fix React duplicate key issues
+      const deduplicatedMap = new Map<string, Lead>();
+      [...companies, ...leads].forEach(item => {
+          if (!deduplicatedMap.has(item.id)) {
+              deduplicatedMap.set(item.id, item);
+          }
+      });
+
       setProspectingAreas(areas);
-      setAllMapItems([...companies, ...leads]);
+      setAllMapItems(Array.from(deduplicatedMap.values()));
       setAllVisitNotes(visitNotes);
     } catch (error) {
       console.error("Failed to fetch prospecting areas:", error);
@@ -341,14 +349,14 @@ export default function ProspectingAreasPage() {
                   )}
                   {(selectedArea.leads || []).map(lead => (
                       <MarkerF
-                          key={lead.id}
+                          key={`lead-${lead.id}`}
                           position={{ lat: lead.latitude, lng: lead.longitude }}
                           title={lead.companyName}
                       />
                   ))}
                   {(selectedArea.streets || []).map(street => (
                       <MarkerF
-                          key={street.place_id}
+                          key={`street-${street.place_id}`}
                           position={{ lat: street.latitude, lng: street.longitude }}
                           title={street.description}
                           icon={{ url: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png" }}
@@ -507,7 +515,7 @@ export default function ProspectingAreasPage() {
                     <TableBody>
                         {filteredNearbyItems.map(item => (
                         <TableRow
-                            key={item.id}
+                            key={`nearby-${item.id}`}
                             onMouseEnter={() => setHoveredItemId(item.id)}
                             onMouseLeave={() => setHoveredItemId(null)}
                         >

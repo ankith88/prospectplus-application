@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import type { VisitNote, VisitNoteAnalysis, Address, Lead } from '@/lib/types';
+import type { VisitNote, Address, Lead } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
   AlertDialog,

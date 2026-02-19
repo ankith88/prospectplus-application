@@ -102,7 +102,7 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     address.street = `${streetNumber || ''} ${route || ''}`.trim();
     address.address1 = get('subpremise'); // For level, suite, etc.
     address.city = get('locality') || get('postal_town');
-    address.state = get('administrative_area_level_1', true);
+    address.state = get('administrative_area_level_1', true) || '';
     address.zip = get('postal_code');
     return address as Address;
 };
@@ -772,7 +772,7 @@ export default function CaptureVisitPage() {
                                                     <FormField control={control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                 </CardContent>
                                             </Card>
                                         )}

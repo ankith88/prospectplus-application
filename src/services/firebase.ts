@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -279,7 +278,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
-          profile: `A company profile for ${companyName}. Industry: ${data.industryCategory || 'N/A'}. Status: ${safeGetStatus(data.customerStatus)}.`,
+          profile: `A company profile for ${companyName || 'Unknown Company'}.`,
           address: address,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -376,7 +375,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
             address = data.address;
         } else if (data.street || data.city || data.state || data.zip || data.country) {
           address = {
-            address1: data.address1,
+            address1: data.address1 || '',
             street: data.street || '',
             city: data.city || '',
             state: data.state || '',

@@ -271,7 +271,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <div>
                       <p className="text-muted-foreground">Phone</p>
                       <div className="flex items-center gap-1">
-                        <span className="font-medium break-all">{company.customerPhone ?? 'N/A'}</span>
+                        <span className="break-all">{company.customerPhone ?? 'N/A'}</span>
                         {company.customerPhone && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(company.customerPhone, 'Phone')}>
                                 <Clipboard className="w-3 h-3" />
