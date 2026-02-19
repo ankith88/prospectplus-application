@@ -41,6 +41,7 @@ import { firestore } from '@/lib/firebase';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { LeadStatusBadge } from './lead-status-badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 
 type ProspectWithLeadInfo = {
@@ -57,7 +58,7 @@ const containerStyle = {
   borderRadius: '0.5rem',
 };
 
-const center = {
+const defaultCenter = {
   lat: -25.2744,
   lng: 133.7751,
 };
@@ -932,7 +933,7 @@ export default function LeadsMapClient() {
                 <div className="relative rounded-lg overflow-hidden border h-[80vh] flex-grow">
                     <GoogleMap
                         mapContainerStyle={containerStyle}
-                        center={center}
+                        center={defaultCenter}
                         zoom={4}
                         onLoad={onMapLoad}
                         onClick={onMapClick}
