@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -8,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star } from 'lucide-react';
-import { format } from 'date-fns';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star } from 'lucide-react';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
   GoogleMap,
@@ -95,10 +96,17 @@ export default function ProspectingAreasPage() {
       
       const areas = allRoutes.filter(route => route.isProspectingArea);
       
+      // Deduplicate items sharing the same ID before rendering markers
       const deduplicatedMap = new Map<string, Lead>();
       [...companies, ...leads].forEach(item => {
           if (!deduplicatedMap.has(item.id)) {
               deduplicatedMap.set(item.id, item);
+          } else {
+              // Prefer 'Won' status items (companies) if a duplicate ID exists
+              const existing = deduplicatedMap.get(item.id)!;
+              if (item.status === 'Won' && existing.status !== 'Won') {
+                  deduplicatedMap.set(item.id, item);
+              }
           }
       });
 
@@ -126,15 +134,19 @@ export default function ProspectingAreasPage() {
     let hasPoints = false;
 
     (selectedArea.streets || []).forEach(street => {
-        if(!isNaN(Number(street.latitude)) && !isNaN(Number(street.longitude))) {
-            bounds.extend({ lat: Number(street.latitude), lng: Number(street.longitude) });
+        const lat = Number(street.latitude);
+        const lng = Number(street.longitude);
+        if(!isNaN(lat) && !isNaN(lng)) {
+            bounds.extend({ lat, lng });
             hasPoints = true;
         }
     });
 
     (selectedArea.leads || []).forEach(lead => {
-      if (!isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))) {
-        bounds.extend({ lat: Number(lead.latitude), lng: Number(lead.longitude) });
+      const lat = Number(lead.latitude);
+      const lng = Number(lead.longitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        bounds.extend({ lat, lng });
         hasPoints = true;
       }
     });
@@ -157,8 +169,10 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths?.[0]?.length) {
         selectedArea.shape.paths[0].forEach(path => {
-            if (!isNaN(Number(path.lat)) && !isNaN(Number(path.lng))) {
-                bounds.extend(path);
+            const lat = Number(path.lat);
+            const lng = Number(path.lng);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                bounds.extend({ lat, lng });
                 hasBounds = true;
             }
         });
@@ -170,8 +184,10 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.streets && selectedArea.streets.length > 0) {
         selectedArea.streets.forEach(street => {
-            if (!isNaN(Number(street.latitude)) && !isNaN(Number(street.longitude))) {
-                bounds.extend({ lat: Number(street.latitude), lng: Number(street.longitude) });
+            const lat = Number(street.latitude);
+            const lng = Number(street.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                bounds.extend({ lat, lng });
                 hasBounds = true;
             }
         });
@@ -179,8 +195,10 @@ export default function ProspectingAreasPage() {
 
     if (selectedArea.leads && selectedArea.leads.length > 0) {
         selectedArea.leads.forEach(lead => {
-            if (!isNaN(Number(lead.latitude)) && !isNaN(Number(lead.longitude))) {
-                bounds.extend({ lat: Number(lead.latitude), lng: Number(lead.longitude) });
+            const lat = Number(lead.latitude);
+            const lng = Number(lead.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                bounds.extend({ lat, lng });
                 hasBounds = true;
             }
         });
@@ -191,16 +209,24 @@ export default function ProspectingAreasPage() {
     if (hasBounds) {
         map.fitBounds(bounds);
         areaCenter = bounds.getCenter();
-    } else if (selectedArea.leads?.length === 1 && !isNaN(Number(selectedArea.leads[0].latitude)) && !isNaN(Number(selectedArea.leads[0].longitude))) {
-        const center = { lat: Number(selectedArea.leads[0].latitude), lng: Number(selectedArea.leads[0].longitude) };
-        map.panTo(center);
-        map.setZoom(15);
-        areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
-    } else if (selectedArea.streets?.length === 1 && !isNaN(Number(selectedArea.streets[0].latitude)) && !isNaN(Number(selectedArea.streets[0].longitude))) {
-        const center = { lat: Number(selectedArea.streets[0].latitude), lng: Number(selectedArea.streets[0].longitude) };
-        map.panTo(center);
-        map.setZoom(15);
-        areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+    } else if (selectedArea.leads?.length === 1) {
+        const lat = Number(selectedArea.leads[0].latitude);
+        const lng = Number(selectedArea.leads[0].longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+            const center = { lat, lng };
+            map.panTo(center);
+            map.setZoom(15);
+            areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+        }
+    } else if (selectedArea.streets?.length === 1) {
+        const lat = Number(selectedArea.streets[0].latitude);
+        const lng = Number(selectedArea.streets[0].longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+            const center = { lat, lng };
+            map.panTo(center);
+            map.setZoom(15);
+            areaCenter = new window.google.maps.LatLng(center.lat, center.lng);
+        }
     }
     
     if (areaCenter) {
