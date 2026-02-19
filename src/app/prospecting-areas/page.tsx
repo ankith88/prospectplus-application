@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -354,18 +353,8 @@ export default function ProspectingAreasPage() {
                       options={{ fillColor: '#4285F4', fillOpacity: 0.2, strokeColor: '#4285F4', strokeWeight: 2 }}
                     />
                   )}
-                  {(selectedArea.leads || []).map(lead => {
-                      const lat = Number(lead.latitude);
-                      const lng = Number(lead.longitude);
-                      if (isNaN(lat) || isNaN(lng)) return null;
-                      return (
-                        <MarkerF
-                            key={`lead-${lead.id}`}
-                            position={{ lat, lng }}
-                            title={lead.companyName}
-                        />
-                      );
-                  })}
+                  
+                  {/* Street Markers */}
                   {(selectedArea.streets || []).map(street => {
                       const lat = Number(street.latitude);
                       const lng = Number(street.longitude);
@@ -379,22 +368,19 @@ export default function ProspectingAreasPage() {
                         />
                       );
                   })}
-                  {filteredNearbyItems.map(item => {
+
+                  {/* ONLY show leads that have been visited */}
+                  {visitedItemsInArea.map(item => {
                         const lat = Number(item.latitude);
                         const lng = Number(item.longitude);
                         if (isNaN(lat) || isNaN(lng)) return null;
                         
-                        const hasVisit = !!item.visitNoteID;
-                        const isCompany = item.status === 'Won';
-                        let iconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"; // Default lead
-                        if (hasVisit) iconUrl = "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
-                        else if (isCompany) iconUrl = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
-                        
+                        let iconUrl = "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
                         if (hoveredItemId === item.id) iconUrl = "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
 
                         return (
                             <MarkerF
-                                key={`item-${item.id}`}
+                                key={`visited-item-${item.id}`}
                                 position={{ lat, lng }}
                                 title={item.companyName}
                                 icon={{ url: iconUrl }}
@@ -430,7 +416,7 @@ export default function ProspectingAreasPage() {
                         <div className="p-2 text-sm">
                             {selectedArea.leads && selectedArea.leads.length > 0 && (
                                 <div>
-                                    <p className="font-medium">Leads ({selectedArea.leads.length}):</p>
+                                    <p className="font-medium">Designated Leads ({selectedArea.leads.length}):</p>
                                     <ul className="list-disc list-inside">
                                         {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
                                     </ul>
@@ -507,59 +493,6 @@ export default function ProspectingAreasPage() {
                 </div>
             </CardContent>
         </Card>
-
-        {nearbyMapItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Nearby Signed Customers & Leads ({filteredNearbyItems.length})</CardTitle>
-                <CardDescription>Items within a 5km radius of the prospecting territory.</CardDescription>
-                 <div className="pt-2">
-                    <Input
-                        placeholder="Search nearby items..."
-                        value={searchNearbyQuery}
-                        onChange={(e) => setSearchNearbyQuery(e.target.value)}
-                    />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-96 overflow-y-auto">
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Company Name</TableHead>
-                        <TableHead>Address</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Distance</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredNearbyItems.map(item => (
-                        <TableRow
-                            key={`nearby-${item.id}`}
-                            onMouseEnter={() => setHoveredItemId(item.id)}
-                            onMouseLeave={() => setHoveredItemId(null)}
-                        >
-                            <TableCell className="font-medium">{item.companyName}</TableCell>
-                            <TableCell>{formatAddressDisplay(item.address as Address)}</TableCell>
-                            <TableCell><LeadStatusBadge status={item.status} /></TableCell>
-                            <TableCell>{(item.distance / 1000).toFixed(2)} km</TableCell>
-                            <TableCell className="text-right">
-                            <Button asChild size="sm" variant="outline">
-                                <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                View Profile
-                                </Link>
-                            </Button>
-                            </TableCell>
-                        </TableRow>
-                        ))}
-                    </TableBody>
-                    </Table>
-                </div>
-              </CardContent>
-            </Card>
-        )}
       </>
       )}
 

@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -45,6 +44,8 @@ import {
   ClipboardEdit,
   Trash2,
   CheckSquare,
+  Mic,
+  MicOff,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion, VisitNote } from '@/lib/types'
@@ -52,7 +53,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadAppointments, updateLeadDetails, getLeadsFromFirebase, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -113,9 +114,6 @@ import { TranscriptViewer } from './transcript-viewer'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { Calendar as CalendarIcon } from 'lucide-react'
-import { format, startOfDay, endOfDay } from 'date-fns'
-import type { DateRange } from 'react-day-picker';
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
