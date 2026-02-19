@@ -1,7 +1,9 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -24,7 +26,6 @@ import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
@@ -473,7 +474,7 @@ export default function FieldActivityReportPage() {
                                     cx="50%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`}
                                     outerRadius={80}
                                     dataKey="value"
                                 >
@@ -482,7 +483,7 @@ export default function FieldActivityReportPage() {
                                     ))}
                                 </Pie>
                                 <Tooltip content={<ChartTooltipContent />} />
-                                <Legend />
+                                <Legend formatter={(val) => val === 'Won' ? 'Signed' : val} />
                             </PieChart>
                         </ChartContainer>
                     ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No converted lead status data available</div>}

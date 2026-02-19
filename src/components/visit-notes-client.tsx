@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
@@ -236,7 +237,7 @@ export default function VisitNotesClient() {
               </CardTitle>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm">
-                  <SlidersHorizontal className="h-4 w-4" />
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
                   <span className="ml-2">Toggle Filters</span>
                 </Button>
               </CollapsibleTrigger>
