@@ -42,6 +42,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { LeadStatusBadge } from './lead-status-badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { ScrollArea } from './ui/scroll-area';
 
 
 type ProspectWithLeadInfo = {

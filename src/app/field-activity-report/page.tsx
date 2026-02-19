@@ -138,9 +138,6 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisits > 0 ? (convertedNotes.length / totalVisits) * 100 : 0;
 
-    // Commission Criteria:
-    // 1. Visit note was converted to lead AND lead has a Completed appointment
-    // 2. OR Lead is Outbound (fieldSales: false) AND lead status is Won (Signed)
     const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
         if (!lead) return false;
@@ -158,7 +155,6 @@ export default function FieldActivityReportPage() {
         };
     });
 
-    // Leaderboards
     const appointmentLeaderboard = allFieldSalesUsers.map(user => {
         const userName = user.displayName!;
         const count = convertedNotes.filter(n => 
@@ -184,7 +180,6 @@ export default function FieldActivityReportPage() {
         return { name: userName, value: count * 50 };
     }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
 
-    // Chart Data
     const visitsByOutcomeData = filteredVisitNotes.reduce((acc, note) => {
         const type = note.outcome?.type || 'Other';
         const existing = acc.find(item => item.name === type);
@@ -357,7 +352,7 @@ export default function FieldActivityReportPage() {
                             </TableHeader>
                             <TableBody>
                                 {stats.appointmentLeaderboard.map((item, idx) => (
-                                    <TableRow key={idx}>
+                                    <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold">{item.value}</TableCell>
                                     </TableRow>
@@ -389,7 +384,7 @@ export default function FieldActivityReportPage() {
                             </TableHeader>
                             <TableBody>
                                 {stats.outboundSuccessLeaderboard.map((item, idx) => (
-                                    <TableRow key={idx}>
+                                    <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold text-green-600">{item.value}</TableCell>
                                     </TableRow>
@@ -421,7 +416,7 @@ export default function FieldActivityReportPage() {
                             </TableHeader>
                             <TableBody>
                                 {stats.commissionLeaderboard.map((item, idx) => (
-                                    <TableRow key={idx}>
+                                    <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold text-amber-600">${item.value}</TableCell>
                                     </TableRow>
