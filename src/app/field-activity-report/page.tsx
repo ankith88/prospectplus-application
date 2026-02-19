@@ -7,13 +7,13 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -26,8 +26,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-
-const OUTCOME_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7'];
 
 export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
@@ -61,7 +59,6 @@ export default function FieldActivityReportPage() {
     if (!userProfile) return;
     setIsRefreshing(true);
     setLoading(true);
-    toast({ title: 'Loading Report Data...', description: 'Fetching the latest information.' });
     try {
       const notesPromise = userProfile.role === 'Field Sales'
           ? getVisitNotes(userProfile.uid)
@@ -77,10 +74,9 @@ export default function FieldActivityReportPage() {
       setAllLeads(leads);
       setAllAppointments(appointments);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales'));
-      toast({ title: 'Success', description: 'Report data has been loaded.' });
     } catch (error) {
       console.error("Failed to fetch report data:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest data.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest report data.' });
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -166,6 +162,12 @@ export default function FieldActivityReportPage() {
         return { name: userName, value: count };
     }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
 
+    const commissionLeaderboard = allFieldSalesUsers.map(user => {
+        const userName = user.displayName!;
+        const count = commissionEligibleLeads.filter(l => l.capturedBy === userName).length;
+        return { name: userName, value: count * 50 };
+    }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
+
     const visitsByUserData = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
@@ -181,6 +183,7 @@ export default function FieldActivityReportPage() {
       commissionEligibleLeads,
       appointmentLeaderboard,
       outboundSuccessLeaderboard,
+      commissionLeaderboard,
       visitsByUserData,
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
@@ -236,7 +239,7 @@ export default function FieldActivityReportPage() {
       <div className="flex flex-col gap-6">
         <header>
           <h1 className="text-3xl font-bold tracking-tight">Field Activity Report</h1>
-          <p className="text-muted-foreground">Insights into field sales visit notes and their outcomes.</p>
+          <p className="text-muted-foreground">Performance and commission insights for field sales visits.</p>
         </header>
 
         <Collapsible>
@@ -288,14 +291,14 @@ export default function FieldActivityReportPage() {
           <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Total pending/paid" onClick={() => setIsCommissionListOpen(true)} />
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Trophy className="h-5 w-5 text-yellow-500" />
-                        Leaderboard: Appointment Success
+                        Appointment Success
                     </CardTitle>
-                    <CardDescription>Visits converted to leads with a 'Completed' appointment.</CardDescription>
+                    <CardDescription>Visits leading to 'Completed' appointments.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {stats.appointmentLeaderboard.length > 0 ? (
@@ -303,7 +306,7 @@ export default function FieldActivityReportPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Field Sales Rep</TableHead>
-                                    <TableHead className="text-right">Successful Appts</TableHead>
+                                    <TableHead className="text-right">Count</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -316,7 +319,7 @@ export default function FieldActivityReportPage() {
                             </TableBody>
                         </Table>
                     ) : (
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No completed appointments found for converted leads.</div>
+                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No data.</div>
                     )}
                 </CardContent>
             </Card>
@@ -325,9 +328,9 @@ export default function FieldActivityReportPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Star className="h-5 w-5 text-green-500" />
-                        Leaderboard: Outbound Wins
+                        Outbound Wins
                     </CardTitle>
-                    <CardDescription>Visits pushed to Outbound that resulted in a 'Signed' customer.</CardDescription>
+                    <CardDescription>Visits converted to Outbound 'Signed' customers.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {stats.outboundSuccessLeaderboard.length > 0 ? (
@@ -335,7 +338,7 @@ export default function FieldActivityReportPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Field Sales Rep</TableHead>
-                                    <TableHead className="text-right">Outbound Wins</TableHead>
+                                    <TableHead className="text-right">Count</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -348,7 +351,39 @@ export default function FieldActivityReportPage() {
                             </TableBody>
                         </Table>
                     ) : (
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No outbound wins found for converted leads.</div>
+                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No data.</div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Coins className="h-5 w-5 text-amber-500" />
+                        Commission Earnings
+                    </CardTitle>
+                    <CardDescription>Total commission value by user.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.commissionLeaderboard.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Field Sales Rep</TableHead>
+                                    <TableHead className="text-right">Earnings</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.commissionLeaderboard.map((item, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell className="text-right font-bold text-amber-600">${item.value}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No data.</div>
                     )}
                 </CardContent>
             </Card>
@@ -356,7 +391,7 @@ export default function FieldActivityReportPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
-                <CardHeader><CardTitle>Visits by Field Sales Rep</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Total Visits by Rep</CardTitle></CardHeader>
                 <CardContent>
                 {stats.visitsByUserData.length > 0 ? (
                     <ChartContainer config={{}} className="h-[300px] w-full">
@@ -373,10 +408,10 @@ export default function FieldActivityReportPage() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Activity by Franchisee (Converted Leads)</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Geographic Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">Historical activity map coming soon. Review data in the drill-downs above.</div>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">Review lead distribution data in the drill-downs and leaderboards above.</div>
                 </CardContent>
             </Card>
         </div>
