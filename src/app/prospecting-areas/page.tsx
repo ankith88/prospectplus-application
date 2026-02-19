@@ -519,7 +519,7 @@ export default function ProspectingAreasPage() {
                             <History className="h-5 w-5 text-orange-500" />
                             <CardTitle>Recent Visits in Area ({visitedItemsInArea.length})</CardTitle>
                         </div>
-                        <CardDescription>History of field sales activity within this prospecting territory.</CardDescription>
+                        <CardDescription>History of field sales activity within a 5km radius of the area center.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="max-h-96 overflow-y-auto">
