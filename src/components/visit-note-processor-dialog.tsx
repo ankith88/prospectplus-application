@@ -94,7 +94,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not search for existing records.' });
     } finally {
-      setLoading(false);
+      setIsSearching(false);
     }
   };
 
