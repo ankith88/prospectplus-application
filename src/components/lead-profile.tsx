@@ -6,7 +6,7 @@ import {
   ArrowLeft,
   Building,
   Building2,
-  Calendar,
+  Calendar as CalendarIcon,
   Clipboard,
   Edit,
   Globe,
@@ -115,6 +115,7 @@ import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
+import { format } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
@@ -734,7 +735,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const scheduleAppointmentButton = (
         <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}>
-            <Calendar className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-4 w-4" />
             Schedule Appointment
         </Button>
     );
@@ -1114,7 +1115,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                   </div>
                    <div className="flex items-start gap-3">
-                    <Calendar className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
+                    <CalendarIcon className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-muted-foreground">Date Lead Entered</p>
                       <p className="font-medium">{lead.dateLeadEntered ? new Date(lead.dateLeadEntered).toLocaleDateString() : 'N/A'}</p>
@@ -1263,7 +1264,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             className="w-full"
                                             onClick={() => setIsScheduleAppointmentOpen(true)}
                                         >
-                                            <Calendar className="mr-2 h-4 w-4" />
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
                                             Schedule Appointment
                                         </Button>
                                   </CardFooter>
@@ -1479,7 +1480,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <div className="bg-secondary rounded-full p-2">
                                     {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
                                     {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Meeting' && <Calendar className="h-4 w-4 text-muted-foreground" />}
+                                    {item.type === 'Meeting' && <CalendarIcon className="h-4 w-4 text-muted-foreground" />}
                                     {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
                                     </div>
                                     {activities && index < activities.length - 1 && (
@@ -1530,7 +1531,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-muted-foreground" />
+                        <CalendarIcon className="w-5 h-5 text-muted-foreground" />
                         Appointments
                     </CardTitle>
                     </CardHeader>
