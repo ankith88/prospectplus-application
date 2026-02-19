@@ -1138,9 +1138,9 @@ async function logCallActivity(
              updateData.customerStatus = 'New';
              returnStatus = 'New';
         } else { // Move to Outbound
-            updateData.customerStatus = 'Priority Lead';
+            updateData.customerStatus = 'Priority Field Lead';
             notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
-            returnStatus = 'Priority Lead';
+            returnStatus = 'Priority Field Lead';
         }
 
         await updateDoc(leadRef, updateData);
