@@ -1,14 +1,13 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@/lib/types';
+import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -26,6 +25,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
+
+const STATUS_COLORS: Record<string, string> = {
+  'New': '#A0A0A0',
+  'Contacted': '#FFBB28',
+  'Qualified': '#00C49F',
+  'Pre Qualified': '#F59E0B',
+  'Won': '#22C55E',
+  'Lost': '#EF4444',
+  'In Progress': '#0088FE',
+  'Trialing ShipMate': '#EC4899',
+};
 
 export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
@@ -126,6 +138,9 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisits > 0 ? (convertedNotes.length / totalVisits) * 100 : 0;
 
+    // Commission Criteria:
+    // 1. Visit note was converted to lead AND lead has a Completed appointment
+    // 2. OR Lead is Outbound (fieldSales: false) AND lead status is Won (Signed)
     const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
         if (!lead) return false;
@@ -143,6 +158,7 @@ export default function FieldActivityReportPage() {
         };
     });
 
+    // Leaderboards
     const appointmentLeaderboard = allFieldSalesUsers.map(user => {
         const userName = user.displayName!;
         const count = convertedNotes.filter(n => 
@@ -168,6 +184,33 @@ export default function FieldActivityReportPage() {
         return { name: userName, value: count * 50 };
     }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
 
+    // Chart Data
+    const visitsByOutcomeData = filteredVisitNotes.reduce((acc, note) => {
+        const type = note.outcome?.type || 'Other';
+        const existing = acc.find(item => item.name === type);
+        if (existing) existing.value++;
+        else acc.push({ name: type, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
+
+    const statusOfConvertedLeadsData = convertedNotes.reduce((acc, note) => {
+        const lead = leadsMap.get(note.leadId!);
+        const status = lead?.status || 'Unknown';
+        const existing = acc.find(item => item.name === status);
+        if (existing) existing.value++;
+        else acc.push({ name: status, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
+
+    const visitsByFranchiseeData = filteredVisitNotes.reduce((acc, note) => {
+        const lead = note.leadId ? leadsMap.get(note.leadId) : null;
+        const franchisee = lead?.franchisee || 'No Franchisee';
+        const existing = acc.find(item => item.name === franchisee);
+        if (existing) existing.value++;
+        else acc.push({ name: franchisee, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value).slice(0, 10);
+
     const visitsByUserData = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
@@ -184,6 +227,9 @@ export default function FieldActivityReportPage() {
       appointmentLeaderboard,
       outboundSuccessLeaderboard,
       commissionLeaderboard,
+      visitsByOutcomeData,
+      statusOfConvertedLeadsData,
+      visitsByFranchiseeData,
       visitsByUserData,
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
@@ -391,6 +437,66 @@ export default function FieldActivityReportPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Visits by Outcome</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {stats.visitsByOutcomeData.length > 0 ? (
+                        <ChartContainer config={{}} className="h-[300px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.visitsByOutcomeData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                    {stats.visitsByOutcomeData.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No outcome data available</div>}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Status of Converted Leads</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {stats.statusOfConvertedLeadsData.length > 0 ? (
+                        <ChartContainer config={{}} className="h-[300px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.statusOfConvertedLeadsData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                    {stats.statusOfConvertedLeadsData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No converted lead status data available</div>}
+                </CardContent>
+            </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
                 <CardHeader><CardTitle>Total Visits by Rep</CardTitle></CardHeader>
                 <CardContent>
                 {stats.visitsByUserData.length > 0 ? (
@@ -408,10 +514,20 @@ export default function FieldActivityReportPage() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Geographic Insights</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Visits by Franchisee</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">Review lead distribution data in the drill-downs and leaderboards above.</div>
+                    {stats.visitsByFranchiseeData.length > 0 ? (
+                        <ChartContainer config={{}} className="h-[300px] w-full">
+                            <BarChart data={stats.visitsByFranchiseeData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" width={120} fontSize={10} />
+                                <Tooltip />
+                                <Bar dataKey="value" fill="#82ca9d" name="Visits" />
+                            </BarChart>
+                        </ChartContainer>
+                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No franchisee data available</div>}
                 </CardContent>
             </Card>
         </div>
