@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -53,7 +54,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail, updateVisitNote } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -826,6 +827,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return null;
   };
 
+  const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
 
   if (!lead || !user) {
     return (
@@ -963,7 +965,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                </CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
-                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /><span>AI Prospect</span></>}
+                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect Website</>}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
                         {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
@@ -1157,7 +1159,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         Field Discovery from Visit Note
                     </CardTitle>
                     <CardDescription>
-                        The following discovery data and notes were captured during the initial visit.
+                        The following discovery data and notes were captured by <strong>{linkedVisitNote.capturedBy}</strong> during the initial visit.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1194,6 +1196,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                              <div className="text-sm space-y-2 pt-4 border-t">
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
+                                    <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
                                     {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
                                         <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
                                     )}
@@ -1234,7 +1237,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                   <MoreVertical className="h-4 w-4" />
                                               </Button>
                                           </DropdownMenuTrigger>
-                                          <DropdownMenuContent>
+                                          <DropdownMenuContent align="end">
                                               <DialogTrigger asChild>
                                                   <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
                                                       <Edit className="mr-2 h-4 w-4" /> Edit

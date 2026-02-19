@@ -356,7 +356,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         Field Discovery from Visit Note
                     </CardTitle>
                     <CardDescription>
-                        The following discovery data and notes were captured during the initial visit.
+                        The following discovery data and notes were captured by <strong>{linkedVisitNote.capturedBy}</strong> during the initial visit.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -393,6 +393,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                              <div className="text-sm space-y-2 pt-4 border-t">
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
+                                    <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
                                     {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
                                         <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
                                     )}
