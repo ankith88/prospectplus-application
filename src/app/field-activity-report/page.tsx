@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -9,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -23,6 +22,9 @@ import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 const OUTCOME_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7'];
 
@@ -33,6 +35,8 @@ export default function FieldActivityReportPage() {
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
+  
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -125,103 +129,73 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisits > 0 ? (convertedNotes.length / totalVisits) * 100 : 0;
 
-    const visitsByUser = filteredVisitNotes.reduce((acc, note) => {
-      acc[note.capturedBy] = (acc[note.capturedBy] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const visitsByUserData = Object.entries(visitsByUser).map(([name, visits]) => ({ name, visits: visits })).sort((a,b) => b.visits - a.visits);
-    
-    let visitsOverTimeData: { name: string; visits: number }[] = [];
-    if (filters.date?.from && filters.date?.to) {
-        const diffDays = (filters.date.to.getTime() - filters.date.from.getTime()) / (1000 * 3600 * 24);
-        if (diffDays > 90) { // Monthly
-             const months = eachMonthOfInterval({ start: filters.date.from, end: filters.date.to });
-             visitsOverTimeData = months.map(month => {
-                const monthStr = format(month, 'MMM yyyy');
-                const visitsInMonth = filteredVisitNotes.filter(n => format(parseISO(n.createdAt), 'MMM yyyy') === monthStr).length;
-                return { name: monthStr, visits: visitsInMonth };
-             });
-        } else if (diffDays > 14) { // Weekly
-            const weeks = eachWeekOfInterval({ start: filters.date.from, end: filters.date.to }, { weekStartsOn: 1 });
-            visitsOverTimeData = weeks.map(week => {
-                const weekStartStr = format(week, 'dd MMM');
-                const visitsInWeek = filteredVisitNotes.filter(n => {
-                    const noteDate = parseISO(n.createdAt);
-                    return noteDate >= week && noteDate < new Date(week.getTime() + 7 * 24 * 60 * 60 * 1000);
-                }).length;
-                return { name: weekStartStr, visits: visitsInWeek };
-            });
-        } else { // Daily
-            const days = eachDayOfInterval({ start: filters.date.from, end: filters.date.to });
-            visitsOverTimeData = days.map(day => {
-                const dayStr = format(day, 'dd MMM');
-                const visitsInDay = filteredVisitNotes.filter(n => format(parseISO(n.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')).length;
-                return { name: dayStr, visits: visitsInDay };
-            });
-        }
-    }
-
-
-    const visitsByOutcome = filteredVisitNotes.reduce((acc, note) => {
-        let outcome = note.outcome?.type || 'No Outcome';
-        if (outcome === 'Schedule Appointment') {
-            outcome = 'Appointment Qualified';
-        }
-        if (outcome === 'Move to Outbound') {
-            outcome = 'Needs Follow-up';
-        }
-        acc[outcome] = (acc[outcome] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-    const visitsByOutcomeData = Object.entries(visitsByOutcome).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value);
-
-
-    const convertedLeads = convertedNotes.map(note => leadsMap.get(note.leadId!)).filter((l): l is Lead => !!l);
-    const convertedLeadsByStatus = convertedLeads.reduce((acc, lead) => {
-        acc[lead.status] = (acc[lead.status] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-    const convertedLeadsByStatusData = Object.entries(convertedLeadsByStatus).map(([name, value]) => ({ name, value }));
-
-    const convertedLeadsWithFranchisee = convertedLeads.map(lead => ({...lead, franchisee: lead.franchisee || 'Unknown' }));
-    const visitsByFranchiseeData = convertedLeadsWithFranchisee.reduce((acc, lead) => {
-        const key = lead.franchisee || 'Unknown';
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-    const visitsByFranchiseeSortedData = Object.entries(visitsByFranchiseeData).map(([name, visits]) => ({ name, visits })).sort((a,b) => b.visits - a.visits);
-
-    const commissionEligible = convertedNotes.filter(note => {
+    const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
         if (!lead) return false;
         
-        if (note.outcome?.type === 'Needs Follow-up' && lead.status === 'Won') {
-            return true;
-        }
+        const hasCompletedAppointment = allAppointments.some(appt => appt.leadId === lead.id && appt.appointmentStatus === 'Completed');
+        const isSignedViaOutbound = lead.fieldSales === false && lead.status === 'Won';
         
-        const hasAttendedAppointment = allAppointments.some(appt => appt.leadId === lead.id && appt.appointmentStatus === 'Completed');
-        if (hasAttendedAppointment) {
-            return true;
-        }
-        return false;
+        return hasCompletedAppointment || isSignedViaOutbound;
+    }).map(note => {
+        const lead = leadsMap.get(note.leadId!)!;
+        return {
+            ...lead,
+            visitDate: note.createdAt,
+            capturedBy: note.capturedBy
+        };
     });
+
+    const appointmentLeaderboard = allFieldSalesUsers.map(user => {
+        const userName = user.displayName!;
+        const count = convertedNotes.filter(n => 
+            n.capturedBy === userName && 
+            allAppointments.some(appt => appt.leadId === n.leadId && appt.appointmentStatus === 'Completed')
+        ).length;
+        return { name: userName, value: count };
+    }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
+
+    const outboundSuccessLeaderboard = allFieldSalesUsers.map(user => {
+        const userName = user.displayName!;
+        const count = convertedNotes.filter(n => {
+            if (n.capturedBy !== userName) return false;
+            const lead = leadsMap.get(n.leadId!);
+            return lead && lead.fieldSales === false && lead.status === 'Won';
+        }).length;
+        return { name: userName, value: count };
+    }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
+
+    const visitsByUserData = allFieldSalesUsers.map(user => {
+        const name = user.displayName!;
+        const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
+        return { name, visits };
+    }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
     return {
       totalVisits,
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
+      commissionEligibleCount: commissionEligibleLeads.length,
+      commissionEligibleLeads,
+      appointmentLeaderboard,
+      outboundSuccessLeaderboard,
       visitsByUserData,
-      visitsByOutcomeData,
-      visitsOverTimeData,
-      convertedLeadsByStatusData,
-      visitsByFranchiseeData: visitsByFranchiseeSortedData,
-      commissionEligibleCount: commissionEligible.length,
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, filters.date]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
 
-  const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
-    <Card>
+  const handleRedirectToConvertedLeads = () => {
+    const params = new URLSearchParams();
+    if (filters.user.length > 0) params.set('user', filters.user.join(','));
+    if (filters.franchisee.length > 0) params.set('franchisee', filters.franchisee.join(','));
+    if (filters.date?.from) params.set('dateFrom', filters.date.from.toISOString());
+    if (filters.date?.to) params.set('dateTo', filters.date.to.toISOString());
+    params.set('status', 'Converted');
+    router.push(`/check-ins?${params.toString()}`);
+  };
+
+  const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+    <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -257,148 +231,202 @@ export default function FieldActivityReportPage() {
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Field Activity Report</h1>
-        <p className="text-muted-foreground">Insights into field sales visit notes and their outcomes.</p>
-      </header>
+    <>
+      <div className="flex flex-col gap-6">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight">Field Activity Report</h1>
+          <p className="text-muted-foreground">Insights into field sales visit notes and their outcomes.</p>
+        </header>
 
-      <Collapsible>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button onClick={fetchData} variant="outline" disabled={isRefreshing}><RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh</Button>
-              <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /><span className="ml-2">Toggle</span></Button></CollapsibleTrigger>
-            </div>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              {userProfile?.role !== 'Field Sales' && (
-                <div className="space-y-2">
-                    <Label>Captured By</Label>
-                    <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
+        <Collapsible>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button onClick={fetchData} variant="outline" disabled={isRefreshing}><RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh</Button>
+                <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /><span className="ml-2">Toggle</span></Button></CollapsibleTrigger>
+              </div>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                {userProfile?.role !== 'Field Sales' && (
+                  <div className="space-y-2">
+                      <Label>Captured By</Label>
+                      <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
+                  </div>
+                )}
+                 <div className="space-y-2">
+                  <Label>Franchisee</Label>
+                  <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
                 </div>
-              )}
-               <div className="space-y-2">
-                <Label>Franchisee</Label>
-                <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
-              </div>
-              <div className="space-y-2">
-                <Label>Outcome</Label>
-                <MultiSelectCombobox options={outcomeOptions} selected={filters.outcome} onSelectedChange={(val) => handleFilterChange('outcome', val)} placeholder="Select outcomes..."/>
-              </div>
-              <div className="space-y-2">
-                <Label>Date Range</Label>
-                <Popover>
-                    <PopoverTrigger asChild><Button id="date" variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 flex" align="start">
-                        <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
-                    </PopoverContent>
-                </Popover>
-              </div>
-              {hasActiveFilters && <Button variant="ghost" onClick={clearFilters}><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+                <div className="space-y-2">
+                  <Label>Outcome</Label>
+                  <MultiSelectCombobox options={outcomeOptions} selected={filters.outcome} onSelectedChange={(val) => handleFilterChange('outcome', val)} placeholder="Select outcomes..."/>
+                </div>
+                <div className="space-y-2">
+                  <Label>Date Range</Label>
+                  <Popover>
+                      <PopoverTrigger asChild><Button id="date" variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 flex" align="start">
+                          <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
+                      </PopoverContent>
+                  </Popover>
+                </div>
+                {hasActiveFilters && <Button variant="ghost" onClick={clearFilters}><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
-        <StatCard title="Converted to Leads" value={stats.totalConverted} icon={FileCheck} />
-        <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
-        <StatCard title="Conversion Rate" value={`${stats.conversionRate}%`} icon={Percent} />
-        <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Based on appointment or signed status" />
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-            <CardHeader><CardTitle>Visits by Field Sales Rep</CardTitle></CardHeader>
-            <CardContent>
-              {stats.visitsByUserData.length > 0 ? (
-                <ChartContainer config={{}} className="h-[300px] w-full">
-                  <BarChart data={stats.visitsByUserData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={100} fontSize={12} />
-                    <Tooltip />
-                    <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits" />
-                  </BarChart>
-                </ChartContainer>
-              ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data to display</div>}
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader><CardTitle>Visits Over Time</CardTitle></CardHeader>
-            <CardContent>
-              {stats.visitsOverTimeData.length > 0 ? (
-                <ChartContainer config={{}} className="h-[300px] w-full">
-                  <BarChart data={stats.visitsOverTimeData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" fontSize={12} />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits" />
-                  </BarChart>
-                </ChartContainer>
-              ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">Select a date range to see trend data</div>}
-            </CardContent>
-        </Card>
-      </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
+          <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} onClick={handleRedirectToConvertedLeads} description="Click to view sourced leads" />
+          <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
+          <StatCard title="Conversion Rate" value={`${stats.conversionRate}%`} icon={Percent} />
+          <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
+          <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Total pending/paid" onClick={() => setIsCommissionListOpen(true)} />
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Trophy className="h-5 w-5 text-yellow-500" />
+                        Leaderboard: Appointment Success
+                    </CardTitle>
+                    <CardDescription>Visits converted to leads with a 'Completed' appointment.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.appointmentLeaderboard.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Field Sales Rep</TableHead>
+                                    <TableHead className="text-right">Successful Appts</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.appointmentLeaderboard.map((item, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell className="text-right font-bold">{item.value}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No completed appointments found for converted leads.</div>
+                    )}
+                </CardContent>
+            </Card>
 
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <Card>
-            <CardHeader><CardTitle>Visits by Outcome</CardTitle></CardHeader>
-            <CardContent>
-                {stats.visitsByOutcomeData.length > 0 ? (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Star className="h-5 w-5 text-green-500" />
+                        Leaderboard: Outbound Wins
+                    </CardTitle>
+                    <CardDescription>Visits pushed to Outbound that resulted in a 'Signed' customer.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.outboundSuccessLeaderboard.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Field Sales Rep</TableHead>
+                                    <TableHead className="text-right">Outbound Wins</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.outboundSuccessLeaderboard.map((item, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell className="text-right font-bold text-green-600">{item.value}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <div className="h-[200px] flex items-center justify-center text-muted-foreground italic">No outbound wins found for converted leads.</div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader><CardTitle>Visits by Field Sales Rep</CardTitle></CardHeader>
+                <CardContent>
+                {stats.visitsByUserData.length > 0 ? (
                     <ChartContainer config={{}} className="h-[300px] w-full">
-                        <PieChart>
-                            <Pie data={stats.visitsByOutcomeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
-                                {stats.visitsByOutcomeData.map((entry, index) => <Cell key={`cell-${index}`} fill={OUTCOME_COLORS[index % OUTCOME_COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip />
-                            <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
-                        </PieChart>
+                    <BarChart data={stats.visitsByUserData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                        <Tooltip />
+                        <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits" />
+                    </BarChart>
                     </ChartContainer>
                 ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data to display</div>}
-            </CardContent>
-         </Card>
-          <Card>
-            <CardHeader><CardTitle>Status of Converted Leads</CardTitle></CardHeader>
-            <CardContent>
-                {stats.convertedLeadsByStatusData.length > 0 ? (
-                    <ChartContainer config={{}} className="h-[300px] w-full">
-                        <PieChart>
-                            <Pie data={stats.convertedLeadsByStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                {stats.convertedLeadsByStatusData.map((entry, index) => <Cell key={`cell-${index}`} fill={OUTCOME_COLORS[index % OUTCOME_COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip />
-                            <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} />
-                        </PieChart>
-                    </ChartContainer>
-                ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No converted leads</div>}
-            </CardContent>
-         </Card>
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Visits by Franchisee</CardTitle></CardHeader>
-            <CardContent>
-              {stats.visitsByFranchiseeData.length > 0 ? (
-                <ChartContainer config={{}} className="h-[300px] w-full">
-                  <BarChart data={stats.visitsByFranchiseeData.slice(0, 10)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={80} fontSize={12} />
-                    <Tooltip />
-                    <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits" />
-                  </BarChart>
-                </ChartContainer>
-              ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No franchisee data from converted leads</div>}
-            </CardContent>
-         </Card>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><MapIcon className="h-5 w-5" />Activity by Franchisee (Converted Leads)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">Historical activity map coming soon. Review data in the drill-downs above.</div>
+                </CardContent>
+            </Card>
+        </div>
       </div>
 
-    </div>
+      <Dialog open={isCommissionListOpen} onOpenChange={setIsCommissionListOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+              <DialogHeader>
+                  <DialogTitle>Commission Eligible Leads</DialogTitle>
+                  <DialogDescription>
+                      List of leads converted from field visits that met the commission criteria. Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).
+                  </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="flex-1 mt-4">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Company</TableHead>
+                              <TableHead>Rep</TableHead>
+                              <TableHead>Visit Date</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {stats.commissionEligibleLeads.length > 0 ? (
+                              stats.commissionEligibleLeads.map((lead) => (
+                                  <TableRow key={lead.id}>
+                                      <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                      <TableCell>{lead.capturedBy}</TableCell>
+                                      <TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell>
+                                      <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                      <TableCell className="text-right">
+                                          <Button variant="ghost" size="sm" asChild>
+                                              <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">
+                                                  View Profile <ExternalLink className="ml-2 h-3 w-3" />
+                                              </Link>
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                          ) : (
+                              <TableRow>
+                                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No commission eligible leads for the current filters.</TableCell>
+                              </TableRow>
+                          )}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+          </DialogContent>
+      </Dialog>
+    </>
   );
 }
-
-    

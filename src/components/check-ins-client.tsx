@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -32,6 +33,7 @@ export default function CheckinsClientPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
@@ -44,6 +46,26 @@ export default function CheckinsClientPage() {
   
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'dateLeadEntered', direction: 'descending' });
 
+  // Initialize filters from URL search params
+  useEffect(() => {
+    const userParam = searchParams.get('user');
+    const franchiseeParam = searchParams.get('franchisee');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+    const statusParam = searchParams.get('status');
+
+    const newFilters = { ...filters };
+    if (userParam) newFilters.user = userParam.split(',');
+    if (franchiseeParam) newFilters.franchisee = franchiseeParam.split(',');
+    if (statusParam) newFilters.status = statusParam.split(',');
+    if (dateFrom) {
+        newFilters.date = {
+            from: parseISO(dateFrom),
+            to: dateTo ? parseISO(dateTo) : undefined
+        };
+    }
+    setFilters(newFilters);
+  }, [searchParams]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,7 +130,12 @@ export default function CheckinsClientPage() {
     }
     
     if (filters.status.length > 0) {
-        leads = leads.filter(l => filters.status.includes(l.status));
+        if (filters.status.includes('Converted')) {
+            // "Converted" is a meta-status for visits, but here we show the current lead status
+            // Unless specifically filtering for visit notes status
+        } else {
+            leads = leads.filter(l => filters.status.includes(l.status));
+        }
     }
 
     if (filters.date?.from) {
@@ -150,8 +177,8 @@ export default function CheckinsClientPage() {
                 bValue = b.entityId || '';
                 break;
             default:
-                aValue = a[sortConfig.key as keyof Lead] ?? '';
-                bValue = b[sortConfig.key as keyof Lead] ?? '';
+                aValue = (a as any)[sortConfig.key] ?? '';
+                bValue = (b as any)[sortConfig.key] ?? '';
         }
         
         if (aValue < bValue) {
