@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -57,38 +58,6 @@ import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import { ScoreIndicator } from '@/components/score-indicator'
-import { Badge } from '@/components/ui/badge'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal
-} from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -129,6 +98,7 @@ import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { salesReps } from '@/lib/constants'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
+import { LogNoteDialog } from './log-note-dialog'
 
 
 interface LeadProfileProps {
@@ -1089,13 +1059,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 Assign a Sales Rep <ChevronDown className="ml-2 h-4 w-4" />
                              </Button>
                            </DropdownMenuTrigger>
-                           <DropdownMenuContent>
+                           <DropdownContent>
                                 {salesReps.map(rep => (
                                     <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
                                         {rep.name}
                                     </DropdownMenuItem>
                                 ))}
-                           </DropdownMenuContent>
+                           </DropdownContent>
                         </DropdownMenu>
                       )}
                     </div>
