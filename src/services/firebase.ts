@@ -600,7 +600,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
 
     } catch (error) {
         console.error("[getAllLeadsForReport] Failed to fetch leads:", error);
-        throw new Error('An unexpected response was received from the server.');
+        throw new Error('[getAllLeadsForReport] The database request timed out. Try applying tighter filters.');
     }
 }
 
@@ -667,7 +667,7 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
     try {
-        const activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
+        const activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'), limit(5000));
         const activitySnapshot = await getDocs(activityQuery);
         const callActivityDocs = activitySnapshot.docs;
 
@@ -686,18 +686,23 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             leadChunks.push(leadIds.slice(i, i + 30));
         }
 
-        for (const chunk of leadChunks) {
-            if (chunk.length === 0) continue;
+        // Fetch lead data chunks in parallel for better performance
+        const chunkPromises = leadChunks.map(async (chunk) => {
+            if (chunk.length === 0) return;
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
             });
-        }
+        });
+
+        await Promise.all(chunkPromises);
         
         const allCalls = callActivityDocs.map(activityDoc => {
             const activityData = activityDoc.data() as Activity;
-            const leadId = activityDoc.ref.parent.parent!.id;
+            const leadId = activityDoc.ref.parent.parent?.id;
+            if (!leadId) return null;
+            
             const leadData = leadsData[leadId];
 
             if (!leadData) {
@@ -726,11 +731,10 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             }
         });
 
-        const finalCalls = Array.from(uniqueCallsMap.values());
-        return finalCalls;
+        return Array.from(uniqueCallsMap.values());
     } catch (error) {
         console.error('An unexpected error occurred in getAllCallActivities:', error);
-        throw new Error('An unexpected response was received from the server.');
+        throw new Error('[getAllCallActivities] The database request timed out or failed. Try applying tighter filters.');
     }
 }
 
@@ -826,17 +830,22 @@ async function getAllTranscripts(): Promise<Transcript[]> {
         for (let i = 0; i < leadIds.length; i += 30) {
             leadChunks.push(leadIds.slice(i, i + 30));
         }
-        for (const chunk of leadChunks) {
-            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+        
+        const chunkPromises = leadChunks.map(async (chunk) => {
+            if (chunk.length === 0) return;
+            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
             });
-        }
+        });
+
+        await Promise.all(chunkPromises);
 
         const allTranscripts = transcriptsSnapshot.docs.map(doc => {
             const transcriptData = doc.data();
-            const leadId = doc.ref.parent.parent!.id;
+            const leadId = doc.ref.parent.parent?.id;
+            if (!leadId) return null;
             const leadData = leadsData[leadId];
             
             return {
@@ -857,7 +866,7 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
 async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string }>> {
     try {
-        const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
+        const appointmentsSnapshot = await getDocs(query(collectionGroup(firestore, 'appointments'), limit(5000)));
         
         const leadIds = [...new Set(appointmentsSnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) return [];
@@ -867,18 +876,22 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
         for (let i = 0; i < leadIds.length; i += 30) {
             leadChunks.push(leadIds.slice(i, i + 30));
         }
-        for (const chunk of leadChunks) {
-            if (chunk.length === 0) continue;
+        
+        const chunkPromises = leadChunks.map(async (chunk) => {
+            if (chunk.length === 0) return;
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
             });
-        }
+        });
+
+        await Promise.all(chunkPromises);
 
         const allAppointments = appointmentsSnapshot.docs.map(appointmentDoc => {
             const appointmentData = appointmentDoc.data() as Appointment;
-            const leadId = appointmentDoc.ref.parent.parent!.id;
+            const leadId = appointmentDoc.ref.parent.parent?.id;
+            if (!leadId) return null;
             const leadData = leadsData[leadId];
             
             if (!leadData) {
@@ -901,7 +914,7 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
         return allAppointments;
     } catch (error) {
         console.error('Failed to fetch all appointments:', error);
-        return [];
+        throw new Error('[getAllAppointments] The database request timed out. Try applying tighter filters.');
     }
 }
 
@@ -1425,14 +1438,17 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
             leadChunks.push(leadIds.slice(i, i + 30));
         }
 
-        for (const chunk of leadChunks) {
-            if (chunk.length === 0) continue;
-            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+        // Fetch lead data chunks in parallel
+        const chunkPromises = leadChunks.map(async (chunk) => {
+            if (chunk.length === 0) return;
+            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
             });
-        }
+        });
+
+        await Promise.all(chunkPromises);
         
         const hydratedTasks = userTasks.map(task => {
             const lead = leadsData[task.leadId];

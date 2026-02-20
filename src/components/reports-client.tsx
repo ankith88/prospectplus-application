@@ -115,24 +115,29 @@ export default function ReportsClientPage() {
     setError(null);
     try {
         // Fetch sequentially to prevent overwhelming the server
+        console.log("[Reports] Fetching users...");
         const refreshedUsers = await getAllUsers();
         const dialers = refreshedUsers
             .filter(u => u.role !== 'admin' && u.displayName)
             .map(u => u.displayName!);
         setAllDialers(dialers);
 
+        console.log("[Reports] Fetching leads...");
         const refreshedLeads = await getAllLeadsForReport();
         setAllLeads(refreshedLeads);
 
+        console.log("[Reports] Fetching call activities...");
         const refreshedCalls = await getAllCallActivities();
         setAllCalls(refreshedCalls);
 
+        console.log("[Reports] Fetching appointments...");
         const refreshedAppointments = await getAllAppointments();
         setAllAppointments(refreshedAppointments);
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
-        setError("The server timed out while generating the report. This usually happens if the database is too large to process in one request. Please try refreshing or applying tighter filters.");
+        const detail = error.message || "An unexpected error occurred.";
+        setError(`Data Fetch Error: ${detail}. This often happens when the database is too large for a single request. Try applying tighter filters (like shorter date ranges) and refreshing.`);
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
     } finally {
         setLoading(false);
@@ -814,7 +819,7 @@ export default function ReportsClientPage() {
       {error && (
           <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Server Load Error</AlertTitle>
+              <AlertTitle>Reporting Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
           </Alert>
       )}
@@ -822,7 +827,7 @@ export default function ReportsClientPage() {
       {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-4">
               <Loader />
-              <p className="text-muted-foreground animate-pulse">Calculating complex metrics...</p>
+              <p className="text-muted-foreground animate-pulse">Processing large datasets...</p>
           </div>
       ) : (
           <>
