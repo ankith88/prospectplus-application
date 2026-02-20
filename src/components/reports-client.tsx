@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -7,14 +8,14 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -47,15 +48,6 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Email Brush Off': '#A0A0A0',
 };
 
-const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
-  'Completed': '#22C55E',
-  'Cancelled': '#EF4444',
-  'No Show': '#F59E0B',
-  'Rescheduled': '#8884d8',
-  'Pending': '#A0A0A0',
-};
-
-const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
@@ -96,6 +88,7 @@ export default function ReportsClientPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [indexUrl, setIndexUrl] = useState<string | null>(null);
   
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -128,6 +121,7 @@ export default function ReportsClientPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setIndexUrl(null);
     try {
         const startDate = filters.callDate?.from?.toISOString();
         const endDate = filters.callDate?.to 
@@ -136,7 +130,7 @@ export default function ReportsClientPage() {
                 ? endOfDay(filters.callDate.from).toISOString() 
                 : undefined;
 
-        console.log("[Reports] Starting client-side direct data load...");
+        console.log("[Reports] Starting optimized client-side direct data load...");
         
         // 1. Fetch Users
         const usersSnap = await getDocs(collection(firestore, 'users'));
@@ -171,13 +165,18 @@ export default function ReportsClientPage() {
         const leadMap = new Map(leadsData.map(l => [l.id, l]));
 
         // 3. Fetch Calls (Direct Collection Group)
-        let callsQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'), limit(3000));
-        if (startDate) callsQuery = query(callsQuery, where('date', '>=', startDate));
-        if (endDate) callsQuery = query(callsQuery, where('date', '<=', endDate));
+        // Optimization: We remove the 'type' == 'Call' filter to reduce index complexity 
+        // if it helps, and filter in memory. However, the date range on collectionGroup 
+        // still needs an index.
+        let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'), limit(5000));
+        if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
+        if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
         
-        const callsSnap = await getDocs(callsQuery);
-        const calls = callsSnap.docs.map(activityDoc => {
+        const activitiesSnap = await getDocs(activitiesQuery);
+        const calls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
+            if (data.type !== 'Call') return null; // Filter in memory to simplify index requirements
+
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
@@ -195,7 +194,7 @@ export default function ReportsClientPage() {
         setAllCalls(calls);
 
         // 4. Fetch Appointments (Direct Collection Group)
-        let apptsQuery = query(collectionGroup(firestore, 'appointments'), limit(3000));
+        let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'), limit(3000));
         if (startDate) apptsQuery = query(apptsQuery, where('starttime', '>=', startDate));
         if (endDate) apptsQuery = query(apptsQuery, where('starttime', '<=', endDate));
         
@@ -224,7 +223,20 @@ export default function ReportsClientPage() {
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
-        setError(`Error: ${error.message || "An unexpected error occurred."}`);
+        
+        // Handle the "missing index" error specifically
+        if (error.message && error.message.includes('requires an index')) {
+            const urlMatch = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+            if (urlMatch) {
+                setIndexUrl(urlMatch[0]);
+                setError("This report requires a database index to be created before it can load.");
+            } else {
+                setError(`Index Error: ${error.message}`);
+            }
+        } else {
+            setError(`Error: ${error.message || "An unexpected error occurred."}`);
+        }
+        
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
     } finally {
         setLoading(false);
@@ -440,6 +452,7 @@ export default function ReportsClientPage() {
   return (
     <div className="flex flex-col gap-6">
       <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound calling.</p></header>
+      
       <Collapsible defaultOpen={true}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -469,11 +482,27 @@ export default function ReportsClientPage() {
           </Card>
       </Collapsible>
 
-      {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Reporting Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Configuration Error</AlertTitle>
+          <AlertDescription className="space-y-4">
+            <p>{error}</p>
+            {indexUrl && (
+              <Button asChild variant="outline" className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-white">
+                <a href={indexUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Click here to create the required index in Firebase Console
+                </a>
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-4"><Loader /><p className="text-muted-foreground animate-pulse">Loading directly from database...</p></div>
-      ) : (
+      ) : !error && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
@@ -490,7 +519,7 @@ export default function ReportsClientPage() {
                         <ChartContainer config={{}} className="h-[350px] w-full">
                             <PieChart>
                                 <Pie data={stats.leadsByStatus} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
-                                    {stats.leadsByStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />)}
+                                    {stats.leadsByStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#8884d8'} />)}
                                 </Pie>
                                 <Tooltip />
                                 <Legend onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value} />
