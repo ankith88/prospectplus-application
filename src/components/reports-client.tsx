@@ -8,7 +8,33 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink, ClipboardCheck, ListTodo, Layers } from 'lucide-react';
+import { 
+  Phone, 
+  Users, 
+  Percent, 
+  Clock, 
+  Filter, 
+  SlidersHorizontal, 
+  X, 
+  Sparkles, 
+  Send, 
+  Route, 
+  Star, 
+  Calendar as CalendarIconLucide, 
+  Goal, 
+  CheckCircle, 
+  TrendingUp, 
+  Briefcase, 
+  Archive, 
+  BarChart3, 
+  RefreshCw, 
+  Flame, 
+  AlertCircle, 
+  ExternalLink, 
+  ListTodo, 
+  Layers,
+  MessageSquare
+} from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -27,32 +53,12 @@ import { firestore } from '@/lib/firebase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
+import { Button } from '@/components/ui/button';
+import { LeadStatusBadge } from './lead-status-badge';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
 
-const STATUS_COLORS: { [key in LeadStatus]?: string } = {
-  'New': '#A0A0A0',
-  'Contacted': '#FFBB28',
-  'In Progress': '#FF8042',
-  'Connected': '#0088FE',
-  'High Touch': '#8884d8',
-  'Qualified': '#00C49F',
-  'Pre Qualified': '#F59E0B',
-  'Won': '#22C55E',
-  'Unqualified': '#D1D5DB',
-  'Lost': '#EF4444',
-  'LPO Review': '#A855F7',
-  'Trialing ShipMate': '#EC4899',
-  'Reschedule': '#FBBF24',
-  'Priority Lead': '#F97316',
-  'Priority Field Lead': '#F97316',
-  'Free Trial': '#EC4899',
-  'Prospect Opportunity': '#F59E0B',
-  'Customer Opportunity': '#22C55E',
-  'Email Brush Off': '#A0A0A0',
-};
-
-const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
+const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
@@ -96,7 +102,7 @@ export default function ReportsClientPage() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
@@ -111,20 +117,6 @@ export default function ReportsClientPage() {
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
   });
-
-  const allFranchiseesOptions: Option[] = useMemo(() => {
-    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [allLeads]);
-  
-  const leadStatusOptions: Option[] = useMemo(() => {
-    return leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
-  }, []);
-
-  const amOptions: Option[] = useMemo(() => {
-    const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(ams as string[]).map(am => ({ value: am, label: am })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [allAppointments]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -262,6 +254,8 @@ export default function ReportsClientPage() {
     });
   };
 
+  // --- FILTERED DATA (Must be defined before stats) ---
+
   const filteredCalls = useMemo(() => {
     return (allCalls || []).filter(call => {
         const lead = (allLeads || []).find(l => l.id === call.leadId);
@@ -323,12 +317,14 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
   }, [allAppointments, allLeads, filters]);
+
+  // --- SUMMARY STATS (Depends on filtered datasets above) ---
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -342,8 +338,11 @@ export default function ReportsClientPage() {
     
     const totalAppointments = filteredAppointments.length;
 
+    // Queue statuses: New, Priority Lead, Priority Field Lead
     const queueLeads = allLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status)).length;
+    // In Progress: In Progress
     const inProgressLeads = allLeads.filter(l => l.status === 'In Progress').length;
+    // Processed: Terminal or archived statuses
     const archivedLeads = allLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status)).length;
 
     const callsWithDuration = filteredCalls.filter(c => c.duration);
@@ -455,6 +454,20 @@ export default function ReportsClientPage() {
     };
   }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
 
+  const allFranchiseesOptions: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
+  
+  const leadStatusOptionsUI: Option[] = useMemo(() => {
+    return leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, []);
+
+  const amOptions: Option[] = useMemo(() => {
+    const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
+    return Array.from(ams as string[]).map(am => ({ value: am, label: am })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allAppointments]);
+
   const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
 
   if (loading || authLoading || !userProfile) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
@@ -493,7 +506,7 @@ export default function ReportsClientPage() {
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
                     <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
                     <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={allFranchiseesOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
-                    <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
+                    <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptionsUI} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
                         <Label>Call/Creation Date</Label>
                         <Popover>
