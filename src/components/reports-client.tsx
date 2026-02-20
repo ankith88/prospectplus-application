@@ -12,7 +12,6 @@ import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizont
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid, parseISO } from 'date-fns';
@@ -27,6 +26,7 @@ import { collection, query, where, getDocs, limit, collectionGroup, orderBy, doc
 import { firestore } from '@/lib/firebase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ScrollArea } from './ui/scroll-area';
+import { Badge } from './ui/badge';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
 
@@ -102,8 +102,8 @@ export default function ReportsClientPage() {
   const [filters, setFilters] = useState({
     status: [] as string[],
     callDate: {
-        from: startOfMonth(new Date()),
-        to: endOfMonth(new Date())
+        from: startOfDay(startOfMonth(new Date())),
+        to: endOfDay(endOfMonth(new Date()))
     } as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
@@ -246,106 +246,6 @@ export default function ReportsClientPage() {
     }
   }, [filters.callDate, toast]);
 
-  useEffect(() => {
-    if (!user && !authLoading) {
-      router.push('/signin');
-      return;
-    }
-    if(user && !authLoading) {
-        fetchData();
-    }
-  }, [user, authLoading, router, fetchData]);
-
-  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      status: [],
-      callDate: {
-          from: startOfMonth(new Date()),
-          to: endOfMonth(new Date())
-      },
-      appointmentDate: undefined,
-      duration: 'all',
-      dialerAssigned: [],
-      franchisee: [],
-      appointmentAssignedTo: [],
-    });
-  };
-
-  const parseDurationLocal = (durationStr?: string): number => {
-    if (!durationStr) return 0;
-    const minutesMatch = durationStr.match(/(\d+)m/);
-    const secondsMatch = durationStr.match(/(\d+)s/);
-    const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
-    const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
-    return minutes * 60 + seconds;
-  };
-
-  const filteredCalls = useMemo(() => {
-    return (allCalls || []).filter(call => {
-        const lead = (allLeads || []).find(l => l.id === call.leadId);
-        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
-
-        let callDateMatch = true;
-        if (filters.callDate?.from) {
-          const callDate = new Date(call.date);
-          const fromDate = startOfDay(filters.callDate.from);
-          const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-          callDateMatch = callDate >= fromDate && callDate <= toDate;
-        }
-        
-        const durationInSeconds = parseDurationLocal(call.duration);
-        const durationMatch = () => {
-            switch (filters.duration) {
-                case 'under30s': return durationInSeconds < 30;
-                case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
-                case 'over2min': return durationInSeconds >= 120;
-                case 'none': return durationInSeconds === 0;
-                default: return true;
-            }
-        };
-
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
-
-        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
-    });
-  }, [allCalls, allLeads, filters, allAppointments]);
-  
-  const filteredAppointments = useMemo(() => {
-    return (allAppointments || []).filter(appointment => {
-        if (appointment.leadName === 'Unknown Lead') return false;
-        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
-        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
-
-        let creationDateMatch = true;
-        if (filters.callDate?.from) {
-            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
-            if (!appointmentCreatedDate) return false;
-            const fromDate = startOfDay(filters.callDate.from);
-            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
-        }
-
-        let appointmentDateMatch = true;
-        if (filters.appointmentDate?.from) {
-            const apptDate = new Date(appointment.duedate);
-            const fromDate = startOfDay(filters.appointmentDate.from);
-            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
-        }
-
-        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
-    });
-  }, [allAppointments, allLeads, filters]);
-
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
@@ -359,13 +259,19 @@ export default function ReportsClientPage() {
     
     const totalAppointments = filteredAppointments.length;
 
-    // Queue Stats
     const queueLeads = allLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status)).length;
     const inProgressLeads = allLeads.filter(l => l.status === 'In Progress').length;
     const archivedLeads = allLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status)).length;
 
     const callsWithDuration = filteredCalls.filter(c => c.duration);
-    const totalDuration = callsWithDuration.reduce((sum, call) => sum + parseDurationLocal(call.duration), 0);
+    const totalDuration = callsWithDuration.reduce((sum, call) => {
+        const d = call.duration || '';
+        const minutesMatch = d.match(/(\d+)m/);
+        const secondsMatch = d.match(/(\d+)s/);
+        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+        const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
+        return sum + (minutes * 60 + seconds);
+    }, 0);
     const averageDuration = callsWithDuration.length > 0 ? totalDuration / callsWithDuration.length : 0;
     const avgMinutes = Math.floor(averageDuration / 60);
     const avgSeconds = Math.round(averageDuration % 60);
@@ -450,7 +356,6 @@ export default function ReportsClientPage() {
       appointmentOutcomeData,
       amPerformanceData,
       
-      // Ratios
       callRatios: {
           appointment: totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0,
           won: totalCalls > 0 ? (wonCount / totalCalls) * 100 : 0,
@@ -465,7 +370,79 @@ export default function ReportsClientPage() {
           lost: totalAppointments > 0 ? (lostCount / totalAppointments) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
+  }, [allCalls, allLeads, allAppointments, allDialers, filters]);
+
+  const filteredCalls = useMemo(() => {
+    return (allCalls || []).filter(call => {
+        const lead = (allLeads || []).find(l => l.id === call.leadId);
+        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
+
+        let callDateMatch = true;
+        if (filters.callDate?.from) {
+          const callDate = new Date(call.date);
+          const fromDate = startOfDay(filters.callDate.from);
+          const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
+          callDateMatch = callDate >= fromDate && callDate <= toDate;
+        }
+        
+        const d = call.duration || '';
+        const minutesMatch = d.match(/(\d+)m/);
+        const secondsMatch = d.match(/(\d+)s/);
+        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+        const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
+        const durationInSeconds = minutes * 60 + seconds;
+
+        const durationMatch = () => {
+            switch (filters.duration) {
+                case 'under30s': return durationInSeconds < 30;
+                case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
+                case 'over2min': return durationInSeconds >= 120;
+                case 'none': return durationInSeconds === 0;
+                default: return true;
+            }
+        };
+
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
+
+        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
+    });
+  }, [allCalls, allLeads, filters, allAppointments]);
+  
+  const filteredAppointments = useMemo(() => {
+    return (allAppointments || []).filter(appointment => {
+        if (appointment.leadName === 'Unknown Lead') return false;
+        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
+        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
+
+        let creationDateMatch = true;
+        if (filters.callDate?.from) {
+            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
+            if (!appointmentCreatedDate) return false;
+            const fromDate = startOfDay(filters.callDate.from);
+            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+        }
+
+        let appointmentDateMatch = true;
+        if (filters.appointmentDate?.from) {
+            const apptDate = new Date(appointment.duedate);
+            const fromDate = startOfDay(filters.appointmentDate.from);
+            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
+        }
+
+        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
+    });
+  }, [allAppointments, allLeads, filters]);
+
+  const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
+
+  if (loading || authLoading || !userProfile) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
@@ -479,10 +456,6 @@ export default function ReportsClientPage() {
       </CardContent>
     </Card>
   );
-
-  const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
-
-  if (authLoading || !userProfile) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
   return (
     <div className="flex flex-col gap-6">
@@ -544,9 +517,7 @@ export default function ReportsClientPage() {
         </Alert>
       )}
 
-      {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-4"><Loader /><p className="text-muted-foreground animate-pulse">Loading data...</p></div>
-      ) : !error && (
+      {!error && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
