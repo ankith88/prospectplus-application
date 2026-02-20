@@ -86,7 +86,10 @@ export default function ReportsClientPage() {
 
   const [filters, setFilters] = useState({
     status: [] as string[],
-    callDate: undefined as DateRange | undefined,
+    callDate: {
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date())
+    } as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -114,7 +117,13 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        // Fetch sequentially to prevent overwhelming the server
+        const startDate = filters.callDate?.from?.toISOString();
+        const endDate = filters.callDate?.to 
+            ? endOfDay(filters.callDate.to).toISOString() 
+            : filters.callDate?.from 
+                ? endOfDay(filters.callDate.from).toISOString() 
+                : undefined;
+
         console.log("[Reports] Fetching users...");
         const refreshedUsers = await getAllUsers();
         const dialers = refreshedUsers
@@ -126,24 +135,24 @@ export default function ReportsClientPage() {
         const refreshedLeads = await getAllLeadsForReport();
         setAllLeads(refreshedLeads);
 
-        console.log("[Reports] Fetching call activities...");
-        const refreshedCalls = await getAllCallActivities();
+        console.log("[Reports] Fetching call activities for range:", startDate, "to", endDate);
+        const refreshedCalls = await getAllCallActivities(startDate, endDate);
         setAllCalls(refreshedCalls);
 
-        console.log("[Reports] Fetching appointments...");
-        const refreshedAppointments = await getAllAppointments();
+        console.log("[Reports] Fetching appointments for range:", startDate, "to", endDate);
+        const refreshedAppointments = await getAllAppointments(startDate, endDate);
         setAllAppointments(refreshedAppointments);
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
         const detail = error.message || "An unexpected error occurred.";
-        setError(`Data Fetch Error: ${detail}. This often happens when the database is too large for a single request. Try applying tighter filters (like shorter date ranges) and refreshing.`);
+        setError(`Data Fetch Error: ${detail}. The database request timed out. This often happens when fetching too much data at once. Defaulting to current month has been applied to reduce load.`);
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
     } finally {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [toast]);
+  }, [filters.callDate, toast]);
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -178,7 +187,10 @@ export default function ReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       status: [],
-      callDate: undefined,
+      callDate: {
+          from: startOfMonth(new Date()),
+          to: endOfMonth(new Date())
+      },
       appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: userProfile?.role === 'admin' ? [] : (userProfile?.displayName ? [userProfile.displayName] : []),
@@ -646,7 +658,7 @@ export default function ReportsClientPage() {
         <p className="text-muted-foreground">Performance dashboard for outbound calling.</p>
       </header>
 
-       <Collapsible>
+       <Collapsible defaultOpen={true}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">

@@ -665,9 +665,16 @@ async function getLeadActivity(leadId: string, limitNum: number = 10, lastDocId:
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
-async function getAllCallActivities(): Promise<CallActivity[]> {
+async function getAllCallActivities(startDate?: string, endDate?: string): Promise<CallActivity[]> {
     try {
-        const activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'), limit(5000));
+        console.log(`[getAllCallActivities] Fetching calls within range: ${startDate} to ${endDate}`);
+        let activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
+        
+        if (startDate) activityQuery = query(activityQuery, where('date', '>=', startDate));
+        if (endDate) activityQuery = query(activityQuery, where('date', '<=', endDate));
+        
+        activityQuery = query(activityQuery, limit(10000));
+        
         const activitySnapshot = await getDocs(activityQuery);
         const callActivityDocs = activitySnapshot.docs;
 
@@ -864,9 +871,17 @@ async function getAllTranscripts(): Promise<Transcript[]> {
     }
 }
 
-async function getAllAppointments(): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string }>> {
+async function getAllAppointments(startDate?: string, endDate?: string): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string }>> {
     try {
-        const appointmentsSnapshot = await getDocs(query(collectionGroup(firestore, 'appointments'), limit(5000)));
+        console.log(`[getAllAppointments] Fetching appointments within range: ${startDate} to ${endDate}`);
+        let appointmentsQuery = query(collectionGroup(firestore, 'appointments'));
+        
+        if (startDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '>=', startDate));
+        if (endDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '<=', endDate));
+        
+        appointmentsQuery = query(appointmentsQuery, limit(10000));
+        
+        const appointmentsSnapshot = await getDocs(appointmentsQuery);
         
         const leadIds = [...new Set(appointmentsSnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) return [];
