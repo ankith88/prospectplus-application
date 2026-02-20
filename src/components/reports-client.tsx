@@ -165,9 +165,6 @@ export default function ReportsClientPage() {
         const leadMap = new Map(leadsData.map(l => [l.id, l]));
 
         // 3. Fetch Calls (Direct Collection Group)
-        // Optimization: We remove the 'type' == 'Call' filter to reduce index complexity 
-        // if it helps, and filter in memory. However, the date range on collectionGroup 
-        // still needs an index.
         let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'), limit(5000));
         if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
         if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
@@ -175,7 +172,7 @@ export default function ReportsClientPage() {
         const activitiesSnap = await getDocs(activitiesQuery);
         const calls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
-            if (data.type !== 'Call') return null; // Filter in memory to simplify index requirements
+            if (data.type !== 'Call') return null;
 
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
@@ -224,17 +221,18 @@ export default function ReportsClientPage() {
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
         
-        // Handle the "missing index" error specifically
-        if (error.message && error.message.includes('requires an index')) {
-            const urlMatch = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+        // Handle the "missing index" error specifically with broader detection
+        const errorMsg = error.message || "";
+        if (errorMsg.includes('index') || errorMsg.includes('https://console.firebase.google.com')) {
+            const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
             if (urlMatch) {
                 setIndexUrl(urlMatch[0]);
                 setError("This report requires a database index to be created before it can load.");
             } else {
-                setError(`Index Error: ${error.message}`);
+                setError(`Index Error: ${errorMsg}`);
             }
         } else {
-            setError(`Error: ${error.message || "An unexpected error occurred."}`);
+            setError(`Error: ${errorMsg || "An unexpected error occurred."}`);
         }
         
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
@@ -371,7 +369,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.callDate.from);
             const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
         }
 
         let appointmentDateMatch = true;
