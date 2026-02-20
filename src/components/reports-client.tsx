@@ -2,45 +2,36 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
+import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { 
   Phone, 
-  Users, 
   Percent, 
-  Clock, 
   Filter, 
   SlidersHorizontal, 
   X, 
-  Sparkles, 
-  Send, 
-  Route, 
   Star, 
   Calendar as CalendarIconLucide, 
   Goal, 
-  CheckCircle, 
   TrendingUp, 
-  Briefcase, 
-  Archive, 
   BarChart3, 
   RefreshCw, 
   Flame, 
   AlertCircle, 
   ExternalLink, 
-  ListTodo, 
   Layers,
-  MessageSquare
+  Send,
+  User,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -48,17 +39,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
-import { collection, query, where, getDocs, limit, collectionGroup, orderBy, documentId } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup, orderBy, documentId, where } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
-
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Email Brush Off'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
@@ -133,8 +121,8 @@ export default function ReportsClientPage() {
         }).filter(Boolean);
         setAllDialers(userList);
 
-        // Fetch leads first to exclude Field Sales from the base set
-        const leadsQuery = query(collection(firestore, 'leads'), orderBy('dateLeadEntered', 'desc'), limit(5000));
+        // Fetch ALL leads (Lifetime)
+        const leadsQuery = query(collection(firestore, 'leads'), orderBy('dateLeadEntered', 'desc'));
         const leadsSnap = await getDocs(leadsQuery);
         const leadsData = leadsSnap.docs
             .map(doc => {
@@ -157,7 +145,8 @@ export default function ReportsClientPage() {
         setAllLeads(leadsData);
         const leadMap = new Map(leadsData.map(l => [l.id, l]));
 
-        let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'), limit(5000));
+        // Fetch ALL activities (Lifetime)
+        let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'));
         if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
         if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
         
@@ -169,7 +158,7 @@ export default function ReportsClientPage() {
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
-            if (!lead) return null; // Automatically excludes field sales leads not in our map
+            if (!lead) return null;
             
             return {
                 ...data,
@@ -182,7 +171,8 @@ export default function ReportsClientPage() {
         }).filter(Boolean) as CallActivity[];
         setAllCalls(calls);
 
-        let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'), limit(3000));
+        // Fetch ALL appointments (Lifetime)
+        let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'));
         if (startDate) apptsQuery = query(apptsQuery, where('starttime', '>=', startDate));
         if (endDate) apptsQuery = query(apptsQuery, where('starttime', '<=', endDate));
         
@@ -352,6 +342,11 @@ export default function ReportsClientPage() {
         return acc;
     }, {} as Record<string, number>);
 
+    const inProgressStatusDist = inProgressLeads.reduce((acc, l) => {
+        acc[l.status] = (acc[l.status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
       const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
@@ -398,6 +393,7 @@ export default function ReportsClientPage() {
       inProgressCount: inProgressLeads.length,
       processedCount: processedLeads.length,
       queueStatusDist,
+      inProgressStatusDist,
       teamPerformanceData,
       callOutcomesData,
       appointmentOutcomeData,
@@ -524,29 +520,39 @@ export default function ReportsClientPage() {
                             <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
                         </div>
                         <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <span className="text-sm font-medium">Active Pipeline</span>
+                            <span className="text-sm font-medium">Currently In Progress</span>
                             <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
                         </div>
                         <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <span className="text-sm font-medium">Fully Processed</span>
+                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
                             <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
                         </div>
                     </CardContent>
                 </Card>
 
                 <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle>Status Distribution (Queue & In Progress)</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Status Distribution</CardTitle><CardDescription>Breakdown of leads in active stages.</CardDescription></CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            {Object.entries(stats.queueStatusDist).map(([status, count]) => (
-                                <div key={status} className="p-3 border rounded-md">
-                                    <p className="text-xs text-muted-foreground mb-1">{status}</p>
-                                    <p className="text-xl font-bold">{count}</p>
-                                </div>
-                            ))}
-                            <div className="p-3 border rounded-md bg-blue-50/50">
-                                <p className="text-xs text-muted-foreground mb-1">In Progress</p>
-                                <p className="text-xl font-bold">{stats.inProgressCount}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-semibold border-b pb-1">Queue Distribution</h4>
+                                {Object.entries(stats.queueStatusDist).map(([status, count]) => (
+                                    <div key={status} className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">{status}</span>
+                                        <span className="font-medium">{count}</span>
+                                    </div>
+                                ))}
+                                {Object.keys(stats.queueStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in queue.</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-semibold border-b pb-1">In Progress Distribution</h4>
+                                {Object.entries(stats.inProgressStatusDist).map(([status, count]) => (
+                                    <div key={status} className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">{status}</span>
+                                        <span className="font-medium">{count}</span>
+                                    </div>
+                                ))}
+                                {Object.keys(stats.inProgressStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in progress.</p>}
                             </div>
                         </div>
                     </CardContent>
@@ -555,7 +561,7 @@ export default function ReportsClientPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle><CardDescription>Ratios based on total dials made.</CardDescription></CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
@@ -570,7 +576,7 @@ export default function ReportsClientPage() {
                 </Card>
 
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle><CardDescription>Ratios based on scheduled appointments.</CardDescription></CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
