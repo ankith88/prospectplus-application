@@ -566,8 +566,14 @@ async function getArchivedLeads(): Promise<Lead[]> {
 
 async function getAllLeadsForReport(): Promise<Lead[]> {
     try {
-        console.log('[getAllLeadsForReport] Starting to fetch all leads for reporting...');
-        const leadsSnapshot = await getDocs(collection(firestore, 'leads'));
+        console.log('[getAllLeadsForReport] Fetching limited lead set for reporting...');
+        // Limit to most recent 5000 leads to prevent Server Action timeout
+        const leadsQuery = query(
+            collection(firestore, 'leads'),
+            orderBy('dateLeadEntered', 'desc'),
+            limit(5000)
+        );
+        const leadsSnapshot = await getDocs(leadsQuery);
         if (leadsSnapshot.empty) {
             console.log("[getAllLeadsForReport] No leads found.");
             return [];
@@ -595,7 +601,7 @@ async function getAllLeadsForReport(): Promise<Lead[]> {
             } as Lead;
         });
 
-        console.log(`[getAllLeadsForReport] Successfully fetched ${leads.length} lead shells.`);
+        console.log(`[getAllLeadsForReport] Successfully fetched ${leads.length} leads.`);
         return leads;
 
     } catch (error) {
@@ -673,7 +679,8 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         if (startDate) activityQuery = query(activityQuery, where('date', '>=', startDate));
         if (endDate) activityQuery = query(activityQuery, where('date', '<=', endDate));
         
-        activityQuery = query(activityQuery, limit(10000));
+        // Use a conservative limit for Server Actions
+        activityQuery = query(activityQuery, limit(3000));
         
         const activitySnapshot = await getDocs(activityQuery);
         const callActivityDocs = activitySnapshot.docs;
@@ -683,27 +690,30 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         }
 
         const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
-        if (leadIds.length === 0) {
-             return [];
-        }
-
         const leadsData: { [key: string]: Lead } = {};
+        
+        // Fetch leads in batches of 30, but control parallel execution to avoid timeout
         const leadChunks: string[][] = [];
         for (let i = 0; i < leadIds.length; i += 30) {
             leadChunks.push(leadIds.slice(i, i + 30));
         }
 
-        // Fetch lead data chunks in parallel for better performance
-        const chunkPromises = leadChunks.map(async (chunk) => {
-            if (chunk.length === 0) return;
-            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
-            const leadsSnapshot = await getDocs(leadsQuery);
-            leadsSnapshot.forEach(doc => {
-                leadsData[doc.id] = doc.data() as Lead;
-            });
-        });
-
-        await Promise.all(chunkPromises);
+        // Process hydration in small parallel steps
+        const hydrationBatchSize = 5; 
+        for (let i = 0; i < leadChunks.length; i += hydrationBatchSize) {
+            const batch = leadChunks.slice(i, i + hydrationBatchSize);
+            await Promise.all(batch.map(async (chunk) => {
+                try {
+                    const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
+                    const leadsSnapshot = await getDocs(leadsQuery);
+                    leadsSnapshot.forEach(doc => {
+                        leadsData[doc.id] = doc.data() as Lead;
+                    });
+                } catch (e) {
+                    console.error(`[getAllCallActivities] Failed to hydrate lead chunk:`, e);
+                }
+            }));
+        }
         
         const allCalls = callActivityDocs.map(activityDoc => {
             const activityData = activityDoc.data() as Activity;
@@ -711,10 +721,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             if (!leadId) return null;
             
             const leadData = leadsData[leadId];
-
-            if (!leadData) {
-                return null;
-            }
+            if (!leadData) return null;
 
             return {
                 ...activityData,
@@ -879,7 +886,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
         if (startDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '>=', startDate));
         if (endDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '<=', endDate));
         
-        appointmentsQuery = query(appointmentsQuery, limit(10000));
+        appointmentsQuery = query(appointmentsQuery, limit(3000));
         
         const appointmentsSnapshot = await getDocs(appointmentsQuery);
         
@@ -892,16 +899,22 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             leadChunks.push(leadIds.slice(i, i + 30));
         }
         
-        const chunkPromises = leadChunks.map(async (chunk) => {
-            if (chunk.length === 0) return;
-            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
-            const leadsSnapshot = await getDocs(leadsQuery);
-            leadsSnapshot.forEach(doc => {
-                leadsData[doc.id] = doc.data() as Lead;
-            });
-        });
-
-        await Promise.all(chunkPromises);
+        // Controlled hydration parallelism
+        const hydrationBatchSize = 5;
+        for (let i = 0; i < leadChunks.length; i += hydrationBatchSize) {
+            const batch = leadChunks.slice(i, i + hydrationBatchSize);
+            await Promise.all(batch.map(async (chunk) => {
+                try {
+                    const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
+                    const leadsSnapshot = await getDocs(leadsQuery);
+                    leadsSnapshot.forEach(doc => {
+                        leadsData[doc.id] = doc.data() as Lead;
+                    });
+                } catch (e) {
+                    console.error(`[getAllAppointments] Failed to hydrate lead chunk:`, e);
+                }
+            }));
+        }
 
         const allAppointments = appointmentsSnapshot.docs.map(appointmentDoc => {
             const appointmentData = appointmentDoc.data() as Appointment;
@@ -909,9 +922,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             if (!leadId) return null;
             const leadData = leadsData[leadId];
             
-            if (!leadData) {
-                return null;
-            }
+            if (!leadData) return null;
 
             return {
                 ...appointmentData,

@@ -124,24 +124,25 @@ export default function ReportsClientPage() {
                 ? endOfDay(filters.callDate.from).toISOString() 
                 : undefined;
 
-        console.log("[Reports] Fetching users...");
+        console.log("[Reports] Starting data load cycle...");
+        
+        // 1. Fetch Users (fast)
         const refreshedUsers = await getAllUsers();
-        const dialers = refreshedUsers
-            .filter(u => u.role !== 'admin' && u.displayName)
-            .map(u => u.displayName!);
-        setAllDialers(dialers);
+        setAllDialers(refreshedUsers.filter(u => u.displayName).map(u => u.displayName!));
 
-        console.log("[Reports] Fetching leads...");
+        // 2. Fetch recent leads (limited to 5000 to prevent timeout)
         const refreshedLeads = await getAllLeadsForReport();
         setAllLeads(refreshedLeads);
 
-        console.log("[Reports] Fetching call activities for range:", startDate, "to", endDate);
+        // 3. Fetch call activities within range
         const refreshedCalls = await getAllCallActivities(startDate, endDate);
         setAllCalls(refreshedCalls);
 
-        console.log("[Reports] Fetching appointments for range:", startDate, "to", endDate);
+        // 4. Fetch appointments within range
         const refreshedAppointments = await getAllAppointments(startDate, endDate);
         setAllAppointments(refreshedAppointments);
+
+        console.log("[Reports] Data load cycle complete.");
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
@@ -839,15 +840,15 @@ export default function ReportsClientPage() {
       {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-4">
               <Loader />
-              <p className="text-muted-foreground animate-pulse">Processing large datasets...</p>
+              <p className="text-muted-foreground animate-pulse">Processing data... this can take up to 20 seconds for large months.</p>
           </div>
       ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-3">
                     <CardHeader>
-                        <CardTitle>Leads by Status</CardTitle>
-                        <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
+                        <CardTitle>Recent Leads by Status</CardTitle>
+                        <CardDescription>Distribution of the 5,000 most recent leads by their current status (excluding 'New').</CardDescription>
                     </CardHeader>
                     <CardContent>
                     {stats.leadsByStatus.length > 0 ? (
@@ -1121,7 +1122,7 @@ export default function ReportsClientPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                         <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
-                        <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
+                        <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} active leads`} />
                         <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(2)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
                         <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
                         <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(2)}% of total calls`} />
@@ -1138,7 +1139,7 @@ export default function ReportsClientPage() {
                         <StatCard title="Priority Leads Remaining" value={stats.priorityLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
                         <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
                         <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
-                        <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
+                        <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes processed statuses." />
                     </div>
                 </div>
 
@@ -1248,7 +1249,7 @@ export default function ReportsClientPage() {
                             description={`${stats.lostAppointmentRate.toFixed(2)}% of total appointments`} 
                         />
                         <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Ratio of appointments to calls" />
-                        <StatCard title="Won from Completed" value={`${stats.wonFromCompletedRate}%`} icon={TrendingUp} description="%% of completed appointments that resulted in a 'Won' status" />
+                        <StatCard title="Won from Completed" value={`${stats.wonFromCompletedRate.toFixed(2)}%`} icon={TrendingUp} description="% of completed appointments that resulted in a 'Won' status" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(2)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
