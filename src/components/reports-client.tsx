@@ -55,7 +55,7 @@ const STATUS_COLORS: { [key in LeadStatus]?: string } = {
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
+type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
 
 const safeGetStatus = (status: any): LeadStatus => {
     const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
@@ -138,8 +138,6 @@ export default function ReportsClientPage() {
                 ? endOfDay(filters.callDate.from).toISOString() 
                 : undefined;
 
-        console.log("[Reports] Starting optimized client-side direct data load...");
-        
         const usersSnap = await getDocs(collection(firestore, 'users'));
         const userList = usersSnap.docs.map(doc => {
             const data = doc.data();
@@ -158,9 +156,6 @@ export default function ReportsClientPage() {
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
-                customerCampaign: data.customerCampaign,
-                leadType: data.leadType,
-                demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
                 fieldSales: data.fieldSales,
                 dateLeadEntered: data.dateLeadEntered,
@@ -220,11 +215,8 @@ export default function ReportsClientPage() {
         }).filter(Boolean) as AppointmentWithLead[];
         setAllAppointments(appts);
 
-        console.log("[Reports] Client-side load complete.");
-
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
-        
         const errorMsg = error.message || "";
         if (errorMsg.includes('requires an index') || errorMsg.includes('COLLECTION_GROUP_DESC')) {
             const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
@@ -238,7 +230,6 @@ export default function ReportsClientPage() {
         } else {
             setError(`Error: ${errorMsg || "An unexpected error occurred."}`);
         }
-        
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
     } finally {
         setLoading(false);
@@ -246,10 +237,102 @@ export default function ReportsClientPage() {
     }
   }, [filters.callDate, toast]);
 
+  useEffect(() => {
+    if (userProfile) {
+      fetchData();
+    }
+  }, [userProfile, fetchData]);
+
+  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      status: [],
+      callDate: {
+          from: startOfDay(startOfMonth(new Date())),
+          to: endOfDay(endOfMonth(new Date()))
+      },
+      appointmentDate: undefined,
+      duration: 'all',
+      dialerAssigned: [],
+      franchisee: [],
+      appointmentAssignedTo: [],
+    });
+  };
+
+  const filteredCalls = useMemo(() => {
+    return (allCalls || []).filter(call => {
+        const lead = (allLeads || []).find(l => l.id === call.leadId);
+        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
+
+        let callDateMatch = true;
+        if (filters.callDate?.from) {
+          const callDate = new Date(call.date);
+          const fromDate = startOfDay(filters.callDate.from);
+          const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
+          callDateMatch = callDate >= fromDate && callDate <= toDate;
+        }
+        
+        const d = call.duration || '';
+        const minutesMatch = d.match(/(\d+)m/);
+        const secondsMatch = d.match(/(\d+)s/);
+        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+        const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
+        const durationInSeconds = minutes * 60 + seconds;
+
+        const durationMatch = () => {
+            switch (filters.duration) {
+                case 'under30s': return durationInSeconds < 30;
+                case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
+                case 'over2min': return durationInSeconds >= 120;
+                case 'none': return durationInSeconds === 0;
+                default: return true;
+            }
+        };
+
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
+
+        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
+    });
+  }, [allCalls, allLeads, filters, allAppointments]);
+  
+  const filteredAppointments = useMemo(() => {
+    return (allAppointments || []).filter(appointment => {
+        if (appointment.leadName === 'Unknown Lead') return false;
+        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
+        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
+
+        let creationDateMatch = true;
+        if (filters.callDate?.from) {
+            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
+            if (!appointmentCreatedDate) return false;
+            const fromDate = startOfDay(filters.callDate.from);
+            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+        }
+
+        let appointmentDateMatch = true;
+        if (filters.appointmentDate?.from) {
+            const apptDate = new Date(appointment.duedate);
+            const fromDate = startOfDay(filters.appointmentDate.from);
+            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
+        }
+
+        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
+    });
+  }, [allAppointments, allLeads, filters]);
+
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
-    
     const leadsWithActivity = allLeads.filter(l => leadsContactedIds.has(l.id));
     
     const wonCount = leadsWithActivity.filter(l => l.status === 'Won').length;
@@ -264,7 +347,7 @@ export default function ReportsClientPage() {
     const archivedLeads = allLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status)).length;
 
     const callsWithDuration = filteredCalls.filter(c => c.duration);
-    const totalDuration = callsWithDuration.reduce((sum, call) => {
+    const totalDurationInSec = callsWithDuration.reduce((sum, call) => {
         const d = call.duration || '';
         const minutesMatch = d.match(/(\d+)m/);
         const secondsMatch = d.match(/(\d+)s/);
@@ -272,7 +355,7 @@ export default function ReportsClientPage() {
         const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
         return sum + (minutes * 60 + seconds);
     }, 0);
-    const averageDuration = callsWithDuration.length > 0 ? totalDuration / callsWithDuration.length : 0;
+    const averageDuration = callsWithDuration.length > 0 ? totalDurationInSec / callsWithDuration.length : 0;
     const avgMinutes = Math.floor(averageDuration / 60);
     const avgSeconds = Math.round(averageDuration % 60);
     const averageDurationFormatted = `${avgMinutes}m ${avgSeconds}s`;
@@ -370,75 +453,7 @@ export default function ReportsClientPage() {
           lost: totalAppointments > 0 ? (lostCount / totalAppointments) * 100 : 0,
       }
     };
-  }, [allCalls, allLeads, allAppointments, allDialers, filters]);
-
-  const filteredCalls = useMemo(() => {
-    return (allCalls || []).filter(call => {
-        const lead = (allLeads || []).find(l => l.id === call.leadId);
-        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
-
-        let callDateMatch = true;
-        if (filters.callDate?.from) {
-          const callDate = new Date(call.date);
-          const fromDate = startOfDay(filters.callDate.from);
-          const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-          callDateMatch = callDate >= fromDate && callDate <= toDate;
-        }
-        
-        const d = call.duration || '';
-        const minutesMatch = d.match(/(\d+)m/);
-        const secondsMatch = d.match(/(\d+)s/);
-        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
-        const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
-        const durationInSeconds = minutes * 60 + seconds;
-
-        const durationMatch = () => {
-            switch (filters.duration) {
-                case 'under30s': return durationInSeconds < 30;
-                case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
-                case 'over2min': return durationInSeconds >= 120;
-                case 'none': return durationInSeconds === 0;
-                default: return true;
-            }
-        };
-
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
-
-        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
-    });
-  }, [allCalls, allLeads, filters, allAppointments]);
-  
-  const filteredAppointments = useMemo(() => {
-    return (allAppointments || []).filter(appointment => {
-        if (appointment.leadName === 'Unknown Lead') return false;
-        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
-        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
-
-        let creationDateMatch = true;
-        if (filters.callDate?.from) {
-            const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
-            if (!appointmentCreatedDate) return false;
-            const fromDate = startOfDay(filters.callDate.from);
-            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
-        }
-
-        let appointmentDateMatch = true;
-        if (filters.appointmentDate?.from) {
-            const apptDate = new Date(appointment.duedate);
-            const fromDate = startOfDay(filters.appointmentDate.from);
-            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
-        }
-
-        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
-    });
-  }, [allAppointments, allLeads, filters]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
 
   const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
 
