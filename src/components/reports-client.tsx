@@ -51,8 +51,15 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
 
+const leadStatuses: LeadStatus[] = [
+    'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
+    'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
+    'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'
+];
+
 const safeGetStatus = (status: any): LeadStatus => {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+    const validStatuses: LeadStatus[] = [...leadStatuses];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') return 'New';
         let cleanStatus = status.replace('SUSPECT-', '');
