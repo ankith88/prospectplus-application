@@ -346,8 +346,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
 }
 
 
-async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean, dialerAssigned?: string }): Promise<Lead[]> {
-  const { leadId, summary = false, dialerAssigned } = options || {};
+async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean, dialerAssigned?: string, franchisee?: string }): Promise<Lead[]> {
+  const { leadId, summary = false, dialerAssigned, franchisee } = options || {};
   
   if (leadId) {
       const lead = await getLeadFromFirebase(leadId, !summary);
@@ -358,6 +358,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
     let leadsQuery = query(collection(firestore, 'leads'));
     if (dialerAssigned) {
         leadsQuery = query(leadsQuery, where('dialerAssigned', '==', dialerAssigned));
+    }
+    if (franchisee) {
+        leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
     }
 
     const snapshot = await getDocs(leadsQuery);
@@ -431,10 +434,14 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
-async function getCompaniesFromFirebase(): Promise<Lead[]> {
+async function getCompaniesFromFirebase(options?: { franchisee?: string }): Promise<Lead[]> {
+    const { franchisee } = options || {};
     console.log(`[getCompaniesFromFirebase] Starting to fetch companies from Firebase...`);
     try {
-        const companiesQuery = query(collection(firestore, 'companies'));
+        let companiesQuery = query(collection(firestore, 'companies'));
+        if (franchisee) {
+            companiesQuery = query(companiesQuery, where('franchisee', '==', franchisee));
+        }
         const snapshot = await getDocs(companiesQuery);
 
         if (snapshot.empty) {
@@ -505,12 +512,16 @@ async function getCompaniesFromFirebase(): Promise<Lead[]> {
 }
 
 
-async function getArchivedLeads(): Promise<Lead[]> {
+async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
         
-        const q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
+        let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
+        if (franchisee) {
+            q = query(q, where('franchisee', '==', franchisee));
+        }
+        
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
@@ -564,15 +575,18 @@ async function getArchivedLeads(): Promise<Lead[]> {
 }
 
 
-async function getAllLeadsForReport(): Promise<Lead[]> {
+async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
     try {
         console.log('[getAllLeadsForReport] Fetching limited lead set for reporting...');
         // Limit to most recent 5000 leads to prevent Server Action timeout
-        const leadsQuery = query(
+        let leadsQuery = query(
             collection(firestore, 'leads'),
             orderBy('dateLeadEntered', 'desc'),
             limit(5000)
         );
+        if (franchisee) {
+            leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
+        }
         const leadsSnapshot = await getDocs(leadsQuery);
         if (leadsSnapshot.empty) {
             console.log("[getAllLeadsForReport] No leads found.");
@@ -1794,6 +1808,7 @@ interface NewLeadData {
   salesRepAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
   visitNoteID?: string;
+  franchisee?: string;
 }
 
 async function createNewLead(data: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {

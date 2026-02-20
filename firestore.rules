@@ -43,12 +43,27 @@ service cloud.firestore {
 
     // Leads and their subcollections
     match /leads/{leadId}/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'Franchisee' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.franchisee == (
+          // Use get() for subcollections since resource.data would be the subdoc, not the lead
+          exists(/databases/$(database)/documents/leads/$(leadId)) ? 
+          get(/databases/$(database)/documents/leads/$(leadId)).data.franchisee : 
+          null
+        )
+      );
     }
 
     // Companies and their subcollections
     match /companies/{companyId}/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'Franchisee' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.franchisee == (
+          exists(/databases/$(database)/documents/companies/$(companyId)) ? 
+          get(/databases/$(database)/documents/companies/$(companyId)).data.franchisee : 
+          null
+        )
+      );
     }
 
     // Visit Notes

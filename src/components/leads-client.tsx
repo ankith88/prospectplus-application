@@ -216,17 +216,20 @@ export default function LeadsClientPage() {
       return;
     }
     
-    if (user) {
+    if (user && userProfile) {
         fetchData();
     }
 
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, userProfile]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
         const [fetchedLeads, fetchedUsers] = await Promise.all([
-            getLeadsFromFirebase({ summary: true }),
+            getLeadsFromFirebase({ 
+                summary: true,
+                franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+            }),
             getAllUsers()
         ]);
         setAllLeads(fetchedLeads);
@@ -264,7 +267,7 @@ export default function LeadsClientPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const handleFilterChange = (filterName: keyof typeof filters, value: string | string[] | DateRange | undefined) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
-    setCurrentPage(1);
+    setCurrentPage(1); 
   };
 
   const clearFilters = () => {
@@ -327,11 +330,11 @@ export default function LeadsClientPage() {
   const myLeads = useMemo(() => {
     if (user?.displayName) {
       return filteredLeads.filter(lead => 
-        lead.dialerAssigned === user.displayName
+        lead.dialerAssigned === user.displayName || (userProfile?.role === 'Franchisee' && lead.franchisee === userProfile.franchisee)
       );
     }
     return [];
-  }, [filteredLeads, user]);
+  }, [filteredLeads, user, userProfile]);
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -382,7 +385,10 @@ export default function LeadsClientPage() {
   const handleExportAll = async () => {
     toast({ title: 'Starting Export', description: 'Fetching all lead data. This may take a moment...' });
     try {
-        const allLeadsData = await getLeadsFromFirebase({ summary: false }); // Fetch full data
+        const allLeadsData = await getLeadsFromFirebase({ 
+            summary: false,
+            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+        });
 
         const headers = [
             'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
@@ -906,7 +912,7 @@ export default function LeadsClientPage() {
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <CardTitle>My Assigned Leads</CardTitle>
+            <CardTitle>{userProfile?.role === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
                 {isSessionActive && (
                   <Button onClick={handleEndSession} variant="destructive" size="sm">
@@ -934,7 +940,7 @@ export default function LeadsClientPage() {
                 )}
                 <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
-                    Export My Leads
+                    Export {userProfile?.role === 'Franchisee' ? 'Franchise' : 'My'} Leads
                 </Button>
                  {isAdminView && (
                     <Button onClick={handleExportAll} variant="outline" size="sm">

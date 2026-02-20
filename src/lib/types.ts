@@ -1,3 +1,4 @@
+
 export type LeadStatus =
   | 'New'
   | 'Priority Lead'
@@ -197,6 +198,21 @@ export interface VisitNote {
   discoveryData?: Partial<DiscoveryData>;
 }
 
+export interface UserProfile {
+  uid: string
+  email: string
+  firstName?: string
+  lastName?: string
+  displayName?: string
+  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee'
+  phoneNumber?: string
+  aircallUserId?: string
+  disabled?: boolean
+  linkedSalesRep?: string
+  linkedBDR?: string
+  franchisee?: string
+}
+
 export interface Lead {
   id: string
   entityId?: string
@@ -244,7 +260,7 @@ export interface Lead {
   visitNoteID?: string;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID'> & { isCompany: boolean; isProspect?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee'> & { isCompany: boolean; isProspect?: boolean };
 
 export interface StorableRoute {
   id?: string;

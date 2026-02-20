@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -26,6 +25,7 @@ import { CreateUserDialog } from './create-user-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
+import { Input } from '../ui/input';
 
 
 export function UserManagementTable() {
@@ -41,6 +41,7 @@ export function UserManagementTable() {
   const [newRole, setNewRole] = useState<UserProfile['role'] | ''>('');
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
+  const [newFranchisee, setNewFranchisee] = useState('');
 
 
   const { toast } = useToast();
@@ -67,6 +68,7 @@ export function UserManagementTable() {
       setNewRole(userToEdit.role || 'user');
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
+      setNewFranchisee(userToEdit.franchisee || '');
     }
   }, [userToEdit]);
 
@@ -106,9 +108,15 @@ export function UserManagementTable() {
       if (newRole === 'Field Sales') {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
+        updateData.franchisee = '';
+      } else if (newRole === 'Franchisee') {
+        updateData.franchisee = newFranchisee;
+        updateData.linkedSalesRep = '';
+        updateData.linkedBDR = '';
       } else {
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
+        updateData.franchisee = '';
       }
       
       await updateUser(userToEdit.uid, updateData);
@@ -218,9 +226,16 @@ export function UserManagementTable() {
                             <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>
                             <SelectItem value="Lead Gen">Lead Gen</SelectItem>
                             <SelectItem value="Lead Gen Admin">Lead Gen Admin</SelectItem>
+                            <SelectItem value="Franchisee">Franchisee</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
+                {newRole === 'Franchisee' && (
+                    <div className="space-y-2">
+                        <Label>Franchise Name</Label>
+                        <Input value={newFranchisee} onChange={(e) => setNewFranchisee(e.target.value)} placeholder="e.g. Sydney City" />
+                    </div>
+                )}
                 {newRole === 'Field Sales' && (
                     <>
                         <div className="space-y-2">

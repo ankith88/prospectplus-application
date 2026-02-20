@@ -149,8 +149,13 @@ export default function SignedCustomersPage() {
     setLoading(true);
     try {
       const [companies, leads] = await Promise.all([
-        getCompaniesFromFirebase(),
-        getLeadsFromFirebase({ summary: true }),
+        getCompaniesFromFirebase({
+            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+        }),
+        getLeadsFromFirebase({ 
+            summary: true,
+            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+        }),
       ]);
       const companyMapLeads = companies
         .filter(c => c.latitude != null && c.longitude != null)
@@ -174,11 +179,11 @@ export default function SignedCustomersPage() {
       router.push('/signin');
       return;
     }
-    if (authLoading) return;
+    if (authLoading || !userProfile) return;
     
     fetchData();
 
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, userProfile]);
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -292,7 +297,7 @@ export default function SignedCustomersPage() {
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
-        const placesService = new window.google.maps.places.PlacesService(map);
+        const placesService = new window.google.maps.PlacesService(map);
         return new Promise((resolve) => {
             placesService.getDetails({
                 placeId,
@@ -309,7 +314,7 @@ export default function SignedCustomersPage() {
 
   const handleFindNearbyLeads = useCallback(() => {
     if (!selectedCompany || !selectedCompany.latitude || !selectedCompany.longitude || !window.google?.maps?.geometry) return;
-    const centerLatLng = new window.google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
+    const centerLatLng = new google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
     
     const nearby = allMapData
       .filter(item => {
@@ -478,7 +483,7 @@ export default function SignedCustomersPage() {
             if (searchKeywords.length > 0 && company.latitude && company.longitude) {
                 // Mocking the result of findProspects for bulk operation
                  await new Promise<void>(resolve => {
-                    const placesService = new window.google.maps.places.PlacesService(map);
+                    const placesService = new window.google.maps.PlacesService(map);
                     const request: google.maps.places.PlaceSearchRequest = {
                         location: { lat: company.latitude!, lng: company.longitude! },
                         radius: 2000,
@@ -773,6 +778,7 @@ export default function SignedCustomersPage() {
         },
         initialNotes: initialNotes,
         dialerAssigned: userProfile.displayName,
+        franchisee: userProfile.role === 'Franchisee' ? userProfile.franchisee : undefined
     };
 
     try {
@@ -789,6 +795,7 @@ export default function SignedCustomersPage() {
               longitude: newLeadData.address.lng,
               dialerAssigned: undefined,
               customerPhone: newLeadData.contact.phone,
+              franchisee: newLeadData.franchisee
             };
             setAllMapData(prev => [...prev, newMapLead]);
             setProspects(prev => prev.map(p => p.place.place_id === placeId

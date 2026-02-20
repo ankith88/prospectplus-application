@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -35,11 +34,12 @@ const formSchema = z.object({
   lastName: z.string().min(1, 'Last name is required.'),
   email: z.string().email('A valid email is required.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin']),
+  role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee']),
   phoneNumber: z.string().optional(),
   aircallUserId: z.string().optional(),
   linkedSalesRep: z.string().optional(),
   linkedBDR: z.string().optional(),
+  franchisee: z.string().optional(),
 });
 
 interface CreateUserDialogProps {
@@ -65,6 +65,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       aircallUserId: '',
       linkedSalesRep: '',
       linkedBDR: '',
+      franchisee: '',
     },
   });
 
@@ -128,10 +129,16 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                         <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>
                         <SelectItem value="Lead Gen">Lead Gen</SelectItem>
                         <SelectItem value="Lead Gen Admin">Lead Gen Admin</SelectItem>
+                        <SelectItem value="Franchisee">Franchisee</SelectItem>
                     </SelectContent>
                 </Select>
                 <FormMessage /></FormItem>
             )}/>
+            {role === 'Franchisee' && (
+                <FormField control={form.control} name="franchisee" render={({ field }) => (
+                    <FormItem><FormLabel>Franchise Name*</FormLabel><FormControl><Input {...field} placeholder="e.g. Sydney City" /></FormControl><FormDescription>Users with the Franchisee role will only see leads and signed customers associated with this specific franchise.</FormDescription><FormMessage /></FormItem>
+                )}/>
+            )}
             {role === 'Field Sales' && (
               <>
                 <FormField control={form.control} name="linkedSalesRep" render={({ field }) => (
