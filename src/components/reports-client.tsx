@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,7 +15,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -23,10 +23,10 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
-import { collection, query, where, getDocs, limit, collectionGroup, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, collectionGroup, orderBy, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 
-const STATUS_COLORS: { [key in LeadStatus]: string } = {
+const STATUS_COLORS: { [key in LeadStatus]?: string } = {
   'New': '#A0A0A0',
   'Contacted': '#FFBB28',
   'In Progress': '#FF8042',
@@ -106,7 +106,7 @@ export default function ReportsClientPage() {
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
-    appointmentAssignedTo: [],
+    appointmentAssignedTo: [] as string[],
   });
 
   const allFranchiseesOptions: Option[] = useMemo(() => {
@@ -226,7 +226,8 @@ export default function ReportsClientPage() {
         if (errorMsg.includes('index') || errorMsg.includes('https://console.firebase.google.com')) {
             const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
             if (urlMatch) {
-                setIndexUrl(urlMatch[0]);
+                const cleanUrl = urlMatch[0].replace(/[.\s]+$/, "");
+                setIndexUrl(cleanUrl);
                 setError("This report requires a database index to be created before it can load.");
             } else {
                 setError(`Index Error: ${errorMsg}`);
@@ -369,7 +370,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.callDate.from);
             const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
 
         let appointmentDateMatch = true;
@@ -417,6 +418,23 @@ export default function ReportsClientPage() {
       const conversionRate = dialerCalls > 0 ? (dialerAppointments / dialerCalls) * 100 : 0;
       return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments, 'Conversion Rate': parseFloat(conversionRate.toFixed(2)) };
     }).filter(d => d['Total Calls'] > 0);
+
+    // Daily Trend
+    const dailyTrendMap = new Map<string, { date: string, calls: number, appointments: number }>();
+    filteredCalls.forEach(c => {
+        const d = format(new Date(c.date), 'yyyy-MM-dd');
+        if(!dailyTrendMap.has(d)) dailyTrendMap.set(d, { date: d, calls: 0, appointments: 0 });
+        dailyTrendMap.get(d)!.calls++;
+    });
+    filteredAppointments.forEach(a => {
+        const createdDate = parseDateString(a.appointmentDate);
+        if(createdDate) {
+            const d = format(createdDate, 'yyyy-MM-dd');
+            if(!dailyTrendMap.has(d)) dailyTrendMap.set(d, { date: d, calls: 0, appointments: 0 });
+            dailyTrendMap.get(d)!.appointments++;
+        }
+    });
+    const dailyTrendData = Array.from(dailyTrendMap.values()).sort((a,b) => a.date.localeCompare(b.date));
     
     return {
       totalCalls,
@@ -427,6 +445,7 @@ export default function ReportsClientPage() {
       totalAppointments,
       appointmentToCallRatio: parseFloat(appointmentToCallRatio.toFixed(2)),
       teamPerformanceData,
+      dailyTrendData,
     };
   }, [filteredCalls, filteredLeads, filteredAppointments, allDialers]);
 
@@ -510,22 +529,47 @@ export default function ReportsClientPage() {
                 <StatCard title="Appt. Conversion" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Appointments per Call" />
             </div>
 
-            <Card>
-                <CardHeader><CardTitle>Recent Leads by Status</CardTitle></CardHeader>
-                <CardContent>
-                    {stats.leadsByStatus.length > 0 ? (
-                        <ChartContainer config={{}} className="h-[350px] w-full">
-                            <PieChart>
-                                <Pie data={stats.leadsByStatus} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
-                                    {stats.leadsByStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#8884d8'} />)}
-                                </Pie>
-                                <Tooltip />
-                                <Legend onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value} />
-                            </PieChart>
-                        </ChartContainer>
-                    ) : <div className="flex h-[350px] items-center justify-center text-muted-foreground">No data.</div>}
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader><CardTitle>Activity Trend</CardTitle></CardHeader>
+                    <CardContent>
+                        {stats.dailyTrendData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <LineChart data={stats.dailyTrendData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        tickFormatter={(val) => format(new Date(val), 'MMM d')}
+                                        fontSize={12}
+                                    />
+                                    <YAxis fontSize={12} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="calls" stroke="#8884d8" name="Calls" strokeWidth={2} dot={false} />
+                                    <Line type="monotone" dataKey="appointments" stroke="#82ca9d" name="Appointments" strokeWidth={2} dot={false} />
+                                </LineChart>
+                            </ChartContainer>
+                        ) : <div className="flex h-[300px] items-center justify-center text-muted-foreground">No trend data.</div>}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader><CardTitle>Recent Leads by Status</CardTitle></CardHeader>
+                    <CardContent>
+                        {stats.leadsByStatus.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <PieChart>
+                                    <Pie data={stats.leadsByStatus} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
+                                        {stats.leadsByStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as LeadStatus] || '#8884d8'} />)}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value} />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data.</div>}
+                    </CardContent>
+                </Card>
+            </div>
 
             <Card>
                 <CardHeader><CardTitle>Team Performance</CardTitle></CardHeader>
