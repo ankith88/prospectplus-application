@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -666,8 +667,9 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 
 async function getAllCallActivities(): Promise<CallActivity[]> {
     try {
-        const activitySnapshot = await getDocs(collectionGroup(firestore, 'activity'));
-        const callActivityDocs = activitySnapshot.docs.filter(doc => doc.data().type === 'Call');
+        const activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
+        const activitySnapshot = await getDocs(activityQuery);
+        const callActivityDocs = activitySnapshot.docs;
 
         if (callActivityDocs.length === 0) {
             return [];
@@ -680,8 +682,8 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 10) {
-            leadChunks.push(leadIds.slice(i, i + 10));
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
         }
 
         for (const chunk of leadChunks) {
@@ -698,9 +700,7 @@ async function getAllCallActivities(): Promise<CallActivity[]> {
             const leadId = activityDoc.ref.parent.parent!.id;
             const leadData = leadsData[leadId];
 
-            // Safely skip if leadData is missing
             if (!leadData) {
-                console.warn(`[getAllCallActivities] No lead data found for lead ID: ${leadId}. Skipping activity ${activityDoc.id}.`);
                 return null;
             }
 
@@ -823,8 +823,8 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 10) {
-            leadChunks.push(leadIds.slice(i, i + 10));
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
         }
         for (const chunk of leadChunks) {
             const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
@@ -864,12 +864,12 @@ async function getAllAppointments(): Promise<Array<Appointment & { leadId: strin
 
         const leadsData: { [key: string]: Lead } = {};
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 10) {
-            leadChunks.push(leadIds.slice(i, i + 10));
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
         }
         for (const chunk of leadChunks) {
             if (chunk.length === 0) continue;
-            const leadsQuery = query(collection(firestore, 'leads'), where('__name__', 'in', chunk));
+            const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = doc.data() as Lead;
@@ -1421,8 +1421,8 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         const leadsData: Record<string, Lead> = {};
 
         const leadChunks: string[][] = [];
-        for (let i = 0; i < leadIds.length; i += 10) {
-            leadChunks.push(leadIds.slice(i, i + 10));
+        for (let i = 0; i < leadIds.length; i += 30) {
+            leadChunks.push(leadIds.slice(i, i + 30));
         }
 
         for (const chunk of leadChunks) {

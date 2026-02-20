@@ -1,15 +1,14 @@
 
-
 "use client"
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, Sector, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -43,6 +42,10 @@ const STATUS_COLORS: { [key in LeadStatus]: string } = {
   'Reschedule': '#FBBF24', // Amber 500
   'Priority Lead': '#F97316', // Orange 500,
   'Priority Field Lead': '#F97316',
+  'Free Trial': '#EC4899',
+  'Prospect Opportunity': '#F59E0B',
+  'Customer Opportunity': '#22C55E',
+  'Email Brush Off': '#A0A0A0',
 };
 
 const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: string } = {
@@ -67,6 +70,8 @@ export default function ReportsClientPage() {
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -105,16 +110,46 @@ export default function ReportsClientPage() {
     }
   }, [userProfile, authLoading, router]);
 
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+        // Fetch sequentially to prevent overwhelming the server
+        const refreshedUsers = await getAllUsers();
+        const dialers = refreshedUsers
+            .filter(u => u.role !== 'admin' && u.displayName)
+            .map(u => u.displayName!);
+        setAllDialers(dialers);
+
+        const refreshedLeads = await getAllLeadsForReport();
+        setAllLeads(refreshedLeads);
+
+        const refreshedCalls = await getAllCallActivities();
+        setAllCalls(refreshedCalls);
+
+        const refreshedAppointments = await getAllAppointments();
+        setAllAppointments(refreshedAppointments);
+
+    } catch (error: any) {
+        console.error("Failed to refresh reporting data:", error);
+        setError("The server timed out while generating the report. This usually happens if the database is too large to process in one request. Please try refreshing or applying tighter filters.");
+        toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
+    } finally {
+        setLoading(false);
+        setIsRefreshing(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
       return;
     }
     
-    if (user) {
+    if(user && !authLoading) {
         fetchData();
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, fetchData]);
 
   useEffect(() => {
     if (userProfile?.role !== 'admin' && userProfile?.displayName) {
@@ -122,33 +157,6 @@ export default function ReportsClientPage() {
     }
   }, [userProfile]);
   
-  const fetchData = async () => {
-    setLoading(true);
-    toast({ title: 'Loading Report Data...', description: 'Fetching the latest information from the database.' });
-    try {
-        const [refreshedCalls, refreshedLeads, refreshedAppointments, refreshedUsers] = await Promise.all([
-            getAllCallActivities(),
-            getAllLeadsForReport(),
-            getAllAppointments(),
-            getAllUsers(),
-        ]);
-        setAllCalls(refreshedCalls);
-        setAllLeads(refreshedLeads);
-        setAllAppointments(refreshedAppointments);
-        const dialers = refreshedUsers
-            .filter(u => u.role !== 'admin' && u.displayName)
-            .map(u => u.displayName!);
-        setAllDialers(dialers);
-        toast({ title: 'Success', description: 'Report data has been loaded.' });
-    } catch (error) {
-        console.error("Failed to refresh data:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest data.' });
-    } finally {
-        setLoading(false);
-        setIsRefreshing(false);
-    }
-  };
-
   const handleLegendClick = (inactiveState: string[], setInactiveState: React.Dispatch<React.SetStateAction<string[]>>, entry: any) => {
     const { value } = entry;
     if (inactiveState.includes(value)) {
@@ -600,7 +608,7 @@ export default function ReportsClientPage() {
                            filters.duration !== 'all' ||
                            filters.appointmentAssignedTo.length > 0;
 
-  if (authLoading || !userProfile || loading) {
+  if (authLoading || !userProfile) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
@@ -802,486 +810,503 @@ export default function ReportsClientPage() {
             </CollapsibleContent>
           </Card>
       </Collapsible>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-3">
-            <CardHeader>
-                <CardTitle>Leads by Status</CardTitle>
-                 <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
-            </CardHeader>
-            <CardContent>
-            {stats.leadsByStatus.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                    <PieChart>
-                        <Pie
-                            data={stats.leadsByStatus}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            dataKey="value"
-                        >
-                        {stats.leadsByStatus.map((entry, index) => (
-                           <Cell key={`cell-${index}`} fill={inactiveStatus.includes(entry.name) ? 'transparent' : STATUS_COLORS[entry.name]} />
-                        ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltipContent
-                            formatter={(value, name) => (
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{name === 'Won' ? 'Signed' : name}</span>
-                                    <span className="text-muted-foreground">{value} leads</span>
-                                </div>
-                            )}
-                            />}
-                        />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value}/>
-                    </PieChart>
-                </ChartContainer>
-            ) : (
-                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                No lead status data to display for the selected filters.
-                </div>
-            )}
-            </CardContent>
-        </Card>
-      </div>
 
-       <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance by Account Manager</h2>
-            <p className="text-muted-foreground">Breakdown of appointment metrics for each appointment setter.</p>
+      {error && (
+          <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Server Load Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+          </Alert>
+      )}
+
+      {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-4">
+              <Loader />
+              <p className="text-muted-foreground animate-pulse">Calculating complex metrics...</p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                  <CardTitle>Appointments per Account Manager</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stats.appointmentsByAssigneeData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stats.appointmentsByAssigneeData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" width={100} />
-                      <Tooltip />
-                      <Bar dataKey="appointments" fill="#82ca9d" name="Appointments" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                  <CardTitle>Appointment Outcomes by Account Manager</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stats.appointmentOutcomesByAssigneeData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={stats.appointmentOutcomesByAssigneeData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" stackId="a" />
-                      <YAxis dataKey="name" type="category" width={100} />
-                      <Tooltip />
-                      <Legend formatter={(value) => value === 'Won' ? 'Signed' : value} />
-                      {stats.allStatuses.map((status, index) => (
-                        <Bar key={status} dataKey={status} stackId="a" name={status === 'Won' ? 'Signed' : status} fill={STATUS_COLORS[status] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Briefcase className="h-5 w-5" />
-                    Appointments by Lead Source
-                </CardTitle>
-                <CardDescription>Appointments booked from different lead sources.</CardDescription>
-            </CardHeader>
-            <CardContent>
-            {stats.appointmentsBySource.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                    <PieChart>
-                        <Pie
-                            data={stats.appointmentsBySource}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            dataKey="value"
-                        >
-                        {stats.appointmentsBySource.map((entry, index) => (
-                           <Cell key={`cell-source-${index}`} fill={inactiveSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                        ))}
-                        </Pie>
-                         <Tooltip content={<ChartTooltipContent
-                            formatter={(value, name) => (
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{name}</span>
-                                    <span className="text-muted-foreground">{value} appointments</span>
-                                </div>
-                            )}
-                            />}
-                        />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveSource, setInactiveSource, e)} />
-                    </PieChart>
-                </ChartContainer>
-            ) : (
-                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                    No appointment data to display for the selected filters.
-                </div>
-            )}
-            </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-1">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5" />
-                    Appointments by Lead Type
-                </CardTitle>
-                <CardDescription>Breakdown of lead types for booked appointments.</CardDescription>
-            </CardHeader>
-            <CardContent>
-            {stats.appointmentsByLeadType.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                    <PieChart>
-                        <Pie
-                            data={stats.appointmentsByLeadType}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            dataKey="value"
-                        >
-                        {stats.appointmentsByLeadType.map((entry, index) => (
-                           <Cell key={`cell-lead-type-${index}`} fill={inactiveLeadType.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                        ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltipContent
-                            formatter={(value, name) => (
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{name}</span>
-                                    <span className="text-muted-foreground">{value} appointments</span>
-                                </div>
-                            )}
-                            />}
-                        />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLeadType, setInactiveLeadType, e)} />
-                    </PieChart>
-                </ChartContainer>
-            ) : (
-                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                    No lead type data to display for the selected filters.
-                </div>
-            )}
-            </CardContent>
-        </Card>
-        
-        <Card className="lg:col-span-1">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Frown className="h-5 w-5" />
-                    Lost Leads by Source
-                </CardTitle>
-                <CardDescription>Breakdown of sources for leads with a 'Lost' status.</CardDescription>
-            </CardHeader>
-            <CardContent>
-            {stats.lostLeadsBySource.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                    <PieChart>
-                        <Pie
-                           data={stats.lostLeadsBySource}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            dataKey="value"
-                        >
-                        {stats.lostLeadsBySource.map((entry, index) => (
-                            <Cell key={`cell-lost-source-${index}`} fill={inactiveLostSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                        ))}
-                        </Pie>
-                         <Tooltip content={<ChartTooltipContent
-                            formatter={(value, name) => (
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{name}</span>
-                                    <span className="text-muted-foreground">{value} leads</span>
-                                </div>
-                            )}
-                            />}
-                        />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLostSource, setInactiveLostSource, e)} />
-                    </PieChart>
-                </ChartContainer>
-            ) : (
-                <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                    No lost lead data to display for the selected filters.
-                </div>
-            )}
-            </CardContent>
-        </Card>
-      </div>
-
-       {userProfile?.role === 'admin' && (
-          <div className="space-y-6">
-              <div>
-                  <h2 className="text-2xl font-semibold tracking-tight">Team Performance Leaderboard</h2>
-                  <p className="text-muted-foreground">Comparison of dialer performance.</p>
-              </div>
-              <Card>
-                <CardContent className="pt-6">
-                  {stats.teamPerformanceData.length > 0 ? (
-                      <ChartContainer config={chartConfig} className="h-[400px] w-full">
-                          <BarChart data={stats.teamPerformanceData} layout="vertical">
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis type="number" />
-                              <YAxis dataKey="name" type="category" width={120} />
-                              <Tooltip 
-                                content={<ChartTooltipContent 
-                                  formatter={(value, name) => (
-                                      <div className="flex flex-col">
-                                          <span className="font-medium">{name}</span>
-                                          <span className="text-muted-foreground">{typeof value === 'number' && name === 'Conversion Rate' ? `${value.toFixed(2)}%` : value}</span>
-                                      </div>
-                                  )}
-                                />} 
-                              />
-                              <Legend />
-                              <Bar dataKey="Total Calls" fill="#8884d8" />
-                              <Bar dataKey="Appointments" fill="#82ca9d" />
-                              <Bar dataKey="Conversion Rate" fill="#ffc658" />
-                          </BarChart>
-                      </ChartContainer>
-                  ) : (
-                      <div className="flex h-[400px] items-center justify-center text-muted-foreground">No team performance data available.</div>
-                  )}
-                </CardContent>
-              </Card>
-          </div>
-        )}
-      
-      <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
-                <p className="text-muted-foreground">Metrics related to call activities.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                 <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
-                 <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
-                 <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(2)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
-                 <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
-                 <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(2)}% of total calls`} />
-            </div>
-        </div>
-
-       <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
-                <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
-            </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                <StatCard title="New Leads" value={stats.newLeads} icon={Users} description="Leads not yet actioned." />
-                <StatCard title="Priority Leads Remaining" value={stats.priorityLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
-                <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
-                <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
-                <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
-            </div>
-        </div>
-
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Discovery & Routing Insights</h2>
-                <p className="text-muted-foreground">Metrics related to the discovery process.</p>
-            </div>
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                 <StatCard title="Average Discovery Score" value={stats.averageDiscoveryScore.toFixed(0)} icon={Star} description="Average score across all leads with discovery data." />
-                 <Card>
+      ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-3">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                           <Route className="h-5 w-5" />
-                           Leads by Routing Tag
-                        </CardTitle>
+                        <CardTitle>Leads by Status</CardTitle>
+                        <CardDescription>Distribution of leads by their current status (excluding 'New').</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {stats.routingTagData.length > 0 ? (
-                            <ChartContainer config={chartConfig} className="h-[200px] w-full">
-                                <PieChart>
-                                    <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60}>
-                                        {stats.routingTagData.map((entry, index) => (
-                                            <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<ChartTooltipContent
-                                      formatter={(value, name) => (
-                                          <div className="flex flex-col">
-                                              <span className="font-medium">{name}</span>
-                                              <span className="text-muted-foreground">{value} leads</span>
-                                          </div>
-                                      )}
-                                      />}
+                    {stats.leadsByStatus.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.leadsByStatus}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                {stats.leadsByStatus.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={inactiveStatus.includes(entry.name) ? 'transparent' : STATUS_COLORS[entry.name]} />
+                                ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent
+                                    formatter={(value, name) => (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{name === 'Won' ? 'Signed' : name}</span>
+                                            <span className="text-muted-foreground">{value} leads</span>
+                                        </div>
+                                    )}
+                                    />}
+                                />
+                                <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value}/>
+                            </PieChart>
+                        </ChartContainer>
+                    ) : (
+                        <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                        No lead status data to display for the selected filters.
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="space-y-6">
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance by Account Manager</h2>
+                    <p className="text-muted-foreground">Breakdown of appointment metrics for each appointment setter.</p>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                    <CardHeader>
+                        <CardTitle>Appointments per Account Manager</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.appointmentsByAssigneeData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={stats.appointmentsByAssigneeData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" />
+                            <YAxis dataKey="name" type="category" width={100} />
+                            <Tooltip />
+                            <Bar dataKey="appointments" fill="#82ca9d" name="Appointments" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                        ) : (
+                        <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
+                        )}
+                    </CardContent>
+                    </Card>
+                    <Card>
+                    <CardHeader>
+                        <CardTitle>Appointment Outcomes by Account Manager</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.appointmentOutcomesByAssigneeData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={stats.appointmentOutcomesByAssigneeData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" stackId="a" />
+                            <YAxis dataKey="name" type="category" width={100} />
+                            <Tooltip />
+                            <Legend formatter={(value) => value === 'Won' ? 'Signed' : value} />
+                            {stats.allStatuses.map((status, index) => (
+                                <Bar key={status} dataKey={status} stackId="a" name={status === 'Won' ? 'Signed' : status} fill={STATUS_COLORS[status] || SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                            ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                        ) : (
+                        <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data to display.</div>
+                        )}
+                    </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-1">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Briefcase className="h-5 w-5" />
+                            Appointments by Lead Source
+                        </CardTitle>
+                        <CardDescription>Appointments booked from different lead sources.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    {stats.appointmentsBySource.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.appointmentsBySource}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                {stats.appointmentsBySource.map((entry, index) => (
+                                <Cell key={`cell-source-${index}`} fill={inactiveSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent
+                                    formatter={(value, name) => (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{name}</span>
+                                            <span className="text-muted-foreground">{value} appointments</span>
+                                        </div>
+                                    )}
+                                    />}
+                                />
+                                <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveSource, setInactiveSource, e)} />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : (
+                        <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                            No appointment data to display for the selected filters.
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-1">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Target className="h-5 w-5" />
+                            Appointments by Lead Type
+                        </CardTitle>
+                        <CardDescription>Breakdown of lead types for booked appointments.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    {stats.appointmentsByLeadType.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.appointmentsByLeadType}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                {stats.appointmentsByLeadType.map((entry, index) => (
+                                <Cell key={`cell-lead-type-${index}`} fill={inactiveLeadType.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent
+                                    formatter={(value, name) => (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{name}</span>
+                                            <span className="text-muted-foreground">{value} appointments</span>
+                                        </div>
+                                    )}
+                                    />}
+                                />
+                                <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLeadType, setInactiveLeadType, e)} />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : (
+                        <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                            No lead type data to display for the selected filters.
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+                
+                <Card className="lg:col-span-1">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Frown className="h-5 w-5" />
+                            Lost Leads by Source
+                        </CardTitle>
+                        <CardDescription>Breakdown of sources for leads with a 'Lost' status.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    {stats.lostLeadsBySource.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                            <PieChart>
+                                <Pie
+                                data={stats.lostLeadsBySource}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                {stats.lostLeadsBySource.map((entry, index) => (
+                                    <Cell key={`cell-lost-source-${index}`} fill={inactiveLostSource.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent
+                                    formatter={(value, name) => (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{name}</span>
+                                            <span className="text-muted-foreground">{value} leads</span>
+                                        </div>
+                                    )}
+                                    />}
+                                />
+                                <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveLostSource, setInactiveLostSource, e)} />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : (
+                        <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                            No lost lead data to display for the selected filters.
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {userProfile?.role === 'admin' && (
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Team Performance Leaderboard</h2>
+                        <p className="text-muted-foreground">Comparison of dialer performance.</p>
+                    </div>
+                    <Card>
+                        <CardContent className="pt-6">
+                        {stats.teamPerformanceData.length > 0 ? (
+                            <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                                <BarChart data={stats.teamPerformanceData} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={120} />
+                                    <Tooltip 
+                                        content={<ChartTooltipContent 
+                                        formatter={(value, name) => (
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{name}</span>
+                                                <span className="text-muted-foreground">{typeof value === 'number' && name === 'Conversion Rate' ? `${value.toFixed(2)}%` : value}</span>
+                                            </div>
+                                        )}
+                                        />} 
                                     />
-                                    <Legend iconSize={10} onClick={(e) => handleLegendClick(inactiveRoutingTag, setInactiveRoutingTag, e)} />
-                                </PieChart>
+                                    <Legend />
+                                    <Bar dataKey="Total Calls" fill="#8884d8" />
+                                    <Bar dataKey="Appointments" fill="#82ca9d" />
+                                    <Bar dataKey="Conversion Rate" fill="#ffc658" />
+                                </BarChart>
                             </ChartContainer>
                         ) : (
-                             <div className="flex h-[200px] items-center justify-center text-muted-foreground">No routing data.</div>
-                         )}
-                    </CardContent>
-                 </Card>
-                 <Card>
-                    <CardHeader>
-                         <CardTitle className="flex items-center gap-2">
-                           <BarChart3 className="h-5 w-5" />
-                           Leads by Score Range
-                        </CardTitle>
-                    </CardHeader>
-                     <CardContent>
-                         {stats.scoreRangeData.some(d => d.value > 0) ? (
-                            <ResponsiveContainer width="100%" height={200}>
-                                <BarChart data={stats.scoreRangeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" fontSize={12} />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#8884d8" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                         ) : (
-                             <div className="flex h-[200px] items-center justify-center text-muted-foreground">No score data.</div>
-                         )}
-                    </CardContent>
-                 </Card>
-             </div>
-        </div>
+                            <div className="flex h-[400px] items-center justify-center text-muted-foreground">No team performance data available.</div>
+                        )}
+                        </CardContent>
+                    </Card>
+                </div>
+                )}
+            
+            <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Call Performance</h2>
+                        <p className="text-muted-foreground">Metrics related to call activities.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <StatCard title="Total Calls Made" value={stats.totalCalls} icon={Phone} />
+                        <StatCard title="Unique Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} total leads`} />
+                        <StatCard title="Calls to Contacted Ratio" value={`${stats.callsToContactedRatio.toFixed(2)} : 1`} icon={Percent} description="Avg. calls per unique lead contacted" />
+                        <StatCard title="Average Call Duration" value={stats.averageDurationFormatted} icon={Clock} description="Based on unique calls" />
+                        <StatCard title="Calls > 2min" value={stats.callsOver2Min} icon={TrendingUp} description={`${stats.ratioOver2Min.toFixed(2)}% of total calls`} />
+                    </div>
+                </div>
 
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Conversion Rates</h2>
-                <p className="text-muted-foreground">Key conversion metrics.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
-                <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
-                <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
-                 <StatCard title="Qualified to Contacted" value={`${stats.qualifiedToContactedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified'/'Pre-Qualified'/'Won' to contacted leads" />
-                <StatCard title="Total Qualified to Archived" value={`${stats.combinedQualifiedToArchivedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified' + 'Pre-Qualified' + 'Won' to all archived" />
-            </div>
-        </div>
+            <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Lead Funnel</h2>
+                        <p className="text-muted-foreground">Metrics related to lead progression and status.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                        <StatCard title="New Leads" value={stats.newLeads} icon={Users} description="Leads not yet actioned." />
+                        <StatCard title="Priority Leads Remaining" value={stats.priorityLeadsRemaining} icon={Flame} description="Priority leads to be actioned." />
+                        <StatCard title="Total Assigned Leads" value={stats.totalAssignedLeads} icon={Users} description="Matching current filters" />
+                        <StatCard title="Leads In Progress" value={stats.leadsInProgress} icon={TrendingUp} description="Contacted leads not yet archived" />
+                        <StatCard title="Total Archived Leads" value={stats.totalArchivedLeads} icon={Archive} description="Includes Lost, Qualified, Won, LPO Review, Pre Qualified, and Unqualified statuses." />
+                    </div>
+                </div>
 
-       <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
-            <p className="text-muted-foreground">Metrics related to booked appointments.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-                 <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
-                 <StatCard 
-                    title="Appointments to Won Leads" 
-                    value={stats.appointmentsForWonLeads} 
-                    icon={Goal} 
-                    description={`${stats.wonAppointmentRate.toFixed(2)}% of total appointments`} 
-                />
-                <StatCard 
-                    title="Appointments to Trialing ShipMate" 
-                    value={stats.appointmentsForTrialingShipMateLeads} 
-                    icon={Presentation} 
-                    description={`${stats.trialingShipMateAppointmentRate.toFixed(2)}% of total appointments`} 
-                />
-                <StatCard 
-                    title="Appointments to Lost Leads" 
-                    value={stats.appointmentsForLostLeads} 
-                    icon={UserX} 
-                    description={`${stats.lostAppointmentRate.toFixed(2)}% of total appointments`} 
-                />
-                 <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Ratio of appointments to calls" />
-                 <StatCard title="Won from Completed" value={`${stats.wonFromCompletedRate}%`} icon={TrendingUp} description="%% of completed appointments that resulted in a 'Won' status" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(2)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
-                <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(2)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
-                <Card>
-                <CardHeader>
-                    <CardTitle>Appointment Outcomes</CardTitle>
-                    <CardDescription>Distribution of appointment statuses.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {stats.appointmentOutcomeData.length > 0 ? (
-                    <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                        <PieChart>
-                        <Pie
-                            data={stats.appointmentOutcomeData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            dataKey="value"
-                        >
-                            {stats.appointmentOutcomeData.map((entry, index) => (
-                            <Cell key={`cell-appt-status-${index}`} fill={inactiveAppointmentStatus.includes(entry.name) ? 'transparent' : APPOINTMENT_STATUS_COLORS[entry.name]} />
-                            ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltipContent
-                            formatter={(value, name) => (
-                            <div className="flex flex-col">
-                                <span className="font-medium">{name}</span>
-                                <span className="text-muted-foreground">{value} appointments</span>
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Discovery & Routing Insights</h2>
+                        <p className="text-muted-foreground">Metrics related to the discovery process.</p>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <StatCard title="Average Discovery Score" value={stats.averageDiscoveryScore.toFixed(0)} icon={Star} description="Average score across all leads with discovery data." />
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                <Route className="h-5 w-5" />
+                                Leads by Routing Tag
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {stats.routingTagData.length > 0 ? (
+                                    <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                                        <PieChart>
+                                            <Pie data={stats.routingTagData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60}>
+                                                {stats.routingTagData.map((entry, index) => (
+                                                    <Cell key={`cell-route-${index}`} fill={inactiveRoutingTag.includes(entry.name) ? 'transparent' : SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip content={<ChartTooltipContent
+                                            formatter={(value, name) => (
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{name}</span>
+                                                    <span className="text-muted-foreground">{value} leads</span>
+                                                </div>
+                                            )}
+                                            />}
+                                            />
+                                            <Legend iconSize={10} onClick={(e) => handleLegendClick(inactiveRoutingTag, setInactiveRoutingTag, e)} />
+                                        </PieChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <div className="flex h-[200px] items-center justify-center text-muted-foreground">No routing data.</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                <BarChart3 className="h-5 w-5" />
+                                Leads by Score Range
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {stats.scoreRangeData.some(d => d.value > 0) ? (
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <BarChart data={stats.scoreRangeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="name" fontSize={12} />
+                                            <YAxis />
+                                            <Tooltip />
+                                            <Bar dataKey="value" fill="#8884d8" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="flex h-[200px] items-center justify-center text-muted-foreground">No score data.</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Conversion Rates</h2>
+                        <p className="text-muted-foreground">Key conversion metrics.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                        <StatCard title="Processed to Call Ratio" value={`${stats.processedToCallsRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of processed leads to calls" />
+                        <StatCard title="Appt. to Contact Ratio" value={`${stats.appointmentToContactRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to unique leads contacted" />
+                        <StatCard title="Appt. to Archived Ratio" value={`${stats.appointmentToArchivedRatio.toFixed(2)}%`} icon={TrendingUp} description="Ratio of appointments to archived leads" />
+                        <StatCard title="Qualified to Contacted" value={`${stats.qualifiedToContactedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified'/'Pre-Qualified'/'Won' to contacted leads" />
+                        <StatCard title="Total Qualified to Archived" value={`${stats.combinedQualifiedToArchivedRatio.toFixed(2)}%`} icon={Percent} description="Ratio of 'Qualified' + 'Pre-Qualified' + 'Won' to all archived" />
+                    </div>
+                </div>
+
+            <div className="space-y-6">
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight">Appointment Performance</h2>
+                    <p className="text-muted-foreground">Metrics related to booked appointments.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                        <StatCard title="Total Appointments Booked" value={stats.totalAppointments} icon={CalendarIconLucide} description="Unique appointments" />
+                        <StatCard 
+                            title="Appointments to Won Leads" 
+                            value={stats.appointmentsForWonLeads} 
+                            icon={Goal} 
+                            description={`${stats.wonAppointmentRate.toFixed(2)}% of total appointments`} 
+                        />
+                        <StatCard 
+                            title="Appointments to Trialing ShipMate" 
+                            value={stats.appointmentsForTrialingShipMateLeads} 
+                            icon={Presentation} 
+                            description={`${stats.trialingShipMateAppointmentRate.toFixed(2)}% of total appointments`} 
+                        />
+                        <StatCard 
+                            title="Appointments to Lost Leads" 
+                            value={stats.appointmentsForLostLeads} 
+                            icon={UserX} 
+                            description={`${stats.lostAppointmentRate.toFixed(2)}% of total appointments`} 
+                        />
+                        <StatCard title="Appointment Booking Rate" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Ratio of appointments to calls" />
+                        <StatCard title="Won from Completed" value={`${stats.wonFromCompletedRate}%`} icon={TrendingUp} description="%% of completed appointments that resulted in a 'Won' status" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <StatCard title="Appointment Show Rate" value={`${stats.showRate.toFixed(2)}%`} icon={TrendingUp} description="Completed / (Completed + No Shows + Cancelled)" />
+                        <StatCard title="Appointment No-Show Rate" value={`${stats.noShowRate.toFixed(2)}%`} icon={TrendingDown} description="No Shows / (Completed + No Shows + Cancelled)" />
+                        <Card>
+                        <CardHeader>
+                            <CardTitle>Appointment Outcomes</CardTitle>
+                            <CardDescription>Distribution of appointment statuses.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {stats.appointmentOutcomeData.length > 0 ? (
+                            <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                                <PieChart>
+                                <Pie
+                                    data={stats.appointmentOutcomeData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                    {stats.appointmentOutcomeData.map((entry, index) => (
+                                    <Cell key={`cell-appt-status-${index}`} fill={inactiveAppointmentStatus.includes(entry.name) ? 'transparent' : APPOINTMENT_STATUS_COLORS[entry.name]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent
+                                    formatter={(value, name) => (
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">{name}</span>
+                                        <span className="text-muted-foreground">{value} appointments</span>
+                                    </div>
+                                    )}
+                                />} />
+                                <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveAppointmentStatus, setInactiveAppointmentStatus, e)} />
+                                </PieChart>
+                            </ChartContainer>
+                            ) : (
+                            <div className="flex h-[350px] items-center justify-center text-muted-foreground">
+                                No appointment outcome data to display.
                             </div>
                             )}
-                        />} />
-                        <Legend iconSize={12} wrapperStyle={{fontSize: "12px"}} onClick={(e) => handleLegendClick(inactiveAppointmentStatus, setInactiveAppointmentStatus, e)} />
-                        </PieChart>
-                    </ChartContainer>
-                    ) : (
-                    <div className="flex h-[350px] items-center justify-center text-muted-foreground">
-                        No appointment outcome data to display.
+                        </CardContent>
+                    </Card>
                     </div>
-                    )}
-                </CardContent>
-              </Card>
-            </div>
-        </div>
+                </div>
 
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Demo Performance</h2>
-                <p className="text-muted-foreground">Metrics related to conducted demos.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                 <StatCard title="Total Demos Conducted" value={stats.totalDemosConducted} icon={Presentation} />
-                 <StatCard title="Demos Won" value={stats.demosWon} icon={Goal} />
-                 <StatCard title="Demos Lost" value={stats.demosLost} icon={Frown} />
-                 <StatCard title="Demos in Trial" value={stats.demosTrialing} icon={TrendingUp} />
-            </div>
-        </div>
-        
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-semibold tracking-tight">Lead Outcomes</h2>
-                <p className="text-muted-foreground">Final breakdown of lead statuses.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                <StatCard title="Total Pre-Qualified Leads" value={stats.totalPreQualified} icon={UserCheck} />
-                <StatCard title="Total Qualified Leads" value={stats.totalQualified} icon={UserCheck} />
-                <StatCard title="Total Trialing ShipMate Leads" value={stats.totalTrialingShipMate} icon={Presentation} />
-                <StatCard title="Total Lost Leads" value={stats.totalLost} icon={UserX} />
-                <StatCard title="Total Won Leads" value={stats.totalWon} icon={Goal} />
-            </div>
-        </div>
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Demo Performance</h2>
+                        <p className="text-muted-foreground">Metrics related to conducted demos.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <StatCard title="Total Demos Conducted" value={stats.totalDemosConducted} icon={Presentation} />
+                        <StatCard title="Demos Won" value={stats.demosWon} icon={Goal} />
+                        <StatCard title="Demos Lost" value={stats.demosLost} icon={Frown} />
+                        <StatCard title="Demos in Trial" value={stats.demosTrialing} icon={TrendingUp} />
+                    </div>
+                </div>
+                
+                <div className="space-y-6">
+                    <div>
+                        <h2 className="text-2xl font-semibold tracking-tight">Lead Outcomes</h2>
+                        <p className="text-muted-foreground">Final breakdown of lead statuses.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                        <StatCard title="Total Pre-Qualified Leads" value={stats.totalPreQualified} icon={UserCheck} />
+                        <StatCard title="Total Qualified Leads" value={stats.totalQualified} icon={UserCheck} />
+                        <StatCard title="Total Trialing ShipMate Leads" value={stats.totalTrialingShipMate} icon={Presentation} />
+                        <StatCard title="Total Lost Leads" value={stats.totalLost} icon={UserX} />
+                        <StatCard title="Total Won Leads" value={stats.totalWon} icon={Goal} />
+                    </div>
+                </div>
+          </>
+      )}
 
     </div>
   );
