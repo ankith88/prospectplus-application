@@ -26,6 +26,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, where, getDocs, limit, collectionGroup, orderBy, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { ScrollArea } from './ui/scroll-area';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
 
@@ -94,11 +95,10 @@ export default function ReportsClientPage() {
   const [indexUrl, setIndexUrl] = useState<string | null>(null);
   
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
-  const [inactiveStatus, setInactiveStatus] = useState<string[]>([]);
-
   const [filters, setFilters] = useState({
     status: [] as string[],
     callDate: {
@@ -230,7 +230,7 @@ export default function ReportsClientPage() {
         console.error("Failed to refresh reporting data:", error);
         
         const errorMsg = error.message || "";
-        if (errorMsg.includes('index') || errorMsg.includes('https://console.firebase.google.com')) {
+        if (errorMsg.includes('requires an index') || errorMsg.includes('COLLECTION_GROUP_DESC')) {
             const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
             if (urlMatch) {
                 const cleanUrl = urlMatch[0].replace(/[.\s]+$/, "");
