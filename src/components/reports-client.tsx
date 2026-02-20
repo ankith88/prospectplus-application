@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 import { 
@@ -44,21 +44,21 @@ import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid, parseI
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, where, getDocs, limit, collectionGroup, orderBy, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ScrollArea } from './ui/scroll-area';
-import { Badge } from './ui/badge';
-import { Button } from '@/components/ui/button';
 import { LeadStatusBadge } from './lead-status-badge';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
 
-const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Email Brush Off'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
@@ -101,16 +101,12 @@ export default function ReportsClientPage() {
   const [indexUrl, setIndexUrl] = useState<string | null>(null);
   
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
     status: [] as string[],
-    callDate: {
-        from: startOfDay(startOfMonth(new Date())),
-        to: endOfDay(endOfMonth(new Date()))
-    } as DateRange | undefined,
+    callDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -137,23 +133,27 @@ export default function ReportsClientPage() {
         }).filter(Boolean);
         setAllDialers(userList);
 
+        // Fetch leads first to exclude Field Sales from the base set
         const leadsQuery = query(collection(firestore, 'leads'), orderBy('dateLeadEntered', 'desc'), limit(5000));
         const leadsSnap = await getDocs(leadsQuery);
-        const leadsData = leadsSnap.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                entityId: data.entityId || data.customerEntityId || data.internalid,
-                companyName: data.companyName || 'Unknown Company',
-                dialerAssigned: data.dialerAssigned,
-                salesRepAssigned: data.salesRepAssigned,
-                status: safeGetStatus(data.customerStatus),
-                franchisee: data.franchisee,
-                fieldSales: data.fieldSales,
-                dateLeadEntered: data.dateLeadEntered,
-                discoveryData: data.discoveryData,
-            } as unknown as Lead;
-        });
+        const leadsData = leadsSnap.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    entityId: data.entityId || data.customerEntityId || data.internalid,
+                    companyName: data.companyName || 'Unknown Company',
+                    dialerAssigned: data.dialerAssigned,
+                    salesRepAssigned: data.salesRepAssigned,
+                    status: safeGetStatus(data.customerStatus),
+                    franchisee: data.franchisee,
+                    fieldSales: data.fieldSales === true,
+                    dateLeadEntered: data.dateLeadEntered,
+                    discoveryData: data.discoveryData,
+                } as unknown as Lead;
+            })
+            .filter(l => l.fieldSales === false); // Scoped to Outbound only
+            
         setAllLeads(leadsData);
         const leadMap = new Map(leadsData.map(l => [l.id, l]));
 
@@ -169,7 +169,7 @@ export default function ReportsClientPage() {
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
-            if (!lead) return null;
+            if (!lead) return null; // Automatically excludes field sales leads not in our map
             
             return {
                 ...data,
@@ -242,10 +242,7 @@ export default function ReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       status: [],
-      callDate: {
-          from: startOfDay(startOfMonth(new Date())),
-          to: endOfDay(endOfMonth(new Date()))
-      },
+      callDate: undefined,
       appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: [],
@@ -254,11 +251,11 @@ export default function ReportsClientPage() {
     });
   };
 
-  // --- FILTERED DATA (Must be defined before stats) ---
+  // --- DATA PROCESSING (Memoized) ---
 
   const filteredCalls = useMemo(() => {
-    return (allCalls || []).filter(call => {
-        const lead = (allLeads || []).find(l => l.id === call.leadId);
+    return allCalls.filter(call => {
+        const lead = allLeads.find(l => l.id === call.leadId);
         const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
         const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
@@ -288,16 +285,16 @@ export default function ReportsClientPage() {
             }
         };
 
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
+        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
         return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
   }, [allCalls, allLeads, filters, allAppointments]);
   
   const filteredAppointments = useMemo(() => {
-    return (allAppointments || []).filter(appointment => {
+    return allAppointments.filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') return false;
-        const lead = (allLeads || []).find(l => l.id === appointment.leadId);
+        const lead = allLeads.find(l => l.id === appointment.leadId);
         const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
         const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
@@ -324,12 +321,19 @@ export default function ReportsClientPage() {
     });
   }, [allAppointments, allLeads, filters]);
 
-  // --- SUMMARY STATS (Depends on filtered datasets above) ---
-
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
-    const leadsWithActivity = allLeads.filter(l => leadsContactedIds.has(l.id));
+    
+    // Base leads set for stats - strictly Outbound + Current Filters
+    const baseFilteredLeads = allLeads.filter(l => {
+        const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
+        const dialerMatch = filters.dialerAssigned.length === 0 || (l.dialerAssigned && filters.dialerAssigned.includes(l.dialerAssigned));
+        const statusMatch = filters.status.length === 0 || filters.status.includes(l.status);
+        return franchiseeMatch && dialerMatch && statusMatch;
+    });
+
+    const leadsWithActivity = baseFilteredLeads.filter(l => leadsContactedIds.has(l.id));
     
     const wonCount = leadsWithActivity.filter(l => l.status === 'Won').length;
     const quoteCount = leadsWithActivity.filter(l => l.status === 'Prospect Opportunity').length;
@@ -338,42 +342,20 @@ export default function ReportsClientPage() {
     
     const totalAppointments = filteredAppointments.length;
 
-    // Queue statuses: New, Priority Lead, Priority Field Lead
-    const queueLeads = allLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status)).length;
-    // In Progress: In Progress
-    const inProgressLeads = allLeads.filter(l => l.status === 'In Progress').length;
-    // Processed: Terminal or archived statuses
-    const archivedLeads = allLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status)).length;
+    // Pipeline Logic
+    const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
+    const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress');
+    const processedLeads = baseFilteredLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status));
 
-    const callsWithDuration = filteredCalls.filter(c => c.duration);
-    const totalDurationInSec = callsWithDuration.reduce((sum, call) => {
-        const d = call.duration || '';
-        const minutesMatch = d.match(/(\d+)m/);
-        const secondsMatch = d.match(/(\d+)s/);
-        const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
-        const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
-        return sum + (minutes * 60 + seconds);
-    }, 0);
-    const averageDuration = callsWithDuration.length > 0 ? totalDurationInSec / callsWithDuration.length : 0;
-    const avgMinutes = Math.floor(averageDuration / 60);
-    const avgSeconds = Math.round(averageDuration % 60);
-    const averageDurationFormatted = `${avgMinutes}m ${avgSeconds}s`;
-
-    const leadsByStatus = leadsWithActivity
-        .filter(lead => lead.status !== 'New')
-        .reduce((acc, lead) => {
-            const status = lead.status;
-            const existingEntry = acc.find(item => item.name === status);
-            if (existingEntry) existingEntry.value += 1;
-            else acc.push({ name: status, value: 1 });
-            return acc;
-        }, [] as { name: LeadStatus; value: number }[]);
+    const queueStatusDist = queueLeads.reduce((acc, l) => {
+        acc[l.status] = (acc[l.status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
 
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
       const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
-      const conversionRate = dialerCalls > 0 ? (dialerAppointments / dialerCalls) * 100 : 0;
-      return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments, 'Conversion Rate': parseFloat(conversionRate.toFixed(2)) };
+      return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments };
     }).filter(d => d['Total Calls'] > 0);
 
     const callOutcomesData = filteredCalls.reduce((acc, call) => {
@@ -405,21 +387,6 @@ export default function ReportsClientPage() {
         };
     }).sort((a, b) => b.Total - a.Total);
 
-    const dailyTrendMap = new Map<string, { date: string, calls: number, appointments: number }>();
-    filteredCalls.forEach(c => {
-        const d = format(new Date(c.date), 'yyyy-MM-dd');
-        if(!dailyTrendMap.has(d)) dailyTrendMap.set(d, { date: d, calls: 0, appointments: 0 });
-        dailyTrendMap.get(d)!.calls++;
-    });
-    filteredAppointments.forEach(a => {
-        const createdDate = parseDateString(a.appointmentDate);
-        if(createdDate) {
-            const d = format(createdDate, 'yyyy-MM-dd');
-            if(!dailyTrendMap.has(d)) dailyTrendMap.set(d, { date: d, calls: 0, appointments: 0 });
-            dailyTrendMap.get(d)!.appointments++;
-        }
-    });
-
     return {
       totalCalls,
       wonCount,
@@ -427,13 +394,11 @@ export default function ReportsClientPage() {
       trialCount,
       lostCount,
       totalAppointments,
-      queueCount: queueLeads,
-      inProgressCount: inProgressLeads,
-      processedCount: archivedLeads,
-      leadsByStatus,
-      totalDurationFormatted: averageDurationFormatted,
+      queueCount: queueLeads.length,
+      inProgressCount: inProgressLeads.length,
+      processedCount: processedLeads.length,
+      queueStatusDist,
       teamPerformanceData,
-      dailyTrendData: Array.from(dailyTrendMap.values()).sort((a,b) => a.date.localeCompare(b.date)),
       callOutcomesData,
       appointmentOutcomeData,
       amPerformanceData,
@@ -452,23 +417,18 @@ export default function ReportsClientPage() {
           lost: totalAppointments > 0 ? (lostCount / totalAppointments) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters]);
 
-  const allFranchiseesOptions: Option[] = useMemo(() => {
-    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [allLeads]);
-  
-  const leadStatusOptionsUI: Option[] = useMemo(() => {
-    return leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
-  }, []);
-
+  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(ams as string[]).map(am => ({ value: am, label: am })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(ams as string[]).map(am => ({ value: am, label: am }));
   }, [allAppointments]);
-
   const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
+  const franchiseeOptions: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
+    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
+  }, [allLeads]);
 
   if (loading || authLoading || !userProfile) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
@@ -505,8 +465,8 @@ export default function ReportsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
                     <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
-                    <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={allFranchiseesOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
-                    <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptionsUI} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
+                    <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
+                    <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
                         <Label>Call/Creation Date</Label>
                         <Popover>
@@ -557,23 +517,43 @@ export default function ReportsClientPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Pipeline Status</CardTitle><CardDescription>Real-time volume of leads in the calling lifecycle.</CardDescription></CardHeader>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Pipeline Status</CardTitle><CardDescription>Current volume across the outbound lifecycle.</CardDescription></CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
                             <span className="text-sm font-medium">In Calling Queue</span>
                             <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
                         </div>
                         <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <span className="text-sm font-medium">Currently In Progress</span>
+                            <span className="text-sm font-medium">Active Pipeline</span>
                             <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
                         </div>
                         <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
+                            <span className="text-sm font-medium">Fully Processed</span>
                             <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
                         </div>
                     </CardContent>
                 </Card>
 
+                <Card className="lg:col-span-2">
+                    <CardHeader><CardTitle>Status Distribution (Queue & In Progress)</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {Object.entries(stats.queueStatusDist).map(([status, count]) => (
+                                <div key={status} className="p-3 border rounded-md">
+                                    <p className="text-xs text-muted-foreground mb-1">{status}</p>
+                                    <p className="text-xl font-bold">{count}</p>
+                                </div>
+                            ))}
+                            <div className="p-3 border rounded-md bg-blue-50/50">
+                                <p className="text-xs text-muted-foreground mb-1">In Progress</p>
+                                <p className="text-xl font-bold">{stats.inProgressCount}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle></CardHeader>
                     <CardContent>
@@ -604,27 +584,45 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
+            <Card>
+                <CardHeader><CardTitle>Account Manager Performance</CardTitle><CardDescription>Breakdown of appointment outcomes by AM.</CardDescription></CardHeader>
+                <CardContent>
+                    <ScrollArea className="h-[400px]">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Account Manager</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead className="text-right">Completed</TableHead>
+                                    <TableHead className="text-right">No Show</TableHead>
+                                    <TableHead className="text-right">Cancelled</TableHead>
+                                    <TableHead className="text-right">Pending</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.amPerformanceData.length > 0 ? (
+                                    stats.amPerformanceData.map(am => (
+                                        <TableRow key={am.name}>
+                                            <TableCell className="font-medium">{am.name}</TableCell>
+                                            <TableCell className="text-right">{am.Total}</TableCell>
+                                            <TableCell className="text-right text-green-600 font-bold">{am.Completed}</TableCell>
+                                            <TableCell className="text-right text-orange-600">{am['No Show']}</TableCell>
+                                            <TableCell className="text-right text-red-600">{am.Cancelled}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground">{am.Pending}</TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground italic">No AM performance data available for selected filters.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader><CardTitle>Daily Activity Trend</CardTitle></CardHeader>
-                    <CardContent>
-                        {stats.dailyTrendData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[300px] w-full">
-                                <LineChart data={stats.dailyTrendData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), 'MMM d')} fontSize={12} />
-                                    <YAxis fontSize={12} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Legend />
-                                    <Line type="monotone" dataKey="calls" stroke="#8884d8" name="Calls" strokeWidth={2} dot={false} />
-                                    <Line type="monotone" dataKey="appointments" stroke="#82ca9d" name="Appointments" strokeWidth={2} dot={false} />
-                                </LineChart>
-                            </ChartContainer>
-                        ) : <div className="flex h-[300px] items-center justify-center text-muted-foreground">No trend data.</div>}
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader><CardTitle>Appointment Status</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Appointment Outcomes</CardTitle></CardHeader>
                     <CardContent>
                         {stats.appointmentOutcomeData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[300px] w-full">
@@ -636,43 +634,7 @@ export default function ReportsClientPage() {
                                     <Legend />
                                 </PieChart>
                             </ChartContainer>
-                        ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No outcomes.</div>}
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <CardHeader><CardTitle>Account Manager Performance</CardTitle><CardDescription>Breakdown of appointment outcomes by AM.</CardDescription></CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[400px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Account Manager</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Completed</TableHead>
-                                        <TableHead className="text-right">No Show</TableHead>
-                                        <TableHead className="text-right">Cancelled</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stats.amPerformanceData.length > 0 ? (
-                                        stats.amPerformanceData.map(am => (
-                                            <TableRow key={am.name}>
-                                                <TableCell className="font-medium">{am.name}</TableCell>
-                                                <TableCell className="text-right">{am.Total}</TableCell>
-                                                <TableCell className="text-right text-green-600 font-bold">{am.Completed}</TableCell>
-                                                <TableCell className="text-right text-orange-600">{am['No Show']}</TableCell>
-                                                <TableCell className="text-right text-red-600">{am.Cancelled}</TableCell>
-                                            </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">No AM performance data.</TableCell></TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
+                        ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No appointment outcomes found.</div>}
                     </CardContent>
                 </Card>
                 <Card>
@@ -688,7 +650,7 @@ export default function ReportsClientPage() {
                                     <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
                                 </BarChart>
                             </ChartContainer>
-                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No call outcomes.</div>}
+                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No call outcomes recorded.</div>}
                     </CardContent>
                 </Card>
             </div>
