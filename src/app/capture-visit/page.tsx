@@ -87,6 +87,13 @@ const discoverySchema = z.object({
   decisionMakerTitle: z.string().optional(),
   decisionMakerEmail: z.string().email().optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
+
+  lostPropertyProcess: z.enum([
+    'Staff organise returns manually',
+    'Guests contact us to arrange shipping',
+    'Rarely happens / informal process',
+    'Already use a return platform'
+  ]).optional(),
 });
 
 

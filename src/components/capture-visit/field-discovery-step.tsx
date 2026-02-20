@@ -54,12 +54,37 @@ const discoverySignalGroups = {
     }
 }
 
+const lostPropertyOptions = [
+    { 
+        label: 'Staff organise returns manually', 
+        description: 'Team packs items, arranges postage or courier',
+    },
+    { 
+        label: 'Guests contact us to arrange shipping', 
+        description: 'Staff manage payments, labels or booking',
+    },
+    { 
+        label: 'Rarely happens / informal process', 
+        description: 'No standard system for returns',
+    },
+    { 
+        label: 'Already use a return platform', 
+        description: 'Lost property handled through a system',
+    },
+];
+
 
 const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
   inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
   occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
   taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
+  lostPropertyProcess: z.enum([
+    'Staff organise returns manually',
+    'Guests contact us to arrange shipping',
+    'Rarely happens / informal process',
+    'Already use a return platform'
+  ]).optional(),
 });
 
 const SignalButton = ({ signal, field }: { signal: { id: string; label: string; description: string; }, field: any }) => {
@@ -112,6 +137,35 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                     </FormItem>
                 )}
             />
+
+            <div className="space-y-6 pt-4 border-t">
+                <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?</FormLabel>
+                <FormField
+                    control={control}
+                    name="lostPropertyProcess"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormControl>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                                    {lostPropertyOptions.map((option) => (
+                                        <Button
+                                            key={option.label}
+                                            type="button"
+                                            variant={field.value === option.label ? 'default' : 'outline'}
+                                            className="h-auto flex flex-col items-start p-3 text-left"
+                                            onClick={() => field.onChange(option.label)}
+                                        >
+                                            <span className="font-semibold text-sm">{option.label}</span>
+                                            <span className="text-xs font-normal opacity-70">{option.description}</span>
+                                        </Button>
+                                    ))}
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
 
             <div className="space-y-6 pt-4 border-t">
                 <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>

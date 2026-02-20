@@ -16,7 +16,7 @@ interface SummaryStepProps {
 }
 
 export default function SummaryStep({ discoveryData, onSubmit, onBack, isSubmitting }: SummaryStepProps) {
-  const { score, routingTag, scoringReason } = calculateScoreAndRouting(discoveryData);
+  const { score, routingTag, scoringReason, dashbackOpportunity } = calculateScoreAndRouting(discoveryData);
 
   return (
     <div className="space-y-6">
@@ -38,6 +38,14 @@ export default function SummaryStep({ discoveryData, onSubmit, onBack, isSubmitt
                 {routingTag}
               </Badge>
             </div>
+            {dashbackOpportunity && (
+                <div className="flex flex-col items-center border-l pl-6">
+                    <p className="text-sm text-muted-foreground">Dashback</p>
+                    <Badge variant="secondary" className="text-lg mt-1">
+                        {dashbackOpportunity}
+                    </Badge>
+                </div>
+            )}
           </div>
           <DiscoveryRadarChart discoveryData={discoveryData as DiscoveryData} />
           {scoringReason && (

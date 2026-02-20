@@ -27,6 +27,23 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       if (data.discoverySignals?.includes('Shopify / WooCommerce')) { groupC_score += 1; reasonParts.push('+1 for Shopify/Woo.'); }
       if (data.discoverySignals?.includes('Other label platforms')) { groupC_score -= 2; reasonParts.push('-2 for other label platforms.'); }
       
+      // --- Lost Property (Dashback) ---
+      let dashbackOpportunity = '';
+      if (data.lostPropertyProcess) {
+          if (data.lostPropertyProcess === 'Staff organise returns manually' || data.lostPropertyProcess === 'Guests contact us to arrange shipping') {
+              groupC_score += 2;
+              dashbackOpportunity = 'High';
+              reasonParts.push('+2 for High Dashback Opportunity.');
+          } else if (data.lostPropertyProcess === 'Rarely happens / informal process') {
+              groupC_score += 1;
+              dashbackOpportunity = 'Medium';
+              reasonParts.push('+1 for Medium Dashback Opportunity.');
+          } else if (data.lostPropertyProcess === 'Already use a return platform') {
+              dashbackOpportunity = 'Low / Competitor';
+              reasonParts.push('Low Dashback Opportunity (Competitor).');
+          }
+      }
+
       const discoveryScore = groupA_score + groupB_score + groupC_score;
       
       // --- Qualification Score ---
@@ -60,7 +77,7 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       const finalScore = Math.round(discoveryScore * (qualificationScore / 10));
 
       if (data.discoverySignals?.includes('Decisions made at Head Office')) {
-        return { ...data, score: Math.min(finalScore, 100), routingTag: 'Corporate', scoringReason: 'Lead routed to Corporate because decisions are made at Head Office.' };
+        return { ...data, score: Math.min(finalScore, 100), routingTag: 'Corporate', scoringReason: 'Lead routed to Corporate because decisions are made at Head Office.', dashbackOpportunity };
       }
 
       const servicePoints = (data.discoverySignals?.filter(s => ['Pays for Australia Post', 'Staff Handle Post', 'Drop-off is a hassle', 'Banking Runs', 'Inter-office Deliveries', 'Needs same-day Delivery'].includes(s)).length || 0) > 0;
@@ -75,5 +92,5 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       
       const scoringReason = reasonParts.length > 0 ? reasonParts.join(' ') : 'No specific scoring criteria met.';
 
-      return { ...data, score: Math.min(finalScore, 100), routingTag, scoringReason };
+      return { ...data, score: Math.min(finalScore, 100), routingTag, scoringReason, dashbackOpportunity };
   }

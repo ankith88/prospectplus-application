@@ -137,6 +137,9 @@ export interface DiscoveryData {
   decisionMakerEmail?: string;
   decisionMakerPhone?: string;
 
+  lostPropertyProcess?: string;
+  dashbackOpportunity?: string;
+
   score?: number;
   routingTag?: string;
   scoringReason?: string;
