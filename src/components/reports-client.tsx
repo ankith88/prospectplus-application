@@ -8,7 +8,7 @@ import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryDat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink, ClipboardCheck } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink, ClipboardCheck, ListTodo, Layers } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -17,7 +17,7 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -140,7 +140,6 @@ export default function ReportsClientPage() {
 
         console.log("[Reports] Starting optimized client-side direct data load...");
         
-        // 1. Fetch Users
         const usersSnap = await getDocs(collection(firestore, 'users'));
         const userList = usersSnap.docs.map(doc => {
             const data = doc.data();
@@ -148,7 +147,6 @@ export default function ReportsClientPage() {
         }).filter(Boolean);
         setAllDialers(userList);
 
-        // 2. Fetch Leads (limit 5000 for client hydration map)
         const leadsQuery = query(collection(firestore, 'leads'), orderBy('dateLeadEntered', 'desc'), limit(5000));
         const leadsSnap = await getDocs(leadsQuery);
         const leadsData = leadsSnap.docs.map(doc => {
@@ -160,19 +158,18 @@ export default function ReportsClientPage() {
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
-                campaign: data.customerCampaign,
+                customerCampaign: data.customerCampaign,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
                 fieldSales: data.fieldSales,
                 dateLeadEntered: data.dateLeadEntered,
                 discoveryData: data.discoveryData,
-            } as Lead;
+            } as unknown as Lead;
         });
         setAllLeads(leadsData);
         const leadMap = new Map(leadsData.map(l => [l.id, l]));
 
-        // 3. Fetch Calls (Direct Collection Group)
         let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'), limit(5000));
         if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
         if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
@@ -198,7 +195,6 @@ export default function ReportsClientPage() {
         }).filter(Boolean) as CallActivity[];
         setAllCalls(calls);
 
-        // 4. Fetch Appointments (Direct Collection Group)
         let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'), limit(3000));
         if (startDate) apptsQuery = query(apptsQuery, where('starttime', '>=', startDate));
         if (endDate) apptsQuery = query(apptsQuery, where('starttime', '<=', endDate));
@@ -353,10 +349,21 @@ export default function ReportsClientPage() {
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
-    const uniqueLeadsContacted = leadsContactedIds.size;
-
+    
     const leadsWithActivity = allLeads.filter(l => leadsContactedIds.has(l.id));
     
+    const wonCount = leadsWithActivity.filter(l => l.status === 'Won').length;
+    const quoteCount = leadsWithActivity.filter(l => l.status === 'Prospect Opportunity').length;
+    const trialCount = leadsWithActivity.filter(l => l.status === 'Trialing ShipMate').length;
+    const lostCount = leadsWithActivity.filter(l => l.status === 'Lost').length;
+    
+    const totalAppointments = filteredAppointments.length;
+
+    // Queue Stats
+    const queueLeads = allLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status)).length;
+    const inProgressLeads = allLeads.filter(l => l.status === 'In Progress').length;
+    const archivedLeads = allLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status)).length;
+
     const callsWithDuration = filteredCalls.filter(c => c.duration);
     const totalDuration = callsWithDuration.reduce((sum, call) => sum + parseDurationLocal(call.duration), 0);
     const averageDuration = callsWithDuration.length > 0 ? totalDuration / callsWithDuration.length : 0;
@@ -374,9 +381,6 @@ export default function ReportsClientPage() {
             return acc;
         }, [] as { name: LeadStatus; value: number }[]);
 
-    const totalAppointments = filteredAppointments.length;
-    const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
-
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
       const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
@@ -385,7 +389,6 @@ export default function ReportsClientPage() {
     }).filter(d => d['Total Calls'] > 0);
 
     const callOutcomesData = filteredCalls.reduce((acc, call) => {
-        // Extract outcome from notes like "Outcome: Busy. Notes: ..."
         const outcomeMatch = call.notes.match(/Outcome: ([^.]+)\./);
         const outcome = outcomeMatch ? outcomeMatch[1] : 'Other';
         const existing = acc.find(item => item.name === outcome);
@@ -404,17 +407,13 @@ export default function ReportsClientPage() {
 
     const amPerformanceData = Array.from(new Set(filteredAppointments.map(a => a.assignedTo).filter(Boolean))).map(am => {
         const amAppts = filteredAppointments.filter(a => a.assignedTo === am);
-        const completed = amAppts.filter(a => a.appointmentStatus === 'Completed').length;
-        const cancelled = amAppts.filter(a => a.appointmentStatus === 'Cancelled').length;
-        const noShow = amAppts.filter(a => a.appointmentStatus === 'No Show').length;
-        const pending = amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length;
         return { 
             name: am, 
             Total: amAppts.length,
-            Completed: completed,
-            Cancelled: cancelled,
-            'No Show': noShow,
-            Pending: pending
+            Completed: amAppts.filter(a => a.appointmentStatus === 'Completed').length,
+            Cancelled: amAppts.filter(a => a.appointmentStatus === 'Cancelled').length,
+            'No Show': amAppts.filter(a => a.appointmentStatus === 'No Show').length,
+            Pending: amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length
         };
     }).sort((a, b) => b.Total - a.Total);
 
@@ -432,29 +431,39 @@ export default function ReportsClientPage() {
             dailyTrendMap.get(d)!.appointments++;
         }
     });
-    const dailyTrendData = Array.from(dailyTrendMap.values()).sort((a,b) => a.date.localeCompare(b.date));
 
-    const conversionFunnel = {
-        'Signed': leadsWithActivity.filter(l => l.status === 'Won').length,
-        'ShipMate Trials': leadsWithActivity.filter(l => l.status === 'Trialing ShipMate').length,
-        'Quotes Sent': leadsWithActivity.filter(l => l.status === 'Prospect Opportunity').length,
-        'Free Trials': leadsWithActivity.filter(l => l.status === 'Free Trial').length,
-        'Qualified': leadsWithActivity.filter(l => l.status === 'Qualified').length,
-    };
-    
     return {
       totalCalls,
-      leadsContacted: uniqueLeadsContacted,
+      wonCount,
+      quoteCount,
+      trialCount,
+      lostCount,
+      totalAppointments,
+      queueCount: queueLeads,
+      inProgressCount: inProgressLeads,
+      processedCount: archivedLeads,
       leadsByStatus,
       totalDurationFormatted: averageDurationFormatted,
-      totalAppointments,
-      appointmentToCallRatio: parseFloat(appointmentToCallRatio.toFixed(2)),
       teamPerformanceData,
-      dailyTrendData,
+      dailyTrendData: Array.from(dailyTrendMap.values()).sort((a,b) => a.date.localeCompare(b.date)),
       callOutcomesData,
       appointmentOutcomeData,
       amPerformanceData,
-      conversionFunnel,
+      
+      // Ratios
+      callRatios: {
+          appointment: totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0,
+          won: totalCalls > 0 ? (wonCount / totalCalls) * 100 : 0,
+          quote: totalCalls > 0 ? (quoteCount / totalCalls) * 100 : 0,
+          trial: totalCalls > 0 ? (trialCount / totalCalls) * 100 : 0,
+          lost: totalCalls > 0 ? (lostCount / totalCalls) * 100 : 0,
+      },
+      apptRatios: {
+          won: totalAppointments > 0 ? (wonCount / totalAppointments) * 100 : 0,
+          trial: totalAppointments > 0 ? (trialCount / totalAppointments) * 100 : 0,
+          quote: totalAppointments > 0 ? (quoteCount / totalAppointments) * 100 : 0,
+          lost: totalAppointments > 0 ? (lostCount / totalAppointments) * 100 : 0,
+      }
     };
   }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
 
@@ -536,27 +545,68 @@ export default function ReportsClientPage() {
       )}
 
       {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-4"><Loader /><p className="text-muted-foreground animate-pulse">Loading directly from database...</p></div>
+          <div className="py-20 flex flex-col items-center justify-center gap-4"><Loader /><p className="text-muted-foreground animate-pulse">Loading data...</p></div>
       ) : !error && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
-                <StatCard title="Leads Contacted" value={stats.leadsContacted} icon={UserCheck} />
-                <StatCard title="Total Appointments" value={stats.totalAppointments} icon={CalendarIconLucide} />
-                <StatCard title="Avg. Call Duration" value={stats.totalDurationFormatted} icon={Clock} />
-                <StatCard title="Appt. Conversion" value={`${stats.appointmentToCallRatio}%`} icon={Percent} />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <StatCard title="Signed" value={stats.conversionFunnel['Signed']} icon={Star} />
-                <StatCard title="ShipMate Trials" value={stats.conversionFunnel['ShipMate Trials']} icon={Flame} />
-                <StatCard title="Quotes Sent" value={stats.conversionFunnel['Quotes Sent']} icon={Send} />
-                <StatCard title="Free Trials" value={stats.conversionFunnel['Free Trials']} icon={Sparkles} />
-                <StatCard title="Qualified" value={stats.conversionFunnel['Qualified']} icon={CheckCircle} />
+                <StatCard title="Appointments" value={stats.totalAppointments} icon={CalendarIconLucide} />
+                <StatCard title="Won Customers" value={stats.wonCount} icon={Star} />
+                <StatCard title="Quotes Sent" value={stats.quoteCount} icon={Send} />
+                <StatCard title="ShipMate Trials" value={stats.trialCount} icon={Flame} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-2">
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Pipeline Status</CardTitle><CardDescription>Real-time volume of leads in the calling lifecycle.</CardDescription></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
+                            <span className="text-sm font-medium">In Calling Queue</span>
+                            <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                            <span className="text-sm font-medium">Currently In Progress</span>
+                            <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
+                            <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle></CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <TableRow><TableCell className="font-medium">Call to Appointment</TableCell><TableCell className="text-right font-bold">{stats.callRatios.appointment.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Won</TableCell><TableCell className="text-right font-bold">{stats.callRatios.won.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Quote</TableCell><TableCell className="text-right font-bold">{stats.callRatios.quote.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Trial</TableCell><TableCell className="text-right font-bold">{stats.callRatios.trial.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.callRatios.lost.toFixed(1)}%</TableCell></TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle></CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <TableRow><TableCell className="font-medium">Appt to Won</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.won.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appt to Trial</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.trial.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appt to Quote</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.quote.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appt to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.apptRatios.lost.toFixed(1)}%</TableCell></TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
                     <CardHeader><CardTitle>Daily Activity Trend</CardTitle></CardHeader>
                     <CardContent>
                         {stats.dailyTrendData.length > 0 ? (
@@ -643,25 +693,6 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
             </div>
-
-            <Card>
-                <CardHeader><CardTitle>Dialer Performance</CardTitle></CardHeader>
-                <CardContent>
-                    {stats.teamPerformanceData.length > 0 ? (
-                        <ChartContainer config={{}} className="h-[400px] w-full">
-                            <BarChart data={stats.teamPerformanceData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" width={120} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="Total Calls" fill="#8884d8" />
-                                <Bar dataKey="Appointments" fill="#82ca9d" />
-                            </BarChart>
-                        </ChartContainer>
-                    ) : <div className="flex h-[400px] items-center justify-center text-muted-foreground">No team data.</div>}
-                </CardContent>
-            </Card>
           </div>
       )}
     </div>
