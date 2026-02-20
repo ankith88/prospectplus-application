@@ -2,20 +2,20 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, AppointmentStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
-import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink } from 'lucide-react';
+import { Phone, Users, UserCheck, UserX, Percent, Clock, Filter, SlidersHorizontal, X, Sparkles, Send, Route, Star, Calendar as CalendarIconLucide, Goal, CheckCircle, TrendingUp, Briefcase, Archive, Frown, BarChart3, TrendingDown, Target, RefreshCw, Presentation, Flame, AlertCircle, ExternalLink, ClipboardCheck } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, isValid, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,9 @@ import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, where, getDocs, limit, collectionGroup, orderBy, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57', '#ffc658'];
 
 const STATUS_COLORS: { [key in LeadStatus]?: string } = {
   'New': '#A0A0A0',
@@ -117,6 +120,11 @@ export default function ReportsClientPage() {
   const leadStatusOptions: Option[] = useMemo(() => {
     return leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
   }, []);
+
+  const amOptions: Option[] = useMemo(() => {
+    const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
+    return Array.from(ams as string[]).map(am => ({ value: am, label: am })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allAppointments]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -221,7 +229,6 @@ export default function ReportsClientPage() {
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
         
-        // Handle the "missing index" error specifically with broader detection
         const errorMsg = error.message || "";
         if (errorMsg.includes('index') || errorMsg.includes('https://console.firebase.google.com')) {
             const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
@@ -253,21 +260,6 @@ export default function ReportsClientPage() {
     }
   }, [user, authLoading, router, fetchData]);
 
-  useEffect(() => {
-    if (userProfile?.role !== 'admin' && userProfile?.displayName) {
-      handleFilterChange('dialerAssigned', [userProfile.displayName]);
-    }
-  }, [userProfile]);
-  
-  const handleLegendClick = (inactiveState: string[], setInactiveState: React.Dispatch<React.SetStateAction<string[]>>, entry: any) => {
-    const { value } = entry;
-    if (inactiveState.includes(value)) {
-      setInactiveState(inactiveState.filter(item => item !== value));
-    } else {
-      setInactiveState([...inactiveState, value]);
-    }
-  };
-  
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
@@ -281,7 +273,7 @@ export default function ReportsClientPage() {
       },
       appointmentDate: undefined,
       duration: 'all',
-      dialerAssigned: userProfile?.role === 'admin' ? [] : (userProfile?.displayName ? [userProfile.displayName] : []),
+      dialerAssigned: [],
       franchisee: [],
       appointmentAssignedTo: [],
     });
@@ -295,33 +287,6 @@ export default function ReportsClientPage() {
     const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
     return minutes * 60 + seconds;
   };
-
-  const filteredLeads = useMemo(() => {
-     return (allLeads || []).filter(lead => {
-        const dialerMatch = filters.dialerAssigned.length === 0 || (lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(lead.status);
-        
-        let callDateMatch = true;
-        if (filters.callDate?.from) {
-            const fromDate = startOfDay(filters.callDate.from);
-            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            
-            const hasMatchingActivity = (allCalls || []).some(c => c.leadId === lead.id && new Date(c.date) >= fromDate && new Date(c.date) <= toDate);
-            const hasMatchingAppointment = (allAppointments || []).some(a => {
-                if (a.leadId !== lead.id) return false;
-                const createdDate = parseDateString(a.appointmentDate);
-                if (!createdDate) return false;
-                return createdDate >= fromDate && createdDate <= toDate;
-            });
-            callDateMatch = hasMatchingActivity || hasMatchingAppointment;
-        }
-        
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (allAppointments || []).some(a => a.leadId === lead.id && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
-
-        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && appointmentAssignedToMatch;
-    });
-  }, [allLeads, filters, allCalls, allAppointments]);
 
   const filteredCalls = useMemo(() => {
     return (allCalls || []).filter(call => {
@@ -390,7 +355,7 @@ export default function ReportsClientPage() {
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
     const uniqueLeadsContacted = leadsContactedIds.size;
 
-    const totalLeadsInFilter = filteredLeads.length;
+    const leadsWithActivity = allLeads.filter(l => leadsContactedIds.has(l.id));
     
     const callsWithDuration = filteredCalls.filter(c => c.duration);
     const totalDuration = callsWithDuration.reduce((sum, call) => sum + parseDurationLocal(call.duration), 0);
@@ -399,7 +364,7 @@ export default function ReportsClientPage() {
     const avgSeconds = Math.round(averageDuration % 60);
     const averageDurationFormatted = `${avgMinutes}m ${avgSeconds}s`;
 
-    const leadsByStatus = filteredLeads
+    const leadsByStatus = leadsWithActivity
         .filter(lead => lead.status !== 'New')
         .reduce((acc, lead) => {
             const status = lead.status;
@@ -419,7 +384,40 @@ export default function ReportsClientPage() {
       return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments, 'Conversion Rate': parseFloat(conversionRate.toFixed(2)) };
     }).filter(d => d['Total Calls'] > 0);
 
-    // Daily Trend
+    const callOutcomesData = filteredCalls.reduce((acc, call) => {
+        // Extract outcome from notes like "Outcome: Busy. Notes: ..."
+        const outcomeMatch = call.notes.match(/Outcome: ([^.]+)\./);
+        const outcome = outcomeMatch ? outcomeMatch[1] : 'Other';
+        const existing = acc.find(item => item.name === outcome);
+        if (existing) existing.value++;
+        else acc.push({ name: outcome, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
+
+    const appointmentOutcomeData = filteredAppointments.reduce((acc, appt) => {
+        const status = appt.appointmentStatus || 'Pending';
+        const existing = acc.find(item => item.name === status);
+        if (existing) existing.value++;
+        else acc.push({ name: status, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]);
+
+    const amPerformanceData = Array.from(new Set(filteredAppointments.map(a => a.assignedTo).filter(Boolean))).map(am => {
+        const amAppts = filteredAppointments.filter(a => a.assignedTo === am);
+        const completed = amAppts.filter(a => a.appointmentStatus === 'Completed').length;
+        const cancelled = amAppts.filter(a => a.appointmentStatus === 'Cancelled').length;
+        const noShow = amAppts.filter(a => a.appointmentStatus === 'No Show').length;
+        const pending = amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length;
+        return { 
+            name: am, 
+            Total: amAppts.length,
+            Completed: completed,
+            Cancelled: cancelled,
+            'No Show': noShow,
+            Pending: pending
+        };
+    }).sort((a, b) => b.Total - a.Total);
+
     const dailyTrendMap = new Map<string, { date: string, calls: number, appointments: number }>();
     filteredCalls.forEach(c => {
         const d = format(new Date(c.date), 'yyyy-MM-dd');
@@ -435,19 +433,30 @@ export default function ReportsClientPage() {
         }
     });
     const dailyTrendData = Array.from(dailyTrendMap.values()).sort((a,b) => a.date.localeCompare(b.date));
+
+    const conversionFunnel = {
+        'Signed': leadsWithActivity.filter(l => l.status === 'Won').length,
+        'ShipMate Trials': leadsWithActivity.filter(l => l.status === 'Trialing ShipMate').length,
+        'Quotes Sent': leadsWithActivity.filter(l => l.status === 'Prospect Opportunity').length,
+        'Free Trials': leadsWithActivity.filter(l => l.status === 'Free Trial').length,
+        'Qualified': leadsWithActivity.filter(l => l.status === 'Qualified').length,
+    };
     
     return {
       totalCalls,
       leadsContacted: uniqueLeadsContacted,
       leadsByStatus,
       totalDurationFormatted: averageDurationFormatted,
-      totalLeadsInFilter,
       totalAppointments,
       appointmentToCallRatio: parseFloat(appointmentToCallRatio.toFixed(2)),
       teamPerformanceData,
       dailyTrendData,
+      callOutcomesData,
+      appointmentOutcomeData,
+      amPerformanceData,
+      conversionFunnel,
     };
-  }, [filteredCalls, filteredLeads, filteredAppointments, allDialers]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers]);
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
@@ -485,6 +494,7 @@ export default function ReportsClientPage() {
             <CollapsibleContent>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
+                    <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
                     <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={allFranchiseesOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
@@ -494,6 +504,14 @@ export default function ReportsClientPage() {
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.callDate} onSelect={(date) => handleFilterChange('callDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
+                    <div className="space-y-2">
+                        <Label>Appointment Date</Label>
+                        <Popover>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : <span>Pick a date</span>}</Button></PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
+                        </Popover>
+                    </div>
+                    <Button variant="ghost" onClick={clearFilters} className="col-start-1"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
                 </CardContent>
             </CollapsibleContent>
           </Card>
@@ -523,25 +541,29 @@ export default function ReportsClientPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
-                <StatCard title="Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} leads`} />
+                <StatCard title="Leads Contacted" value={stats.leadsContacted} icon={UserCheck} />
                 <StatCard title="Total Appointments" value={stats.totalAppointments} icon={CalendarIconLucide} />
                 <StatCard title="Avg. Call Duration" value={stats.totalDurationFormatted} icon={Clock} />
-                <StatCard title="Appt. Conversion" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Appointments per Call" />
+                <StatCard title="Appt. Conversion" value={`${stats.appointmentToCallRatio}%`} icon={Percent} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <CardHeader><CardTitle>Activity Trend</CardTitle></CardHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <StatCard title="Signed" value={stats.conversionFunnel['Signed']} icon={Star} />
+                <StatCard title="ShipMate Trials" value={stats.conversionFunnel['ShipMate Trials']} icon={Flame} />
+                <StatCard title="Quotes Sent" value={stats.conversionFunnel['Quotes Sent']} icon={Send} />
+                <StatCard title="Free Trials" value={stats.conversionFunnel['Free Trials']} icon={Sparkles} />
+                <StatCard title="Qualified" value={stats.conversionFunnel['Qualified']} icon={CheckCircle} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-2">
+                    <CardHeader><CardTitle>Daily Activity Trend</CardTitle></CardHeader>
                     <CardContent>
                         {stats.dailyTrendData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[300px] w-full">
                                 <LineChart data={stats.dailyTrendData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        tickFormatter={(val) => format(new Date(val), 'MMM d')}
-                                        fontSize={12}
-                                    />
+                                    <XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), 'MMM d')} fontSize={12} />
                                     <YAxis fontSize={12} />
                                     <Tooltip content={<ChartTooltipContent />} />
                                     <Legend />
@@ -552,27 +574,78 @@ export default function ReportsClientPage() {
                         ) : <div className="flex h-[300px] items-center justify-center text-muted-foreground">No trend data.</div>}
                     </CardContent>
                 </Card>
-
                 <Card>
-                    <CardHeader><CardTitle>Recent Leads by Status</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>Appointment Status</CardTitle></CardHeader>
                     <CardContent>
-                        {stats.leadsByStatus.length > 0 ? (
+                        {stats.appointmentOutcomeData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[300px] w-full">
                                 <PieChart>
-                                    <Pie data={stats.leadsByStatus} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">
-                                        {stats.leadsByStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as LeadStatus] || '#8884d8'} />)}
+                                    <Pie data={stats.appointmentOutcomeData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                        {stats.appointmentOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                     </Pie>
                                     <Tooltip />
-                                    <Legend onClick={(e) => handleLegendClick(inactiveStatus, setInactiveStatus, e)} formatter={(value) => value === 'Won' ? 'Signed' : value} />
+                                    <Legend />
                                 </PieChart>
                             </ChartContainer>
-                        ) : <div className="flex h-[300px] items-center justify-center text-muted-foreground">No data.</div>}
+                        ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No outcomes.</div>}
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader><CardTitle>Account Manager Performance</CardTitle><CardDescription>Breakdown of appointment outcomes by AM.</CardDescription></CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[400px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Account Manager</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Completed</TableHead>
+                                        <TableHead className="text-right">No Show</TableHead>
+                                        <TableHead className="text-right">Cancelled</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.amPerformanceData.length > 0 ? (
+                                        stats.amPerformanceData.map(am => (
+                                            <TableRow key={am.name}>
+                                                <TableCell className="font-medium">{am.name}</TableCell>
+                                                <TableCell className="text-right">{am.Total}</TableCell>
+                                                <TableCell className="text-right text-green-600 font-bold">{am.Completed}</TableCell>
+                                                <TableCell className="text-right text-orange-600">{am['No Show']}</TableCell>
+                                                <TableCell className="text-right text-red-600">{am.Cancelled}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">No AM performance data.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader><CardTitle>Call Outcome Distribution</CardTitle></CardHeader>
+                    <CardContent>
+                        {stats.callOutcomesData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[400px] w-full">
+                                <BarChart data={stats.callOutcomesData} layout="vertical" margin={{ left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={120} fontSize={12} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No call outcomes.</div>}
                     </CardContent>
                 </Card>
             </div>
 
             <Card>
-                <CardHeader><CardTitle>Team Performance</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Dialer Performance</CardTitle></CardHeader>
                 <CardContent>
                     {stats.teamPerformanceData.length > 0 ? (
                         <ChartContainer config={{}} className="h-[400px] w-full">
@@ -586,7 +659,7 @@ export default function ReportsClientPage() {
                                 <Bar dataKey="Appointments" fill="#82ca9d" />
                             </BarChart>
                         </ChartContainer>
-                    ) : <div className="flex h-[400px] items-center justify-center text-muted-foreground">No data.</div>}
+                    ) : <div className="flex h-[400px] items-center justify-center text-muted-foreground">No team data.</div>}
                 </CardContent>
             </Card>
           </div>
