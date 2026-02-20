@@ -56,7 +56,7 @@ const APPOINTMENT_STATUS_COLORS: { [key in AppointmentStatus | 'Pending']: strin
 };
 
 const SOURCE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#A855F7', '#22C55E', '#EF4444'];
-const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead'];
+const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Reschedule', 'Trialing ShipMate', 'Priority Field Lead', 'Email Brush Off'];
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status'] };
@@ -102,11 +102,6 @@ export default function ReportsClientPage() {
   const { toast } = useToast();
   
   const [inactiveStatus, setInactiveStatus] = useState<string[]>([]);
-  const [inactiveSource, setInactiveSource] = useState<string[]>([]);
-  const [inactiveLostSource, setInactiveLostSource] = useState<string[]>([]);
-  const [inactiveLeadType, setInactiveLeadType] = useState<string[]>([]);
-  const [inactiveRoutingTag, setInactiveRoutingTag] = useState<string[]>([]);
-  const [inactiveAppointmentStatus, setInactiveAppointmentStatus] = useState<string[]>([]);
 
   const [filters, setFilters] = useState({
     status: [] as string[],
@@ -126,10 +121,9 @@ export default function ReportsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
-  const allAppointmentAssigneesOptions: Option[] = useMemo(() => {
-    const assignees = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(assignees as string[]).map(a => ({ value: a, label: a })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [allAppointments]);
+  const leadStatusOptions: Option[] = useMemo(() => {
+    return leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a, b) => a.label.localeCompare(b.label));
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -373,7 +367,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -381,32 +375,11 @@ export default function ReportsClientPage() {
   }, [allAppointments, allLeads, filters]);
 
   const stats = useMemo(() => {
-    const leadsMap = new Map((allLeads || []).map(l => [l.id, l]));
     const totalCalls = filteredCalls.length;
     const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
     const uniqueLeadsContacted = leadsContactedIds.size;
 
     const totalLeadsInFilter = filteredLeads.length;
-    const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
-    const totalAssignedLeads = assignedLeads.length;
-    
-    const priorityLeadsRemaining = assignedLeads.filter(lead => lead.status === 'Priority Lead').length;
-    const newLeads = assignedLeads.filter(lead => lead.status === 'New').length;
-    
-    const inProgressStatuses: LeadStatus[] = ['Contacted', 'Connected', 'High Touch', 'In Progress', 'Reschedule'];
-    const leadsInProgress = assignedLeads.filter(lead => inProgressStatuses.includes(lead.status)).length;
-    
-    const queueStatuses: LeadStatus[] = ['New', 'Priority Lead'];
-    const leadsInQueue = assignedLeads.filter(lead => queueStatuses.includes(lead.status)).length;
-    
-    const callsOver2Min = filteredCalls.filter(c => parseDurationLocal(c.duration) >= 120).length;
-    const calls30sTo2min = filteredCalls.filter(c => {
-        const duration = parseDurationLocal(c.duration);
-        return duration >= 30 && duration < 120;
-    }).length;
-
-    const ratioOver2Min = totalCalls > 0 ? (callsOver2Min / totalCalls) * 100 : 0;
-    const ratio30sTo2min = totalCalls > 0 ? (calls30sTo2min / totalCalls) * 100 : 0;
     
     const callsWithDuration = filteredCalls.filter(c => c.duration);
     const totalDuration = callsWithDuration.reduce((sum, call) => sum + parseDurationLocal(call.duration), 0);
@@ -426,39 +399,7 @@ export default function ReportsClientPage() {
         }, [] as { name: LeadStatus; value: number }[]);
 
     const totalAppointments = filteredAppointments.length;
-    const appointmentsForWonLeads = filteredAppointments.filter(a => a.leadStatus === 'Won').length;
-    const appointmentsForTrialingShipMateLeads = filteredAppointments.filter(a => a.leadStatus === 'Trialing ShipMate').length;
-    const appointmentsForLostLeads = filteredAppointments.filter(a => a.leadStatus === 'Lost').length;
-    const wonAppointmentRate = totalAppointments > 0 ? (appointmentsForWonLeads / totalAppointments) * 100 : 0;
-    const trialingShipMateAppointmentRate = totalAppointments > 0 ? (appointmentsForTrialingShipMateLeads / totalAppointments) * 100 : 0;
-    const lostAppointmentRate = totalAppointments > 0 ? (appointmentsForLostLeads / totalAppointments) * 100 : 0;
-    
     const appointmentToCallRatio = totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0;
-    const appointmentToContactRatio = leadsContactedIds.size > 0 ? (totalAppointments / leadsContactedIds.size) * 100 : 0;
-    
-    const archivedStatuses: LeadStatus[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate'];
-    const totalArchivedLeads = assignedLeads.filter(lead => archivedStatuses.includes(lead.status)).length;
-
-    const processedToCallsRatio = totalCalls > 0 ? (totalArchivedLeads / totalCalls) * 100 : 0;
-    const appointmentToArchivedRatio = totalArchivedLeads > 0 ? (totalAppointments / totalArchivedLeads) * 100 : 0;
-
-    const totalPreQualified = filteredLeads.filter(l => l.status === 'Pre Qualified').length;
-    const totalQualified = filteredLeads.filter(l => l.status === 'Qualified').length;
-    const totalLost = filteredLeads.filter(l => l.status === 'Lost').length;
-    const totalWon = filteredLeads.filter(l => l.status === 'Won').length;
-    const totalTrialingShipMate = filteredLeads.filter(l => l.status === 'Trialing ShipMate').length;
-    
-    const leadsWithDiscoveryData = filteredLeads.filter((l): l is Lead & { discoveryData: DiscoveryData } => !!l.discoveryData && Object.keys(l.discoveryData).length > 0);
-    const averageDiscoveryScore = leadsWithDiscoveryData.length > 0
-        ? leadsWithDiscoveryData.reduce((sum, lead) => sum + (lead.discoveryData.score || 0), 0) / leadsWithDiscoveryData.length
-        : 0;
-
-    const leadsByRoutingTag = leadsWithDiscoveryData.reduce((acc, lead) => {
-        const tag = lead.discoveryData.routingTag || 'Unknown';
-        acc[tag] = (acc[tag] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-    const routingTagData = Object.entries(leadsByRoutingTag).map(([name, value]) => ({ name, value }));
 
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
@@ -467,65 +408,17 @@ export default function ReportsClientPage() {
       return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments, 'Conversion Rate': parseFloat(conversionRate.toFixed(2)) };
     }).filter(d => d['Total Calls'] > 0);
     
-    const appointmentOutcomes = filteredAppointments.reduce((acc, appt) => {
-        const status = appt.appointmentStatus || 'Pending';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-    }, {} as Record<AppointmentStatus | 'Pending', number>);
-    const appointmentOutcomeData = Object.entries(appointmentOutcomes).map(([name, value]) => ({ name: name as AppointmentStatus | 'Pending', value }));
-
-    const completedAppointments = filteredAppointments.filter(a => a.appointmentStatus === 'Completed');
-    const completedAppointmentsWon = completedAppointments.filter(a => a.leadStatus === 'Won').length;
-    const wonFromCompletedRate = completedAppointments.length > 0 ? (completedAppointmentsWon / completedAppointments.length) * 100 : 0;
-
-    const appointmentsByAssignee = filteredAppointments.reduce((acc, appt) => {
-        const assignee = appt.assignedTo || 'Unassigned';
-        if (!acc[assignee]) acc[assignee] = { name: assignee, appointments: 0 };
-        acc[assignee].appointments++;
-        return acc;
-    }, {} as Record<string, { name: string; appointments: number }>);
-
-    const appointmentOutcomesByAssignee = filteredAppointments.reduce((acc, appt) => {
-        const assignee = appt.assignedTo || 'Unassigned';
-        const status = appt.leadStatus;
-        if (!acc[assignee]) acc[assignee] = { name: assignee };
-        acc[assignee][status] = (acc[assignee][status] || 0) + 1;
-        return acc;
-    }, {} as Record<string, { name: string } & Partial<Record<LeadStatus, number>>>);
-
     return {
       totalCalls,
       leadsContacted: uniqueLeadsContacted,
-      leadsInQueue,
-      priorityLeadsRemaining,
-      newLeads,
       leadsByStatus,
-      totalAssignedLeads,
-      callsOver2Min,
-      calls30sTo2min,
-      ratioOver2Min: parseFloat(ratioOver2Min.toFixed(2)),
-      ratio30sTo2min: parseFloat(ratio30sTo2min.toFixed(2)),
+      totalDurationFormatted: averageDurationFormatted,
       totalLeadsInFilter,
       totalAppointments,
-      averageDurationFormatted,
-      wonAppointmentRate: parseFloat(wonAppointmentRate.toFixed(2)),
       appointmentToCallRatio: parseFloat(appointmentToCallRatio.toFixed(2)),
-      totalArchivedLeads,
-      totalWon,
-      totalTrialingShipMate,
-      averageDiscoveryScore: parseFloat(averageDiscoveryScore.toFixed(2)),
-      routingTagData,
-      leadsInProgress,
-      combinedQualifiedToArchivedRatio: totalArchivedLeads > 0 ? ((totalQualified + totalPreQualified + totalWon) / totalArchivedLeads) * 100 : 0,
       teamPerformanceData,
-      appointmentOutcomeData,
-      appointmentsByAssigneeData: Object.values(appointmentsByAssignee),
-      appointmentOutcomesByAssigneeData: Object.values(appointmentOutcomesByAssignee),
-      allStatuses: [...new Set(filteredAppointments.map(a => a.leadStatus))],
-      wonFromCompletedRate: parseFloat(wonFromCompletedRate.toFixed(2)),
-      callsToContactedRatio: uniqueLeadsContacted > 0 ? (totalCalls / uniqueLeadsContacted) : 0,
     };
-  }, [filteredCalls, filteredLeads, filteredAppointments, allLeads, allDialers]);
+  }, [filteredCalls, filteredLeads, filteredAppointments, allDialers]);
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
@@ -586,7 +479,7 @@ export default function ReportsClientPage() {
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
                 <StatCard title="Leads Contacted" value={stats.leadsContacted} icon={UserCheck} description={`out of ${stats.totalLeadsInFilter} leads`} />
                 <StatCard title="Total Appointments" value={stats.totalAppointments} icon={CalendarIconLucide} />
-                <StatCard title="Avg. Call Duration" value={stats.averageDurationFormatted} icon={Clock} />
+                <StatCard title="Avg. Call Duration" value={stats.totalDurationFormatted} icon={Clock} />
                 <StatCard title="Appt. Conversion" value={`${stats.appointmentToCallRatio.toFixed(2)}%`} icon={Percent} description="Appointments per Call" />
             </div>
 
