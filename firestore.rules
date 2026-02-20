@@ -14,10 +14,30 @@ service cloud.firestore {
       }
     }
 
-    // Collection group rule for routes
+    // Collection group rules for global reporting and history
     match /{path=**}/routes/{routeId} {
       allow read: if request.auth != null;
       allow update: if request.auth != null && (request.auth.uid == resource.data.userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Field Sales Admin', 'Lead Gen Admin']);
+    }
+    
+    match /{path=**}/activity/{activityId} {
+      allow read: if request.auth != null;
+    }
+    
+    match /{path=**}/appointments/{appointmentId} {
+      allow read: if request.auth != null;
+    }
+    
+    match /{path=**}/notes/{noteId} {
+      allow read: if request.auth != null;
+    }
+    
+    match /{path=**}/transcripts/{transcriptId} {
+      allow read: if request.auth != null;
+    }
+    
+    match /{path=**}/scorecards/{scorecardId} {
+      allow read: if request.auth != null;
     }
 
     // Leads and their subcollections
