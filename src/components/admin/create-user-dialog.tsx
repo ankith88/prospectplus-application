@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -17,6 +16,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -136,7 +136,12 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
             )}/>
             {role === 'Franchisee' && (
                 <FormField control={form.control} name="franchisee" render={({ field }) => (
-                    <FormItem><FormLabel>Franchise Name*</FormLabel><FormControl><Input {...field} placeholder="e.g. Sydney City" /></FormControl><FormDescription>Users with the Franchisee role will only see leads and signed customers associated with this specific franchise.</FormDescription><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>Franchise Name*</FormLabel>
+                      <FormControl><Input {...field} placeholder="e.g. Sydney City" /></FormControl>
+                      <FormDescription>Users with the Franchisee role will only see leads and signed customers associated with this specific franchise.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
                 )}/>
             )}
             {role === 'Field Sales' && (
