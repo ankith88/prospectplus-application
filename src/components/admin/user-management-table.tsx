@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +19,7 @@ import { getAllUsers, updateUser } from '@/services/firebase';
 import type { UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, Edit } from 'lucide-react';
+import { Lock, Mail, UserX, Edit, Search, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { CreateUserDialog } from './create-user-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -42,6 +42,10 @@ export function UserManagementTable() {
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
+
+  // Search and Sort State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
 
   const { toast } = useToast();
@@ -131,6 +135,46 @@ export function UserManagementTable() {
     }
   };
 
+  // Process users for display (Search and Sort)
+  const processedUsers = useMemo(() => {
+    let result = [...users];
+
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(u => 
+        (u.displayName || '').toLowerCase().includes(lowerSearch) || 
+        u.email.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const aValue = (a[sortConfig.key] || '').toString().toLowerCase();
+        const bValue = (b[sortConfig.key] || '').toString().toLowerCase();
+        if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [users, searchTerm, sortConfig]);
+
+  const requestSort = (key: keyof UserProfile) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: keyof UserProfile) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-50" />;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
+
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader /></div>;
@@ -139,55 +183,87 @@ export function UserManagementTable() {
   return (
     <>
       <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={fetchUsers} />
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Franchise</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.length > 0 ? (
-              users.map((user) => (
-                <TableRow key={user.uid}>
-                  <TableCell className="font-medium">{user.displayName}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell><Badge variant="outline">{user.role || 'N/A'}</Badge></TableCell>
-                  <TableCell>{user.franchisee || '-'}</TableCell>
-                  <TableCell>
-                    <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
-                      {user.disabled ? 'Disabled' : 'Active'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => setUserToEdit(user)}>
-                        <Edit className="mr-2 h-4 w-4" /> Edit
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleSendResetEmail(user.email)} disabled={!!isSendingReset}>
-                        {isSendingReset === user.email ? <Loader/> : <Mail className="mr-2 h-4 w-4" />}
-                        Reset Password
-                    </Button>
-                    <Button variant={user.disabled ? "secondary" : "destructive"} size="sm" onClick={() => setUserToToggle(user)}>
-                        <UserX className="mr-2 h-4 w-4" />
-                        {user.disabled ? 'Enable' : 'Disable'}
-                    </Button>
+      
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          {searchTerm && (
+            <Button variant="ghost" size="icon" onClick={() => setSearchTerm('')}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('displayName')} className="group -ml-4">
+                    Name{getSortIndicator('displayName')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('email')} className="group -ml-4">
+                    Email{getSortIndicator('email')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('role')} className="group -ml-4">
+                    Role{getSortIndicator('role')}
+                  </Button>
+                </TableHead>
+                <TableHead>Franchise</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {processedUsers.length > 0 ? (
+                processedUsers.map((user) => (
+                  <TableRow key={user.uid}>
+                    <TableCell className="font-medium">{user.displayName}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell><Badge variant="outline">{user.role || 'N/A'}</Badge></TableCell>
+                    <TableCell>{user.franchisee || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
+                        {user.disabled ? 'Disabled' : 'Active'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => setUserToEdit(user)}>
+                          <Edit className="mr-2 h-4 w-4" /> Edit
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleSendResetEmail(user.email)} disabled={!!isSendingReset}>
+                          {isSendingReset === user.email ? <Loader/> : <Mail className="mr-2 h-4 w-4" />}
+                          Reset Password
+                      </Button>
+                      <Button variant={user.disabled ? "secondary" : "destructive"} size="sm" onClick={() => setUserToToggle(user)}>
+                          <UserX className="mr-2 h-4 w-4" />
+                          {user.disabled ? 'Enable' : 'Disable'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    No users found.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  No users found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
        <AlertDialog open={!!userToToggle} onOpenChange={(open) => !open && setUserToToggle(null)}>
