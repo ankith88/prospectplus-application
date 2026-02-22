@@ -104,7 +104,7 @@ export function UserManagementTable() {
     if (!userToEdit || !newRole) return;
     setIsUpdating(true);
     try {
-      const updateData: Partial<UserProfile> = { role: newRole };
+      const updateData: Partial<UserProfile> = { role: newRole as UserProfile['role'] };
       if (newRole === 'Field Sales') {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
@@ -146,6 +146,7 @@ export function UserManagementTable() {
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Franchise</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -157,6 +158,7 @@ export function UserManagementTable() {
                   <TableCell className="font-medium">{user.displayName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell><Badge variant="outline">{user.role || 'N/A'}</Badge></TableCell>
+                  <TableCell>{user.franchisee || '-'}</TableCell>
                   <TableCell>
                     <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
                       {user.disabled ? 'Disabled' : 'Active'}
@@ -179,7 +181,7 @@ export function UserManagementTable() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   No users found.
                 </TableCell>
               </TableRow>

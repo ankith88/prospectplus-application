@@ -18,8 +18,6 @@ import {
     updateProfile,
     Auth,
     sendPasswordResetEmail,
-    isSignInWithEmailLink,
-    signInWithEmailLink,
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
@@ -137,7 +135,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
              return userCredential;
         } catch(error) {
-            // Rethrow the error to be caught by the calling component
             throw error;
         } finally {
             setIsSigningIn(false);
@@ -162,7 +159,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const signUpAndCreateProfile = async (userData: any) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
 
-        // We need to keep track of the original user to sign them back in.
         const originalUser = auth.currentUser;
 
         try {
@@ -190,15 +186,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         } catch (error) {
             console.error("Error creating user and profile:", error);
-            throw error; // Re-throw to be handled in the dialog
+            throw error;
         } finally {
-             // Sign out the newly created user and sign the original admin back in
             if (auth.currentUser && originalUser && auth.currentUser.uid !== originalUser.uid) {
                 await firebaseSignOut(auth);
-                // This is a simplified re-authentication. In a real app, you might need to
-                // securely re-authenticate the admin, but for this context, this avoids
-                // the admin's session being hijacked. A page refresh will restore the admin session
-                // via onAuthStateChanged.
                 console.log("Admin session will be restored on next page load.");
             }
         }
