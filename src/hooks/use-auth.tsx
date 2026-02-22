@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -184,6 +183,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 disabled: false,
                 linkedSalesRep: userData.linkedSalesRep || null,
                 linkedBDR: userData.linkedBDR || null,
+                franchisee: userData.franchisee || null,
             };
 
             await setDoc(doc(firestore, "users", newUser.uid), userProfileData);
