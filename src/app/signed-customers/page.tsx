@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -483,7 +482,7 @@ export default function SignedCustomersPage() {
             if (searchKeywords.length > 0 && company.latitude && company.longitude) {
                 // Mocking the result of findProspects for bulk operation
                  await new Promise<void>(resolve => {
-                    const placesService = new window.google.maps.PlacesService(map);
+                    const placesService = new window.google.maps.places.PlacesService(map);
                     const request: google.maps.places.PlaceSearchRequest = {
                         location: { lat: company.latitude!, lng: company.longitude! },
                         radius: 2000,

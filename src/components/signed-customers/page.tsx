@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -9,6 +8,14 @@ import {
   CardDescription,
   CardFooter,
 } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import type { Lead, Address, MapLead, Contact } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -66,7 +73,7 @@ const center = {
   lng: 133.7751,
 };
 
-const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 export default function SignedCustomersPage() {
   const [allMapData, setAllMapData] = useState<MapLead[]>([]);
@@ -110,7 +117,7 @@ export default function SignedCustomersPage() {
 
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-unused', // Make ID unique to avoid conflicts, though script tag in layout is primary
+    id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
@@ -141,8 +148,13 @@ export default function SignedCustomersPage() {
     setLoading(true);
     try {
       const [companies, leads] = await Promise.all([
-        getCompaniesFromFirebase(),
-        getLeadsFromFirebase({ summary: true }),
+        getCompaniesFromFirebase({
+            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+        }),
+        getLeadsFromFirebase({ 
+            summary: true,
+            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+        }),
       ]);
       const companyMapLeads = companies
         .filter(c => c.latitude != null && c.longitude != null)
@@ -166,11 +178,11 @@ export default function SignedCustomersPage() {
       router.push('/signin');
       return;
     }
-    if (authLoading) return;
+    if (authLoading || !userProfile) return;
     
     fetchData();
 
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, userProfile]);
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -284,7 +296,7 @@ export default function SignedCustomersPage() {
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
-        const placesService = new window.google.maps.places.PlacesService(map);
+        const placesService = new window.google.maps.PlacesService(map);
         return new Promise((resolve) => {
             placesService.getDetails({
                 placeId,
@@ -437,7 +449,7 @@ export default function SignedCustomersPage() {
     }
     
   }, [map, allMapData, getPlaceDetails, toast]);
-
+  
     const handleBulkFindSimilar = useCallback(async (companyIds: string[]) => {
         if (companyIds.length === 0 || !map) return;
 
@@ -765,6 +777,7 @@ export default function SignedCustomersPage() {
         },
         initialNotes: initialNotes,
         dialerAssigned: userProfile.displayName,
+        franchisee: userProfile.role === 'Franchisee' ? userProfile.franchisee : undefined
     };
 
     try {
@@ -781,6 +794,7 @@ export default function SignedCustomersPage() {
               longitude: newLeadData.address.lng,
               dialerAssigned: undefined,
               customerPhone: newLeadData.contact.phone,
+              franchisee: newLeadData.franchisee
             };
             setAllMapData(prev => [...prev, newMapLead]);
             setProspects(prev => prev.map(p => p.place.place_id === placeId

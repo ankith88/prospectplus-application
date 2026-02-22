@@ -1,4 +1,3 @@
-
 'use client';
 
 import VisitNotesClient from '@/components/visit-notes-client';
@@ -11,7 +10,7 @@ export default function VisitNotesPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

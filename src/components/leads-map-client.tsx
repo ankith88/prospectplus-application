@@ -180,8 +180,13 @@ export default function LeadsMapClient() {
                 : userProfile ? getUserRoutes(userProfile.uid) : Promise.resolve([]);
 
             const [fetchedCompanies, fetchedLeads, fetchedUsers, fetchedRoutes] = await Promise.all([
-                getCompaniesFromFirebase(),
-                getLeadsFromFirebase({ summary: true }),
+                getCompaniesFromFirebase({
+                    franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+                }),
+                getLeadsFromFirebase({ 
+                    summary: true,
+                    franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+                }),
                 getAllUsers(),
                 routesPromise,
             ]);
@@ -763,7 +768,7 @@ export default function LeadsMapClient() {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-2">
                                     <Label>Go to Location</Label>
-                                    <Input ref={geoSearchInputRef} placeholder="Enter a location..."/>
+                                    <input ref={geoSearchInputRef} placeholder="Enter a location..." className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Company Name</Label>
