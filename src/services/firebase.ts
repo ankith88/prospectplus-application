@@ -83,9 +83,8 @@ function safeGetStatus(status: any): LeadStatus {
             return 'Won';
         }
         
-        if (validStatuses.includes(cleanStatus as LeadStatus)) {
-            return cleanStatus as LeadStatus;
-        }
+        const found = validStatuses.find(s => s.toLowerCase() === cleanStatus.toLowerCase());
+        if (found) return found;
     }
     return 'New';
 }
@@ -434,8 +433,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
   }
 }
 
-async function getCompaniesFromFirebase(options?: { franchisee?: string }): Promise<Lead[]> {
-    const { franchisee } = options || {};
+async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoordinateCheck?: boolean }): Promise<Lead[]> {
+    const { franchisee, skipCoordinateCheck = false } = options || {};
     console.log(`[getCompaniesFromFirebase] Starting to fetch companies from Firebase...`);
     try {
         let companiesQuery = query(collection(firestore, 'companies'));
@@ -456,7 +455,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string }): Prom
                 const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : typeof data.latitude === 'number' ? data.latitude : NaN;
                 const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : typeof data.longitude === 'number' ? data.longitude : NaN;
 
-                if (isNaN(lat) || isNaN(lng)) {
+                if (!skipCoordinateCheck && (isNaN(lat) || isNaN(lng))) {
                     console.warn(`[getCompaniesFromFirebase] Skipping company ${data.companyName || doc.id} due to invalid coordinates.`);
                     return null;
                 }
@@ -483,8 +482,8 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string }): Prom
                     status: safeGetStatus(data.customerStatus),
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
                     address: address,
-                    latitude: lat,
-                    longitude: lng,
+                    latitude: isNaN(lat) ? undefined : lat,
+                    longitude: isNaN(lng) ? undefined : lng,
                     franchisee: data.franchisee,
                     websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
                     industryCategory: data.industryCategory,
@@ -502,7 +501,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string }): Prom
             })
             .filter((company): company is Lead => company !== null);
 
-        console.log(`[getCompaniesFromFirebase] Successfully fetched and processed ${companiesArray.length} companies with valid coordinates.`);
+        console.log(`[getCompaniesFromFirebase] Successfully fetched and processed ${companiesArray.length} companies.`);
         return companiesArray;
 
     } catch (error) {

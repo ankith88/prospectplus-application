@@ -80,7 +80,7 @@ export default function FieldActivityReportPage() {
       const [notes, leads, companies, appointments, users] = await Promise.all([
         notesPromise,
         getAllLeadsForReport(),
-        getCompaniesFromFirebase(),
+        getCompaniesFromFirebase({ skipCoordinateCheck: true }),
         getAllAppointments(),
         getAllUsers(),
       ]);
@@ -511,7 +511,7 @@ export default function FieldActivityReportPage() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Visits by Franchisee</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Converted Leads linked to Franchisee</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {stats.visitsByFranchiseeData.length > 0 ? (
