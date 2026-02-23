@@ -19,7 +19,7 @@ import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase } from '@/services/firebase';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
@@ -116,14 +116,11 @@ export default function FieldActivityReportPage() {
     return allVisitNotes.filter(note => {
       const lead = note.leadId ? leadsMap.get(note.leadId) : null;
       
-      // Franchisee-level security filter
+      // Franchisee-level security filter: strictly scoped to the linked record's franchise
       if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-          const noteFranchisee = note.franchisee || lead?.franchisee;
-          if (noteFranchisee && noteFranchisee !== userProfile.franchisee) return false;
-          if (!noteFranchisee && !note.leadId) {
-              // For new notes without a lead yet, we check if the rep is in this franchise
-              // This is a placeholder for more advanced rep-franchise mapping
-          }
+          if (!note.leadId) return false; // Exclude unlinked notes for Franchisees
+          const linkedRecord = leadsMap.get(note.leadId);
+          if (!linkedRecord || linkedRecord.franchisee !== userProfile.franchisee) return false;
       }
 
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);
@@ -265,14 +262,14 @@ export default function FieldActivityReportPage() {
   );
 
   const userOptions: Option[] = useMemo(() => {
-    const users = new Set(allVisitNotes.map(n => n.capturedBy));
+    const users = new Set(notes.map(n => n.capturedBy));
     return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [allVisitNotes]);
+  }, [notes]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(allVisitNotes.map(n => n.outcome?.type).filter(Boolean));
+    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
     return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [allVisitNotes]);
+  }, [notes]);
   
   const franchiseeOptions: Option[] = useMemo(() => {
     const leadIds = allVisitNotes.map(n => n.leadId).filter(Boolean);
