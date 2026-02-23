@@ -13,6 +13,7 @@ import {
   FormControl,
 } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useAuth } from '@/hooks/use-auth';
 
 const discoverySignalGroups = {
     postOffice: {
@@ -110,8 +111,11 @@ const SignalButton = ({ signal, field }: { signal: { id: string; label: string; 
 
 export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
     const { control, watch } = useFormContext<z.infer<typeof discoverySchema>>();
+    const { userProfile } = useAuth();
     const watchedSignals = watch('discoverySignals') || [];
     const showDropOffHassle = watchedSignals.some(s => discoverySignalGroups.postOffice.conditional.dependsOn.includes(s));
+
+    const isFieldSales = userProfile?.role === 'Field Sales';
 
     return (
         <div className="space-y-8">
@@ -138,34 +142,36 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
                 )}
             />
 
-            <div className="space-y-6 pt-4 border-t">
-                <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?</FormLabel>
-                <FormField
-                    control={control}
-                    name="lostPropertyProcess"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormControl>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                                    {lostPropertyOptions.map((option) => (
-                                        <Button
-                                            key={option.label}
-                                            type="button"
-                                            variant={field.value === option.label ? 'default' : 'outline'}
-                                            className="h-auto flex flex-col items-start p-3 text-left"
-                                            onClick={() => field.onChange(option.label)}
-                                        >
-                                            <span className="font-semibold text-sm">{option.label}</span>
-                                            <span className="text-xs font-normal opacity-70">{option.description}</span>
-                                        </Button>
-                                    ))}
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            </div>
+            {!isFieldSales && (
+                <div className="space-y-6 pt-4 border-t">
+                    <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?</FormLabel>
+                    <FormField
+                        control={control}
+                        name="lostPropertyProcess"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormControl>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                                        {lostPropertyOptions.map((option) => (
+                                            <Button
+                                                key={option.label}
+                                                type="button"
+                                                variant={field.value === option.label ? 'default' : 'outline'}
+                                                className="h-auto flex flex-col items-start p-3 text-left"
+                                                onClick={() => field.onChange(option.label)}
+                                            >
+                                                <span className="font-semibold text-sm">{option.label}</span>
+                                                <span className="text-xs font-normal opacity-70">{option.description}</span>
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            )}
 
             <div className="space-y-6 pt-4 border-t">
                 <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>
