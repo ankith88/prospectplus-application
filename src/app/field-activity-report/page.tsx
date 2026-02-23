@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -17,7 +18,7 @@ import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers } from '@/services/firebase';
+import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase } from '@/services/firebase';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -76,14 +77,15 @@ export default function FieldActivityReportPage() {
           ? getVisitNotes(userProfile.uid)
           : getVisitNotes();
 
-      const [notes, leads, appointments, users] = await Promise.all([
+      const [notes, leads, companies, appointments, users] = await Promise.all([
         notesPromise,
         getAllLeadsForReport(),
+        getCompaniesFromFirebase(),
         getAllAppointments(),
         getAllUsers(),
       ]);
       setAllVisitNotes(notes);
-      setAllLeads(leads);
+      setAllLeads([...leads, ...companies]);
       setAllAppointments(appointments);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales'));
     } catch (error) {

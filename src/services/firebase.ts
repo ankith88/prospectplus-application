@@ -577,13 +577,9 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
 
 async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
     try {
-        console.log('[getAllLeadsForReport] Fetching limited lead set for reporting...');
-        // Limit to most recent 5000 leads to prevent Server Action timeout
-        let leadsQuery = query(
-            collection(firestore, 'leads'),
-            orderBy('dateLeadEntered', 'desc'),
-            limit(5000)
-        );
+        console.log('[getAllLeadsForReport] Fetching lead set for reporting...');
+        let leadsQuery = query(collection(firestore, 'leads'));
+        
         if (franchisee) {
             leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
         }
@@ -954,7 +950,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
         return allAppointments;
     } catch (error) {
         console.error('Failed to fetch all appointments:', error);
-        throw new Error('[getAllAppointments] The database request timed out. Try applying tighter filters.');
+        throw new Error('The database request timed out. Try applying tighter filters.');
     }
 }
 
@@ -1136,7 +1132,7 @@ async function logCallActivity(
         }
         
         if (!linkedSalesRep) {
-             console.warn(`[logCallActivity] Could not find linkedSalesRep for lead ${leadId}. NetSuite API call will be skipped.`);
+             console.warn(`[logCallActivity] Could find linkedSalesRep for lead ${leadId}. NetSuite API call will be skipped.`);
         } else {
             await sendFieldSalesOutcomeToNetSuite({
                 leadId,
