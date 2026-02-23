@@ -114,8 +114,6 @@ export default function FieldActivityReportPage() {
 
   const filteredVisitNotes = useMemo(() => {
     return allVisitNotes.filter(note => {
-      const lead = note.leadId ? leadsMap.get(note.leadId) : null;
-      
       // Franchisee-level security filter: strictly scoped to the linked record's franchise
       if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
           if (!note.leadId) return false; // Exclude unlinked notes for Franchisees
@@ -126,6 +124,7 @@ export default function FieldActivityReportPage() {
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);
       const outcomeMatch = filters.outcome.length === 0 || (note.outcome?.type && filters.outcome.includes(note.outcome.type));
       
+      const lead = note.leadId ? leadsMap.get(note.leadId) : null;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
 
       let dateMatch = true;
@@ -262,14 +261,14 @@ export default function FieldActivityReportPage() {
   );
 
   const userOptions: Option[] = useMemo(() => {
-    const users = new Set(notes.map(n => n.capturedBy));
+    const users = new Set(allVisitNotes.map(n => n.capturedBy));
     return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [notes]);
+  }, [allVisitNotes]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
+    const outcomes = new Set(allVisitNotes.map(n => n.outcome?.type).filter(Boolean));
     return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [notes]);
+  }, [allVisitNotes]);
   
   const franchiseeOptions: Option[] = useMemo(() => {
     const leadIds = allVisitNotes.map(n => n.leadId).filter(Boolean);
