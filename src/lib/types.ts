@@ -196,6 +196,7 @@ export interface VisitNote {
   imageUrls?: string[];
   websiteUrl?: string;
   discoveryData?: Partial<DiscoveryData>;
+  franchisee?: string;
 }
 
 export interface UserProfile {

@@ -73,9 +73,8 @@ export default function FieldActivityReportPage() {
     setIsRefreshing(true);
     setLoading(true);
     try {
-      const notesPromise = userProfile.role === 'Field Sales' || userProfile.role === 'Franchisee'
-          ? getVisitNotes(userProfile.uid)
-          : getVisitNotes();
+      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
+      const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
       const [notes, leads, companies, appointments, users] = await Promise.all([
         notesPromise,
@@ -119,9 +118,12 @@ export default function FieldActivityReportPage() {
       
       // Franchisee-level security filter
       if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-          if (lead && lead.franchisee !== userProfile.franchisee) return false;
-          // If note is not converted, check if the captured user belongs to that franchise
-          // But usually we just filter by lead's franchise if available.
+          const noteFranchisee = note.franchisee || lead?.franchisee;
+          if (noteFranchisee && noteFranchisee !== userProfile.franchisee) return false;
+          if (!noteFranchisee && !note.leadId) {
+              // For new notes without a lead yet, we check if the rep is in this franchise
+              // This is a placeholder for more advanced rep-franchise mapping
+          }
       }
 
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);

@@ -71,7 +71,8 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read, update, delete: if request.auth != null && (
         request.auth.uid == resource.data.capturedByUid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Lead Gen Admin', 'Field Sales Admin']
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Lead Gen Admin', 'Field Sales Admin'] ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Franchisee' && resource.data.franchisee == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.franchisee)
       );
     }
   }

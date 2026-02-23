@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -546,6 +547,7 @@ export default function CaptureVisitPage() {
                 content: rawNote,
                 capturedBy: captureUser.displayName || 'Unknown User',
                 capturedByUid: captureUser.uid,
+                franchisee: captureUser.franchisee || undefined,
                 imageUrls: images,
                 googlePlaceId: selectedPlace?.place_id,
                 companyName: selectedPlace?.name,
@@ -641,7 +643,7 @@ export default function CaptureVisitPage() {
     return (
         <>
         <FormProvider {...discoveryForm}>
-            <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
+            <div className="flex flex-col gap-6 hide-scrollbar max-w-2xl mx-auto w-full">
                  <header>
                     <h1 className="text-3xl font-bold tracking-tight">Capture Visit</h1>
                     <p className="text-muted-foreground">Log your field sales visits and interactions.</p>

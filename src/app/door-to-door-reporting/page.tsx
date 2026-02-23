@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
@@ -39,7 +38,7 @@ export default function DoorToDoorReportingPage() {
     user: [] as string[],
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -123,6 +122,11 @@ export default function DoorToDoorReportingPage() {
 
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
+        // Franchisee scoping
+        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (lead.franchisee !== userProfile.franchisee) return false;
+        }
+
         const userMatch = filters.user.length === 0 || (lead.dialerAssigned && filters.user.includes(lead.dialerAssigned));
         // We need to check if any activity for this lead matches the date filter
         let dateMatch = true;
@@ -131,7 +135,7 @@ export default function DoorToDoorReportingPage() {
         }
         return userMatch && dateMatch;
     });
-  }, [allLeads, filters, filteredActivities]);
+  }, [allLeads, filters, filteredActivities, userProfile]);
 
   const stats = useMemo(() => {
     const checkInActivities = filteredActivities.filter(a => a.notes?.includes('Checked in at location via map.'));

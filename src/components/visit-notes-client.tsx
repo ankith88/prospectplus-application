@@ -65,7 +65,7 @@ export default function VisitNotesClient() {
     setIsRefreshing(true);
     
     try {
-      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!);
+      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
       const [fetchedNotes, companies] = await Promise.all([
         canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid),
         getCompaniesFromFirebase()
@@ -155,6 +155,11 @@ export default function VisitNotesClient() {
   
   const filteredNotes = useMemo(() => {
     let result = notes.filter(note => {
+      // Franchisee scoping
+      if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+          if (note.franchisee && note.franchisee !== userProfile.franchisee) return false;
+      }
+
       const companyNameMatch = filters.companyName
         ? note.companyName?.toLowerCase().includes(filters.companyName.toLowerCase())
         : true;
@@ -216,7 +221,7 @@ export default function VisitNotesClient() {
     }
 
     return result;
-  }, [notes, filters, sortConfig]);
+  }, [notes, filters, sortConfig, userProfile]);
 
   const capturedByOptions: Option[] = useMemo(() => {
     const users = new Set(notes.map(n => n.capturedBy));
@@ -240,7 +245,7 @@ export default function VisitNotesClient() {
     'Rejected': 'bg-red-100 text-red-800',
   };
 
-  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee';
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   return (
@@ -322,7 +327,7 @@ export default function VisitNotesClient() {
                 <Table>
                 <TableHeader>
                     <TableRow>
-                    {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                    {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
                         <TableHead>
                           <Button variant="ghost" onClick={() => requestSort('capturedBy')} className="group -ml-4">
                             Captured By{getSortIndicator('capturedBy')}
@@ -376,7 +381,7 @@ export default function VisitNotesClient() {
                         return (
                         <Fragment key={note.id}>
                         <TableRow className={cn(isExpanded && "bg-muted/30")}>
-                        {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                        {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
                             <TableCell>{note.capturedBy}</TableCell>
                         )}
                         <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>

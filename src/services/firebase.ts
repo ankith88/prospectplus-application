@@ -2264,6 +2264,7 @@ export {
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
+    updateLeadDiscoveryData as updateLeadDiscoveryDataNS,
     updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,
