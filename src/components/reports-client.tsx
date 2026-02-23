@@ -128,11 +128,14 @@ export default function ReportsClientPage() {
         }).filter(Boolean);
         setAllDialers(userList);
 
-        // Fetch ALL leads (Lifetime)
-        const leadsQuery = query(collection(firestore, 'leads'), orderBy('dateLeadEntered', 'desc'));
-        const leadsSnap = await getDocs(leadsQuery);
-        const leadsData = leadsSnap.docs
-            .map(doc => {
+        // Fetch leads AND companies to ensure "Won" accounts are included
+        const [leadsSnap, companiesSnap] = await Promise.all([
+            getDocs(collection(firestore, 'leads')),
+            getDocs(collection(firestore, 'companies'))
+        ]);
+
+        const processRecords = (snap: any, isCompany: boolean) => {
+            return snap.docs.map((doc: any) => {
                 const data = doc.data();
                 return {
                     id: doc.id,
@@ -140,19 +143,24 @@ export default function ReportsClientPage() {
                     companyName: data.companyName || 'Unknown Company',
                     dialerAssigned: data.dialerAssigned,
                     salesRepAssigned: data.salesRepAssigned,
-                    status: safeGetStatus(data.customerStatus),
+                    status: isCompany ? 'Won' : safeGetStatus(data.customerStatus),
                     franchisee: data.franchisee,
                     fieldSales: data.fieldSales === true,
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                 } as unknown as Lead;
-            })
-            .filter(l => l.fieldSales === false); // Scoped to Outbound only
-            
-        setAllLeads(leadsData);
-        const leadMap = new Map(leadsData.map(l => [l.id, l]));
+            }).filter((l: Lead) => l.fieldSales === false);
+        };
 
-        // Fetch ALL activities (Lifetime)
+        const combinedLeads = [
+            ...processRecords(leadsSnap, false),
+            ...processRecords(companiesSnap, true)
+        ];
+            
+        setAllLeads(combinedLeads);
+        const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
+
+        // Fetch activities within filtered period
         let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'));
         if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
         if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
@@ -178,7 +186,7 @@ export default function ReportsClientPage() {
         }).filter(Boolean) as CallActivity[];
         setAllCalls(calls);
 
-        // Fetch ALL appointments (Lifetime)
+        // Fetch appointments within filtered period
         let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'));
         if (startDate) apptsQuery = query(apptsQuery, where('starttime', '>=', startDate));
         if (endDate) apptsQuery = query(apptsQuery, where('starttime', '<=', endDate));
@@ -206,19 +214,7 @@ export default function ReportsClientPage() {
 
     } catch (error: any) {
         console.error("Failed to refresh reporting data:", error);
-        const errorMsg = error.message || "";
-        if (errorMsg.includes('requires an index') || errorMsg.includes('COLLECTION_GROUP_DESC')) {
-            const urlMatch = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
-            if (urlMatch) {
-                const cleanUrl = urlMatch[0].replace(/[.\s]+$/, "");
-                setIndexUrl(cleanUrl);
-                setError("This report requires a database index to be created before it can load.");
-            } else {
-                setError(`Index Error: ${errorMsg}`);
-            }
-        } else {
-            setError(`Error: ${errorMsg || "An unexpected error occurred."}`);
-        }
+        setError(`Error: ${error.message || "An unexpected error occurred."}`);
         toast({ variant: 'destructive', title: 'Loading Failed', description: 'Could not load reporting data.' });
     } finally {
         setLoading(false);
@@ -247,8 +243,6 @@ export default function ReportsClientPage() {
       appointmentAssignedTo: [],
     });
   };
-
-  // --- DATA PROCESSING (Memoized) ---
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
@@ -320,29 +314,34 @@ export default function ReportsClientPage() {
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
-    const leadsContactedIds = new Set(filteredCalls.map(c => c.leadId));
+    const totalAppointments = filteredAppointments.length;
     
-    // Base leads set for stats - strictly Outbound + Current Filters
+    // Unique sets of leads associated with the filtered period
+    const uniqueLeadIdsCalled = new Set(filteredCalls.map(c => c.leadId));
+    const uniqueLeadIdsAppointed = new Set(filteredAppointments.map(a => a.leadId));
+
+    const leadsWithCalls = allLeads.filter(l => uniqueLeadIdsCalled.has(l.id));
+    const leadsWithAppts = allLeads.filter(l => uniqueLeadIdsAppointed.has(l.id));
+    
+    const wonCount = leadsWithAppts.filter(l => l.status === 'Won').length;
+    const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity').length;
+    const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
+    const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
+
+    // Standard denominators for ratios
+    const leadsCalledCount = uniqueLeadIdsCalled.size;
+    const leadsAppointedCount = uniqueLeadIdsAppointed.size;
+
+    // Pipeline Logic
     const baseFilteredLeads = allLeads.filter(l => {
         const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
         const dialerMatch = filters.dialerAssigned.length === 0 || (l.dialerAssigned && filters.dialerAssigned.includes(l.dialerAssigned));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(l.status);
-        return franchiseeMatch && dialerMatch && statusMatch;
+        return franchiseeMatch && dialerMatch;
     });
 
-    const leadsWithActivity = baseFilteredLeads.filter(l => leadsContactedIds.has(l.id));
-    
-    const wonCount = leadsWithActivity.filter(l => l.status === 'Won').length;
-    const quoteCount = leadsWithActivity.filter(l => l.status === 'Prospect Opportunity').length;
-    const trialCount = leadsWithActivity.filter(l => l.status === 'Trialing ShipMate').length;
-    const lostCount = leadsWithActivity.filter(l => l.status === 'Lost').length;
-    
-    const totalAppointments = filteredAppointments.length;
-
-    // Pipeline Logic
     const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
     const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress');
-    const processedLeads = baseFilteredLeads.filter(l => ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(l.status));
+    const processedLeads = baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress'].includes(l.status));
 
     const queueStatusDist = queueLeads.reduce((acc, l) => {
         acc[l.status] = (acc[l.status] || 0) + 1;
@@ -407,17 +406,17 @@ export default function ReportsClientPage() {
       amPerformanceData,
       
       callRatios: {
-          appointment: totalCalls > 0 ? (totalAppointments / totalCalls) * 100 : 0,
-          won: totalCalls > 0 ? (wonCount / totalCalls) * 100 : 0,
-          quote: totalCalls > 0 ? (quoteCount / totalCalls) * 100 : 0,
-          trial: totalCalls > 0 ? (trialCount / totalCalls) * 100 : 0,
-          lost: totalCalls > 0 ? (lostCount / totalCalls) * 100 : 0,
+          appointment: leadsCalledCount > 0 ? (leadsAppointedCount / leadsCalledCount) * 100 : 0,
+          won: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Won').length / leadsCalledCount) * 100 : 0,
+          quote: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Prospect Opportunity').length / leadsCalledCount) * 100 : 0,
+          trial: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Trialing ShipMate').length / leadsCalledCount) * 100 : 0,
+          lost: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Lost').length / leadsCalledCount) * 100 : 0,
       },
       apptRatios: {
-          won: totalAppointments > 0 ? (wonCount / totalAppointments) * 100 : 0,
-          trial: totalAppointments > 0 ? (trialCount / totalAppointments) * 100 : 0,
-          quote: totalAppointments > 0 ? (quoteCount / totalAppointments) * 100 : 0,
-          lost: totalAppointments > 0 ? (lostCount / totalAppointments) * 100 : 0,
+          won: leadsAppointedCount > 0 ? (wonCount / leadsAppointedCount) * 100 : 0,
+          trial: leadsAppointedCount > 0 ? (trialCount / leadsAppointedCount) * 100 : 0,
+          quote: leadsAppointedCount > 0 ? (quoteCount / leadsAppointedCount) * 100 : 0,
+          lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
   }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters]);
@@ -496,14 +495,6 @@ export default function ReportsClientPage() {
           <AlertTitle>Configuration Error</AlertTitle>
           <AlertDescription className="space-y-4">
             <p>{error}</p>
-            {indexUrl && (
-              <Button asChild variant="outline" className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-white">
-                <a href={indexUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Click here to create the required index in Firebase Console
-                </a>
-              </Button>
-            )}
           </AlertDescription>
         </Alert>
       )}
@@ -568,7 +559,7 @@ export default function ReportsClientPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle><CardDescription>Ratios based on total dials made.</CardDescription></CardHeader>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle><CardDescription>Ratios based on unique leads called in the period.</CardDescription></CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
@@ -583,7 +574,7 @@ export default function ReportsClientPage() {
                 </Card>
 
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle><CardDescription>Ratios based on scheduled appointments.</CardDescription></CardHeader>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle><CardDescription>Ratios based on unique leads appointed in the period.</CardDescription></CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
