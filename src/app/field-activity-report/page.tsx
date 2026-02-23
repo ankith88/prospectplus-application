@@ -112,15 +112,27 @@ export default function FieldActivityReportPage() {
   
   const leadsMap = useMemo(() => new Map(allLeads.map(l => [l.id, l])), [allLeads]);
 
-  const filteredVisitNotes = useMemo(() => {
-    return allVisitNotes.filter(note => {
-      // Franchisee-level security filter: strictly scoped to the linked record's franchise
-      if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-          if (!note.leadId) return false; // Exclude unlinked notes for Franchisees
-          const linkedRecord = leadsMap.get(note.leadId);
-          if (!linkedRecord || linkedRecord.franchisee !== userProfile.franchisee) return false;
-      }
+  const visibleVisitNotes = useMemo(() => {
+    if (!userProfile) return [];
+    if (userProfile.role !== 'Franchisee') return allVisitNotes;
 
+    return allVisitNotes.filter(note => {
+        const isCapturedByMe = note.capturedByUid === userProfile.uid;
+        
+        let isLinkedToMyFranchise = false;
+        if (note.leadId) {
+            const linkedRecord = leadsMap.get(note.leadId);
+            if (linkedRecord && linkedRecord.franchisee === userProfile.franchisee) {
+                isLinkedToMyFranchise = true;
+            }
+        }
+        
+        return isCapturedByMe || isLinkedToMyFranchise;
+    });
+  }, [allVisitNotes, userProfile, leadsMap]);
+
+  const filteredVisitNotes = useMemo(() => {
+    return visibleVisitNotes.filter(note => {
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);
       const outcomeMatch = filters.outcome.length === 0 || (note.outcome?.type && filters.outcome.includes(note.outcome.type));
       
@@ -137,7 +149,7 @@ export default function FieldActivityReportPage() {
       
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
-  }, [allVisitNotes, filters, leadsMap, userProfile]);
+  }, [visibleVisitNotes, filters, leadsMap]);
 
   const stats = useMemo(() => {
     const totalVisits = filteredVisitNotes.length;
@@ -261,20 +273,20 @@ export default function FieldActivityReportPage() {
   );
 
   const userOptions: Option[] = useMemo(() => {
-    const users = new Set(allVisitNotes.map(n => n.capturedBy));
+    const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
     return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [allVisitNotes]);
+  }, [visibleVisitNotes]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(allVisitNotes.map(n => n.outcome?.type).filter(Boolean));
+    const outcomes = new Set(visibleVisitNotes.map(n => n.outcome?.type).filter(Boolean));
     return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [allVisitNotes]);
+  }, [visibleVisitNotes]);
   
   const franchiseeOptions: Option[] = useMemo(() => {
-    const leadIds = allVisitNotes.map(n => n.leadId).filter(Boolean);
+    const leadIds = visibleVisitNotes.map(n => n.leadId).filter(Boolean);
     const franchisees = new Set(allLeads.filter(l => leadIds.includes(l.id) && l.franchisee).map(l => l.franchisee));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
-  }, [allVisitNotes, allLeads]);
+  }, [visibleVisitNotes, allLeads]);
 
 
   if (authLoading || loading || !hasAccess) {

@@ -7,8 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
-import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase } from '@/services/firebase';
-import type { VisitNote, Address } from '@/lib/types';
+import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase, getLeadsFromFirebase } from '@/services/firebase';
+import type { VisitNote, Address, Lead } from '@/lib/types';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
@@ -31,6 +31,7 @@ type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'ou
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
+  const [allRecords, setAllRecords] = useState<Lead[]>([]);
   const [companyIds, setCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -57,7 +58,6 @@ export default function VisitNotesClient() {
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     
-    // Only show full page loader if it's the very first load
     if (notes.length === 0) {
       setLoading(true);
     }
@@ -66,11 +66,13 @@ export default function VisitNotesClient() {
     
     try {
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
-      const [fetchedNotes, companies] = await Promise.all([
+      const [fetchedNotes, companies, leads] = await Promise.all([
         canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid),
-        getCompaniesFromFirebase()
+        getCompaniesFromFirebase({ skipCoordinateCheck: true }),
+        getLeadsFromFirebase({ summary: true })
       ]);
       setNotes(fetchedNotes);
+      setAllRecords([...companies, ...leads]);
       setCompanyIds(new Set(companies.map(c => c.id)));
     } catch (error) {
       console.error("Failed to fetch visit notes:", error);
@@ -86,6 +88,27 @@ export default function VisitNotesClient() {
       fetchData();
     }
   }, [userProfile, fetchData]);
+
+  const recordsMap = useMemo(() => new Map(allRecords.map(r => [r.id, r])), [allRecords]);
+
+  const visibleNotes = useMemo(() => {
+    if (!userProfile) return [];
+    if (userProfile.role !== 'Franchisee') return notes;
+
+    return notes.filter(note => {
+        const isCapturedByMe = note.capturedByUid === userProfile.uid;
+        
+        let isLinkedToMyFranchise = false;
+        if (note.leadId) {
+            const linkedRecord = recordsMap.get(note.leadId);
+            if (linkedRecord && linkedRecord.franchisee === userProfile.franchisee) {
+                isLinkedToMyFranchise = true;
+            }
+        }
+        
+        return isCapturedByMe || isLinkedToMyFranchise;
+    });
+  }, [notes, userProfile, recordsMap]);
 
   const handleProcessNote = (note: VisitNote) => {
     setSelectedNote(note);
@@ -154,12 +177,7 @@ export default function VisitNotesClient() {
   };
   
   const filteredNotes = useMemo(() => {
-    let result = notes.filter(note => {
-      // Franchisee scoping
-      if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-          if (note.franchisee && note.franchisee !== userProfile.franchisee) return false;
-      }
-
+    let result = visibleNotes.filter(note => {
       const companyNameMatch = filters.companyName
         ? note.companyName?.toLowerCase().includes(filters.companyName.toLowerCase())
         : true;
@@ -221,22 +239,22 @@ export default function VisitNotesClient() {
     }
 
     return result;
-  }, [notes, filters, sortConfig, userProfile]);
+  }, [visibleNotes, filters, sortConfig]);
 
   const capturedByOptions: Option[] = useMemo(() => {
-    const users = new Set(notes.map(n => n.capturedBy));
+    const users = new Set(visibleNotes.map(n => n.capturedBy));
     return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [notes]);
+  }, [visibleNotes]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(notes.map(n => n.outcome?.type).filter(Boolean));
+    const outcomes = new Set(visibleNotes.map(n => n.outcome?.type).filter(Boolean));
     return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [notes]);
+  }, [visibleNotes]);
 
   const statusOptions: Option[] = useMemo(() => {
-    const statuses = new Set(notes.map(n => n.status));
+    const statuses = new Set(visibleNotes.map(n => n.status));
     return Array.from(statuses).map(s => ({ value: s, label: s }));
-  }, [notes]);
+  }, [visibleNotes]);
 
   const statusColorMap: Record<VisitNote['status'], string> = {
     'New': 'bg-blue-100 text-blue-800',
@@ -319,7 +337,7 @@ export default function VisitNotesClient() {
           <CardHeader>
             <CardTitle>Visit Notes</CardTitle>
             <CardDescription>
-              Displaying {filteredNotes.length} of {notes.length} notes. Click column headers to sort.
+              Displaying {filteredNotes.length} of {visibleNotes.length} visible notes. Click column headers to sort.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -459,7 +477,7 @@ export default function VisitNotesClient() {
                     ) : (
                     <TableRow>
                         <TableCell colSpan={7} className="text-center h-24">
-                        No visit notes found.
+                        No visible visit notes found.
                         </TableCell>
                     </TableRow>
                     )}
