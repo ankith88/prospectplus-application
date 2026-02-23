@@ -13,7 +13,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown } from 'lucide-react';
+import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -21,7 +21,7 @@ import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import type { DateRange } from 'react-day-picker';
-import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ScrollArea } from './ui/scroll-area';
@@ -33,6 +33,7 @@ export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
   const [companyIds, setCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
   
@@ -53,10 +54,17 @@ export default function VisitNotesClient() {
     status: ['New'] as string[],
   });
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!userProfile) return;
-    const fetchData = async () => {
+    
+    // Only show full page loader if it's the very first load
+    if (notes.length === 0) {
       setLoading(true);
+    }
+    
+    setIsRefreshing(true);
+    
+    try {
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role!);
       const [fetchedNotes, companies] = await Promise.all([
         canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid),
@@ -64,10 +72,20 @@ export default function VisitNotesClient() {
       ]);
       setNotes(fetchedNotes);
       setCompanyIds(new Set(companies.map(c => c.id)));
+    } catch (error) {
+      console.error("Failed to fetch visit notes:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not reload visit notes.' });
+    } finally {
       setLoading(false);
-    };
-    fetchData();
-  }, [userProfile]);
+      setIsRefreshing(false);
+    }
+  }, [userProfile, toast, notes.length]);
+
+  useEffect(() => {
+    if (userProfile) {
+      fetchData();
+    }
+  }, [userProfile, fetchData]);
 
   const handleProcessNote = (note: VisitNote) => {
     setSelectedNote(note);
@@ -240,12 +258,18 @@ export default function VisitNotesClient() {
                 <Filter className="h-5 w-5" />
                 <span>Filters</span>
               </CardTitle>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  <span className="ml-2">Toggle Filters</span>
+              <div className="flex items-center gap-2">
+                <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
-              </CollapsibleTrigger>
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="ml-2">Toggle Filters</span>
+                    </Button>
+                </CollapsibleTrigger>
+              </div>
             </CardHeader>
             <CollapsibleContent>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
