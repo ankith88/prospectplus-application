@@ -138,7 +138,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   
   const isFieldSales = userProfile?.role === 'Field Sales';
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
@@ -300,7 +300,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 ) : (
-                  userProfile?.role !== 'Franchisee' && (
                     <SidebarMenuItem>
                       <SidebarMenuButton>
                         <BarChart2 />
@@ -325,7 +324,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </SidebarMenuItem>
-                  )
                 )
             )}
              {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee') && (

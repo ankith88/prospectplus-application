@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import ReportsClientPage from '@/components/reports-client';
@@ -12,7 +11,7 @@ export default function ReportsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

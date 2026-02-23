@@ -110,6 +110,7 @@ export default function ReportsClientPage() {
   });
 
   const fetchData = useCallback(async () => {
+    if (!userProfile) return;
     setLoading(true);
     setError(null);
     setIndexUrl(null);
@@ -175,6 +176,11 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
             
+            // Franchisee security filter
+            if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+                if (lead.franchisee !== userProfile.franchisee) return null;
+            }
+
             return {
                 ...data,
                 id: activityDoc.id,
@@ -199,6 +205,11 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
 
+            // Franchisee security filter
+            if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+                if (lead.franchisee !== userProfile.franchisee) return null;
+            }
+
             return {
                 ...data,
                 id: apptDoc.id,
@@ -220,7 +231,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [filters.callDate, toast]);
+  }, [filters.callDate, userProfile, toast]);
 
   useEffect(() => {
     if (userProfile) {
@@ -247,6 +258,12 @@ export default function ReportsClientPage() {
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
         const lead = allLeads.find(l => l.id === call.leadId);
+        
+        // Franchisee security filter (redundant but safe)
+        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (lead?.franchisee !== userProfile.franchisee) return false;
+        }
+
         const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
         const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
@@ -280,12 +297,18 @@ export default function ReportsClientPage() {
 
         return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
-  }, [allCalls, allLeads, filters, allAppointments]);
+  }, [allCalls, allLeads, filters, allAppointments, userProfile]);
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') return false;
         const lead = allLeads.find(l => l.id === appointment.leadId);
+
+        // Franchisee security filter (redundant but safe)
+        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (lead?.franchisee !== userProfile.franchisee) return false;
+        }
+
         const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
         const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
@@ -310,7 +333,7 @@ export default function ReportsClientPage() {
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
-  }, [allAppointments, allLeads, filters]);
+  }, [allAppointments, allLeads, filters, userProfile]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -334,6 +357,10 @@ export default function ReportsClientPage() {
 
     // Pipeline Logic
     const baseFilteredLeads = allLeads.filter(l => {
+        // Franchisee security filter
+        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (l.franchisee !== userProfile.franchisee) return false;
+        }
         const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
         const dialerMatch = filters.dialerAssigned.length === 0 || (l.dialerAssigned && filters.dialerAssigned.includes(l.dialerAssigned));
         return franchiseeMatch && dialerMatch;
@@ -419,7 +446,7 @@ export default function ReportsClientPage() {
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile]);
 
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
@@ -467,7 +494,9 @@ export default function ReportsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
                     <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
-                    <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
+                    {userProfile?.role !== 'Franchisee' && (
+                        <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
+                    )}
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
                         <Label>Call/Creation Date</Label>

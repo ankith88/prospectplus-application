@@ -60,7 +60,7 @@ export default function FieldActivityReportPage() {
     franchisee: [] as string[],
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -73,7 +73,7 @@ export default function FieldActivityReportPage() {
     setIsRefreshing(true);
     setLoading(true);
     try {
-      const notesPromise = userProfile.role === 'Field Sales'
+      const notesPromise = userProfile.role === 'Field Sales' || userProfile.role === 'Franchisee'
           ? getVisitNotes(userProfile.uid)
           : getVisitNotes();
 
@@ -115,10 +115,18 @@ export default function FieldActivityReportPage() {
 
   const filteredVisitNotes = useMemo(() => {
     return allVisitNotes.filter(note => {
+      const lead = note.leadId ? leadsMap.get(note.leadId) : null;
+      
+      // Franchisee-level security filter
+      if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+          if (lead && lead.franchisee !== userProfile.franchisee) return false;
+          // If note is not converted, check if the captured user belongs to that franchise
+          // But usually we just filter by lead's franchise if available.
+      }
+
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);
       const outcomeMatch = filters.outcome.length === 0 || (note.outcome?.type && filters.outcome.includes(note.outcome.type));
       
-      const lead = note.leadId ? leadsMap.get(note.leadId) : null;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
 
       let dateMatch = true;
@@ -131,7 +139,7 @@ export default function FieldActivityReportPage() {
       
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
-  }, [allVisitNotes, filters, leadsMap]);
+  }, [allVisitNotes, filters, leadsMap, userProfile]);
 
   const stats = useMemo(() => {
     const totalVisits = filteredVisitNotes.length;
@@ -296,16 +304,18 @@ export default function FieldActivityReportPage() {
             </CardHeader>
             <CollapsibleContent>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                {userProfile?.role !== 'Field Sales' && (
+                {userProfile?.role !== 'Field Sales' && userProfile?.role !== 'Franchisee' && (
                   <div className="space-y-2">
                       <Label>Captured By</Label>
                       <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
                   </div>
                 )}
-                 <div className="space-y-2">
-                  <Label>Franchisee</Label>
-                  <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
-                </div>
+                 {userProfile?.role !== 'Franchisee' && (
+                    <div className="space-y-2">
+                        <Label>Franchisee</Label>
+                        <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>
+                    </div>
+                 )}
                 <div className="space-y-2">
                   <Label>Outcome</Label>
                   <MultiSelectCombobox options={outcomeOptions} selected={filters.outcome} onSelectedChange={(val) => handleFilterChange('outcome', val)} placeholder="Select outcomes..."/>
