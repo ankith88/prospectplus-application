@@ -17,6 +17,12 @@ import {
   TrendingUp,
   Info,
   PhoneCall,
+  Key,
+  Hash,
+  Tag,
+  Globe,
+  User,
+  Briefcase,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -144,10 +150,52 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     }
   };
 
+  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable }: any) => {
+    return (
+        <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="text-[11px] font-medium uppercase tracking-wider">{label}</span>
+            </div>
+            <div className="flex items-center gap-2 min-h-[1.5rem]">
+                {isWebsite ? (
+                    value ? (
+                        <a href={value} target="_blank" className="text-sm font-semibold text-primary hover:underline truncate max-w-[250px]">
+                            {value}
+                        </a>
+                    ) : <span className="text-sm text-muted-foreground">-</span>
+                ) : isLink ? (
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold">{value || '-'}</span>
+                        {value && linkUrl && (
+                            <a href={linkUrl} target="_blank" className="text-primary hover:text-primary/80">
+                                <LinkIcon className="h-3 w-3" />
+                            </a>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-sm font-semibold">{value || '-'}</span>
+                )}
+                
+                {copyable && value && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(value, label)}>
+                        <Clipboard className="h-3 w-3" />
+                    </Button>
+                )}
+                
+                {callable && value && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(value)}>
+                        <PhoneCall className="h-3 w-3" />
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+  };
+
   if (!user) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
   const fullAddressStr = formatAddress(company.address);
-  const entryDate = company.dateLeadEntered ? parseISO(company.dateLeadEntered) : null;
 
   return (
     <>
@@ -182,74 +230,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle></CardHeader>
-             <CardContent className="space-y-4">
-                {company.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{company.companyDescription}</div>}
-               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Customer ID</p>
-                    <div className="flex items-center gap-2">
-                        <p className="font-medium">{company.entityId ?? 'N/A'}</p>
-                        {company.entityId && (
-                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.entityId, 'Customer ID')}>
-                                <Clipboard className="h-3 w-3" />
-                            </Button>
-                        )}
+             <CardHeader className="pb-4 border-b">
+                <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
+             </CardHeader>
+             <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                    {/* Left Column */}
+                    <div className="space-y-8">
+                        <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
+                        <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
+                        <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
+                        <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
                     </div>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">NetSuite Internal ID</p>
-                    <div className="flex items-center gap-2">
-                        <p className="font-medium">{company.salesRecordInternalId || (company as any).internalid || 'N/A'}</p>
-                        {(company.salesRecordInternalId || (company as any).internalid) && (
-                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.salesRecordInternalId || (company as any).internalid, 'Internal ID')}>
-                                <Clipboard className="h-3 w-3" />
-                            </Button>
-                        )}
+                    {/* Right Column */}
+                    <div className="space-y-8">
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.salesRecordInternalId} copyable />
+                        <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
+                        <DetailItem icon={Tag} label="Sub-Industry" value={company.industrySubCategory || '- None -'} />
+                        <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable />
+                        <DetailItem icon={Briefcase} label="Lead Source" value={company.customerSource || company.campaign} />
                     </div>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Franchisee</p>
-                    <p className="font-medium">{company.franchisee || 'N/A'}</p>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Date Entered</p>
-                    <p className="font-medium">{entryDate && isValid(entryDate) ? format(entryDate, 'PP') : 'N/A'}</p>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Campaign</p>
-                    <p className="font-medium">{company.campaign || 'N/A'}</p>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Source</p>
-                    <p className="font-medium">{company.customerSource || 'N/A'}</p>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Phone</p>
-                    <div className="flex items-center gap-2">
-                        <p className="font-medium">{company.customerPhone || 'N/A'}</p>
-                        {company.customerPhone && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(company.customerPhone!)}>
-                                <PhoneCall className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Email</p>
-                    <div className="flex items-center gap-2">
-                        <p className="font-medium truncate max-w-[150px]">{company.customerServiceEmail || 'N/A'}</p>
-                        {company.customerServiceEmail && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
-                                <a href={`mailto:${company.customerServiceEmail}`}><Mail className="h-3 w-3" /></a>
-                            </Button>
-                        )}
-                    </div>
-                 </div>
-                 <div className="space-y-1"><p className="text-muted-foreground">Website</p>{company.websiteUrl ? <a href={company.websiteUrl} target="_blank" className="text-primary hover:underline">{company.websiteUrl}</a> : 'N/A'}</div>
-                 <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{company.industryCategory ?? 'N/A'}</p></div>
-                 <div className="space-y-1"><p className="text-muted-foreground">Sales Rep</p><p className="font-medium">{company.salesRepAssigned ?? 'N/A'}</p></div>
-               </div>
+                </div>
              </CardContent>
            </Card>
           

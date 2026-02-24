@@ -29,6 +29,11 @@ import {
   Search,
   SkipForward,
   MapPin,
+  Key,
+  Hash,
+  Tag,
+  Globe,
+  User,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -108,15 +113,12 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
-  const [isImprovedScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
   const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
-  const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
@@ -143,6 +145,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
 
+  const handleEndSession = useCallback(() => {
+    localStorage.removeItem('dialingSessionLeads');
+    setIsSessionActive(false);
+    setSessionLeads([]);
+    toast({ title: 'Dialing Session Ended' });
+  }, [toast]);
+
+  const handleNextLead = useCallback(() => {
+    const currentIndex = sessionLeads.indexOf(lead.id);
+    if (currentIndex !== -1 && currentIndex < sessionLeads.length - 1) {
+      setLoadingNextLead(true);
+      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
+    } else {
+      toast({ title: 'Session Complete', description: 'You have reached the end of your dialing list.' });
+      handleEndSession();
+    }
+  }, [lead.id, sessionLeads, router, toast, handleEndSession]);
+
   useEffect(() => {
     setLead(initialLead);
     const visitNoteId = initialLead.visitNoteID;
@@ -167,24 +187,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       }
     }
   }, [initialLead]);
-
-  const handleEndSession = useCallback(() => {
-    localStorage.removeItem('dialingSessionLeads');
-    setIsSessionActive(false);
-    setSessionLeads([]);
-    toast({ title: 'Dialing Session Ended' });
-  }, [toast]);
-
-  const handleNextLead = useCallback(() => {
-    const currentIndex = sessionLeads.indexOf(lead.id);
-    if (currentIndex !== -1 && currentIndex < sessionLeads.length - 1) {
-      setLoadingNextLead(true);
-      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
-    } else {
-      toast({ title: 'Session Complete', description: 'You have reached the end of your dialing list.' });
-      handleEndSession();
-    }
-  }, [lead.id, sessionLeads, router, toast, handleEndSession]);
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
@@ -322,6 +324,49 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
+    return (
+        <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="text-[11px] font-medium uppercase tracking-wider">{label}</span>
+            </div>
+            <div className="flex items-center gap-2 min-h-[1.5rem]">
+                {isWebsite ? (
+                    value ? (
+                        <a href={value} target="_blank" className="text-sm font-semibold text-primary hover:underline truncate max-w-[250px]">
+                            {value}
+                        </a>
+                    ) : <span className="text-sm text-muted-foreground">-</span>
+                ) : isLink ? (
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold">{value || '-'}</span>
+                        {value && linkUrl && (
+                            <a href={linkUrl} target="_blank" className="text-primary hover:text-primary/80">
+                                <LinkIcon className="h-3 w-3" />
+                            </a>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-sm font-semibold">{value || '-'}</span>
+                )}
+                
+                {copyable && value && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(value, label)}>
+                        <Clipboard className="h-3 w-3" />
+                    </Button>
+                )}
+                
+                {callable && value && (
+                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(lead.id, value)}>
+                        <PhoneCall className="h-3 w-3" />
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+  };
+
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
     const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
@@ -357,7 +402,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
   const fullAddressStr = lead.address ? formatAddressString(lead.address) : 'No address available';
-  const entryDate = lead.dateLeadEntered ? parseISO(lead.dateLeadEntered) : null;
 
   return (
     <>
@@ -398,81 +442,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader className="flex flex-row items-center justify-between">
+             <CardHeader className="flex flex-row items-center justify-between pb-4 border-b">
                <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
                <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting}><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</Button>
-                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}><Building className="mr-2 h-4 w-4" /> Nearby</Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
                       <DialogTrigger asChild><Button variant="outline" size="sm"><Edit className="mr-2 h-4 w-4" /> Edit</Button></DialogTrigger>
                       <DialogContent><DialogHeader><DialogTitle>Edit Details</DialogTitle></DialogHeader><EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} /></DialogContent>
                     </Dialog>
                </div>
              </CardHeader>
-             <CardContent className="space-y-4">
-                {lead.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{lead.companyDescription}</div>}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Customer ID</p>
-                        <div className="flex items-center gap-2">
-                            <p className="font-medium">{lead.entityId || 'N/A'}</p>
-                            {lead.entityId && (
-                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
-                                    <Clipboard className="h-3 w-3" />
-                                </Button>
-                            )}
-                        </div>
+             <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                    {/* Left Column */}
+                    <div className="space-y-8">
+                        <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
+                        <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                        <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
+                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                     </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">NetSuite Internal ID</p>
-                        <div className="flex items-center gap-2">
-                            <p className="font-medium">{lead.salesRecordInternalId || (lead as any).internalid || 'N/A'}</p>
-                            {(lead.salesRecordInternalId || (lead as any).internalid) && (
-                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.salesRecordInternalId || (lead as any).internalid, 'Internal ID')}>
-                                    <Clipboard className="h-3 w-3" />
-                                </Button>
-                            )}
-                        </div>
+                    {/* Right Column */}
+                    <div className="space-y-8">
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId} copyable />
+                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
+                        <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
+                        <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable />
+                        <DetailItem icon={Briefcase} label="Lead Source" value={lead.customerSource || lead.campaign} />
                     </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Franchisee</p>
-                        <p className="font-medium">{lead.franchisee || 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Date Entered</p>
-                        <p className="font-medium">{entryDate && isValid(entryDate) ? format(entryDate, 'PP') : 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Campaign</p>
-                        <p className="font-medium">{lead.campaign || 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Source</p>
-                        <p className="font-medium">{lead.customerSource || 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Phone</p>
-                        <div className="flex items-center gap-2">
-                            <p className="font-medium">{lead.customerPhone || 'N/A'}</p>
-                            {lead.customerPhone && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
-                                    <PhoneCall className="h-3 w-3" />
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Email</p>
-                        <div className="flex items-center gap-2">
-                            <p className="font-medium truncate max-w-[150px]">{lead.customerServiceEmail || 'N/A'}</p>
-                            {lead.customerServiceEmail && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
-                                    <a href={`mailto:${lead.customerServiceEmail}`}><Mail className="h-3 w-3" /></a>
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="space-y-1"><p className="text-muted-foreground">Website</p>{lead.websiteUrl ? <a href={lead.websiteUrl} target="_blank" className="text-primary hover:underline flex items-center gap-1">{lead.websiteUrl}<LinkIcon className="w-3" /></a> : 'N/A'}</div>
                 </div>
              </CardContent>
            </Card>
