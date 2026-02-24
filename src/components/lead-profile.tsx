@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -48,9 +47,10 @@ import {
   Mic,
   MicOff,
   Star,
+  AlertCircle,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion, VisitNote } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, UserProfile } from '@/lib/types'
 import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -73,9 +73,7 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { collection, onSnapshot, query, where, orderBy, getDocs, limit, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
@@ -116,9 +114,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
 import {
   AlertDialog,
@@ -129,137 +124,19 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
-import { initiateLocalMileTrial, initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy'
-
+import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 
 interface LeadProfileProps {
   initialLead: Lead;
 }
 
-interface MoveLeadDialogProps {
-  lead: Lead;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onLeadMoved: () => void;
-}
-
 const formatAddress = (address?: Address) => {
     if (!address) return 'N/A';
     return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
-}
-
-function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDialogProps) {
-    const [bucket, setBucket] = useState<'field' | 'outbound' | ''>('');
-    const [users, setUsers] = useState<UserProfile[]>([]);
-    const [selectedUser, setSelectedUser] = useState<string>('');
-    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-    const [isMoving, setIsMoving] = useState(false);
-    const { toast } = useToast();
-    
-    useEffect(() => {
-        const fetchUsers = async () => {
-            if (!isOpen) return;
-
-            setIsLoadingUsers(true);
-            const allUsers = await getAllUsers();
-            const filteredUsers = allUsers.filter(u => {
-                if (bucket === 'field') {
-                    return u.role === 'Field Sales' || u.role === 'admin';
-                }
-                if (bucket === 'outbound') {
-                    return u.role === 'user';
-                }
-                return false;
-            });
-            setUsers(filteredUsers);
-            setIsLoadingUsers(false);
-        };
-        fetchUsers();
-    }, [bucket, isOpen]);
-
-    const handleMoveLead = async () => {
-        if (!bucket || !selectedUser) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please select a bucket and a user.' });
-            return;
-        }
-        setIsMoving(true);
-        try {
-            await moveLeadToBucket({
-                leadId: lead.id,
-                fieldSales: bucket === 'field',
-                assigneeDisplayName: selectedUser,
-            });
-            toast({ title: 'Success', description: 'Lead has been moved and reassigned.' });
-            onLeadMoved();
-            onOpenChange(false);
-        } catch (error) {
-            console.error("Failed to move lead:", error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not move the lead.' });
-        } finally {
-            setIsMoving(false);
-        }
-    };
-    
-    useEffect(() => {
-        if (!isOpen) {
-            setBucket('');
-            setSelectedUser('');
-        }
-    }, [isOpen]);
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Move Lead</DialogTitle>
-                    <DialogDescription>Move {lead.companyName} to a different sales bucket and reassign.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label>Bucket</Label>
-                        <RadioGroup value={bucket} onValueChange={(value) => setBucket(value as 'field' | 'outbound')}>
-                            <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="field" id="field" />
-                                <Label htmlFor="field">Field Sales (fieldSales = true)</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="outbound" id="outbound" />
-                                <Label htmlFor="outbound">Outbound (fieldSales = false)</Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-                    {bucket && (
-                         <div className="space-y-2">
-                             <Label>Assign To</Label>
-                             <Select value={selectedUser} onValueChange={setSelectedUser}>
-                                <SelectTrigger disabled={isLoadingUsers}>
-                                    <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${bucket === 'field' ? 'Field Sales Rep' : 'Dialer'}`} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {users.map(user => (
-                                        <SelectItem key={user.uid} value={user.displayName!}>
-                                            {user.displayName} ({user.role})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                             </Select>
-                         </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleMoveLead} disabled={!bucket || !selectedUser || isMoving}>
-                        {isMoving ? <Loader/> : 'Confirm Move'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
 }
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
@@ -270,7 +147,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
   const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
@@ -283,7 +159,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
-  const [dateFilter, setDateFilter] = useState<DateRange | undefined>(undefined);
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
@@ -300,37 +175,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
 
-
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
-  const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [], invoices = [] } = lead;
-
+  const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
 
   useEffect(() => {
     setLead(initialLead);
     const visitNoteId = initialLead.visitNoteID;
-    const fetchVisitNoteData = async () => {
-        if (visitNoteId) {
-            setIsDiscoveryLoading(true);
-            try {
-                const noteRef = doc(firestore, 'visitnotes', visitNoteId);
-                const noteSnap = await getDoc(noteRef);
-                if (noteSnap.exists()) {
-                    const visitNote = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
-                    setLinkedVisitNote(visitNote);
-                }
-            } catch (error) {
-                console.error("Failed to fetch visit note discovery data:", error);
-            } finally {
-                setIsDiscoveryLoading(false);
+    if (visitNoteId) {
+        setIsDiscoveryLoading(true);
+        const noteRef = doc(firestore, 'visitnotes', visitNoteId);
+        getDoc(noteRef).then(noteSnap => {
+            if (noteSnap.exists()) {
+                setLinkedVisitNote({ id: noteSnap.id, ...noteSnap.data() } as VisitNote);
             }
-        }
-    };
-    fetchVisitNoteData();
+        }).finally(() => setIsDiscoveryLoading(false));
+    }
 
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
     if (sessionLeadIds) {
@@ -341,8 +205,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       } else {
         setIsSessionActive(false);
       }
-    } else {
-      setIsSessionActive(false);
     }
     if (initialLead.aiScore) {
         setScoringResult({
@@ -354,65 +216,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [initialLead]);
 
-
   const handleCallLogged = (newStatus?: LeadStatus) => {
-    if (newStatus) {
-       setLead(prev => ({...prev!, status: newStatus}));
-    }
-    
+    if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
     if (isSessionActive) {
-        const currentLeadId = lead?.id;
-        if(currentLeadId) {
-            const updatedSessionLeads = sessionLeads.filter(id => id !== currentLeadId);
-            localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-            setSessionLeads(updatedSessionLeads);
-        }
-    }
-};
-
-
-  const handleAiProspect = async () => {
-    if (!lead || !lead.websiteUrl) {
-        toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
-        return;
-    }
-    try {
-        setIsProspecting(true);
-        const result = await prospectWebsiteTool({
-            leadId: lead.id,
-            websiteUrl: lead.websiteUrl,
-        });
-        
-        if (result.logoUrl) {
-          await updateLeadAvatar(lead.id, result.logoUrl);
-          setLead(prev => ({ ...prev!, avatarUrl: result.logoUrl! }));
-          toast({ title: "Logo Found!", description: "Company logo has been updated." });
-        }
-        
-        if (result.companyDescription) {
-            setLead(prev => ({...prev!, companyDescription: result.companyDescription! }));
-            toast({ title: "Description Generated", description: "Company description has been updated." });
-        }
-        
-        if (result.contacts && result.contacts.length > 0) {
-            setLead(prev => ({...prev!, contacts: [...(prev!.contacts || []), ...result.contacts!]}));
-            toast({ title: "Success", description: `${result.contacts.length} new contact(s) found and saved.` });
-        } else {
-            toast({ title: "No New Contacts", description: "No new contacts were found on the website." });
-        }
-
-    } catch (error) {
-        console.error("Failed to prospect website:", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to prospect website." });
-    } finally {
-        setIsProspecting(false);
+        const updatedSessionLeads = sessionLeads.filter(id => id !== lead?.id);
+        localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+        setSessionLeads(updatedSessionLeads);
     }
   };
 
-  const addActivity = async (newActivity: Omit<Activity, 'id' | 'date'>) => {
-    if (lead) {
-        const newActivityId = await logActivity(lead.id, { ...newActivity, date: new Date().toISOString() });
-        setLead(prev => ({...prev!, activity: [{...newActivity, id: newActivityId, date: new Date().toISOString()}, ...(prev!.activity || [])] as Activity[] }));
+  const handleAiProspect = async () => {
+    if (!lead || !lead.websiteUrl) return;
+    setIsProspecting(true);
+    try {
+        const result = await prospectWebsiteTool({ leadId: lead.id, websiteUrl: lead.websiteUrl });
+        if (result.logoUrl) {
+          await updateLeadAvatar(lead.id, result.logoUrl);
+          setLead(prev => ({ ...prev!, avatarUrl: result.logoUrl! }));
+        }
+        if (result.companyDescription) setLead(prev => ({...prev!, companyDescription: result.companyDescription! }));
+        if (result.contacts && result.contacts.length > 0) setLead(prev => ({...prev!, contacts: [...(prev!.contacts || []), ...result.contacts!]}));
+        toast({ title: "Success", description: "Prospecting complete." });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Error", description: "Prospecting failed." });
+    } finally {
+        setIsProspecting(false);
     }
   };
 
@@ -423,7 +251,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   
   const handleContactAdded = (newContactData: any) => {
     const newContact: Contact = {
-        id: 'temp-' + Date.now(), // Temporary unique ID for rendering
+        id: 'temp-' + Date.now(),
         name: `${newContactData.firstName} ${newContactData.lastName}`,
         title: newContactData.title,
         email: newContactData.email,
@@ -433,15 +261,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleContactUpdated = (updatedContact: Contact) => {
-     addActivity({
-        type: 'Update',
-        notes: `Contact ${updatedContact.name} updated.`,
-        author: user?.displayName,
-     });
      setLead(prev => ({...prev!, contacts: (prev!.contacts || []).map(c => c.id === updatedContact.id ? updatedContact : c)}));
   };
 
-  const handleLeadUpdated = (updatedLeadData: Partial<Lead>, oldLead: Lead) => {
+  const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
     setLead(prev => ({ ...prev!, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
   }
@@ -451,93 +274,51 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     try {
       await deleteContactFromLead(lead.id, contact.id, contact.name);
       setLead(prev => ({...prev!, contacts: (prev!.contacts || []).filter(c => c.id !== contact.id)}));
-      toast({ title: "Success", description: "Contact deleted successfully." });
+      toast({ title: "Success", description: "Contact deleted." });
     } catch (error) {
-      console.error("Failed to delete contact:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete contact." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
     }
   };
 
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
     logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
-    toast({
-        title: "Opening AirCall",
-        description: `Attempting to dial ${phoneNumber}...`,
-    });
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
-    toast({
-        title: "Copied to clipboard",
-        description: `${fieldName} copied successfully.`,
-    });
+    toast({ title: "Copied", description: `${fieldName} copied.` });
   };
 
   const handleGetTranscriptForCall = async (callId: string) => {
-    console.log(`[Client] 'Fetch Transcript' button clicked for call ID: ${callId}`);
-
-    if (!lead) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not identify lead.' });
-      return;
-    }
-    if (!lead.dialerAssigned) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Lead has no assigned dialer to address the transcript to.' });
-      return;
-    }
+    if (!lead?.dialerAssigned) return;
+    setFetchingTranscriptId(callId);
     try {
-      console.log('[Client] Calling getCallTranscriptByCallId flow...');
-      setFetchingTranscriptId(callId);
-      
-      const result = await getCallTranscriptByCallId({
-        callId: callId,
-        leadId: lead.id,
-        leadAuthor: lead.dialerAssigned,
-      });
-      
-      console.log('[Client] Flow result:', result);
-
+      const result = await getCallTranscriptByCallId({ callId, leadId: lead.id, leadAuthor: lead.dialerAssigned });
       if (result.transcriptFound) {
-        toast({ title: "Success", description: "Transcript fetched and logged." });
-        const newTranscript = {
-          id: 'temp-' + callId,
-          callId: callId,
-          date: new Date().toISOString(),
-          content: '{"utterances":[]}', // Placeholder
-          author: lead.dialerAssigned
-        };
-        setLead(prev => ({...prev!, transcripts: [newTranscript, ...(prev!.transcripts || [])]}));
-      } else {
-        toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+        toast({ title: "Success", description: "Transcript fetched." });
+        fetchData();
       }
-    } catch (error: any) {
-      console.error("[Client] Error calling flow:", error);
-      toast({ variant: "destructive", title: "Error", description: error.message || "An unexpected error occurred during analysis." });
     } finally {
       setFetchingTranscriptId(null);
     }
   };
 
+  const fetchData = async () => {
+      const updatedLead = await getLeadFromFirebase(lead.id, true);
+      if (updatedLead) setLead(updatedLead);
+  };
+
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lead || !newTaskTitle || !newTaskDueDate || !user?.displayName) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Task title and due date are required.' });
-        return;
-    }
+    if (!lead || !newTaskTitle || !newTaskDueDate || !user?.displayName) return;
     try {
-        const newTask = await addTaskToLead(lead.id, {
-            title: newTaskTitle,
-            dueDate: newTaskDueDate.toISOString(),
-            author: user.displayName,
-        });
+        const newTask = await addTaskToLead(lead.id, { title: newTaskTitle, dueDate: newTaskDueDate.toISOString(), author: user.displayName });
         setLead(prev => ({...prev!, tasks: [newTask, ...(prev!.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
         setNewTaskTitle('');
         setNewTaskDueDate(undefined);
-        toast({ title: 'Success', description: 'Task added successfully.' });
     } catch (error) {
-        console.error("Failed to add task:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to add task." });
     }
   };
@@ -547,10 +328,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       try {
           await updateTaskCompletion(lead.id, taskId, isCompleted);
           setLead(prev => ({...prev!, tasks: (prev!.tasks || []).map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t)}));
-          toast({ title: 'Success', description: `Task marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
       } catch (error) {
-          console.error("Failed to update task:", error);
-          toast({ variant: "destructive", title: "Error", description: "Failed to update task." });
+          toast({ variant: "destructive", title: "Error", description: "Failed to update." });
       }
   };
 
@@ -559,10 +338,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       try {
           await deleteTaskFromLead(lead.id, taskId);
           setLead(prev => ({...prev!, tasks: (prev!.tasks || []).filter(t => t.id !== taskId)}));
-          toast({ title: 'Success', description: 'Task deleted successfully.' });
       } catch (error) {
-          console.error("Failed to delete task:", error);
-          toast({ variant: "destructive", title: "Error", description: "Failed to delete task." });
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
       }
   };
 
@@ -570,56 +347,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead) return;
     try {
       await updateLeadDiscoveryData(lead.id, discoveryData);
-      setLead(prev => ({ ...prev!, discoveryData: discoveryData }));
-      toast({ title: 'Success', description: 'Discovery questions saved.' });
+      setLead(prev => ({ ...prev!, discoveryData }));
       setIsDiscoveryQuestionsOpen(false);
     } catch (error: any) {
-        console.error("[Client] Failed to save discovery data to Firebase:", error);
-        toast({ variant: "destructive", title: "Firebase Error", description: `Failed to save discovery data: ${error.message}` });
+        toast({ variant: "destructive", title: "Error", description: error.message });
     }
   };
 
-  const handleDiscoveryClose = (open: boolean) => {
-    setIsDiscoveryQuestionsOpen(open);
-  }
-
-  const handleAddressSave = async (newAddress: Address) => {
-    if (!lead) return;
-    try {
-      await updateLeadDetails(lead.id, lead, { address: newAddress });
-      setLead(prev => ({ ...prev!, address: newAddress }));
-      toast({ title: "Success", description: "Address updated successfully." });
-    } catch (error) {
-      console.error("Failed to update address:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to update address." });
-    } finally {
-      setIsEditAddressDialogOpen(false);
-    }
-  }
-
-  const { nextLeadId, hasNextLead } = useMemo(() => {
-    if (!lead || !isSessionActive || sessionLeads.length === 0) {
-      return { nextLeadId: null, hasNextLead: false };
-    }
-    if (!sessionLeads.includes(lead.id)) {
-      return { nextLeadId: sessionLeads[0], hasNextLead: true };
-    }
-
-    const currentIndex = sessionLeads.indexOf(lead.id);
-    if (currentIndex < sessionLeads.length - 1) {
-      return { nextLeadId: sessionLeads[currentIndex + 1], hasNextLead: true };
-    }
-    
-    return { nextLeadId: null, hasNextLead: false };
-}, [lead, sessionLeads, isSessionActive]);
-
   const handleNextLead = () => {
-    setLoadingNextLead(true);
-    if (nextLeadId) {
-      router.push(`/leads/${nextLeadId}`);
+    if (sessionLeads.indexOf(lead.id) < sessionLeads.length - 1) {
+      router.push(`/leads/${sessionLeads[sessionLeads.indexOf(lead.id) + 1]}`);
     } else {
       localStorage.removeItem('dialingSessionLeads');
-      toast({ title: "Dialing Session Complete!", description: "You've actioned all leads in this session."});
       router.push('/leads');
     }
   };
@@ -627,116 +366,62 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleEndSession = () => {
     localStorage.removeItem('dialingSessionLeads');
     setIsSessionActive(false);
-    setSessionLeads([]);
-    toast({ title: 'Dialing Session Ended', description: 'You can start a new session from the leads page.' });
+    router.push('/leads');
   };
 
   const handleBackToLeads = () => {
     setLoadingBack(true);
-    const destination = isCompanyProfile ? '/signed-customers' : '/leads';
-    router.push(destination);
+    router.push(isCompanyProfile ? '/signed-customers' : '/leads');
   };
   
   const handleRepSelection = (repName: string, repUrl: string) => {
     if (!lead) return;
-    
     setLead(prev => ({ ...prev!, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
-    toast({ title: "Sales Rep Updated", description: `${repName} has been assigned to this lead.` });
-
-    updateLeadSalesRep(lead.id, repName, repUrl)
-        .then(() => {
-            console.log(`Lead ${lead.id} successfully assigned to ${repName} in the background.`);
-        })
-        .catch(error => {
-            console.error("Failed to assign sales rep in the background:", error);
-            toast({ variant: "destructive", title: "Background Sync Failed", description: "Could not save the sales rep assignment." });
-        });
+    updateLeadSalesRep(lead.id, repName, repUrl);
   };
 
-  const handleFindNearbyCompanies = useCallback(async () => {
-    if (!lead.latitude || !lead.longitude || !window.google?.maps?.geometry) {
-        toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
-        return;
-    }
-
+  const handleFindNearbyCompanies = async () => {
+    if (!lead.latitude || !lead.longitude) return;
     setIsFindingNearby(true);
     try {
-        const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
         const allCompanies = await getCompaniesFromFirebase();
-        
+        const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
         const nearby = allCompanies.filter(company => {
-          if (!company.latitude || !company.longitude || company.id === lead.id) {
-            return false;
-          }
+          if (!company.latitude || !company.longitude || company.id === lead.id) return false;
           const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-          const distance = window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng);
-          return distance <= 500; // 500m radius
+          return window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng) <= 500;
         });
-
         setNearbyCompanies(nearby);
         setIsNearbyCustomersOpen(true);
-        if(nearby.length === 0) {
-            toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
-        }
-    } catch (error) {
-        console.error("Error finding nearby companies:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch nearby companies.' });
     } finally {
         setIsFindingNearby(false);
     }
-  }, [lead, toast]);
+  };
 
   const handleLocalMileConfirm = async () => {
     const result = await initiateLocalMileTrial({ leadId: lead.id });
-    if (result.success) {
-      toast({ title: 'Success', description: 'LocalMile trial initiated.' });
-      setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
-    } else {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
-      throw new Error(result.message);
-    }
+    if (result.success) setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
+    else throw new Error(result.message);
   };
 
   const handleShipMateConfirm = async () => {
     const result = await initiateMPProductsTrial({ leadId: lead.id });
-    if (result.success) {
-      toast({ title: 'Success', description: 'ShipMate trial initiated.' });
-      setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
-    } else {
-      toast({ variant: 'destructive', title: 'Error', description: result.message });
-      throw new Error(result.message);
-    }
+    if (result.success) setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
+    else throw new Error(result.message);
   };
-
 
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
     const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
-    const isFieldSales = userProfile?.role === 'Field Sales';
-    const isFieldSalesAdmin = userProfile?.role === 'Field Sales Admin';
+    const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
     const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
 
-    const checkInButton = (
-      <Button variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}>
-        <CheckSquare className="mr-2 h-4 w-4" />
-        Check In
-      </Button>
-    );
-
-    const signupButton = (
-      <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}>
-        <Briefcase className="mr-2 h-4 w-4" />
-        Signup
-      </Button>
-    );
-
-    const freeTrialButton = (
+    const checkInBtn = <Button variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</Button>;
+    const signupBtn = <Button variant={isFieldSales || isAdmin ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</Button>;
+    const trialBtn = (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"}>
-                <Star className="mr-2 h-4 w-4" />
-                Free Trial
-              </Button>
+              <Button variant={isFieldSales || isAdmin ? "default" : "outline"}><Star className="mr-2 h-4 w-4" />Free Trial</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
                 <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
@@ -745,138 +430,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
+    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const callBtn = <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
+    const processBtn = <Button onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
+    const noteBtn = <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
+    const moveBtn = <Button variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
 
-    const scheduleAppointmentButton = (
-        <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}>
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            Schedule Appointment
-        </Button>
-    );
-    
-    const logCallButton = (
-        <Button variant={(isFieldSales || isFieldSalesAdmin) ? "secondary" : "outline"} onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
-            <PhoneCall className="mr-2 h-4 w-4" />{(isFieldSales || isFieldSalesAdmin) ? 'Log Outcome' : 'Log a Call'}
-        </Button>
-    );
-
-    const processFieldLeadButton = (
-      <Button onClick={() => { setLastCallActivity(null); setShowPostCallDialog(true); }}>
-        <Briefcase className="mr-2 h-4 w-4" />
-        Process Field Lead
-      </Button>
-    );
-
-    const logNoteButton = (
-        <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
-            <ClipboardEdit className="mr-2 h-4 w-4" />
-            Log a Note
-        </Button>
-    );
-    
-    const viewScriptButton = (
-        <Button variant="outline" onClick={() => window.open('https://illicium.com.au/revup_client_assets/mailplus_catch_all.html', '_blank')}>
-            <BookText className="mr-2 h-4 w-4" />View Script
-        </Button>
-    );
-    
-    const scorecardButton = (
-        <ColdCallScorecardDialog lead={lead} dialerName={lead.dialerAssigned || userProfile?.displayName || ''} onScorecardSubmit={() => {}} />
-    );
-    
-    const moveLeadButton = (
-        <Button variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}>
-            <Move className="mr-2 h-4 w-4" />
-            Move Lead
-        </Button>
-    );
-
-    if (isAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{processFieldLeadButton}{scheduleAppointmentButton}{signupButton}{freeTrialButton}{logNoteButton}{viewScriptButton}{scorecardButton}{moveLeadButton}</div>;
-    }
-    
-    if (isLeadGenAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{processFieldLeadButton}{scheduleAppointmentButton}{logNoteButton}{viewScriptButton}{scorecardButton}{moveLeadButton}</div>;
-    }
-
-    if (isFieldSales || isFieldSalesAdmin) {
-        return <div className="flex flex-wrap items-center gap-2">{checkInButton}{signupButton}{freeTrialButton}{logCallButton}{logNoteButton}{scorecardButton}{moveLeadButton}</div>;
-    }
-    
-    if (isDialer) {
-        return <div className="flex flex-wrap items-center gap-2">{scheduleAppointmentButton}{logCallButton}{logNoteButton}{viewScriptButton}{moveLeadButton}</div>;
-    }
-
+    if (isAdmin) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{processBtn}{apptBtn}{signupBtn}{trialBtn}{noteBtn}{moveBtn}</div>;
+    if (isLeadGenAdmin) return <div className="flex flex-wrap items-center gap-2">{processBtn}{apptBtn}{noteBtn}{moveBtn}</div>;
+    if (isFieldSales) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{signupBtn}{trialBtn}{callBtn}{noteBtn}{moveBtn}</div>;
+    if (isDialer) return <div className="flex flex-wrap items-center gap-2">{apptBtn}{callBtn}{noteBtn}{moveBtn}</div>;
     return null;
   };
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
-
-  const contactAttempts = useMemo(() => {
-    return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
-  }, [activities]);
-
   const fullAddressStr = lead.address ? formatAddress(lead.address) : 'No address available';
 
   return (
     <>
-    <MoveLeadDialog
-        lead={lead}
-        isOpen={isMoveLeadDialogOpen}
-        onOpenChange={setIsMoveLeadDialogOpen}
-        onLeadMoved={() => router.refresh()}
-    />
-     {isScheduleAppointmentOpen && (
-        <ScheduleAppointmentDialog
-            isOpen={isScheduleAppointmentOpen}
-            onOpenChange={setIsScheduleAppointmentOpen}
-            lead={lead}
-        />
-    )}
-
-    <Dialog open={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen}>
-      <DialogContent className="max-w-3xl">
-          <DialogHeader>
-              <DialogTitle>Nearby Signed Customers</DialogTitle>
-              <DialogDescription>
-                  Found {nearbyCompanies.length} signed customer(s) within a 500m radius of {lead?.companyName}.
-              </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-              {nearbyCompanies.length > 0 ? (
-                  <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Company Name</TableHead>
-                                <TableHead>Address</TableHead>
-                                <TableHead>Industry</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {nearbyCompanies.map(company => (
-                                <TableRow key={company.id}>
-                                    <TableCell className="font-semibold">{company.companyName}</TableCell>
-                                    <TableCell>{formatAddress(company.address as Address)}</TableCell>
-                                    <TableCell>{company.industryCategory || 'N/A'}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-              ) : (
-                  <p className="text-center text-muted-foreground py-8">No nearby customers found.</p>
-              )}
-          </ScrollArea>
-           <DialogFooter>
-              <Button onClick={() => setIsNearbyCustomersOpen(false)}>Close</Button>
-           </DialogFooter>
-      </DialogContent>
-    </Dialog>
     <PostCallOutcomeDialog
         isOpen={showPostCallDialog}
-        onClose={() => {
-            setShowPostCallDialog(false);
-        }}
+        onClose={() => setShowPostCallDialog(false)}
         lead={lead}
-        callActivity={lastCallActivity}
         onOutcomeLogged={handleCallLogged}
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
@@ -890,835 +465,190 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </Button>
         {isSessionActive && (
           <div className="flex items-center gap-2">
-              <Button onClick={handleEndSession} variant="destructive">
-                  <XCircle className="mr-2 h-4 w-4" />
-                  End Session
-              </Button>
-              <Button onClick={handleNextLead} disabled={loadingNextLead}>
-                  {loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}
-                  {loadingNextLead ? 'Loading...' : 'Next in Session'}
-              </Button>
+              <Button onClick={handleEndSession} variant="destructive"><XCircle className="mr-2 h-4 w-4" />End Session</Button>
+              <Button onClick={handleNextLead} disabled={loadingNextLead}>{loadingNextLead ? <Loader /> : <SkipForward className="mr-2 h-4 w-4" />}Next</Button>
           </div>
         )}
       </div>
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div>
+        <div>
             <h1 className="text-3xl font-bold">{lead.companyName}</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <div className="flex items-center gap-2 mt-1">
               <LeadStatusBadge status={lead.status} />
-                <>
-                  <p className="text-muted-foreground">&bull; {contacts?.length || 0} {contacts?.length === 1 ? 'Contact' : 'Contacts'}</p>
-                  <p className="text-muted-foreground">&bull; Contacted {contactAttempts} {contactAttempts === 1 ? 'time' : 'times'}</p>
-                </>
+              <p className="text-muted-foreground text-sm">&bull; {contacts?.length || 0} Contacts &bull; Contacted {callHistory.length} times</p>
             </div>
-          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-            {renderActionButtons()}
-        </div>
+        <div className="flex flex-wrap items-center gap-2">{renderActionButtons()}</div>
       </header>
-
-      <DiscoveryQuestionsDialog 
-        lead={lead} 
-        onSave={handleDiscoverySave}
-        isOpen={isDiscoveryQuestionsOpen}
-        onOpenChange={handleDiscoveryClose}
-      />
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-               <CardTitle className="flex items-center gap-2">
-                 <Building className="w-5 h-5 text-muted-foreground" />
-                 Company Details
-               </CardTitle>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting || !lead.websiteUrl}>
-                        {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect Website</>}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
-                        {isFindingNearby ? <Loader /> : <><Building className="mr-2 h-4 w-4" /> Nearby Customers</>}
-                    </Button>
+             <CardHeader className="flex flex-row items-center justify-between">
+               <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
+               <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting}><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</Button>
+                    <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}><Building className="mr-2 h-4 w-4" /> Nearby</Button>
                     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
-                      <DialogTrigger asChild>
-                         <Button variant="outline" size="sm">
-                           <Edit className="mr-2 h-4 w-4" />
-                           Edit Details
-                         </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Edit Lead Details</DialogTitle>
-                        </DialogHeader>
-                        <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
-                      </DialogContent>
+                      <DialogTrigger asChild><Button variant="outline" size="sm"><Edit className="mr-2 h-4 w-4" /> Edit</Button></DialogTrigger>
+                      <DialogContent><DialogHeader><DialogTitle>Edit Details</DialogTitle></DialogHeader><EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} /></DialogContent>
                     </Dialog>
-                </div>
+               </div>
              </CardHeader>
              <CardContent className="space-y-4">
-                {lead.companyDescription && (
-                    <div className="text-sm text-muted-foreground border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">
-                        {lead.companyDescription}
-                    </div>
-                )}
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                 <div className="flex items-start gap-3">
-                   <Key className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">Customer ID</p>
-                     <div className="flex items-center gap-1">
-                        <p className="font-medium break-all">{lead.entityId ?? 'N/A'}</p>
-                        {lead.entityId && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
-                                <Clipboard className="w-3 h-3" />
-                            </Button>
-                        )}
-                     </div>
-                   </div>
-                 </div>
-                 <div className="flex items-start gap-3">
-                   <Hash className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">NetSuite Internal ID</p>
-                     <div className="flex items-center gap-1">
-                        <p className="font-medium break-all">{lead.id ?? 'N/A'}</p>
-                        {lead.id && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.id, 'NetSuite Internal ID')}>
-                                <Clipboard className="w-3 h-3" />
-                            </Button>
-                        )}
-                     </div>
-                   </div>
-                 </div>
-                 <div className="flex items-start gap-3">
-                   <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">Franchisee</p>
-                     <p className="font-medium">{lead.franchisee ?? 'N/A'}</p>
-                   </div>
-                 </div>
-                 <div className="flex items-start gap-3">
-                   <Globe className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">Website</p>
-                     {lead.websiteUrl ? (
-                        <a href={lead.websiteUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1 break-all">
-                            <span>{lead.websiteUrl}</span>
-                            <LinkIcon className="w-3 h-3 shrink-0" />
-                        </a>
-                     ) : (
-                        <p className="font-medium">N/A</p>
-                     )}
-                   </div>
-                 </div>
-                  <div className="flex items-start gap-3">
-                    <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">Industry</p>
-                     <p className="font-medium">{lead.industryCategory ?? 'N/A'}</p>
-                   </div>
-                 </div>
-                 <div className="flex items-start gap-3">
-                   <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                   <div>
-                     <p className="text-muted-foreground">Sub-Industry</p>
-                     <p className="font-medium">{lead.industrySubCategory || 'N/A'}</p>
-                   </div>
-                 </div>
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Email</p>
-                      <div className="flex items-center gap-1">
-                        <p className="font-medium break-all">{lead.customerServiceEmail ?? 'N/A'}</p>
-                        {lead.customerServiceEmail && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerServiceEmail, 'Email')}>
-                                <Clipboard className="w-3 h-3" />
-                            </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Phone className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <div className="flex items-center gap-1">
-                        <span className="break-all">{lead.customerPhone ?? 'N/A'}</span>
-                        {lead.customerPhone && (
-                            <>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleCopy(lead.customerPhone, 'Phone')}>
-                                <Clipboard className="w-3 h-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
-                                <PhoneCall className="w-3 h-3" />
-                            </Button>
-                            </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <User className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Sales Rep Assigned</p>
-                      {lead.salesRepAssigned ? (
-                        <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                            <Button variant="link" className="p-0 h-auto font-medium">
-                                {lead.salesRepAssigned} <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent>
-                                {salesReps.map(rep => (
-                                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
-                                        Assign to {rep.name}
-                                    </DropdownMenuItem>
-                                ))}
-                           </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button variant="link" className="p-0 h-auto font-medium">
-                                Assign a Sales Rep <ChevronDown className="ml-2 h-4 w-4" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent>
-                                {salesReps.map(rep => (
-                                    <DropdownMenuItem key={rep.name} onSelect={() => handleRepSelection(rep.name, rep.url)}>
-                                        {rep.name}
-                                    </DropdownMenuItem>
-                                ))}
-                           </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                  </div>
-                   <div className="flex items-start gap-3">
-                    <Briefcase className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Campaign</p>
-                      <p className="font-medium">{lead.campaign ?? 'N/A'}</p>
-                    </div>
-                  </div>
-                   <div className="flex items-start gap-3">
-                    <Tag className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Lead Source</p>
-                      <p className="font-medium">{lead.customerSource ?? 'N/A'}</p>
-                    </div>
-                  </div>
-                   <div className="flex items-start gap-3">
-                    <CalendarIcon className="w-4 h-4 mt-1 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-muted-foreground">Date Lead Entered</p>
-                      <p className="font-medium">{lead.dateLeadEntered ? new Date(lead.dateLeadEntered).toLocaleDateString() : 'N/A'}</p>
-                    </div>
-                  </div>
-               </div>
+                {lead.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{lead.companyDescription}</div>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-1"><p className="text-muted-foreground">ID</p><p className="font-medium">{lead.entityId || 'N/A'}</p></div>
+                    <div className="space-y-1"><p className="text-muted-foreground">Website</p>{lead.websiteUrl ? <a href={lead.websiteUrl} target="_blank" className="text-primary hover:underline flex items-center gap-1">{lead.websiteUrl}<LinkIcon className="w-3" /></a> : 'N/A'}</div>
+                    <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{lead.industryCategory || 'N/A'}</p></div>
+                    <div className="space-y-1"><p className="text-muted-foreground">Assigned Rep</p><p className="font-medium">{lead.salesRepAssigned || 'N/A'}</p></div>
+                </div>
              </CardContent>
            </Card>
           
           {linkedVisitNote && (
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Info className="w-5 h-5 text-muted-foreground" />
-                        Field Discovery from Visit Note
-                    </CardTitle>
-                    <CardDescription>
-                        The following discovery data and notes were captured by <strong>{linkedVisitNote.capturedBy}</strong> during the initial visit.
-                    </CardDescription>
+                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    {isDiscoveryLoading ? (
-                        <div className="flex justify-center p-8"><Loader /></div>
-                    ) : (
-                        <div className="flex flex-col gap-4">
-                            {linkedVisitNote.content && (
-                                <div className="space-y-2">
-                                    <h4 className="font-semibold text-sm">Original Visit Notes:</h4>
-                                    <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground italic">
-                                        "{linkedVisitNote.content}"
-                                    </div>
-                                </div>
-                            )}
-                            {linkedVisitNote.scheduledDate && (
-                                <div className="p-3 bg-primary/5 border border-primary/20 rounded-md text-sm">
-                                    <p className="font-semibold flex items-center gap-2">
-                                        <CalendarIcon className="h-4 w-4" />
-                                        Follow-up Scheduled:
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                        {format(new Date(linkedVisitNote.scheduledDate), 'PPP')}
-                                        {linkedVisitNote.scheduledTime && ` @ ${linkedVisitNote.scheduledTime}`}
-                                    </p>
-                                </div>
-                            )}
-                            <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Score</p>
-                                    <p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                    <Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge>
-                                </div>
-                            </div>
-                            {linkedVisitNote.discoveryData && (
-                                <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />
-                            )}
-                            {linkedVisitNote.discoveryData?.scoringReason && (
-                                <div className="text-xs text-muted-foreground p-2 border-t">
-                                    <strong>Scoring Rationale:</strong> {linkedVisitNote.discoveryData.scoringReason}
-                                </div>
-                            )}
-                             <div className="text-sm space-y-2 pt-4 border-t">
-                                <h4 className="font-semibold">Captured Answers:</h4>
-                                <ul className="list-disc pl-5 text-muted-foreground">
-                                    <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
-                                    <li><strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</li>
-                                    {linkedVisitNote.discoveryData?.personSpokenWithName && (
-                                        <li>
-                                            <strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName}
-                                            {linkedVisitNote.discoveryData.personSpokenWithTitle && ` (${linkedVisitNote.discoveryData.personSpokenWithTitle})`}
-                                            {linkedVisitNote.discoveryData.personSpokenWithEmail && ` | ${linkedVisitNote.discoveryData.personSpokenWithEmail}`}
-                                            {linkedVisitNote.discoveryData.personSpokenWithPhone && ` | ${linkedVisitNote.discoveryData.personSpokenWithPhone}`}
-                                        </li>
-                                    )}
-                                    {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
-                                        <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
-                                    )}
-                                    {linkedVisitNote.discoveryData?.inconvenience && <li><strong>Inconvenience:</strong> {linkedVisitNote.discoveryData.inconvenience}</li>}
-                                    {linkedVisitNote.discoveryData?.occurrence && <li><strong>Occurrence:</strong> {linkedVisitNote.discoveryData.occurrence}</li>}
-                                    {(linkedVisitNote.discoveryData as any)?.taskOwner && <li><strong>Task Owner:</strong> {(linkedVisitNote.discoveryData as any).taskOwner}</li>}
-                                </ul>
-                            </div>
+                <CardContent className="space-y-4">
+                    {linkedVisitNote.outcome && (
+                        <div className="p-3 bg-muted rounded-md border text-sm font-semibold flex items-center justify-between">
+                            <span>Visit Outcome:</span>
+                            <Badge variant="secondary">{linkedVisitNote.outcome.type}</Badge>
                         </div>
                     )}
+                    {linkedVisitNote.scheduledDate && (
+                        <Alert className="bg-primary/5 border-primary/20">
+                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <AlertTitle>Scheduled Follow-up</AlertTitle>
+                            <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
+                        </Alert>
+                    )}
+                    <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                        <div className="text-center"><p className="text-sm text-muted-foreground">Score</p><p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
+                        <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
+                    </div>
+                    {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
+                    <div className="text-sm space-y-2 pt-4 border-t">
+                        <h4 className="font-semibold">Captured Answers:</h4>
+                        <ul className="list-disc pl-5 text-muted-foreground">
+                            <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
+                            <li><strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</li>
+                            {linkedVisitNote.discoveryData?.personSpokenWithName && <li><strong>Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</li>}
+                            {linkedVisitNote.discoveryData?.discoverySignals?.map(s => <li key={s}>{s}</li>)}
+                        </ul>
+                    </div>
                 </CardContent>
             </Card>
           )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-muted-foreground" />
-                            Contacts
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    {contacts.length > 0 ? (
-                      <div className="space-y-4">
-                      {contacts.map((contact, index) => {
-                         return (
-                          <Dialog key={contact.id || index} onOpenChange={(open) => !open && setSelectedContact(null)}>
-                              <Card className="relative group/contact p-4">
-                                  <CardHeader className="flex-row items-start justify-between pb-2 p-0">
-                                      <div>
-                                          <p className="font-semibold">{contact.name}</p>
-                                          <p className="text-sm text-muted-foreground">{contact.title}</p>
-                                      </div>
-                                      <DropdownMenu>
-                                          <DropdownMenuTrigger asChild>
-                                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                  <MoreVertical className="h-4 w-4" />
-                                              </Button>
-                                          </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end">
-                                              <DialogTrigger asChild>
-                                                  <DropdownMenuItem onSelect={() => setSelectedContact(contact)}>
-                                                      <Edit className="mr-2 h-4 w-4" /> Edit
-                                                  </DropdownMenuItem>
-                                              </DialogTrigger>
-                                              <AlertDialog>
-                                                  <AlertDialogTrigger asChild>
-                                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
-                                                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                                      </DropdownMenuItem>
-                                                  </AlertDialogTrigger>
-                                                  <AlertDialogContent>
-                                                      <AlertDialogHeader>
-                                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                          <AlertDialogDescription>
-                                                              This will permanently delete the contact {contact.name}. This action cannot be undone.
-                                                          </AlertDialogDescription>
-                                                      </AlertDialogHeader>
-                                                      <AlertDialogFooter>
-                                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                          <AlertDialogAction onClick={() => handleDeleteContact(contact)} className="bg-destructive hover:bg-destructive/90">
-                                                              Delete
-                                                          </AlertDialogAction>
-                                                      </AlertDialogFooter>
-                                                  </AlertDialogContent>
-                                              </AlertDialog>
-                                          </DropdownMenuContent>
-                                      </DropdownMenu>
-                                  </CardHeader>
-                                  <CardContent className="space-y-3 text-sm p-0 pt-2">
-                                      <div className="flex items-center gap-3">
-                                          <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                                          <a href={`mailto:${contact.email}`} className="text-primary hover:underline break-all">
-                                              {contact.email}
-                                          </a>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                          <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                                          <div className="flex items-center gap-1">
-                                              <span className="break-all">{contact.phone}</span>
-                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}>
-                                                  <PhoneCall className="w-3 h-3" />
-                                              </Button>
-                                          </div>
-                                      </div>
-                                  </CardContent>
-                                  <CardFooter className="p-0 pt-4">
-                                       <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => setIsScheduleAppointmentOpen(true)}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            Schedule Appointment
-                                        </Button>
-                                  </CardFooter>
-                              </Card>
-                              <DialogContent>
-                                  <DialogHeader>
-                                      <DialogTitle>Edit Contact</DialogTitle>
-                                  </DialogHeader>
-                                  {selectedContact && (
-                                      <EditContactForm
-                                          leadId={lead.id}
-                                          contact={selectedContact}
-                                          onContactUpdated={handleContactUpdated}
-                                          onClose={() => setSelectedContact(null)}
-                                      />
-                                  )}
-                              </DialogContent>
-                          </Dialog>
-                         )
-                      })}
-                      </div>
-                    ) : (
-                      <div className="py-4 text-center text-muted-foreground">No contacts found.</div>
-                    )}
-                     <Dialog>
-                      <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="w-full mt-4">
-                              <PlusCircle className="mr-2 h-4 w-4" />
-                              Add Contact
-                          </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                          <DialogHeader>
-                          <DialogTitle>Add New Contact</DialogTitle>
-                          <DialogDescription>
-                              Enter the details for the new contact.
-                          </DialogDescription>
-                          </DialogHeader>
-                          <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded}/>
-                      </DialogContent>
-                    </Dialog>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        {contacts.map(contact => (
+                            <Card key={contact.id} className="p-3 text-sm">
+                                <p className="font-semibold">{contact.name}</p>
+                                <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="w-3" /></Button></div>
+                                </div>
+                            </Card>
+                        ))}
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Building2 className="w-5 h-5 text-muted-foreground" />
-                            Address
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex items-start gap-3">
-                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                                <div className="flex-1">
-                                    <p className="text-muted-foreground break-words">{fullAddressStr}</p>
-                                    <div className="flex items-center gap-1 mt-1">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddressStr === 'No address available'} onClick={() => setSelectedAddress(fullAddressStr)}>
-                                            <Search className="w-3 h-3" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={fullAddressStr === 'No address available'} onClick={() => handleCopy(fullAddressStr, 'Address')}>
-                                            <Clipboard className="w-3 h-3" />
-                                        </Button>
-                                    </div>
-                                </div>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5 text-muted-foreground" />Address</CardTitle></CardHeader>
+                    <CardContent className="text-sm space-y-4">
+                        <p className="text-muted-foreground">{fullAddressStr}</p>
+                        {lead.address?.lat && (
+                            <div className="h-40 rounded-md border overflow-hidden">
+                                <iframe width="100%" height="100%" frameBorder="0" style={{ border: 0 }} src={`https://maps.google.com/maps?q=${encodeURIComponent(fullAddressStr)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}></iframe>
                             </div>
-                            {fullAddressStr !== 'No address available' && (
-                                <div className="h-48 w-full rounded-md overflow-hidden border">
-                                    <iframe
-                                        width="100%"
-                                        height="100%"
-                                        frameBorder="0"
-                                        style={{ border: 0 }}
-                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                                            fullAddressStr
-                                        )}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                                        allowFullScreen
-                                        aria-hidden="false"
-                                        tabIndex={0}
-                                    ></iframe>
-                                </div>
-                            )}
-                                <Dialog open={isEditAddressDialogOpen} onOpenChange={setIsEditAddressDialogOpen}>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="w-full">
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit Address
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Edit Address</DialogTitle>
-                                    </DialogHeader>
-                                    <AddressAutocomplete
-                                    />
-                                    <DialogFooter>
-                                        <Button onClick={() => setIsEditAddressDialogOpen(false)}>Done</Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="w-5 h-5 text-muted-foreground" />
-                History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <Tabs defaultValue="notes">
-                    <TabsList>
-                        <TabsTrigger value="checkin">Check-in Data</TabsTrigger>
-                        <TabsTrigger value="notes">Notes</TabsTrigger>
-                        <TabsTrigger value="calls">Call History</TabsTrigger>
-                        <TabsTrigger value="activity">Activity History</TabsTrigger>
-                    </TabsList>
-                     <TabsContent value="checkin">
-                        {lead.checkinQuestions && lead.checkinQuestions.length > 0 ? (
-                            <div className="space-y-4 mt-4">
-                            {lead.checkinQuestions.map((q, index) => (
-                                <div key={index} className="text-sm border-l-2 pl-4">
-                                    <p className="font-semibold">{q.question}</p>
-                                    <p className="text-muted-foreground whitespace-pre-wrap">
-                                        {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
-                                    </p>
-                                </div>
-                            ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-muted-foreground text-center py-4">No check-in data recorded for this lead.</p>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="notes">
-                        {notes.length > 0 ? (
-                            <div className="space-y-4 mt-4">
+            
+            <Card>
+                <CardHeader><CardTitle>History</CardTitle></CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="notes">
+                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger></TabsList>
+                        <TabsContent value="notes" className="space-y-4 pt-4">
                             {notes.map(note => (
-                            <div key={note.id} className="text-sm border-l-2 pl-4">
-                                <p className="whitespace-pre-wrap">{note.content}</p>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(note.date).toLocaleString()} by {note.author}
-                                </p>
-                            </div>
+                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
                             ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-muted-foreground text-center py-4">No notes for this lead yet.</p>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="calls">
-                         {callHistory.length > 0 ? (
-                            <ul className="space-y-4 mt-4">
-                                {callHistory.map((item) => {
-                                const transcript = transcripts.find(t => t.callId === item.callId);
-                                return (
-                                    <li key={item.id} className="flex gap-4 group">
-                                    <div className="flex-1 pb-4 border-b last:border-b-0 min-w-0">
-                                        <div className="flex items-start justify-between gap-2">
-                                        <p className="font-medium">Call {item.duration && `(${item.duration})`}</p>
-                                        <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground break-words">
-                                        {item.notes}
-                                        </div>
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-1 gap-2">
-                                        <div className="text-xs text-muted-foreground flex items-center gap-1 break-all">
-                                            <Hash className="w-3 h-3 flex-shrink-0" />
-                                            <span>Call ID: {item.callId}</span>
-                                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleCopy(item.callId, 'Call ID')}>
-                                                <Clipboard className="w-2.5 h-2.5" />
-                                            </Button>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {transcript ? (
-                                                <Button variant="outline" size="sm" onClick={()=>{ setSelectedTranscript(transcript); setIsTranscriptViewerOpen(true); }}>
-                                                    <FileText className="mr-2 h-4 w-4" />
-                                                    View Transcript
-                                                </Button>
-                                            ) : (
-                                                <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleGetTranscriptForCall(item.callId!)}
-                                                disabled={fetchingTranscriptId === item.callId}
-                                                >
-                                                {fetchingTranscriptId === item.callId ? <Loader /> : 'Fetch Transcript'}
-                                                </Button>
-                                            )}
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                onClick={() => window.open(`https://assets.aircall.io/calls/${item.callId}/recording/info`, '_blank')}>
-                                                <Voicemail className="mr-2 h-4 w-4" />
-                                                Recording
-                                            </Button>
-                                        </div>
-                                        </div>
-                                    </div>
-                                    </li>
-                                )
-                                })}
-                            </ul>
-                            ) : (
-                            <p className="text-sm text-center text-muted-foreground py-4">No AirCall call history found.</p>
-                            )}
-                    </TabsContent>
-                    <TabsContent value="activity">
-                         {activities.length > 0 ? (
-                            <ul className="space-y-4 mt-4">
-                            {activities.map((item, index) => (
-                                <li key={item.id} className="flex gap-4 group">
-                                <div className="flex flex-col items-center">
-                                    <div className="bg-secondary rounded-full p-2">
-                                    {item.type === 'Call' && <Phone className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Email' && <Mail className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Meeting' && <CalendarIcon className="h-4 w-4 text-muted-foreground" />}
-                                    {item.type === 'Update' && <MessageSquare className="h-4 w-4 text-muted-foreground" />}
-                                    </div>
-                                    {activities && index < activities.length - 1 && (
-                                        <div className="w-px h-full bg-border"></div>
-                                    )}
-                                </div>
-                                <div className="flex-1 pb-4 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                    <p className="font-medium">{item.type} {item.type === 'Call' && item.duration && `(${item.duration})`}</p>
-                                    <p className="text-sm text-muted-foreground text-right flex-shrink-0">{new Date(item.date).toLocaleString()}</p>
-                                    </div>
-                                    <div className="text-sm text-muted-foreground break-words">
-                                    {item.notes}
-                                    </div>
-                                </div>
-                                </li>
+                        </TabsContent>
+                        <TabsContent value="calls" className="space-y-4 pt-4">
+                            {callHistory.map(call => (
+                                <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
                             ))}
-                            </ul>
-                        ) : (
-                            <p className="text-sm text-center text-muted-foreground py-4">No activity yet.</p>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
-          </Card>
-          
-          <Dialog open={isTranscriptViewerOpen} onOpenChange={setIsTranscriptViewerOpen}>
-              <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                      <DialogTitle>Call Transcript</DialogTitle>
-                  </DialogHeader>
-                  {selectedTranscript && lead && (
-                      <TranscriptViewer 
-                        transcript={selectedTranscript} 
-                        leadName={lead.companyName} 
-                        leadId={lead.id}
-                        onAnalysisComplete={(analysis) => {
-                          setLead(prev => ({...prev!, transcripts: (prev!.transcripts || []).map(t => t.id === selectedTranscript.id ? {...t, analysis} : t)}));
-                        }}
-                      />
-                  )}
-              </DialogContent>
-          </Dialog>
-
+                        </TabsContent>
+                        <TabsContent value="activity" className="space-y-2 pt-4">
+                            {activities.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                        </TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
         </div>
 
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        <div className="flex flex-col gap-6">
           <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <CalendarIcon className="w-5 h-5 text-muted-foreground" />
-                        Appointments
-                    </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    {appointments.length > 0 ? (
-                        <>
-                        {appointments.map(appointment => (
-                            <div key={appointment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                            <div className="flex items-center gap-4">
-                                <div className="text-center">
-                                    <p className="text-xs text-muted-foreground">{format(new Date(appointment.duedate), 'MMM')}</p>
-                                    <p className="text-lg font-bold">{format(new Date(appointment.duedate), 'd')}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium">
-                                        Appointment with {appointment.assignedTo}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        {new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                    </p>
-                                </div>
-                            </div>
-                            </div>
-                        ))}
-                        </>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground py-4">No appointments booked for this lead yet.</p>
-                    )}
+                <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                    {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {format(new Date(a.duedate), 'PP')}</div>)}
+                    {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
                 </CardContent>
           </Card>
           
            <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Route className="w-5 h-5 text-muted-foreground" />
-                        Discovery & Routing
-                    </CardTitle>
-                     <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)}>
-                        <FileQuestion className="mr-2 h-4 w-4" />
-                        Open Discovery Form
-                    </Button>
+                    <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
                 </CardHeader>
                  <CardContent>
                     {lead.discoveryData ? (
-                        <div className="flex flex-col gap-4">
-                             <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Score</p>
-                                    <p className="text-2xl font-bold">{lead.discoveryData.score}</p>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                    <p className="text-sm text-muted-foreground">Routing Tag</p>
-                                    <Badge variant="outline">{lead.discoveryData.routingTag}</Badge>
-                                </div>
+                        <div className="space-y-4">
+                             <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
+                                <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
+                                <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
                             </div>
                             <DiscoveryRadarChart discoveryData={lead.discoveryData} />
-                             {lead.discoveryData.scoringReason && (
-                                <div className="text-xs text-muted-foreground p-2 border-t">
-                                    <strong>Scoring Rationale:</strong> {lead.discoveryData.scoringReason}
-                                </div>
-                            )}
                         </div>
-                    ) : (
-                         <div className="text-center text-muted-foreground py-4">
-                            <p>No discovery data yet. Open the form to begin.</p>
-                        </div>
-                    )}
+                    ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
                 </CardContent>
             </Card>
 
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <ListTodo className="w-5 h-5 text-muted-foreground" />
-                        Tasks
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <form onSubmit={handleAddTask} className="flex flex-col gap-2">
-                            <Input
-                                placeholder="New task title..."
-                                value={newTaskTitle}
-                                onChange={(e) => setNewTaskTitle(e.target.value)}
-                            />
-                            <div className="flex gap-2">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className={cn("flex-1 justify-start text-left font-normal", !newTaskDueDate && "text-muted-foreground")}>
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick a due date"}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setNewTaskDueDate} initialFocus />
-                                    </PopoverContent>
-                                </Popover>
-                                <Button type="submit" size="icon">
-                                    <PlusCircle className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </form>
-                        <div className="space-y-2">
-                            {tasks.length > 0 ? (
-                                tasks.map((task) => (
-                                    <div key={task.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted group">
-                                        <Checkbox
-                                            checked={task.isCompleted}
-                                            onCheckedChange={(checked) => handleToggleTask(task.id, !!checked)}
-                                        />
-                                        <div className="flex-1 min-w-0">
-                                            <p className={cn("text-sm font-medium truncate", task.isCompleted && "line-through text-muted-foreground")}>
-                                                {task.title}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Due: {format(new Date(task.dueDate), "dd MMM")}
-                                            </p>
-                                        </div>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteTask(task.id)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-center py-4 text-sm text-muted-foreground">No tasks scheduled.</p>
-                            )}
+                <CardHeader><CardTitle className="flex items-center gap-2"><ListTodo className="w-5 h-5 text-muted-foreground" />Tasks</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                    <form onSubmit={handleAddTask} className="flex flex-col gap-2">
+                        <Input placeholder="New task..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
+                        <div className="flex gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild><Button variant="outline" className="flex-1 text-left font-normal">{newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
+                                <PopoverContent className="w-auto p-0"><CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setNewTaskDueDate} initialFocus /></PopoverContent>
+                            </Popover>
+                            <Button type="submit" size="icon"><PlusCircle className="h-4 w-4" /></Button>
                         </div>
+                    </form>
+                    <div className="space-y-2">
+                        {tasks.map(t => <div key={t.id} className="flex items-center gap-2 text-sm"><Checkbox checked={t.isCompleted} onCheckedChange={(c) => handleToggleTask(t.id, !!c)} /><span className={cn(t.isCompleted && "line-through text-muted-foreground")}>{t.title}</span></div>)}
                     </div>
                 </CardContent>
             </Card>
         </div>
       </main>
     </div>
-    <MapModal
-        isOpen={!!selectedAddress}
-        onClose={() => setSelectedAddress(null)}
-        address={selectedAddress || ''}
-      />
-      <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
-    <MoveLeadDialog
-        lead={lead}
-        isOpen={isMoveLeadDialogOpen}
-        onOpenChange={setIsMoveLeadDialogOpen}
-        onLeadMoved={() => router.refresh()}
-    />
-    <ServiceSelectionDialog
-        isOpen={isServiceSelectionOpen}
-        onOpenChange={setIsServiceSelectionOpen}
-        lead={lead}
-        mode={serviceSelectionMode}
-    />
-    <LocalMileAccessDialog
-        isOpen={isLocalMileDialogOpen}
-        onOpenChange={setIsLocalMileDialogOpen}
-        lead={lead}
-        onConfirm={handleLocalMileConfirm}
-    />
-    <ShipMateAccessDialog
-        isOpen={isShipMateDialogOpen}
-        onOpenChange={setIsShipMateDialogOpen}
-        lead={lead}
-        onConfirm={handleShipMateConfirm}
-    />
+    <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
+    <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
+    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} />
+    <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
+    <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     </>
   )
 }

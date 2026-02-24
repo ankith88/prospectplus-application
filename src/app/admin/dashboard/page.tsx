@@ -1,10 +1,9 @@
-
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, Appointment, UserProfile, SavedRoute, VisitNote } from '@/lib/types';
+import type { Lead, Appointment, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -16,11 +15,10 @@ import {
   Trophy,
   Activity as ActivityIcon,
   LineChart,
-  BarChart,
   Target,
-  ArrowRight,
   Briefcase,
   CheckSquare,
+  BarChart,
   BarChart3,
 } from 'lucide-react';
 import { getAllLeadsForReport, getAllCallActivities, getAllAppointments, getAllUsers, getVisitNotes } from '@/services/firebase';
@@ -105,7 +103,6 @@ export default function AdminDashboardPage() {
         const leads = leadsResponse || [];
         const calls = callsResponse || [];
         const appointments = appointmentsResponse || [];
-        const users = usersResponse || [];
         const visitNotes = visitNotesResponse || [];
         
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
@@ -119,7 +116,6 @@ export default function AdminDashboardPage() {
         const signedCustomers = leads.filter(l => l.status === 'Won').length;
         const appointmentsThisWeek = appointments.filter(a => a.duedate && isThisWeek(new Date(a.duedate), { weekStartsOn: 1 })).length;
         
-        // Correctly count unique calls today
         const uniqueCallsToday = new Set(calls.filter(c => isToday(new Date(c.date))).map(c => c.callId)).size;
         const callsToday = uniqueCallsToday;
         
@@ -127,7 +123,6 @@ export default function AdminDashboardPage() {
         const totalVisitNotesThisWeek = visitNotes.filter(n => isThisWeek(new Date(n.createdAt), { weekStartsOn: 1 })).length;
         const totalConvertedNotes = visitNotes.filter(n => n.status === 'Converted').length;
 
-        
         const dialerAppointments = appointments.reduce((acc, curr) => {
             if(curr.dialerAssigned) {
                 acc[curr.dialerAssigned] = (acc[curr.dialerAssigned] || 0) + 1;
@@ -152,7 +147,6 @@ export default function AdminDashboardPage() {
         }, {} as Record<string, number>);
         const topFieldRepByVisits = Object.entries(visitsByRep).sort((a, b) => b[1] - a[1])[0];
 
-        // Correctly associate unique calls with dialers for outbound
         const outboundCallsByDialer = calls.reduce((acc, call) => {
             const lead = leadsMap.get(call.leadId);
             if (lead && !lead.fieldSales && call.dialerAssigned && call.callId) {
@@ -176,7 +170,6 @@ export default function AdminDashboardPage() {
             }
         });
 
-        // Recent Wins
         const recentWins = leads
             .filter(l => l.status === 'Won')
             .sort((a, b) => {
@@ -186,7 +179,6 @@ export default function AdminDashboardPage() {
             })
             .slice(0, 5);
 
-        // Upcoming Appointments
         const now = new Date();
         const upcomingAppointments = appointments
             .filter(a => {
@@ -200,7 +192,6 @@ export default function AdminDashboardPage() {
                 ...appt,
                 leadName: leadsMap.get(appt.leadId)?.companyName || 'Unknown Lead'
             }));
-
 
         setStats({
           totalLeads,
@@ -243,24 +234,6 @@ export default function AdminDashboardPage() {
         {description && <div className="text-xs text-muted-foreground">{description}</div>}
       </CardContent>
     </Card>
-  );
-
-  const ArcherLeaderboardCard = ({ title, user, metric, icon: Icon }: { title: string, user: string | null, metric: string, icon: React.ElementType }) => (
-      <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-1"><Icon className="h-4 w-4" /><CardTitle className="text-sm font-medium">{title}</CardTitle></div>
-          </CardHeader>
-          <CardContent>
-            {user ? (
-                <>
-                    <div className="text-xl font-bold">{user}</div>
-                    <div className="text-xs text-muted-foreground">{metric}</div>
-                </>
-            ) : (
-                <div className="text-sm text-muted-foreground">No data available</div>
-            )}
-          </CardContent>
-      </Card>
   );
 
   const LeaderboardCard = ({ title, user, metric, icon: Icon }: { title: string, user: string | null, metric: string, icon: React.ElementType }) => (
@@ -425,7 +398,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Button asChild variant="outline">
-                <Link href="/reports"><BarChart className="mr-2 h-4 w-4"/> Outbound Reporting</Link>
+                <Link href="/reports"><LineChart className="mr-2 h-4 w-4"/> Outbound Reporting</Link>
             </Button>
             <Button asChild variant="outline">
                 <Link href="/field-activity-report"><BarChart3 className="mr-2 h-4 w-4"/>Field Activity</Link>

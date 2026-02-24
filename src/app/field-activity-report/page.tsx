@@ -1,15 +1,14 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, LeadStatus } from '@/lib/types';
+import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins, PieChart as PieChartIcon, BarChart3, CheckCircle2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -26,6 +25,7 @@ import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
@@ -240,7 +240,6 @@ export default function FieldActivityReportPage() {
         return { name, visits };
     }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
-    // Appointment Status Distribution for sourced leads
     const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
     const appointmentStatusData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
         const leadAppts = allAppointments.filter(appt => appt.leadId === leadId);
@@ -401,7 +400,7 @@ export default function FieldActivityReportPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {stats.appointmentLeaderboard.map((item, idx) => (
+                                {stats.appointmentLeaderboard.map((item) => (
                                     <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold">{item.value}</TableCell>
@@ -433,7 +432,7 @@ export default function FieldActivityReportPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {stats.outboundSuccessLeaderboard.map((item, idx) => (
+                                {stats.outboundSuccessLeaderboard.map((item) => (
                                     <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold text-green-600">{item.value}</TableCell>
@@ -450,7 +449,7 @@ export default function FieldActivityReportPage() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Coins className="h-5 w-5 text-amber-500" />
+                        <DollarSign className="h-5 w-5 text-amber-500" />
                         Commission Earnings
                     </CardTitle>
                     <CardDescription>Total commission value by user.</CardDescription>
@@ -465,7 +464,7 @@ export default function FieldActivityReportPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {stats.commissionLeaderboard.map((item, idx) => (
+                                {stats.commissionLeaderboard.map((item) => (
                                     <TableRow key={item.name}>
                                         <TableCell className="font-medium">{item.name}</TableCell>
                                         <TableCell className="text-right font-bold text-amber-600">${item.value}</TableCell>

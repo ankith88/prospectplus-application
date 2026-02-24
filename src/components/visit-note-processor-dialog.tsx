@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -140,10 +139,8 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     try {
       const collectionName = selectedItem.isCompanyResult ? 'companies' : 'leads';
       
-      // 1. Update the visit note with the link
       await updateVisitNote(note.id, { status: 'Converted', leadId: selectedItem.id });
       
-      // 2. Update the target lead/company with the visitNoteID
       const docRef = doc(firestore, collectionName, selectedItem.id);
       await updateDoc(docRef, { visitNoteID: note.id });
 
@@ -153,7 +150,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
         description: `The visit note has been linked to ${selectedItem.companyName}.`,
       });
       
-      // Redirect to the linked item
       const destination = selectedItem.isCompanyResult ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`;
       router.push(destination);
       onOpenChange(false);
