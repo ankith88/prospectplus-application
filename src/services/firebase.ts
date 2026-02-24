@@ -165,8 +165,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
         const transformedLead: Lead = {
           id: docSnapshot.id,
-          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'] || '',
-          salesRecordInternalId: data.salesRecordInternalId,
+          entityId: data['customerEntityId'] || data['entityId'] || '',
+          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -181,7 +181,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerCampaign,
+          campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
@@ -195,7 +195,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
-          customerSource: data.customerSource,
+          customerSource: data.customerSource || data.source,
           checkinQuestions: data.checkinQuestions || [],
           checkinScore: data.checkinScore,
           checkinScoringReason: data.checkinScoringReason,
@@ -273,8 +273,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
 
         const transformedCompany: Lead = {
           id: docSnapshot.id,
-          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'] || '',
-          salesRecordInternalId: data.salesRecordInternalId,
+          entityId: data['customerEntityId'] || data['entityId'] || '',
+          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -289,7 +289,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerCampaign,
+          campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           aiScore: data.aiScore,
@@ -302,7 +302,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
-          customerSource: data.customerSource,
+          customerSource: data.customerSource || data.source,
           visitNoteID: data.visitNoteID,
         };
         
@@ -389,8 +389,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
 
         const transformedLead: Lead = {
           id: doc.id,
-          entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
-          salesRecordInternalId: data.salesRecordInternalId,
+          entityId: data['customerEntityId'] || data['entityId'] || '',
+          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -405,7 +405,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           salesRepAssigned: data.salesRepAssigned,
           salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
           dialerAssigned: data.dialerAssigned,
-          campaign: data.customerCampaign,
+          campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
           contactCount: data.contactCount || 0,
@@ -419,7 +419,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           services: data.services || [],
           lastProspected: data.lastProspected,
           dateLeadEntered: data.dateLeadEntered,
-          customerSource: data.customerSource,
+          customerSource: data.customerSource || data.source,
           visitNoteID: data.visitNoteID,
         };
 
@@ -476,8 +476,8 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
                 const transformedCompany: Lead = {
                     id: doc.id,
-                    entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
-                    salesRecordInternalId: data.salesRecordInternalId,
+                    entityId: data['customerEntityId'] || data['entityId'] || '',
+                    salesRecordInternalId: data.internalid || data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
@@ -493,7 +493,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     services: data.services || [],
                     lastProspected: data.lastProspected,
                     dateLeadEntered: data.dateLeadEntered,
-                    customerSource: data.customerSource,
+                    customerSource: data.customerSource || data.source,
                     visitNoteID: data.visitNoteID,
                 };
 
@@ -535,8 +535,8 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                 
                 const transformedLead: Lead = {
                     id: doc.id,
-                    entityId: data['customerEntityId'] || data['entityId'] || data['internalid'],
-                    salesRecordInternalId: data.salesRecordInternalId,
+                    entityId: data['customerEntityId'] || data['entityId'] || '',
+                    salesRecordInternalId: data.internalid || data.salesRecordInternalId,
                     companyName: companyName,
                     status: safeGetStatus(data.customerStatus),
                     statusReason: data.statusReason,
@@ -549,7 +549,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     services: data.services || [],
                     lastProspected: data.lastProspected,
                     dateLeadEntered: data.dateLeadEntered,
-                    customerSource: data.customerSource,
+                    customerSource: data.customerSource || data.source,
                     visitNoteID: data.visitNoteID,
                 };
                 
@@ -592,12 +592,13 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
             const data = doc.data();
             return {
                 id: doc.id,
-                entityId: data.entityId || data.customerEntityId || data.internalid,
+                entityId: data.entityId || data.customerEntityId || '',
+                salesRecordInternalId: data.internalid || data.salesRecordInternalId,
                 companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
-                campaign: data.customerCampaign,
+                campaign: data.campaign || data.customerCampaign,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
@@ -605,7 +606,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 activity: [],
                 lastProspected: data.lastProspected,
                 dateLeadEntered: data.dateLeadEntered,
-                customerSource: data.customerSource,
+                customerSource: data.customerSource || data.source,
                 visitNoteID: data.visitNoteID,
             } as Lead;
         });
@@ -809,7 +810,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
             allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
         }
         
-        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(a.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);

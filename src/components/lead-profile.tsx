@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -215,66 +216,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!text) return;
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: `${fieldName} copied.` });
-  };
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lead || !newTaskTitle || !newTaskDueDate || !user?.displayName) return;
-    try {
-        const newTask = await addTaskToLead(lead.id, { title: newTaskTitle, dueDate: newTaskDueDate.toISOString(), author: user.displayName });
-        setLead(prev => ({...prev!, tasks: [newTask, ...(prev!.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
-        setNewTaskTitle('');
-        setnewTaskDueDate(undefined);
-    } catch (error) {
-        toast({ variant: "destructive", title: "Error", description: "Failed to add task." });
-    }
-  };
-
-  const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
-      if (!lead) return;
-      try {
-          await updateTaskCompletion(lead.id, taskId, isCompleted);
-          setLead(prev => ({...prev!, tasks: (prev!.tasks || []).map(t => t.id === taskId ? {...t, isCompleted, completedAt: isCompleted ? new Date().toISOString() : undefined} : t)}));
-      } catch (error) {
-          toast({ variant: "destructive", title: "Error", description: "Failed to update." });
-      }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-      if (!lead) return;
-      try {
-          await deleteTaskFromLead(lead.id, taskId);
-          setLead(prev => ({...prev!, tasks: (prev!.tasks || []).filter(t => t.id !== taskId)}));
-      } catch (error) {
-          toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
-      }
-  };
-
-  const handleDiscoverySave = async (discoveryData: DiscoveryData) => {
-    if (!lead) return;
-    try {
-      await updateLeadDiscoveryData(lead.id, discoveryData);
-      setLead(prev => ({ ...prev!, discoveryData }));
-      setIsDiscoveryQuestionsOpen(false);
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  };
-
-  const handleNextLead = () => {
-    const currentIndex = sessionLeads.indexOf(lead.id);
-    if (currentIndex < sessionLeads.length - 1) {
-      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
-    } else {
-      localStorage.removeItem('dialingSessionLeads');
-      router.push('/leads');
-    }
-  };
-  
-  const handleEndSession = () => {
-    localStorage.removeItem('dialingSessionLeads');
-    setIsSessionActive(false);
-    router.push('/leads');
   };
 
   const handleBackToLeads = () => {

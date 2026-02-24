@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -429,7 +430,7 @@ export default function FieldActivityReportPage() {
                         <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
                             <div>
                                 <p className="text-sm font-medium text-blue-800">Qualified Rate</p>
-                                <p className="text-xs text-green-600">Converted Leads {"->"} Qualified/Pre-Qualified</p>
+                                <p className="text-xs text-blue-600">Converted Leads {"->"} Qualified/Pre-Qualified</p>
                                 <p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p>
                             </div>
                             <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
@@ -452,7 +453,7 @@ export default function FieldActivityReportPage() {
                         <BarChart3 className="h-5 w-5 text-primary" />
                         Rep Outcome Efficiency Table
                     </CardTitle>
-                    <CardDescription>Outcome distribution and conversion performance per Field Sales Rep.</CardDescription>
+                    <CardDescription>Outcome distribution per Field Sales Rep.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="h-[400px]">
@@ -616,11 +617,11 @@ export default function FieldActivityReportPage() {
                     <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {stats.appointmentStatusData.length > 0 ? (
+                    {stats.appointmentOutcomeData.length > 0 ? (
                         <ChartContainer config={{}} className="h-[300px] w-full">
                             <PieChart>
                                 <Pie
-                                    data={stats.appointmentStatusData}
+                                    data={stats.appointmentOutcomeData}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={60}
@@ -629,9 +630,10 @@ export default function FieldActivityReportPage() {
                                     dataKey="value"
                                     label={({ name, value }) => `${name}: ${value}`}
                                 >
-                                    {stats.appointmentStatusData.map((entry, index) => (
+                                    {stats.appointmentOutcomeData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
+                                    <LabelList dataKey="value" position="inside" fill="white" />
                                 </Pie>
                                 <Tooltip />
                                 <Legend />
@@ -661,6 +663,7 @@ export default function FieldActivityReportPage() {
                                     {stats.statusOfConvertedLeadsData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || COLORS[index % COLORS.length]} />
                                     ))}
+                                    <LabelList dataKey="value" position="inside" fill="white" />
                                 </Pie>
                                 <Tooltip content={<ChartTooltipContent />} />
                                 <Legend formatter={(val) => val === 'Won' ? 'Signed' : val} />
@@ -692,6 +695,7 @@ export default function FieldActivityReportPage() {
                                     {stats.visitsByOutcomeData.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
+                                    <LabelList dataKey="value" position="inside" fill="white" />
                                 </Pie>
                                 <Tooltip content={<ChartTooltipContent />} />
                                 <Legend />
