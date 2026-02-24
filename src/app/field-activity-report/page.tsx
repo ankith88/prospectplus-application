@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
 import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -157,7 +157,7 @@ export default function FieldActivityReportPage() {
       
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
-  }, [visibleVisitNotes, filters, leadsMap]);
+  }, [visibleNotes, filters, leadsMap]);
 
   const stats = useMemo(() => {
     const totalVisits = filteredVisitNotes.length;
@@ -497,6 +497,7 @@ export default function FieldActivityReportPage() {
                                     outerRadius={80}
                                     paddingAngle={5}
                                     dataKey="value"
+                                    label={({ name, value }) => `${name}: ${value}`}
                                 >
                                     {stats.appointmentStatusData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={APPOINTMENT_STATUS_COLORS[entry.name] || COLORS[index % COLORS.length]} />
@@ -523,7 +524,7 @@ export default function FieldActivityReportPage() {
                                     cx="50%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ name, percent }) => `${name === 'Won' ? 'Signed' : name}: ${(percent * 100).toFixed(0)}%`}
+                                    label={({ name, value }) => `${name === 'Won' ? 'Signed' : name}: ${value}`}
                                     outerRadius={80}
                                     dataKey="value"
                                 >
@@ -554,7 +555,7 @@ export default function FieldActivityReportPage() {
                                     cx="50%"
                                     cy="50%"
                                     labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    label={({ name, value }) => `${name}: ${value}`}
                                     outerRadius={80}
                                     dataKey="value"
                                 >
@@ -579,7 +580,9 @@ export default function FieldActivityReportPage() {
                         <XAxis type="number" />
                         <YAxis dataKey="name" type="category" width={100} fontSize={12} />
                         <Tooltip />
-                        <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits" />
+                        <Bar dataKey="visits" fill="hsl(var(--primary))" name="Visits">
+                            <LabelList dataKey="visits" position="right" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+                        </Bar>
                     </BarChart>
                     </ChartContainer>
                 ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data to display</div>}
@@ -597,7 +600,9 @@ export default function FieldActivityReportPage() {
                                 <XAxis type="number" />
                                 <YAxis dataKey="name" type="category" width={120} fontSize={10} />
                                 <Tooltip />
-                                <Bar dataKey="value" fill="#82ca9d" name="Visits" />
+                                <Bar dataKey="value" fill="#82ca9d" name="Visits">
+                                    <LabelList dataKey="value" position="right" style={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                </Bar>
                             </BarChart>
                         </ChartContainer>
                     ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No franchisee data available</div>}
