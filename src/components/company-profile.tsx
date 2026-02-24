@@ -5,33 +5,23 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building,
-  Building2,
   Calendar as CalendarIcon,
   Clipboard,
-  Globe,
-  Hash,
-  Key,
   Link as LinkIcon,
-  MessageSquare,
   Mail,
-  Briefcase,
   MapPin,
-  Search,
   History,
   Phone,
-  User,
   Users,
   FileDigit,
   ClipboardEdit,
-  Tag,
-  ExternalLink,
-  Info,
   TrendingUp,
+  Info,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Table,
@@ -46,7 +36,6 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { ScrollArea } from './ui/scroll-area'
 import { LogNoteDialog } from './log-note-dialog'
 import { collection, getDocs, orderBy, query, doc, getDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
@@ -259,6 +248,14 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
                     </div>
                     {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
+                    
+                    <div className="space-y-2 pt-4 border-t">
+                        <h4 className="font-semibold text-sm">Visit Note Content:</h4>
+                        <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
+                            {linkedVisitNote.content}
+                        </div>
+                    </div>
+
                     <div className="text-sm space-y-2 pt-4 border-t">
                         <h4 className="font-semibold">Captured Answers:</h4>
                         <ul className="list-disc pl-5 text-muted-foreground">

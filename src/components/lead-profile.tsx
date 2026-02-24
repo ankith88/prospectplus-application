@@ -5,59 +5,40 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building,
-  Building2,
   Calendar as CalendarIcon,
   Clipboard,
   Edit,
   Globe,
-  Hash,
-  Key,
   Link as LinkIcon,
-  MessageSquare,
   Mail,
   Briefcase,
   MapPin,
   Info,
   Search,
-  BookText,
-  FileText,
   PhoneCall,
-  Download,
-  Voicemail,
   ListTodo,
-  FileQuestion,
   Route,
   Clock,
   SkipForward,
-  ChevronDown,
   History,
   XCircle,
-  FileDigit,
   Move,
   Sparkles,
-  Tag,
   Users,
   Phone,
-  User,
   PlusCircle,
-  MoreVertical,
   ClipboardEdit,
   Trash2,
   CheckSquare,
-  Mic,
-  MicOff,
   Star,
-  AlertCircle,
 } from 'lucide-react'
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, UserProfile } from '@/lib/types'
-import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
-import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
+import { useEffect, useState, useCallback } from 'react'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadNotes as getLeadNotesFromDb, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail, updateVisitNote } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, bulkUpdateLeadDialerRep, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Table,
@@ -71,42 +52,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
-import { Textarea } from '@/components/ui/textarea'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { collection, onSnapshot, query, where, orderBy, getDocs, limit, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
-import { TranscriptViewer } from './transcript-viewer'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid, parseISO } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
-import { ColdCallScorecardDialog } from './cold-call-scorecard';
 import { ScrollArea } from './ui/scroll-area'
-import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
 import { Label } from './ui/label'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
-import { salesReps } from '@/lib/constants'
-import { AddContactForm } from './add-contact-form'
-import { EditContactForm } from './edit-contact-form'
 import { LogNoteDialog } from './log-note-dialog'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-  DialogClose,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
@@ -129,6 +98,7 @@ import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
+import { initiateLocalMileTrial, initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -141,21 +111,14 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
-  const [scoringResult, setScoringResult] = useState<AiLeadScoringOutput['scoredLeads'][0] | null>(null);
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
-  const [scoringLoading, setScoringLoading] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
-  const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
-  const [isTranscriptViewerOpen, setIsTranscriptViewerOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
-  const [isLogOutcomeOpen, setIsLogOutcomeOpen] = useState(false);
   const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
-  const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
@@ -206,14 +169,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsSessionActive(false);
       }
     }
-    if (initialLead.aiScore) {
-        setScoringResult({
-            leadId: initialLead.id,
-            score: initialLead.aiScore,
-            reason: initialLead.aiReason || '',
-            prospectedContacts: [],
-        });
-    }
   }, [initialLead]);
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
@@ -249,36 +204,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setIsLogNoteOpen(false);
   };
   
-  const handleContactAdded = (newContactData: any) => {
-    const newContact: Contact = {
-        id: 'temp-' + Date.now(),
-        name: `${newContactData.firstName} ${newContactData.lastName}`,
-        title: newContactData.title,
-        email: newContactData.email,
-        phone: newContactData.phone,
-    };
-    setLead(prev => ({...prev!, contacts: [newContact, ...(prev!.contacts || [])]}));
-  };
-
-  const handleContactUpdated = (updatedContact: Contact) => {
-     setLead(prev => ({...prev!, contacts: (prev!.contacts || []).map(c => c.id === updatedContact.id ? updatedContact : c)}));
-  };
-
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
     setLead(prev => ({ ...prev!, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
   }
-
-  const handleDeleteContact = async (contact: Contact) => {
-    if (!lead) return;
-    try {
-      await deleteContactFromLead(lead.id, contact.id, contact.name);
-      setLead(prev => ({...prev!, contacts: (prev!.contacts || []).filter(c => c.id !== contact.id)}));
-      toast({ title: "Success", description: "Contact deleted." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete." });
-    }
-  };
 
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
@@ -289,20 +218,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!text) return;
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: `${fieldName} copied.` });
-  };
-
-  const handleGetTranscriptForCall = async (callId: string) => {
-    if (!lead?.dialerAssigned) return;
-    setFetchingTranscriptId(callId);
-    try {
-      const result = await getCallTranscriptByCallId({ callId, leadId: lead.id, leadAuthor: lead.dialerAssigned });
-      if (result.transcriptFound) {
-        toast({ title: "Success", description: "Transcript fetched." });
-        fetchData();
-      }
-    } finally {
-      setFetchingTranscriptId(null);
-    }
   };
 
   const fetchData = async () => {
@@ -355,8 +270,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleNextLead = () => {
-    if (sessionLeads.indexOf(lead.id) < sessionLeads.length - 1) {
-      router.push(`/leads/${sessionLeads[sessionLeads.indexOf(lead.id) + 1]}`);
+    const currentIndex = sessionLeads.indexOf(lead.id);
+    if (currentIndex < sessionLeads.length - 1) {
+      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
     } else {
       localStorage.removeItem('dialingSessionLeads');
       router.push('/leads');
@@ -374,12 +290,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     router.push(isCompanyProfile ? '/signed-customers' : '/leads');
   };
   
-  const handleRepSelection = (repName: string, repUrl: string) => {
-    if (!lead) return;
-    setLead(prev => ({ ...prev!, salesRepAssigned: repName, salesRepAssignedCalendlyLink: repUrl }));
-    updateLeadSalesRep(lead.id, repName, repUrl);
-  };
-
   const handleFindNearbyCompanies = async () => {
     if (!lead.latitude || !lead.longitude) return;
     setIsFindingNearby(true);
@@ -400,14 +310,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleLocalMileConfirm = async () => {
     const result = await initiateLocalMileTrial({ leadId: lead.id });
-    if (result.success) setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
-    else throw new Error(result.message);
+    if (result.success) {
+        toast({ title: 'Success', description: 'LocalMile trial initiated.' });
+        setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+        throw new Error(result.message);
+    }
   };
 
   const handleShipMateConfirm = async () => {
     const result = await initiateMPProductsTrial({ leadId: lead.id });
-    if (result.success) setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
-    else throw new Error(result.message);
+    if (result.success) {
+        toast({ title: 'Success', description: 'ShipMate trial initiated.' });
+        setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+        throw new Error(result.message);
+    }
   };
 
   const renderActionButtons = () => {
@@ -416,10 +336,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
     const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
 
-    const checkInBtn = <Button variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</Button>;
-    const signupBtn = <Button variant={isFieldSales || isAdmin ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</Button>;
+    const checkInBtn = <Button key="check-in" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</Button>;
+    const signupBtn = <Button key="signup" variant={isFieldSales || isAdmin ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</Button>;
     const trialBtn = (
-        <DropdownMenu>
+        <DropdownMenu key="trial-dropdown">
             <DropdownMenuTrigger asChild>
               <Button variant={isFieldSales || isAdmin ? "default" : "outline"}><Star className="mr-2 h-4 w-4" />Free Trial</Button>
             </DropdownMenuTrigger>
@@ -430,11 +350,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
-    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
-    const callBtn = <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
-    const processBtn = <Button onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
-    const noteBtn = <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
-    const moveBtn = <Button variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
+    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const callBtn = <Button key="call" variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
+    const processBtn = <Button key="process" onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
+    const noteBtn = <Button key="note" variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
+    const moveBtn = <Button key="move" variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
 
     if (isAdmin) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{processBtn}{apptBtn}{signupBtn}{trialBtn}{noteBtn}{moveBtn}</div>;
     if (isLeadGenAdmin) return <div className="flex flex-wrap items-center gap-2">{processBtn}{apptBtn}{noteBtn}{moveBtn}</div>;
@@ -445,7 +365,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
   const fullAddressStr = lead.address ? formatAddressString(lead.address) : 'No address available';
-
   const entryDate = lead.dateLeadEntered ? parseISO(lead.dateLeadEntered) : null;
 
   return (
@@ -570,6 +489,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
                     </div>
                     {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
+                    
+                    <div className="space-y-2 pt-4 border-t">
+                        <h4 className="font-semibold text-sm">Visit Note Content:</h4>
+                        <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
+                            {linkedVisitNote.content}
+                        </div>
+                    </div>
+
                     <div className="text-sm space-y-2 pt-4 border-t">
                         <h4 className="font-semibold">Captured Answers:</h4>
                         <ul className="list-disc pl-5 text-muted-foreground">
