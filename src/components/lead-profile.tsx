@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -169,6 +168,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [initialLead]);
 
+  const handleEndSession = useCallback(() => {
+    localStorage.removeItem('dialingSessionLeads');
+    setIsSessionActive(false);
+    setSessionLeads([]);
+    toast({ title: 'Dialing Session Ended' });
+  }, [toast]);
+
+  const handleNextLead = useCallback(() => {
+    const currentIndex = sessionLeads.indexOf(lead.id);
+    if (currentIndex !== -1 && currentIndex < sessionLeads.length - 1) {
+      setLoadingNextLead(true);
+      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
+    } else {
+      toast({ title: 'Session Complete', description: 'You have reached the end of your dialing list.' });
+      handleEndSession();
+    }
+  }, [lead.id, sessionLeads, router, toast, handleEndSession]);
+
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
     if (isSessionActive) {
@@ -260,6 +277,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     } else {
         toast({ variant: 'destructive', title: 'Error', description: result.message });
         throw new Error(result.message);
+    }
+  };
+
+  const handleDiscoverySave = async (data: DiscoveryData) => {
+    try {
+        await updateLeadDiscoveryData(lead.id, data);
+        setLead(prev => ({ ...prev, discoveryData: data }));
+        toast({ title: 'Discovery Saved', description: 'Discovery data has been updated and synced.' });
+        setIsDiscoveryQuestionsOpen(false);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not save discovery data.' });
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle || !newTaskDueDate || !user?.displayName) return;
+    try {
+        const newTask = await addTaskToLead(lead.id, {
+            title: newTaskTitle,
+            dueDate: newTaskDueDate.toISOString(),
+            author: user.displayName,
+        });
+        setLead(prev => ({ ...prev, tasks: [newTask, ...(prev.tasks || [])] }));
+        setNewTaskTitle('');
+        setnewTaskDueDate(undefined);
+        toast({ title: 'Task Added' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not add task.' });
+    }
+  };
+
+  const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
+    try {
+        await updateTaskCompletion(lead.id, taskId, isCompleted);
+        setLead(prev => ({
+            ...prev,
+            tasks: prev.tasks?.map(t => t.id === taskId ? { ...t, isCompleted } : t)
+        }));
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update task.' });
     }
   };
 

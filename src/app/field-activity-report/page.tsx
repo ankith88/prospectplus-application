@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -229,7 +228,7 @@ export default function FieldActivityReportPage() {
     }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
     const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
-    const appointmentStatusData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
+    const appointmentOutcomeData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
         const leadAppts = allAppointments.filter(appt => appt.leadId === leadId);
         leadAppts.forEach(appt => {
             const status = appt.appointmentStatus || 'Pending';
@@ -295,7 +294,7 @@ export default function FieldActivityReportPage() {
       statusOfConvertedLeadsData,
       visitsByFranchiseeData,
       visitsByUserData,
-      appointmentStatusData,
+      appointmentOutcomeData,
       totalCompletedAppointments,
       repOutcomeEfficiency,
       conversionEfficiency
@@ -453,7 +452,7 @@ export default function FieldActivityReportPage() {
                         <BarChart3 className="h-5 w-5 text-primary" />
                         Rep Outcome Efficiency Table
                     </CardTitle>
-                    <CardDescription>Outcome distribution per Field Sales Rep.</CardDescription>
+                    <CardDescription>Outcome distribution for every visit captured by each Field Sales Rep.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="h-[400px]">
@@ -488,9 +487,9 @@ export default function FieldActivityReportPage() {
                                                     </div>
                                                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                                                         {rep.outcomes.map((o, idx) => (
-                                                            <div key={o.type} className="flex items-center gap-1.5">
+                                                            <div key={o.type} className="flex items-center gap-1.5 group relative">
                                                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                                                                <span className="text-[10px] font-medium whitespace-nowrap">
+                                                                <span className="text-[10px] font-medium whitespace-nowrap cursor-help">
                                                                     {o.type}: {o.percentage}% <span className="opacity-60">({o.count} / {rep.totalVisits})</span>
                                                                 </span>
                                                             </div>
