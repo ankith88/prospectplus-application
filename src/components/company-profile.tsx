@@ -187,8 +187,33 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
              <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" />Details</CardTitle></CardHeader>
              <CardContent className="space-y-4">
                 {company.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{company.companyDescription}</div>}
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                 <div className="space-y-1"><p className="text-muted-foreground">Customer ID</p><p className="font-medium">{company.entityId ?? 'N/A'}</p></div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Customer ID</p>
+                    <div className="flex items-center gap-2">
+                        <p className="font-medium">{company.entityId ?? 'N/A'}</p>
+                        {company.entityId && (
+                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.entityId, 'Customer ID')}>
+                                <Clipboard className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">NetSuite Internal ID</p>
+                    <div className="flex items-center gap-2">
+                        <p className="font-medium">{company.salesRecordInternalId || 'N/A'}</p>
+                        {company.salesRecordInternalId && (
+                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.salesRecordInternalId, 'Internal ID')}>
+                                <Clipboard className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Franchisee</p>
+                    <p className="font-medium">{company.franchisee || 'N/A'}</p>
+                 </div>
                  <div className="space-y-1"><p className="text-muted-foreground">Website</p>{company.websiteUrl ? <a href={company.websiteUrl} target="_blank" className="text-primary hover:underline">{company.websiteUrl}</a> : 'N/A'}</div>
                  <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{company.industryCategory ?? 'N/A'}</p></div>
                  <div className="space-y-1"><p className="text-muted-foreground">Sales Rep</p><p className="font-medium">{company.salesRepAssigned ?? 'N/A'}</p></div>

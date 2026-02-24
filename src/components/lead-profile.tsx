@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import Link from 'next/link'
+import Link from 'next/navigation'
 import {
   ArrowLeft,
   Building,
@@ -498,8 +498,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardHeader>
              <CardContent className="space-y-4">
                 {lead.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{lead.companyDescription}</div>}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div className="space-y-1"><p className="text-muted-foreground">ID</p><p className="font-medium">{lead.entityId || 'N/A'}</p></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Customer ID</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-medium">{lead.entityId || 'N/A'}</p>
+                            {lead.entityId && (
+                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.entityId, 'Customer ID')}>
+                                    <Clipboard className="h-3 w-3" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">NetSuite Internal ID</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-medium">{lead.salesRecordInternalId || 'N/A'}</p>
+                            {lead.salesRecordInternalId && (
+                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.salesRecordInternalId, 'Internal ID')}>
+                                    <Clipboard className="h-3 w-3" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Franchisee</p>
+                        <p className="font-medium">{lead.franchisee || 'N/A'}</p>
+                    </div>
                     <div className="space-y-1"><p className="text-muted-foreground">Website</p>{lead.websiteUrl ? <a href={lead.websiteUrl} target="_blank" className="text-primary hover:underline flex items-center gap-1">{lead.websiteUrl}<LinkIcon className="w-3" /></a> : 'N/A'}</div>
                     <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{lead.industryCategory || 'N/A'}</p></div>
                     <div className="space-y-1"><p className="text-muted-foreground">Assigned Rep</p><p className="font-medium">{lead.salesRepAssigned || 'N/A'}</p></div>
