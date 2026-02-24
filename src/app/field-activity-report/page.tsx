@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -233,7 +234,7 @@ export default function FieldActivityReportPage() {
         const name = user.displayName!;
         const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
         return { name, visits };
-    }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
+    }).filter(u => u.visits > 0).sort((a,b) => a.visits - b.visits);
 
     const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
     const appointmentStatusData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
@@ -456,10 +457,10 @@ export default function FieldActivityReportPage() {
             <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Target className="h-5 w-5 text-primary" />
-                        Rep Outcome Efficiency (%)
+                        <BarChart3 className="h-5 w-5 text-primary" />
+                        Rep Outcome Efficiency Table
                     </CardTitle>
-                    <CardDescription>Outcome distribution sorted by total activity volume.</CardDescription>
+                    <CardDescription>Overview of rep performance and visit volume.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="h-[300px]">
@@ -467,8 +468,8 @@ export default function FieldActivityReportPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Rep Name</TableHead>
-                                    <TableHead>Total Visits</TableHead>
-                                    <TableHead>Primary Outcomes (%)</TableHead>
+                                    <TableHead className="text-right">Total Visits</TableHead>
+                                    <TableHead>Outcome Distribution</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -476,18 +477,32 @@ export default function FieldActivityReportPage() {
                                     stats.repOutcomeEfficiency.map((rep: any) => (
                                         <TableRow key={rep.name}>
                                             <TableCell className="font-medium">{rep.name}</TableCell>
-                                            <TableCell className="font-bold">{rep.total}</TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {rep.outcomes.slice(0, 3).map((o: any) => (
-                                                        <Badge key={o.type} variant="secondary" className="text-[10px] py-1 px-2 flex flex-col items-start gap-0.5 h-auto">
-                                                            <span className="font-semibold">{o.type}: {o.percentage}%</span>
-                                                            <span className="opacity-70 font-normal">({o.count} / {rep.total})</span>
-                                                        </Badge>
-                                                    ))}
-                                                    {rep.outcomes.length > 3 && (
-                                                        <span className="text-[10px] text-muted-foreground self-center ml-1">+{rep.outcomes.length - 3} more</span>
-                                                    )}
+                                            <TableCell className="text-right font-bold">{rep.total}</TableCell>
+                                            <TableCell className="min-w-[300px]">
+                                                <div className="space-y-3">
+                                                    <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+                                                        {rep.outcomes.map((o: any, idx: number) => (
+                                                            <div
+                                                                key={o.type}
+                                                                title={`${o.type}: ${o.percentage}%`}
+                                                                style={{ 
+                                                                    width: `${o.percentage}%`,
+                                                                    backgroundColor: COLORS[idx % COLORS.length]
+                                                                }}
+                                                                className="h-full transition-all"
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {rep.outcomes.slice(0, 4).map((o: any, idx: number) => (
+                                                            <div key={o.type} className="flex items-center gap-1.5">
+                                                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                                                <span className="text-[10px] font-medium whitespace-nowrap">
+                                                                    {o.type}: {o.percentage}% <span className="opacity-60">({o.count}/{rep.total})</span>
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
