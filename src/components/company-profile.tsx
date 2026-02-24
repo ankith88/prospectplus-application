@@ -53,6 +53,7 @@ import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
+import { format } from 'date-fns'
 
 
 interface CompanyProfileProps {
@@ -372,6 +373,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                     </div>
                                 </div>
                             )}
+                            {linkedVisitNote.scheduledDate && (
+                                <div className="p-3 bg-primary/5 border border-primary/20 rounded-md text-sm">
+                                    <p className="font-semibold flex items-center gap-2">
+                                        <Calendar className="h-4 w-4" />
+                                        Follow-up Scheduled:
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                        {format(new Date(linkedVisitNote.scheduledDate), 'PPP')}
+                                        {linkedVisitNote.scheduledTime && ` @ ${linkedVisitNote.scheduledTime}`}
+                                    </p>
+                                </div>
+                            )}
                             <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
                                 <div className="flex flex-col items-center">
                                     <p className="text-sm text-muted-foreground">Score</p>
@@ -394,6 +407,15 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
                                     <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
+                                    <li><strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</li>
+                                    {linkedVisitNote.discoveryData?.personSpokenWithName && (
+                                        <li>
+                                            <strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName}
+                                            {linkedVisitNote.discoveryData.personSpokenWithTitle && ` (${linkedVisitNote.discoveryData.personSpokenWithTitle})`}
+                                            {linkedVisitNote.discoveryData.personSpokenWithEmail && ` | ${linkedVisitNote.discoveryData.personSpokenWithEmail}`}
+                                            {linkedVisitNote.discoveryData.personSpokenWithPhone && ` | ${linkedVisitNote.discoveryData.personSpokenWithPhone}`}
+                                        </li>
+                                    )}
                                     {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
                                         <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
                                     )}

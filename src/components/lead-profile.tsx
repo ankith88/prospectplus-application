@@ -365,31 +365,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 };
 
 
-  const handleCalculateScore = async () => {
-    if (!lead) return;
-    try {
-        setScoringLoading(true);
-        const leadToScore = {
-            leadId: lead.id,
-            leadProfile: lead.profile,
-            websiteUrl: lead.websiteUrl,
-            activity: activities || []
-        };
-        const scoring = await aiLeadScoring([leadToScore]);
-        if (scoring.scoredLeads.length > 0) {
-            const result = scoring.scoredLeads[0];
-            setScoringResult(result);
-            setLead(prev => ({ ...prev!, aiScore: result.score, aiReason: result.reason }));
-        }
-    } catch (error) {
-        console.error("Failed to calculate score:", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to calculate AI score." });
-    } finally {
-        setScoringLoading(false);
-    }
-  }
-
-  const handleProspectWebsite = async () => {
+  const handleAiProspect = async () => {
     if (!lead || !lead.websiteUrl) {
         toast({ variant: "destructive", title: "No Website", description: "No website URL available for this lead to prospect." });
         return;
@@ -829,18 +805,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
 
-  if (!lead || !user) {
-    return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-        <Loader />
-      </div>
-    );
-  }
-  
-  const fullAddressStr = lead.address
-    ? [lead.address.address1, lead.address.street, lead.address.city, lead.address.state, lead.address.zip, lead.address.country].filter(Boolean).join(', ')
-    : 'No address available';
-
   const contactAttempts = useMemo(() => {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
@@ -1209,6 +1173,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
                                     <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
+                                    <li><strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</li>
                                     {linkedVisitNote.discoveryData?.personSpokenWithName && (
                                         <li>
                                             <strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName}
