@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { z } from 'zod';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -160,6 +160,29 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
                     </React.Fragment>
                 );
             })}
+        </div>
+    );
+};
+
+const MandatoryContactFields = () => {
+    const { control } = useFormContext();
+    return (
+        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-2">
+                <AlertCircle className="h-4 w-4" />
+                <p className="text-sm">Contact details are mandatory for this outcome:</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField control={control} name="personSpokenWithName" render={({ field }) => (
+                    <FormItem><FormLabel>Name*</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={control} name="personSpokenWithPhone" render={({ field }) => (
+                    <FormItem><FormLabel>Phone*</FormLabel><FormControl><Input type="tel" placeholder="0400 123 456" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={control} name="personSpokenWithEmail" render={({ field }) => (
+                    <FormItem className="sm:col-span-2"><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="jane@example.com" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+            </div>
         </div>
     );
 };
@@ -461,12 +484,24 @@ export default function CaptureVisitPage() {
         setImages(prev => prev.filter((_, index) => index !== indexToDelete));
     };
 
+    const isContactInfoComplete = () => {
+        const vals = discoveryForm.getValues();
+        return !!vals.personSpokenWithName && !!vals.personSpokenWithEmail && !!vals.personSpokenWithPhone;
+    };
+
     const handleFinalSubmit = async () => {
         if (!outcomeData) {
             toast({ variant: 'destructive', title: 'Error', description: 'No outcome selected.' });
             return;
         }
         const { type: outcomeType, details: detailsObject } = outcomeData;
+
+        // Mandatory check for high-value outcomes
+        const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
+        if (mandatoryOutcomes.includes(outcomeType) && !isContactInfoComplete()) {
+            toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a contact name, email, and phone number for this outcome.' });
+            return;
+        }
 
         let captureUser = userProfile;
         if (isAdminOrLeadGen) {
@@ -602,6 +637,13 @@ export default function CaptureVisitPage() {
         window.scrollTo(0, 0);
         if (step === 'capture') {
             setNoteContent(captureForm.getValues('content'));
+        }
+        if (step === 'outcome') {
+            const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
+            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type) && !isContactInfoComplete()) {
+                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
+                return;
+            }
         }
         switch(step) {
             case 'search': setStep('discovery'); break;
@@ -897,9 +939,10 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
+                                            <MandatoryContactFields />
                                             <Button 
                                                 className="w-full bg-green-600 hover:bg-green-700" 
-                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Appointment Qualified'}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Appointment Qualified') || !isContactInfoComplete()}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Appointment Qualified', details: { salesRep: userProfile.linkedSalesRep } });
@@ -925,9 +968,10 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
+                                            <MandatoryContactFields />
                                             <Button 
                                                 className="w-full"
-                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Send Quote / Free Trial'}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Send Quote / Free Trial') || !isContactInfoComplete()}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Send Quote / Free Trial', details: { salesRep: userProfile.linkedSalesRep } });
@@ -953,9 +997,10 @@ export default function CaptureVisitPage() {
                                                     ))}
                                                 </RadioGroup>
                                             )}
+                                            <MandatoryContactFields />
                                             <Button 
                                                 className="w-full"
-                                                disabled={!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Sign Up'}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Sign Up') || !isContactInfoComplete()}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Sign Up', details: { salesRep: userProfile.linkedSalesRep } });

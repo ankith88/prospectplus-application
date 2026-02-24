@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,7 +30,7 @@ import {
 import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
 import { firestore } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { Search, Star } from 'lucide-react';
+import { Search, Star, User, Mail, Phone } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -188,6 +189,16 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                 <p className="whitespace-pre-wrap text-sm">{note.content}</p>
                 </ScrollArea>
              </div>
+             {note.discoveryData?.personSpokenWithName && (
+                 <Card className="bg-muted/30">
+                     <CardHeader className="py-3"><CardTitle className="text-sm">Captured Contact Info</CardTitle></CardHeader>
+                     <CardContent className="py-0 pb-3 space-y-2 text-sm">
+                        <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> <span>{note.discoveryData.personSpokenWithName} {note.discoveryData.personSpokenWithTitle ? `(${note.discoveryData.personSpokenWithTitle})` : ''}</span></div>
+                        <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> <span>{note.discoveryData.personSpokenWithEmail || 'N/A'}</span></div>
+                        <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> <span>{note.discoveryData.personSpokenWithPhone || 'N/A'}</span></div>
+                     </CardContent>
+                 </Card>
+             )}
              {note.imageUrls && note.imageUrls.length > 0 && (
                   <div>
                       <h4 className="font-semibold mb-2">Attached Images</h4>
@@ -213,6 +224,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                           <ul className="list-disc pl-5 space-y-1">
                           {Object.entries(note.discoveryData).map(([key, value]) => {
                               if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                              if (['personSpokenWithName', 'personSpokenWithTitle', 'personSpokenWithEmail', 'personSpokenWithPhone'].includes(key)) return null;
                               const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
                               const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
                               return (

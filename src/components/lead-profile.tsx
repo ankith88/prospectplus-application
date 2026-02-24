@@ -283,7 +283,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
   const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
-  const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
+  const [isNearbyCustomersOpen, setIsNearbyCustomersOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
@@ -692,7 +692,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         });
 
         setNearbyCompanies(nearby);
-        setIsNearbyCompaniesDialogOpen(true);
+        setIsNearbyCustomersOpen(true);
         if(nearby.length === 0) {
             toast({ title: 'No Nearby Customers', description: 'No signed customers found within a 500m radius.' });
         }
@@ -752,7 +752,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant={(isFieldSales || isFieldSalesAdmin || isAdmin) ? "default" : "outline"}>
-                <Sparkles className="mr-2 h-4 w-4" />
+                <Star className="mr-2 h-4 w-4" />
                 Free Trial
               </Button>
             </DropdownMenuTrigger>
@@ -861,7 +861,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         />
     )}
 
-    <Dialog open={isNearbyCompaniesDialogOpen} onOpenChange={setIsNearbyCompaniesDialogOpen}>
+    <Dialog open={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen}>
       <DialogContent className="max-w-3xl">
           <DialogHeader>
               <DialogTitle>Nearby Signed Customers</DialogTitle>
@@ -894,7 +894,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               )}
           </ScrollArea>
            <DialogFooter>
-              <Button onClick={() => setIsNearbyCompaniesDialogOpen(false)}>Close</Button>
+              <Button onClick={() => setIsNearbyCustomersOpen(false)}>Close</Button>
            </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1197,6 +1197,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <h4 className="font-semibold">Captured Answers:</h4>
                                 <ul className="list-disc pl-5 text-muted-foreground">
                                     <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
+                                    {linkedVisitNote.discoveryData?.personSpokenWithName && (
+                                        <li><strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName} {linkedVisitNote.discoveryData.personSpokenWithEmail ? `(${linkedVisitNote.discoveryData.personSpokenWithEmail})` : ''}</li>
+                                    )}
                                     {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
                                         <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
                                     )}
