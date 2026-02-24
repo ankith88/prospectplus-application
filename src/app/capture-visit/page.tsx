@@ -292,21 +292,22 @@ export default function CaptureVisitPage() {
         summary: 5,
     }[step] || 1;
 
-    const autocompleteRef = useRef<google.maps.places.Autocomplete>();
-    const searchInputCallbackRef = useCallback((node: HTMLInputElement) => {
-        if (node && !autocompleteRef.current && isLoaded) {
-            autocompleteRef.current = new window.google.maps.places.Autocomplete(node, {
+    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+    const searchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
+        if (node && isLoaded) {
+            const autocomplete = new window.google.maps.places.Autocomplete(node, {
                 types: ['establishment'],
                 componentRestrictions: { country: 'au' },
                 fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website'],
             });
-            autocompleteRef.current.addListener('place_changed', () => {
-                const place = autocompleteRef.current?.getPlace();
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
                 if (place?.address_components) {
                     setSelectedPlace(place);
                     setSearchQuery(place.name || '');
                 }
             });
+            autocompleteRef.current = autocomplete;
         }
     }, [isLoaded]);
 
@@ -697,7 +698,7 @@ export default function CaptureVisitPage() {
     }
 
     return (
-        <>
+        <React.Fragment>
             <FormProvider {...discoveryForm}>
                 <div className="flex flex-col gap-6 hide-scrollbar max-w-2xl mx-auto w-full">
                     <header>
@@ -798,7 +799,7 @@ export default function CaptureVisitPage() {
                                             )}
 
                                             <FormField
-                                                control={control}
+                                                control={discoveryForm.control}
                                                 name="businessType"
                                                 render={({ field }) => (
                                                 <FormItem>
@@ -816,11 +817,11 @@ export default function CaptureVisitPage() {
                                             <Card>
                                                 <CardHeader><CardTitle>Person Spoken With</CardTitle></CardHeader>
                                                 <CardContent className="space-y-4">
-                                                    <FormField control={control} name="personSpokenWithName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="personSpokenWithTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Manager" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="personSpokenWithEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="jane@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="personSpokenWithPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0400 123 456" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="personSpokenWithTags" render={({ field }) => (
+                                                    <FormField control={discoveryForm.control} name="personSpokenWithName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Jane Doe" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="personSpokenWithTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Manager" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="personSpokenWithEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="jane@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="personSpokenWithPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0400 123 456" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="personSpokenWithTags" render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Role</FormLabel>
                                                             <MultiSelectCombobox options={contactTagOptions} selected={field.value || []} onSelectedChange={field.onChange} placeholder="Select roles..." />
@@ -833,10 +834,10 @@ export default function CaptureVisitPage() {
                                             <Card>
                                                 <CardHeader><CardTitle>Decision Maker Details</CardTitle><CardDescription>Since you didn't speak to the decision maker, add their details if you have them.</CardDescription></CardHeader>
                                                 <CardContent className="space-y-4">
-                                                    <FormField control={control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={discoveryForm.control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                 </CardContent>
                                             </Card>
                                         </div>
@@ -1027,6 +1028,6 @@ export default function CaptureVisitPage() {
                 </div>
             </FormProvider>
             <canvas ref={canvasRef} style={{ display: 'none' }} />
-        </>
+        </React.Fragment>
     );
 }
