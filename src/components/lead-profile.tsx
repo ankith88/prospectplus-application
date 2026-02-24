@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -468,7 +469,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <Calendar className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>

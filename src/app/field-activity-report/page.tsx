@@ -9,7 +9,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -179,16 +179,6 @@ export default function FieldActivityReportPage() {
             return acc;
         }, {} as Record<string, number>);
 
-        // Calculate appointment outcomes for leads sourced by this rep via field visits
-        const leadIdsSourcedByRep = new Set(userNotes.map(n => n.leadId).filter(Boolean));
-        const appointmentsForSourcedLeads = allAppointments.filter(appt => leadIdsSourcedByRep.has(appt.leadId));
-
-        const apptOutcomesCount = appointmentsForSourcedLeads.reduce((acc, appt) => {
-            const status = appt.appointmentStatus || 'Pending';
-            acc[status] = (acc[status] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
         return {
             id: user.uid,
             name,
@@ -198,16 +188,33 @@ export default function FieldActivityReportPage() {
                 count,
                 percentage: ((count / totalVisits) * 100).toFixed(1)
             })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)),
-            apptOutcomes: Object.entries(apptOutcomesCount).map(([type, count]) => ({
-                type,
-                count
-            }))
         };
     }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
     const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length;
+
+    // Status of Converted Leads (from screenshot)
+    const convertedLeadStatusDist = convertedNotes.reduce((acc, note) => {
+        const lead = leadsMap.get(note.leadId!);
+        const status = lead?.status || 'Unknown';
+        const existing = acc.find(item => item.name === status);
+        if (existing) existing.value++;
+        else acc.push({ name: status, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
+
+    // Appointment Outcomes (Sourced Leads)
+    const convertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
+    const sourcedAppts = allAppointments.filter(a => convertedLeadIds.has(a.leadId));
+    const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
+        const status = appt.appointmentStatus || 'Pending';
+        const existing = acc.find(item => item.name === status);
+        if (existing) existing.value++;
+        else acc.push({ name: status, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
     return {
       totalVisits: totalVisitsCount,
@@ -219,6 +226,8 @@ export default function FieldActivityReportPage() {
       visitsByOutcomeData,
       visitsByUserData,
       repOutcomeEfficiency,
+      convertedLeadStatusDist,
+      sourcedApptOutcomeDist,
       conversionEfficiency: {
           total: convertedNotes.length,
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio },
@@ -282,7 +291,7 @@ export default function FieldActivityReportPage() {
               {userProfile?.role !== 'Field Sales' && userProfile?.role !== 'Franchisee' && (
                 <div className="space-y-2">
                     <Label>Captured By</Label>
-                    <MultiSelectCombobox options={userOptions} selected={filters.capturedBy} onSelectedChange={(val) => handleFilterChange('capturedBy', val)} placeholder="Select users..."/>
+                    <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
                 </div>
               )}
               {userProfile?.role !== 'Franchisee' && (
@@ -342,7 +351,7 @@ export default function FieldActivityReportPage() {
           <Card className="lg:col-span-2">
               <CardHeader>
                   <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency Table</CardTitle>
-                  <CardDescription>Outcome distribution for visits and appointments captured by rep.</CardDescription>
+                  <CardDescription>Outcome distribution for visits captured by rep.</CardDescription>
               </CardHeader>
               <CardContent>
                   <ScrollArea className="h-[400px]">
@@ -351,8 +360,7 @@ export default function FieldActivityReportPage() {
                             <TableRow>
                                 <TableHead>Rep Name</TableHead>
                                 <TableHead className="text-right">Total Visits</TableHead>
-                                <TableHead>Visit Distribution</TableHead>
-                                <TableHead>Appt Outcomes</TableHead>
+                                <TableHead>Outcome Distribution</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -361,7 +369,7 @@ export default function FieldActivityReportPage() {
                                       <TableRow key={rep.id}>
                                           <TableCell className="font-medium">{rep.name}</TableCell>
                                           <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
-                                          <TableCell className="min-w-[300px]">
+                                          <TableCell className="min-w-[400px]">
                                               <div className="space-y-3">
                                                   <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                                                       {rep.outcomes.map((o, idx) => (
@@ -382,22 +390,71 @@ export default function FieldActivityReportPage() {
                                                   </div>
                                               </div>
                                           </TableCell>
-                                          <TableCell>
-                                              <div className="flex flex-wrap gap-2">
-                                                  {rep.apptOutcomes.map(o => (
-                                                      <Badge key={o.type} variant="secondary" className="text-[10px] whitespace-nowrap">
-                                                          {o.type}: {o.count}
-                                                      </Badge>
-                                                  ))}
-                                                  {rep.apptOutcomes.length === 0 && <span className="text-xs text-muted-foreground italic">None</span>}
-                                              </div>
-                                          </TableCell>
                                       </TableRow>
                                   ))
-                              ) : <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
+                              ) : <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
                           </TableBody>
                       </Table>
                   </ScrollArea>
+              </CardContent>
+          </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                  <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.sourcedApptOutcomeDist.length > 0 ? (
+                      <ChartContainer config={{}} className="h-[300px] w-full">
+                          <PieChart>
+                              <Pie 
+                                data={stats.sourcedApptOutcomeDist} 
+                                cx="50%" 
+                                cy="50%" 
+                                innerRadius={60} 
+                                outerRadius={80} 
+                                paddingAngle={5} 
+                                dataKey="value"
+                                label={({ name, value }) => `${name}: ${value}`}
+                              >
+                                  {stats.sourcedApptOutcomeDist.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                          </PieChart>
+                      </ChartContainer>
+                  ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No appointments for these visits.</div>}
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5 text-green-500" /> Status of Converted Leads</CardTitle>
+                  <CardDescription>Current status breakdown of leads generated from field visits.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.convertedLeadStatusDist.length > 0 ? (
+                      <ChartContainer config={{}} className="h-[300px] w-full">
+                          <PieChart>
+                              <Pie 
+                                data={stats.convertedLeadStatusDist} 
+                                cx="50%" 
+                                cy="50%" 
+                                labelLine={false} 
+                                outerRadius={80} 
+                                dataKey="value"
+                                label={({ name, value }) => `${name}: ${value}`}
+                              >
+                                  {stats.convertedLeadStatusDist.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip content={<ChartTooltipContent />} />
+                              <Legend />
+                          </PieChart>
+                      </ChartContainer>
+                  ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No converted leads for these visits.</div>}
               </CardContent>
           </Card>
       </div>
@@ -412,7 +469,7 @@ export default function FieldActivityReportPage() {
               </CardContent>
           </Card>
           <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Visits by Outcome</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> All Visit Outcomes</CardTitle></CardHeader>
               <CardContent>
                   <ChartContainer config={{}} className="h-[300px] w-full">
                       <PieChart><Pie data={stats.visitsByOutcomeData} cx="50%" cy="50%" labelLine={false} label={({ name, value }) => `${name}: ${value}`} outerRadius={80} dataKey="value">{stats.visitsByOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="value" position="inside" fill="white" /></Pie><Tooltip content={<ChartTooltipContent />} /><Legend /></PieChart>
