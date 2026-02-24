@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -29,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
 const STATUS_COLORS: Record<string, string> = {
   'New': '#A0A0A0',
@@ -40,14 +39,6 @@ const STATUS_COLORS: Record<string, string> = {
   'Lost': '#EF4444',
   'In Progress': '#0088FE',
   'Trialing ShipMate': '#EC4899',
-};
-
-const APPOINTMENT_STATUS_COLORS: Record<string, string> = {
-    'Completed': '#22C55E',
-    'Cancelled': '#EF4444',
-    'No Show': '#F59E0B',
-    'Rescheduled': '#8B5CF6',
-    'Pending': '#6B7280',
 };
 
 export default function FieldActivityReportPage() {
@@ -252,14 +243,6 @@ export default function FieldActivityReportPage() {
         return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
     }, 0);
 
-    // Map leadId to the rep who sourced it via a visit note
-    const leadIdToSourcedRep = new Map<string, string>();
-    allVisitNotes.forEach(note => {
-        if (note.leadId) {
-            leadIdToSourcedRep.set(note.leadId, note.capturedBy);
-        }
-    });
-
     const repOutcomeEfficiency = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
@@ -273,16 +256,6 @@ export default function FieldActivityReportPage() {
             return acc;
         }, {} as Record<string, number>);
 
-        // Calculate appointment outcomes for leads sourced by this specific rep
-        const userSourcedAppointments = allAppointments.filter(appt => leadIdToSourcedRep.get(appt.leadId) === name);
-        const totalAppointments = userSourcedAppointments.length;
-
-        const apptStatusCount = userSourcedAppointments.reduce((acc, appt) => {
-            const status = appt.appointmentStatus || 'Pending';
-            acc[status] = (acc[status] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
         return {
             id: user.uid,
             name,
@@ -291,15 +264,7 @@ export default function FieldActivityReportPage() {
                 type,
                 count,
                 percentage: ((count / totalVisits) * 100).toFixed(1)
-            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)),
-            appointments: {
-                total: totalAppointments,
-                statuses: Object.entries(apptStatusCount).map(([type, count]) => ({
-                    type,
-                    count,
-                    percentage: totalAppointments > 0 ? ((count / totalAppointments) * 100).toFixed(1) : "0"
-                })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
-            }
+            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
         };
     }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
@@ -334,7 +299,7 @@ export default function FieldActivityReportPage() {
       repOutcomeEfficiency,
       conversionEfficiency
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, allVisitNotes]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
 
   const handleRedirectToConvertedLeads = () => {
     const params = new URLSearchParams();
@@ -487,7 +452,7 @@ export default function FieldActivityReportPage() {
                         <BarChart3 className="h-5 w-5 text-primary" />
                         Rep Outcome Efficiency Table
                     </CardTitle>
-                    <CardDescription>Outcome distribution and appointment performance per Field Sales Rep.</CardDescription>
+                    <CardDescription>Outcome distribution and conversion performance per Field Sales Rep.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ScrollArea className="h-[400px]">
@@ -497,7 +462,6 @@ export default function FieldActivityReportPage() {
                                     <TableHead>Rep Name</TableHead>
                                     <TableHead className="text-right">Total Visits</TableHead>
                                     <TableHead>Outcome Distribution</TableHead>
-                                    <TableHead>Appointment Outcomes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -506,23 +470,23 @@ export default function FieldActivityReportPage() {
                                         <TableRow key={rep.id}>
                                             <TableCell className="font-medium">{rep.name}</TableCell>
                                             <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
-                                            <TableCell className="min-w-[250px]">
+                                            <TableCell className="min-w-[400px]">
                                                 <div className="space-y-3">
-                                                    <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+                                                    <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                                                         {rep.outcomes.map((o, idx) => (
                                                             <div
                                                                 key={o.type}
-                                                                title={`${o.type}: ${o.percentage}%`}
+                                                                title={`${o.type}: ${o.count} / ${rep.totalVisits} (${o.percentage}%)`}
                                                                 style={{ 
                                                                     width: `${o.percentage}%`,
                                                                     backgroundColor: COLORS[idx % COLORS.length]
                                                                 }}
-                                                                className="h-full transition-all"
+                                                                className="h-full transition-all hover:brightness-110"
                                                             />
                                                         ))}
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {rep.outcomes.slice(0, 3).map((o, idx) => (
+                                                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                                        {rep.outcomes.map((o, idx) => (
                                                             <div key={o.type} className="flex items-center gap-1.5">
                                                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
                                                                 <span className="text-[10px] font-medium whitespace-nowrap">
@@ -533,44 +497,11 @@ export default function FieldActivityReportPage() {
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="min-w-[250px]">
-                                                <div className="space-y-3">
-                                                    {rep.appointments.total > 0 ? (
-                                                        <>
-                                                            <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                                                {rep.appointments.statuses.map((s) => (
-                                                                    <div
-                                                                        key={s.type}
-                                                                        title={`${s.type}: ${s.percentage}%`}
-                                                                        style={{ 
-                                                                            width: `${s.percentage}%`,
-                                                                            backgroundColor: APPOINTMENT_STATUS_COLORS[s.type] || '#ccc'
-                                                                        }}
-                                                                        className="h-full transition-all"
-                                                                    />
-                                                                ))}
-                                                            </div>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {rep.appointments.statuses.map((s) => (
-                                                                    <div key={s.type} className="flex items-center gap-1.5">
-                                                                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: APPOINTMENT_STATUS_COLORS[s.type] || '#ccc' }} />
-                                                                        <span className="text-[10px] font-medium whitespace-nowrap">
-                                                                            {s.type}: {s.percentage}% <span className="opacity-60">({s.count} / {rep.appointments.total})</span>
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-[10px] text-muted-foreground italic">No appointments set</span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
                                         </TableRow>
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No activity for the selected filters.</TableCell>
+                                        <TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for the selected filters.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -699,7 +630,7 @@ export default function FieldActivityReportPage() {
                                     label={({ name, value }) => `${name}: ${value}`}
                                 >
                                     {stats.appointmentStatusData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={APPOINTMENT_STATUS_COLORS[entry.name] || COLORS[index % COLORS.length]} />
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
                                 <Tooltip />
