@@ -8,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Target } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -68,13 +68,7 @@ export default function FieldActivityReportPage() {
     franchisee: [] as string[],
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
-
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
+  const hasAccess = userProfile?.role && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -256,9 +250,42 @@ export default function FieldActivityReportPage() {
         return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
     }, 0);
 
+    // --- Rep Level Outcome Efficiency ---
+    const repOutcomeEfficiency = allFieldSalesUsers.map(user => {
+        const name = user.displayName!;
+        const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
+        const total = userNotes.length;
+        
+        if (total === 0) return null;
+
+        const outcomesCount = userNotes.reduce((acc, n) => {
+            const type = n.outcome?.type || 'Other';
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        return {
+            name,
+            total,
+            outcomes: Object.entries(outcomesCount).map(([type, count]) => ({
+                type,
+                count,
+                percentage: ((count / total) * 100).toFixed(1)
+            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
+        };
+    }).filter(Boolean);
+
+    // --- Converted Lead Conversion Ratios ---
+    const totalConverted = convertedNotes.length;
+    const conversionEfficiency = {
+        won: totalConverted > 0 ? (convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length / totalConverted) * 100 : 0,
+        qualified: totalConverted > 0 ? (convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length / totalConverted) * 100 : 0,
+        quote: totalConverted > 0 ? (convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length / totalConverted) * 100 : 0,
+    };
+
     return {
       totalVisits,
-      totalConverted: convertedNotes.length,
+      totalConverted,
       totalRejected: rejectedNotes.length,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: commissionEligibleLeads.length,
@@ -272,6 +299,8 @@ export default function FieldActivityReportPage() {
       visitsByUserData,
       appointmentStatusData,
       totalCompletedAppointments,
+      repOutcomeEfficiency,
+      conversionEfficiency
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
 
@@ -376,9 +405,95 @@ export default function FieldActivityReportPage() {
           <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} onClick={handleRedirectToConvertedLeads} description="Click to view sourced leads" />
           <StatCard title="Completed Appts" value={stats.totalCompletedAppointments} icon={CheckCircle2} description="Linked to converted visits" />
           <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
-          <StatCard title="Conversion Rate" value={`${stats.conversionRate}%`} icon={Percent} />
+          <StatCard title="Visit Conversion %" value={`${stats.conversionRate}%`} icon={Percent} />
           <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
           <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Total pending/paid" onClick={() => setIsCommissionListOpen(true)} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-blue-500" />
+                        Sourced Lead Efficiency
+                    </CardTitle>
+                    <CardDescription>Ratios of converted leads reaching key statuses.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between p-3 rounded-md bg-green-50 border border-green-100">
+                            <div>
+                                <p className="text-sm font-medium text-green-800">Signed Rate</p>
+                                <p className="text-xs text-green-600">Converted Leads -> Won</p>
+                            </div>
+                            <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
+                            <div>
+                                <p className="text-sm font-medium text-blue-800">Qualified Rate</p>
+                                <p className="text-xs text-blue-600">Converted Leads -> Qualified</p>
+                            </div>
+                            <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
+                            <div>
+                                <p className="text-sm font-medium text-amber-800">Quote Rate</p>
+                                <p className="text-xs text-amber-600">Converted Leads -> Prospect Opportunity</p>
+                            </div>
+                            <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.toFixed(1)}%</span>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Target className="h-5 w-5 text-primary" />
+                        Rep Outcome Efficiency (%)
+                    </CardTitle>
+                    <CardDescription>Outcome distribution per individual Field Sales Rep.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ScrollArea className="h-[250px]">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Rep Name</TableHead>
+                                    <TableHead>Total Visits</TableHead>
+                                    <TableHead>Primary Outcomes (%)</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.repOutcomeEfficiency.length > 0 ? (
+                                    stats.repOutcomeEfficiency.map((rep: any) => (
+                                        <TableRow key={rep.name}>
+                                            <TableCell className="font-medium">{rep.name}</TableCell>
+                                            <TableCell>{rep.total}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {rep.outcomes.slice(0, 3).map((o: any) => (
+                                                        <Badge key={o.type} variant="secondary" className="text-[10px] py-0 px-1">
+                                                            {o.type}: {o.percentage}%
+                                                        </Badge>
+                                                    ))}
+                                                    {rep.outcomes.length > 3 && (
+                                                        <span className="text-[10px] text-muted-foreground">+{rep.outcomes.length - 3} more</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for the selected filters.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
