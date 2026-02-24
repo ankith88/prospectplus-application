@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -8,7 +9,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, ImageIcon } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -71,7 +72,7 @@ export default function FieldActivityReportPage() {
       setAllVisitNotes(notes);
       setAllLeads([...leads, ...companies]);
       setAllAppointments(appointments);
-      setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales'));
+      setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
     } catch (error) {
       console.error("Failed to fetch report data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest report data.' });
@@ -178,6 +179,16 @@ export default function FieldActivityReportPage() {
             return acc;
         }, {} as Record<string, number>);
 
+        // Calculate appointment outcomes for leads sourced by this rep via field visits
+        const leadIdsSourcedByRep = new Set(userNotes.map(n => n.leadId).filter(Boolean));
+        const appointmentsForSourcedLeads = allAppointments.filter(appt => leadIdsSourcedByRep.has(appt.leadId));
+
+        const apptOutcomesCount = appointmentsForSourcedLeads.reduce((acc, appt) => {
+            const status = appt.appointmentStatus || 'Pending';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
         return {
             id: user.uid,
             name,
@@ -186,7 +197,11 @@ export default function FieldActivityReportPage() {
                 type,
                 count,
                 percentage: ((count / totalVisits) * 100).toFixed(1)
-            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
+            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)),
+            apptOutcomes: Object.entries(apptOutcomesCount).map(([type, count]) => ({
+                type,
+                count
+            }))
         };
     }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
@@ -327,19 +342,26 @@ export default function FieldActivityReportPage() {
           <Card className="lg:col-span-2">
               <CardHeader>
                   <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency Table</CardTitle>
-                  <CardDescription>Outcome distribution for every visit captured by rep.</CardDescription>
+                  <CardDescription>Outcome distribution for visits and appointments captured by rep.</CardDescription>
               </CardHeader>
               <CardContent>
                   <ScrollArea className="h-[400px]">
                       <Table>
-                          <TableHeader><TableRow><TableHead>Rep Name</TableHead><TableHead className="text-right">Total Visits</TableHead><TableHead>Outcome Distribution</TableHead></TableRow></TableHeader>
+                          <TableHeader>
+                            <TableRow>
+                                <TableHead>Rep Name</TableHead>
+                                <TableHead className="text-right">Total Visits</TableHead>
+                                <TableHead>Visit Distribution</TableHead>
+                                <TableHead>Appt Outcomes</TableHead>
+                            </TableRow>
+                          </TableHeader>
                           <TableBody>
                               {stats.repOutcomeEfficiency.length > 0 ? (
                                   stats.repOutcomeEfficiency.map((rep) => (
                                       <TableRow key={rep.id}>
                                           <TableCell className="font-medium">{rep.name}</TableCell>
                                           <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
-                                          <TableCell className="min-w-[400px]">
+                                          <TableCell className="min-w-[300px]">
                                               <div className="space-y-3">
                                                   <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                                                       {rep.outcomes.map((o, idx) => (
@@ -360,9 +382,19 @@ export default function FieldActivityReportPage() {
                                                   </div>
                                               </div>
                                           </TableCell>
+                                          <TableCell>
+                                              <div className="flex flex-wrap gap-2">
+                                                  {rep.apptOutcomes.map(o => (
+                                                      <Badge key={o.type} variant="secondary" className="text-[10px] whitespace-nowrap">
+                                                          {o.type}: {o.count}
+                                                      </Badge>
+                                                  ))}
+                                                  {rep.apptOutcomes.length === 0 && <span className="text-xs text-muted-foreground italic">None</span>}
+                                              </div>
+                                          </TableCell>
                                       </TableRow>
                                   ))
-                              ) : <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
+                              ) : <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
                           </TableBody>
                       </Table>
                   </ScrollArea>
