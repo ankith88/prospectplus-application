@@ -64,7 +64,7 @@ import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
@@ -306,6 +306,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return isValid(date) ? format(date, 'MMM d, yyyy') : '-';
+  };
+
   const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
     return (
         <div className="space-y-1">
@@ -440,7 +446,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.internalid || lead.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
-                        <DetailItem icon={Calendar} label="Date Entered" value={lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-'} />
+                        <DetailItem icon={Calendar} label="Date Entered" value={formatDate(lead.dateLeadEntered)} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                     </div>
@@ -532,7 +538,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                            <Building className="w-6 h-6 text-muted-foreground" />
+                            <MapPin className="w-6 h-6 text-muted-foreground" />
                             Address
                         </CardTitle>
                     </CardHeader>
@@ -615,7 +621,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="space-y-4">
                              <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
                                 <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
-                                <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
+                                <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
                             </div>
                             <DiscoveryRadarChart discoveryData={lead.discoveryData} />
                         </div>

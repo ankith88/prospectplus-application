@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -50,7 +51,7 @@ import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { logActivity } from '@/services/firebase'
 
@@ -152,6 +153,12 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     }
   };
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return isValid(date) ? format(date, 'MMM d, yyyy') : '-';
+  };
+
   const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
     return (
         <div className="space-y-1">
@@ -241,7 +248,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.internalid || company.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
-                        <DetailItem icon={CalendarIcon} label="Date Entered" value={company.dateLeadEntered ? format(new Date(company.dateLeadEntered), 'MMM d, yyyy') : '-'} />
+                        <DetailItem icon={CalendarIcon} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
                     </div>
@@ -311,7 +318,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                 <p className="text-xs text-muted-foreground">{contact.title}</p>
                                 <div className="mt-2 space-y-1">
                                     <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="w-3" /></Button></div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
                                 </div>
                             </div>
                         ))}
@@ -320,7 +327,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                            <Building className="w-6 h-6 text-muted-foreground" />
+                            <MapPin className="w-6 h-6 text-muted-foreground" />
                             Address
                         </CardTitle>
                     </CardHeader>
