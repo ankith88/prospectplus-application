@@ -23,6 +23,8 @@ import {
   Globe,
   User,
   Briefcase,
+  Search,
+  Edit,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -317,14 +319,45 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5 text-muted-foreground" />Address</CardTitle></CardHeader>
-                    <CardContent className="text-sm space-y-4">
-                        <p className="text-muted-foreground">{fullAddressStr}</p>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                            <Building className="w-6 h-6 text-muted-foreground" />
+                            Address
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                                <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
+                                <p className="text-sm text-muted-foreground leading-relaxed">{fullAddressStr}</p>
+                            </div>
+                            <div className="flex items-center gap-3 pl-6">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(fullAddressStr)}>
+                                    <Search className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(fullAddressStr, 'Address')}>
+                                    <Clipboard className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                        
                         {company.address?.lat && (
-                            <div className="h-40 rounded-md border overflow-hidden">
-                                <iframe width="100%" height="100%" frameBorder="0" style={{ border: 0 }} src={`https://maps.google.com/maps?q=${encodeURIComponent(fullAddressStr)}&t=&z=13&ie=UTF8&iwloc=&output=embed`}></iframe>
+                            <div className="h-48 rounded-xl border overflow-hidden shadow-inner bg-muted">
+                                <iframe 
+                                    width="100%" 
+                                    height="100%" 
+                                    frameBorder="0" 
+                                    style={{ border: 0 }} 
+                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(fullAddressStr)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                    allowFullScreen
+                                ></iframe>
                             </div>
                         )}
+                        
+                        <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => {}}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Address
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
