@@ -157,7 +157,7 @@ export default function FieldActivityReportPage() {
       
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
-  }, [visibleNotes, filters, leadsMap]);
+  }, [visibleVisitNotes, filters, leadsMap]);
 
   const stats = useMemo(() => {
     const totalVisits = filteredVisitNotes.length;
