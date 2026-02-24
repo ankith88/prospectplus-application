@@ -284,6 +284,7 @@ export default function FieldActivityReportPage() {
         }, {} as Record<string, number>);
 
         return {
+            id: user.uid,
             name,
             totalVisits,
             outcomes: Object.entries(outcomesCount).map(([type, count]) => ({
@@ -300,7 +301,7 @@ export default function FieldActivityReportPage() {
                 })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
             }
         };
-    }).filter(Boolean).sort((a: any, b: any) => b.totalVisits - a.totalVisits);
+    }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
     const totalConvertedFullCount = convertedNotes.length;
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
@@ -501,14 +502,14 @@ export default function FieldActivityReportPage() {
                             </TableHeader>
                             <TableBody>
                                 {stats.repOutcomeEfficiency.length > 0 ? (
-                                    stats.repOutcomeEfficiency.map((rep: any) => (
-                                        <TableRow key={rep.name}>
+                                    stats.repOutcomeEfficiency.map((rep) => (
+                                        <TableRow key={rep.id}>
                                             <TableCell className="font-medium">{rep.name}</TableCell>
                                             <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
                                             <TableCell className="min-w-[250px]">
                                                 <div className="space-y-3">
                                                     <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                                        {rep.outcomes.map((o: any, idx: number) => (
+                                                        {rep.outcomes.map((o, idx) => (
                                                             <div
                                                                 key={o.type}
                                                                 title={`${o.type}: ${o.percentage}%`}
@@ -521,7 +522,7 @@ export default function FieldActivityReportPage() {
                                                         ))}
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {rep.outcomes.slice(0, 3).map((o: any, idx: number) => (
+                                                        {rep.outcomes.slice(0, 3).map((o, idx) => (
                                                             <div key={o.type} className="flex items-center gap-1.5">
                                                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
                                                                 <span className="text-[10px] font-medium whitespace-nowrap">
@@ -537,7 +538,7 @@ export default function FieldActivityReportPage() {
                                                     {rep.appointments.total > 0 ? (
                                                         <>
                                                             <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                                                {rep.appointments.statuses.map((s: any) => (
+                                                                {rep.appointments.statuses.map((s) => (
                                                                     <div
                                                                         key={s.type}
                                                                         title={`${s.type}: ${s.percentage}%`}
@@ -550,7 +551,7 @@ export default function FieldActivityReportPage() {
                                                                 ))}
                                                             </div>
                                                             <div className="flex flex-wrap gap-2">
-                                                                {rep.appointments.statuses.map((s: any) => (
+                                                                {rep.appointments.statuses.map((s) => (
                                                                     <div key={s.type} className="flex items-center gap-1.5">
                                                                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: APPOINTMENT_STATUS_COLORS[s.type] || '#ccc' }} />
                                                                         <span className="text-[10px] font-medium whitespace-nowrap">
