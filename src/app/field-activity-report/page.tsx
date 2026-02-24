@@ -156,11 +156,11 @@ export default function FieldActivityReportPage() {
   }, [visibleVisitNotes, filters, leadsMap]);
 
   const stats = useMemo(() => {
-    const totalVisits = filteredVisitNotes.length;
+    const totalVisitsCount = filteredVisitNotes.length;
     const convertedNotes = filteredVisitNotes.filter(n => n.status === 'Converted' && n.leadId);
     const rejectedNotes = filteredVisitNotes.filter(n => n.status === 'Rejected');
     
-    const conversionRate = totalVisits > 0 ? (convertedNotes.length / totalVisits) * 100 : 0;
+    const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
     const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
@@ -252,12 +252,20 @@ export default function FieldActivityReportPage() {
         return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
     }, 0);
 
+    // Map leadId to the rep who sourced it via a visit note
+    const leadIdToSourcedRep = new Map<string, string>();
+    allVisitNotes.forEach(note => {
+        if (note.leadId) {
+            leadIdToSourcedRep.set(note.leadId, note.capturedBy);
+        }
+    });
+
     const repOutcomeEfficiency = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
-        const total = userNotes.length;
+        const totalVisits = userNotes.length;
         
-        if (total === 0) return null;
+        if (totalVisits === 0) return null;
 
         const outcomesCount = userNotes.reduce((acc, n) => {
             const type = n.outcome?.type || 'Other';
@@ -265,32 +273,50 @@ export default function FieldActivityReportPage() {
             return acc;
         }, {} as Record<string, number>);
 
+        // Calculate appointment outcomes for leads sourced by this specific rep
+        const userSourcedAppointments = allAppointments.filter(appt => leadIdToSourcedRep.get(appt.leadId) === name);
+        const totalAppointments = userSourcedAppointments.length;
+
+        const apptStatusCount = userSourcedAppointments.reduce((acc, appt) => {
+            const status = appt.appointmentStatus || 'Pending';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
         return {
             name,
-            total,
+            totalVisits,
             outcomes: Object.entries(outcomesCount).map(([type, count]) => ({
                 type,
                 count,
-                percentage: ((count / total) * 100).toFixed(1)
-            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
+                percentage: ((count / totalVisits) * 100).toFixed(1)
+            })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)),
+            appointments: {
+                total: totalAppointments,
+                statuses: Object.entries(apptStatusCount).map(([type, count]) => ({
+                    type,
+                    count,
+                    percentage: totalAppointments > 0 ? ((count / totalAppointments) * 100).toFixed(1) : "0"
+                })).sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage))
+            }
         };
-    }).filter(Boolean).sort((a: any, b: any) => b.total - a.total);
+    }).filter(Boolean).sort((a: any, b: any) => b.totalVisits - a.totalVisits);
 
-    const totalConverted = convertedNotes.length;
+    const totalConvertedFullCount = convertedNotes.length;
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
     const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length;
 
     const conversionEfficiency = {
-        total: totalConverted,
-        won: { percentage: totalConverted > 0 ? (wonCountForRatio / totalConverted) * 100 : 0, count: wonCountForRatio },
-        qualified: { percentage: totalConverted > 0 ? (qualifiedCountForRatio / totalConverted) * 100 : 0, count: qualifiedCountForRatio },
-        quote: { percentage: totalConverted > 0 ? (quoteCountForRatio / totalConverted) * 100 : 0, count: quoteCountForRatio },
+        total: totalConvertedFullCount,
+        won: { percentage: totalConvertedFullCount > 0 ? (wonCountForRatio / totalConvertedFullCount) * 100 : 0, count: wonCountForRatio },
+        qualified: { percentage: totalConvertedFullCount > 0 ? (qualifiedCountForRatio / totalConvertedFullCount) * 100 : 0, count: qualifiedCountForRatio },
+        quote: { percentage: totalConvertedFullCount > 0 ? (quoteCountForRatio / totalConvertedFullCount) * 100 : 0, count: quoteCountForRatio },
     };
 
     return {
-      totalVisits,
-      totalConverted,
+      totalVisits: totalVisitsCount,
+      totalConverted: totalConvertedFullCount,
       totalRejected: rejectedNotes.length,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: commissionEligibleLeads.length,
@@ -307,7 +333,7 @@ export default function FieldActivityReportPage() {
       repOutcomeEfficiency,
       conversionEfficiency
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, allVisitNotes]);
 
   const handleRedirectToConvertedLeads = () => {
     const params = new URLSearchParams();
@@ -437,7 +463,7 @@ export default function FieldActivityReportPage() {
                         <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
                             <div>
                                 <p className="text-sm font-medium text-blue-800">Qualified Rate</p>
-                                <p className="text-xs text-green-600">Converted Leads {"->"} Qualified / Pre-Qualified</p>
+                                <p className="text-xs text-green-600">Converted Leads {"->"} Qualified/Pre-Qualified</p>
                                 <p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p>
                             </div>
                             <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
@@ -460,16 +486,17 @@ export default function FieldActivityReportPage() {
                         <BarChart3 className="h-5 w-5 text-primary" />
                         Rep Outcome Efficiency Table
                     </CardTitle>
-                    <CardDescription>Overview of rep performance and visit volume.</CardDescription>
+                    <CardDescription>Outcome distribution and appointment performance per Field Sales Rep.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ScrollArea className="h-[300px]">
+                    <ScrollArea className="h-[400px]">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Rep Name</TableHead>
                                     <TableHead className="text-right">Total Visits</TableHead>
                                     <TableHead>Outcome Distribution</TableHead>
+                                    <TableHead>Appointment Outcomes</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -477,8 +504,8 @@ export default function FieldActivityReportPage() {
                                     stats.repOutcomeEfficiency.map((rep: any) => (
                                         <TableRow key={rep.name}>
                                             <TableCell className="font-medium">{rep.name}</TableCell>
-                                            <TableCell className="text-right font-bold">{rep.total}</TableCell>
-                                            <TableCell className="min-w-[300px]">
+                                            <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
+                                            <TableCell className="min-w-[250px]">
                                                 <div className="space-y-3">
                                                     <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
                                                         {rep.outcomes.map((o: any, idx: number) => (
@@ -494,22 +521,55 @@ export default function FieldActivityReportPage() {
                                                         ))}
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {rep.outcomes.slice(0, 4).map((o: any, idx: number) => (
+                                                        {rep.outcomes.slice(0, 3).map((o: any, idx: number) => (
                                                             <div key={o.type} className="flex items-center gap-1.5">
                                                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
                                                                 <span className="text-[10px] font-medium whitespace-nowrap">
-                                                                    {o.type}: {o.percentage}% <span className="opacity-60">({o.count}/{rep.total})</span>
+                                                                    {o.type}: {o.percentage}% <span className="opacity-60">({o.count} / {rep.totalVisits})</span>
                                                                 </span>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="min-w-[250px]">
+                                                <div className="space-y-3">
+                                                    {rep.appointments.total > 0 ? (
+                                                        <>
+                                                            <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+                                                                {rep.appointments.statuses.map((s: any) => (
+                                                                    <div
+                                                                        key={s.type}
+                                                                        title={`${s.type}: ${s.percentage}%`}
+                                                                        style={{ 
+                                                                            width: `${s.percentage}%`,
+                                                                            backgroundColor: APPOINTMENT_STATUS_COLORS[s.type] || '#ccc'
+                                                                        }}
+                                                                        className="h-full transition-all"
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {rep.appointments.statuses.map((s: any) => (
+                                                                    <div key={s.type} className="flex items-center gap-1.5">
+                                                                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: APPOINTMENT_STATUS_COLORS[s.type] || '#ccc' }} />
+                                                                        <span className="text-[10px] font-medium whitespace-nowrap">
+                                                                            {s.type}: {s.percentage}% <span className="opacity-60">({s.count} / {rep.appointments.total})</span>
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[10px] text-muted-foreground italic">No appointments set</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for the selected filters.</TableCell>
+                                        <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No activity for the selected filters.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
