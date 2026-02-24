@@ -148,6 +148,11 @@ interface MoveLeadDialogProps {
   onLeadMoved: () => void;
 }
 
+const formatAddress = (address?: Address) => {
+    if (!address) return 'N/A';
+    return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+}
+
 function MoveLeadDialog({ lead, isOpen, onOpenChange, onLeadMoved }: MoveLeadDialogProps) {
     const [bucket, setBucket] = useState<'field' | 'outbound' | ''>('');
     const [users, setUsers] = useState<UserProfile[]>([]);
