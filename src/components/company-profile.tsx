@@ -25,6 +25,7 @@ import {
   Briefcase,
   Search,
   Edit,
+  Calendar,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -50,7 +51,7 @@ import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { format, isValid, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { logActivity } from '@/services/firebase'
 
@@ -152,7 +153,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     }
   };
 
-  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable }: any) => {
+  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
     return (
         <div className="space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -237,21 +238,20 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
              </CardHeader>
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                    {/* Left Column */}
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
-                        <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
-                        <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
-                        <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
-                    </div>
-                    {/* Right Column */}
-                    <div className="space-y-8">
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.salesRecordInternalId} copyable />
+                        <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
+                        <DetailItem icon={Calendar} label="Date Entered" value={company.dateLeadEntered ? format(new Date(company.dateLeadEntered), 'MMM d, yyyy') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
+                        <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
+                    </div>
+                    <div className="space-y-8">
+                        <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
+                        <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable leadId={company.id} />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={Briefcase} label="Lead Source" value={company.campaign || company.customerSource} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={company.industrySubCategory || '- None -'} />
-                        <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable />
-                        <DetailItem icon={Briefcase} label="Lead Source" value={company.customerSource || company.campaign} />
                     </div>
                 </div>
              </CardContent>

@@ -38,7 +38,7 @@ import {
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, bulkUpdateLeadDialerRep, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -56,20 +56,18 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
-import { format, isValid, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { cn } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select'
-import { Label } from './ui/label'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { LogNoteDialog } from './log-note-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -341,7 +339,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 )}
                 
                 {callable && value && (
-                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(lead.id, value)}>
+                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
                         <PhoneCall className="h-3 w-3" />
                     </Button>
                 )}
@@ -439,17 +437,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                        <DetailItem icon={Calendar} label="Date Entered" value={lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-'} />
+                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
-                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                     </div>
                     <div className="space-y-8">
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || lead.id} copyable />
-                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
-                        <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
+                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                         <DetailItem icon={Briefcase} label="Lead Source" value={lead.campaign || lead.customerSource} />
+                        <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
                     </div>
                 </div>
              </CardContent>
@@ -469,7 +468,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <Calendar className="h-4 w-4 text-primary" />
+                            <CalendarIcon className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
