@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -57,6 +57,9 @@ import { firestore } from '@/lib/firebase';
 import SummaryStep from '@/components/capture-visit/summary-step';
 import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { useJsApiLoader } from '@react-google-maps/api';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
 
 
 const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/field-discovery-step'), {
@@ -95,6 +98,9 @@ const discoverySchema = z.object({
     'Rarely happens / informal process',
     'Already use a return platform'
   ]).optional(),
+
+  scheduledDate: z.date().optional(),
+  scheduledTime: z.string().optional(),
 });
 
 
@@ -164,7 +170,7 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
     );
 };
 
-const MandatoryContactFields = () => {
+const MandatoryFieldsForOutcome = () => {
     const { control, watch, setValue } = useFormContext();
     
     const personName = watch("personSpokenWithName");
@@ -192,7 +198,7 @@ const MandatoryContactFields = () => {
                 <div className="flex items-center gap-2 text-primary font-semibold">
                     <AlertCircle className="h-4 w-4" />
                     <p className="text-sm">
-                        {hasExistingInfo ? "Verify or update contact details:" : "Contact details are mandatory:"}
+                        {hasExistingInfo ? "Verify contact details:" : "Contact details are mandatory:"}
                     </p>
                 </div>
                 {hasDM && (
@@ -210,6 +216,42 @@ const MandatoryContactFields = () => {
                 )} />
                 <FormField control={control} name="personSpokenWithEmail" render={({ field }) => (
                     <FormItem className="sm:col-span-2"><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="jane@example.com" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4 mt-4">
+                <FormField control={control} name="scheduledDate" render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Scheduled Date*</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button variant="outline" className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar 
+                                    mode="single" 
+                                    selected={field.value} 
+                                    onSelect={field.onChange} 
+                                    disabled={(date) => date < new Date()} 
+                                    initialFocus 
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={control} name="scheduledTime" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Time (Optional)</FormLabel>
+                        <FormControl><Input placeholder="e.g. 10am or 2-4pm" {...field} /></FormControl>
+                        <FormDescription>Leads often give a range.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
                 )} />
             </div>
         </div>
@@ -271,6 +313,8 @@ export default function CaptureVisitPage() {
             decisionMakerTitle: '',
             decisionMakerEmail: '',
             decisionMakerPhone: '',
+            scheduledDate: undefined,
+            scheduledTime: '',
         },
     });
     
@@ -279,7 +323,9 @@ export default function CaptureVisitPage() {
     const watchedPersonName = watch("personSpokenWithName");
     const watchedPersonEmail = watch("personSpokenWithEmail");
     const watchedPersonPhone = watch("personSpokenWithPhone");
+    const watchedDate = watch("scheduledDate");
     const isContactInfoComplete = !!watchedPersonName && !!watchedPersonEmail && !!watchedPersonPhone;
+    const isFollowupInfoComplete = !!watchedDate;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
@@ -292,7 +338,6 @@ export default function CaptureVisitPage() {
         summary: 5,
     }[step] || 1;
 
-    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
     const searchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
         if (node && isLoaded) {
             const autocomplete = new window.google.maps.places.Autocomplete(node, {
@@ -307,7 +352,6 @@ export default function CaptureVisitPage() {
                     setSearchQuery(place.name || '');
                 }
             });
-            autocompleteRef.current = autocomplete;
         }
     }, [isLoaded]);
 
@@ -338,7 +382,11 @@ export default function CaptureVisitPage() {
                             });
                         }
                         if (noteData.discoveryData) {
-                            discoveryForm.reset(noteData.discoveryData);
+                            discoveryForm.reset({
+                                ...noteData.discoveryData,
+                                scheduledDate: noteData.scheduledDate ? new Date(noteData.scheduledDate) : undefined,
+                                scheduledTime: noteData.scheduledTime || '',
+                            });
                         }
                         if (noteData.content) {
                             captureForm.setValue('content', noteData.content);
@@ -526,9 +574,17 @@ export default function CaptureVisitPage() {
 
         // Mandatory check for high-value outcomes
         const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
-        if (mandatoryOutcomes.includes(outcomeType) && !isContactInfoComplete) {
-            toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a contact name, email, and phone number for this outcome.' });
-            return;
+        const discoveryFormValues = discoveryForm.getValues();
+
+        if (mandatoryOutcomes.includes(outcomeType)) {
+            if (!isContactInfoComplete) {
+                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a contact name, email, and phone number for this outcome.' });
+                return;
+            }
+            if (!isFollowupInfoComplete) {
+                toast({ variant: 'destructive', title: 'Scheduled Date Required', description: 'Please select a scheduled follow-up date for this outcome.' });
+                return;
+            }
         }
 
         let captureUser = userProfile;
@@ -567,7 +623,6 @@ export default function CaptureVisitPage() {
             }
         }
         
-        const discoveryFormValues = discoveryForm.getValues();
         const scoredDiscoveryData = calculateScoreAndRouting(discoveryFormValues);
     
         if (editingNote) {
@@ -581,6 +636,8 @@ export default function CaptureVisitPage() {
                     outcome: { type: outcomeType, details: detailsObject },
                     discoveryData: scoredDiscoveryData,
                     imageUrls: images,
+                    scheduledDate: discoveryFormValues.scheduledDate?.toISOString(),
+                    scheduledTime: discoveryFormValues.scheduledTime,
                 });
                 toast({ title: 'Success', description: 'Your visit note has been updated.' });
                 router.push('/visit-notes');
@@ -610,6 +667,8 @@ export default function CaptureVisitPage() {
                     details: detailsObject,
                 },
                 discoveryData: scoredDiscoveryData,
+                scheduledDate: discoveryFormValues.scheduledDate?.toISOString(),
+                scheduledTime: discoveryFormValues.scheduledTime,
             });
 
             const discoveryAnswers = Object.entries(scoredDiscoveryData)
@@ -657,9 +716,15 @@ export default function CaptureVisitPage() {
         }
         if (step === 'outcome') {
             const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
-            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type) && !isContactInfoComplete) {
-                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
-                return;
+            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type)) {
+                if (!isContactInfoComplete) {
+                    toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
+                    return;
+                }
+                if (!isFollowupInfoComplete) {
+                    toast({ variant: 'destructive', title: 'Scheduled Date Required', description: 'Please select a scheduled follow-up date for this outcome.' });
+                    return;
+                }
             }
         }
         switch(step) {
@@ -940,10 +1005,10 @@ export default function CaptureVisitPage() {
                                         <AccordionItem value="item-1">
                                             <AccordionTrigger>Appointment Qualified</AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryContactFields />
+                                                <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full bg-green-600 hover:bg-green-700" 
-                                                    disabled={!isContactInfoComplete}
+                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {
@@ -959,10 +1024,10 @@ export default function CaptureVisitPage() {
                                         <AccordionItem value="item-quote-trial">
                                             <AccordionTrigger>Send Quote / Free Trial</AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryContactFields />
+                                                <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full"
-                                                    disabled={!isContactInfoComplete}
+                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {
@@ -978,10 +1043,10 @@ export default function CaptureVisitPage() {
                                         <AccordionItem value="item-5">
                                             <AccordionTrigger>Sign Up</AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryContactFields />
+                                                <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full"
-                                                    disabled={!isContactInfoComplete}
+                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {

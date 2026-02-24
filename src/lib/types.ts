@@ -197,6 +197,8 @@ export interface VisitNote {
   websiteUrl?: string;
   discoveryData?: Partial<DiscoveryData>;
   franchisee?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
 }
 
 export interface UserProfile {

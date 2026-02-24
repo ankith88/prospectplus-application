@@ -54,7 +54,7 @@ import { aiLeadScoring, AiLeadScoringOutput } from '@/ai/flows/ai-lead-scoring'
 import { improveScript, ImproveScriptOutput } from '@/ai/flows/improve-script'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
-import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail, updateVisitNote } from '@/services/firebase'
+import { deleteContactFromLead, logActivity, updateLeadAvatar, logNoteActivity, updateLeadStatus, getLeadActivity, getLeadTasks, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, getLeadFromFirebase, getLeadContacts, getLeadActivity as getLeadActivityFromDb, getLeadNotes, getLeadNotes as getLeadNotesFromDb, getLeadTranscripts, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, getAllUsers, moveLeadToBucket, updateContactInLead, getLastNote, getLastActivity, deleteLead, updateLeadDetails, updateContactSendEmail, updateVisitNote } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -964,7 +964,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                  Company Details
                </CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleProspectWebsite} disabled={isProspecting || !lead.websiteUrl}>
+                    <Button variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting || !lead.websiteUrl}>
                         {isProspecting ? <Loader /> : <><Sparkles className="mr-2 h-4 w-4" /> AI Prospect Website</>}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleFindNearbyCompanies} disabled={isFindingNearby}>
@@ -1173,6 +1173,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <div className="p-4 rounded-md bg-muted text-sm whitespace-pre-wrap text-muted-foreground italic">
                                         "{linkedVisitNote.content}"
                                     </div>
+                                </div>
+                            )}
+                            {linkedVisitNote.scheduledDate && (
+                                <div className="p-3 bg-primary/5 border border-primary/20 rounded-md text-sm">
+                                    <p className="font-semibold flex items-center gap-2">
+                                        <CalendarIcon className="h-4 w-4" />
+                                        Follow-up Scheduled:
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                        {format(new Date(linkedVisitNote.scheduledDate), 'PPP')}
+                                        {linkedVisitNote.scheduledTime && ` @ ${linkedVisitNote.scheduledTime}`}
+                                    </p>
                                 </div>
                             )}
                             <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">

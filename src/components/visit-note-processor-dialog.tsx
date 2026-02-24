@@ -30,12 +30,13 @@ import {
 import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
 import { firestore } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { Search, Star, User, Mail, Phone } from 'lucide-react';
+import { Search, Star, User, Mail, Phone, Calendar as CalendarIcon } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import Image from 'next/image';
 import { format } from 'date-fns';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 interface VisitNoteProcessorDialogProps {
   isOpen: boolean;
@@ -183,6 +184,16 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
           <div className="space-y-4">
+             {note.scheduledDate && (
+                 <Alert className="bg-primary/5 border-primary/20">
+                     <CalendarIcon className="h-4 w-4 text-primary" />
+                     <AlertTitle>Scheduled Follow-up</AlertTitle>
+                     <AlertDescription>
+                         {format(new Date(note.scheduledDate), 'PPP')}
+                         {note.scheduledTime && ` at ${note.scheduledTime}`}
+                     </AlertDescription>
+                 </Alert>
+             )}
              <div>
                 <h4 className="font-semibold mb-2">Original Note</h4>
                 <ScrollArea className="h-48 rounded-md border p-4 bg-secondary/50">
@@ -224,7 +235,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                           <ul className="list-disc pl-5 space-y-1">
                           {Object.entries(note.discoveryData).map(([key, value]) => {
                               if (!value || (Array.isArray(value) && value.length === 0)) return null;
-                              if (['personSpokenWithName', 'personSpokenWithTitle', 'personSpokenWithEmail', 'personSpokenWithPhone'].includes(key)) return null;
+                              if (['personSpokenWithName', 'personSpokenWithTitle', 'personSpokenWithEmail', 'personSpokenWithPhone', 'scheduledDate', 'scheduledTime'].includes(key)) return null;
                               const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
                               const formattedValue = Array.isArray(value) ? value.join(', ') : String(value);
                               return (
