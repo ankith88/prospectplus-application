@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -165,12 +165,41 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
 };
 
 const MandatoryContactFields = () => {
-    const { control } = useFormContext();
+    const { control, watch, setValue } = useFormContext();
+    
+    const personName = watch("personSpokenWithName");
+    const personEmail = watch("personSpokenWithEmail");
+    const personPhone = watch("personSpokenWithPhone");
+    
+    const dmName = watch("decisionMakerName");
+    const dmEmail = watch("decisionMakerEmail");
+    const dmPhone = watch("decisionMakerPhone");
+    const dmTitle = watch("decisionMakerTitle");
+
+    const hasDM = !!dmName;
+    const hasExistingInfo = !!personName || !!personEmail || !!personPhone;
+
+    const handleUseDM = () => {
+        setValue("personSpokenWithName", dmName);
+        setValue("personSpokenWithEmail", dmEmail);
+        setValue("personSpokenWithPhone", dmPhone);
+        setValue("personSpokenWithTitle", dmTitle);
+    };
+
     return (
         <div className="space-y-4 p-4 border rounded-md bg-muted/30">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-2">
-                <AlertCircle className="h-4 w-4" />
-                <p className="text-sm">Contact details are mandatory for this outcome:</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 text-primary font-semibold">
+                    <AlertCircle className="h-4 w-4" />
+                    <p className="text-sm">
+                        {hasExistingInfo ? "Verify or update contact details:" : "Contact details are mandatory:"}
+                    </p>
+                </div>
+                {hasDM && (
+                    <Button type="button" variant="outline" size="sm" onClick={handleUseDM}>
+                        Use Decision Maker Info
+                    </Button>
+                )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField control={control} name="personSpokenWithName" render={({ field }) => (
@@ -245,9 +274,14 @@ export default function CaptureVisitPage() {
         },
     });
     
-    const { control, watch } = discoveryForm;
+    const { control, watch, setValue } = discoveryForm;
     const personSpokenWithTags = watch("personSpokenWithTags") || [];
     const showDecisionMakerFields = personSpokenWithTags.length > 0 && !personSpokenWithTags.includes('Decision Maker');
+
+    const watchedPersonName = watch("personSpokenWithName");
+    const watchedPersonEmail = watch("personSpokenWithEmail");
+    const watchedPersonPhone = watch("personSpokenWithPhone");
+    const isContactInfoComplete = !!watchedPersonName && !!watchedPersonEmail && !!watchedPersonPhone;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
@@ -484,11 +518,6 @@ export default function CaptureVisitPage() {
         setImages(prev => prev.filter((_, index) => index !== indexToDelete));
     };
 
-    const isContactInfoComplete = () => {
-        const vals = discoveryForm.getValues();
-        return !!vals.personSpokenWithName && !!vals.personSpokenWithEmail && !!vals.personSpokenWithPhone;
-    };
-
     const handleFinalSubmit = async () => {
         if (!outcomeData) {
             toast({ variant: 'destructive', title: 'Error', description: 'No outcome selected.' });
@@ -498,7 +527,7 @@ export default function CaptureVisitPage() {
 
         // Mandatory check for high-value outcomes
         const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
-        if (mandatoryOutcomes.includes(outcomeType) && !isContactInfoComplete()) {
+        if (mandatoryOutcomes.includes(outcomeType) && !isContactInfoComplete) {
             toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a contact name, email, and phone number for this outcome.' });
             return;
         }
@@ -640,7 +669,7 @@ export default function CaptureVisitPage() {
         }
         if (step === 'outcome') {
             const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
-            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type) && !isContactInfoComplete()) {
+            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type) && !isContactInfoComplete) {
                 toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
                 return;
             }
@@ -821,7 +850,7 @@ export default function CaptureVisitPage() {
                                                 <CardHeader><CardTitle>Decision Maker Details</CardTitle><CardDescription>Since you didn't speak to the decision maker, add their details if you have them.</CardDescription></CardHeader>
                                                 <CardContent className="space-y-4">
                                                     <FormField control={control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                                    <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                                    <FormField control={control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormMessage></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerEmail" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={control} name="decisionMakerPhone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" placeholder="0411 987 654" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                 </CardContent>
@@ -942,7 +971,7 @@ export default function CaptureVisitPage() {
                                             <MandatoryContactFields />
                                             <Button 
                                                 className="w-full bg-green-600 hover:bg-green-700" 
-                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Appointment Qualified') || !isContactInfoComplete()}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Appointment Qualified') || !isContactInfoComplete}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Appointment Qualified', details: { salesRep: userProfile.linkedSalesRep } });
@@ -971,7 +1000,7 @@ export default function CaptureVisitPage() {
                                             <MandatoryContactFields />
                                             <Button 
                                                 className="w-full"
-                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Send Quote / Free Trial') || !isContactInfoComplete()}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Send Quote / Free Trial') || !isContactInfoComplete}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Send Quote / Free Trial', details: { salesRep: userProfile.linkedSalesRep } });
@@ -1000,7 +1029,7 @@ export default function CaptureVisitPage() {
                                             <MandatoryContactFields />
                                             <Button 
                                                 className="w-full"
-                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Sign Up') || !isContactInfoComplete()}
+                                                disabled={(!isFieldSalesRepWithLinkedRep && outcomeData?.type !== 'Sign Up') || !isContactInfoComplete}
                                                 onClick={() => {
                                                     if (isFieldSalesRepWithLinkedRep && userProfile.linkedSalesRep) {
                                                         setOutcomeData({ type: 'Sign Up', details: { salesRep: userProfile.linkedSalesRep } });

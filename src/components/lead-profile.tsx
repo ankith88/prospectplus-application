@@ -1198,7 +1198,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <ul className="list-disc pl-5 text-muted-foreground">
                                     <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
                                     {linkedVisitNote.discoveryData?.personSpokenWithName && (
-                                        <li><strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName} {linkedVisitNote.discoveryData.personSpokenWithEmail ? `(${linkedVisitNote.discoveryData.personSpokenWithEmail})` : ''}</li>
+                                        <li>
+                                            <strong>Captured Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName}
+                                            {linkedVisitNote.discoveryData.personSpokenWithTitle && ` (${linkedVisitNote.discoveryData.personSpokenWithTitle})`}
+                                            {linkedVisitNote.discoveryData.personSpokenWithEmail && ` | ${linkedVisitNote.discoveryData.personSpokenWithEmail}`}
+                                            {linkedVisitNote.discoveryData.personSpokenWithPhone && ` | ${linkedVisitNote.discoveryData.personSpokenWithPhone}`}
+                                        </li>
                                     )}
                                     {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
                                         <li><strong>Signals:</strong> {linkedVisitNote.discoveryData.discoverySignals.join(', ')}</li>
