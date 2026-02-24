@@ -234,7 +234,7 @@ export default function FieldActivityReportPage() {
         const name = user.displayName!;
         const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
         return { name, visits };
-    }).filter(u => u.visits > 0).sort((a,b) => a.visits - b.visits);
+    }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
     const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
     const appointmentStatusData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
