@@ -47,6 +47,7 @@ import {
   CheckSquare,
   Mic,
   MicOff,
+  Star,
 } from 'lucide-react'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, Invoice, UserProfile, CheckinQuestion, VisitNote } from '@/lib/types'
@@ -808,6 +809,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const contactAttempts = useMemo(() => {
     return (activities || []).filter(a => a.type === 'Call' && a.callId).length;
   }, [activities]);
+
+  const fullAddressStr = lead.address ? formatAddress(lead.address) : 'No address available';
 
   return (
     <>
