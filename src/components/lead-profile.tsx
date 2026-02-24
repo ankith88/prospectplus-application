@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building,
-  Calendar as CalendarIcon,
+  Calendar,
   Clipboard,
   Edit,
   Link as LinkIcon,
@@ -73,6 +73,7 @@ import { Label } from './ui/label'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { LogNoteDialog } from './log-note-dialog'
 import { Badge } from '@/components/ui/badge'
+import { AddContactForm } from './add-contact-form'
 import {
   Dialog,
   DialogContent,
@@ -125,11 +126,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
-  const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
   const [isNearbyCustomersOpen, setIsNearbyCustomersOpen] = useState(false);
   const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+  const [isAddingContact, setIsAddingContact] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
@@ -241,24 +242,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleBackToLeads = () => {
     setLoadingBack(true);
     router.push(isCompanyProfile ? '/signed-customers' : '/leads');
-  };
-  
-  const handleFindNearbyCompanies = async () => {
-    if (!lead.latitude || !lead.longitude) return;
-    setIsFindingNearby(true);
-    try {
-        const allCompanies = await getCompaniesFromFirebase();
-        const leadLatLng = new window.google.maps.LatLng(lead.latitude, lead.longitude);
-        const nearby = allCompanies.filter(company => {
-          if (!company.latitude || !company.longitude || company.id === lead.id) return false;
-          const itemLatLng = new window.google.maps.LatLng(company.latitude, company.longitude);
-          return window.google.maps.geometry.spherical.computeDistanceBetween(leadLatLng, itemLatLng) <= 500;
-        });
-        setNearbyCompanies(nearby);
-        setIsNearbyCustomersOpen(true);
-    } finally {
-        setIsFindingNearby(false);
-    }
   };
 
   const handleLocalMileConfirm = async () => {
@@ -387,7 +370,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
-    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><Calendar className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
     const callBtn = <Button key="call" variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
     const processBtn = <Button key="process" onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
     const noteBtn = <Button key="note" variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
@@ -454,7 +437,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardHeader>
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                    {/* Left Column */}
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
@@ -462,7 +444,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
                         <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                     </div>
-                    {/* Right Column */}
                     <div className="space-y-8">
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId} copyable />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
@@ -488,13 +469,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <Calendar className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
                     )}
                     <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                        <div className="text-center"><p className="text-sm text-muted-foreground">Score</p><p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
+                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
                         <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
                     </div>
                     {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
@@ -521,7 +502,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle></CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => setIsAddingContact(true)}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add
+                        </Button>
+                    </CardHeader>
                     <CardContent className="space-y-4">
                         {contacts.map(contact => (
                             <Card key={contact.id} className="p-3 text-sm">
@@ -529,7 +515,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="w-3" /></Button></div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
                                 </div>
                             </Card>
                         ))}
@@ -573,7 +559,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         <div className="flex flex-col gap-6">
           <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><Calendar className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                     {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {format(new Date(a.duedate), 'PP')}</div>)}
                     {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
@@ -626,6 +612,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
     <ScheduleAppointmentDialog lead={lead} isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} />
+    <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Add New Contact</DialogTitle>
+            </DialogHeader>
+            <AddContactForm leadId={lead.id} onContactAdded={(newContact) => {
+                setLead(prev => ({ ...prev, contacts: [...(prev.contacts || []), { ...newContact, id: 'temp-' + Date.now() }] }));
+                setIsAddingContact(false);
+            }} />
+        </DialogContent>
+    </Dialog>
     </>
   )
 }
