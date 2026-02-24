@@ -276,10 +276,15 @@ export default function FieldActivityReportPage() {
     }).filter(Boolean);
 
     const totalConverted = convertedNotes.length;
+    const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
+    const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
+    const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length;
+
     const conversionEfficiency = {
-        won: totalConverted > 0 ? (convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length / totalConverted) * 100 : 0,
-        qualified: totalConverted > 0 ? (convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length / totalConverted) * 100 : 0,
-        quote: totalConverted > 0 ? (convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length / totalConverted) * 100 : 0,
+        total: totalConverted,
+        won: { percentage: totalConverted > 0 ? (wonCountForRatio / totalConverted) * 100 : 0, count: wonCountForRatio },
+        qualified: { percentage: totalConverted > 0 ? (qualifiedCountForRatio / totalConverted) * 100 : 0, count: qualifiedCountForRatio },
+        quote: { percentage: totalConverted > 0 ? (quoteCountForRatio / totalConverted) * 100 : 0, count: quoteCountForRatio },
     };
 
     return {
@@ -423,22 +428,25 @@ export default function FieldActivityReportPage() {
                           <div>
                               <p className="text-sm font-medium text-green-800">Signed Rate</p>
                               <p className="text-xs text-green-600">Converted Leads {"->"} Won</p>
+                              <p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.won.count} / {stats.conversionEfficiency.total})</p>
                           </div>
-                          <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.toFixed(1)}%</span>
+                          <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.percentage.toFixed(1)}%</span>
                       </div>
                       <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
                           <div>
                               <p className="text-sm font-medium text-blue-800">Qualified Rate</p>
                               <p className="text-xs text-green-600">Converted Leads {"->"} Qualified</p>
+                              <p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p>
                           </div>
-                          <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.toFixed(1)}%</span>
+                          <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                       </div>
                       <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
                           <div>
                               <p className="text-sm font-medium text-amber-800">Quote Rate</p>
                               <p className="text-xs text-green-600">Converted Leads {"->"} Prospect Opportunity</p>
+                              <p className="text-[10px] text-amber-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p>
                           </div>
-                          <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.toFixed(1)}%</span>
+                          <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.percentage.toFixed(1)}%</span>
                       </div>
                   </div>
               </CardContent>
@@ -471,12 +479,13 @@ export default function FieldActivityReportPage() {
                                           <TableCell>
                                               <div className="flex flex-wrap gap-1">
                                                   {rep.outcomes.slice(0, 3).map((o: any) => (
-                                                      <Badge key={o.type} variant="secondary" className="text-[10px] py-0 px-1">
-                                                          {o.type}: {o.percentage}%
+                                                      <Badge key={o.type} variant="secondary" className="text-[10px] py-1 px-2 flex flex-col items-start gap-0.5 h-auto">
+                                                          <span className="font-semibold">{o.type}: {o.percentage}%</span>
+                                                          <span className="opacity-70 font-normal">({o.count} / {rep.total})</span>
                                                       </Badge>
                                                   ))}
                                                   {rep.outcomes.length > 3 && (
-                                                      <span className="text-[10px] text-muted-foreground">+{rep.outcomes.length - 3} more</span>
+                                                      <span className="text-[10px] text-muted-foreground self-center ml-1">+{rep.outcomes.length - 3} more</span>
                                                   )}
                                               </div>
                                           </TableCell>
