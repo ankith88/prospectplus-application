@@ -437,7 +437,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.internalid || lead.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
                         <DetailItem icon={Calendar} label="Date Entered" value={lead.dateLeadEntered ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />

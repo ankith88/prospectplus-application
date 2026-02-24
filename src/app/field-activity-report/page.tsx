@@ -8,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, ImageIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -31,17 +31,6 @@ import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
-const STATUS_COLORS: Record<string, string> = {
-  'New': '#A0A0A0',
-  'Contacted': '#FFBB28',
-  'Qualified': '#00C49F',
-  'Pre Qualified': '#F59E0B',
-  'Won': '#22C55E',
-  'Lost': '#EF4444',
-  'In Progress': '#0088FE',
-  'Trialing ShipMate': '#EC4899',
-};
-
 export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -51,9 +40,9 @@ export default function FieldActivityReportPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
   
-  const router = useRouter();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [filters, setFilters] = useState({
     date: undefined as DateRange | undefined,
@@ -163,35 +152,11 @@ export default function FieldActivityReportPage() {
         return { ...lead, visitDate: note.createdAt, capturedBy: note.capturedBy };
     });
 
-    const appointmentLeaderboard = allFieldSalesUsers.map(user => {
-        const userName = user.displayName!;
-        const count = convertedNotes.filter(n => 
-            n.capturedBy === userName && 
-            allAppointments.some(appt => appt.leadId === n.leadId && appt.appointmentStatus === 'Completed')
-        ).length;
-        return { name: userName, value: count };
-    }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
-
-    const commissionLeaderboard = allFieldSalesUsers.map(user => {
-        const userName = user.displayName!;
-        const count = commissionEligibleLeads.filter(l => l.capturedBy === userName).length;
-        return { name: userName, value: count * 50 };
-    }).filter(u => u.value > 0).sort((a,b) => b.value - a.value);
-
     const visitsByOutcomeData = filteredVisitNotes.reduce((acc, note) => {
         const type = note.outcome?.type || 'Other';
         const existing = acc.find(item => item.name === type);
         if (existing) existing.value++;
         else acc.push({ name: type, value: 1 });
-        return acc;
-    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
-
-    const statusOfConvertedLeadsData = convertedNotes.reduce((acc, note) => {
-        const lead = note.leadId ? leadsMap.get(note.leadId) : null;
-        const status = lead?.status || 'Unknown';
-        const existing = acc.find(item => item.name === status);
-        if (existing) existing.value++;
-        else acc.push({ name: status, value: 1 });
         return acc;
     }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
 
@@ -236,10 +201,7 @@ export default function FieldActivityReportPage() {
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: commissionEligibleLeads.length,
       commissionEligibleLeads,
-      appointmentLeaderboard,
-      commissionLeaderboard,
       visitsByOutcomeData,
-      statusOfConvertedLeadsData,
       visitsByUserData,
       repOutcomeEfficiency,
       conversionEfficiency: {
@@ -267,7 +229,7 @@ export default function FieldActivityReportPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
   }, [visibleVisitNotes, allLeads]);
 
-  if (authLoading || loading || !hasAccess) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (loading || isRefreshing) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
@@ -305,7 +267,7 @@ export default function FieldActivityReportPage() {
               {userProfile?.role !== 'Field Sales' && userProfile?.role !== 'Franchisee' && (
                 <div className="space-y-2">
                     <Label>Captured By</Label>
-                    <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
+                    <MultiSelectCombobox options={userOptions} selected={filters.capturedBy} onSelectedChange={(val) => handleFilterChange('capturedBy', val)} placeholder="Select users..."/>
                 </div>
               )}
               {userProfile?.role !== 'Franchisee' && (
@@ -432,7 +394,7 @@ export default function FieldActivityReportPage() {
               <DialogHeader><DialogTitle>Commission Eligible Leads</DialogTitle><DialogDescription>Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</DialogDescription></DialogHeader>
               <ScrollArea className="flex-1 mt-4">
                   <Table>
-                      <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.commissionEligibleLeads.length > 0 ? stats.commissionEligibleLeads.map((lead) => (
                               <TableRow key={lead.id}><TableCell className="font-medium">{lead.companyName}</TableCell><TableCell>{lead.capturedBy}</TableCell><TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell><TableCell><LeadStatusBadge status={lead.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>

@@ -25,7 +25,6 @@ import {
   Briefcase,
   Search,
   Edit,
-  Calendar,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -60,7 +59,7 @@ interface CompanyProfileProps {
   onNoteLogged: (newNote: Note) => void;
 }
 
-const formatAddress = (address?: Address) => {
+const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
     return [address.address1, address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
 }
@@ -198,7 +197,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   if (!user) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
-  const fullAddressStr = formatAddress(company.address);
+  const fullAddressStr = formatAddressString(company.address);
 
   return (
     <>
@@ -240,9 +239,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.salesRecordInternalId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.internalid || company.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
-                        <DetailItem icon={Calendar} label="Date Entered" value={company.dateLeadEntered ? format(new Date(company.dateLeadEntered), 'MMM d, yyyy') : '-'} />
+                        <DetailItem icon={CalendarIcon} label="Date Entered" value={company.dateLeadEntered ? format(new Date(company.dateLeadEntered), 'MMM d, yyyy') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
                     </div>
