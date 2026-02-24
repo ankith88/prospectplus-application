@@ -186,7 +186,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" />Details</CardTitle></CardHeader>
+             <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Details</CardTitle></CardHeader>
              <CardContent className="space-y-4">
                 {company.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{company.companyDescription}</div>}
                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">

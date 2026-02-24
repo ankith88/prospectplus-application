@@ -2,7 +2,6 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import Link from 'next/navigation'
 import {
   ArrowLeft,
   Building,
@@ -135,9 +134,9 @@ interface LeadProfileProps {
   initialLead: Lead;
 }
 
-const formatAddress = (address?: Address) => {
+const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
-    return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
+    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
 }
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
@@ -159,7 +158,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lastCallActivity, setLastCallActivity] = useState<Activity | null>(null);
   const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>();
+  const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
@@ -318,7 +317,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         const newTask = await addTaskToLead(lead.id, { title: newTaskTitle, dueDate: newTaskDueDate.toISOString(), author: user.displayName });
         setLead(prev => ({...prev!, tasks: [newTask, ...(prev!.tasks || [])].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
         setNewTaskTitle('');
-        setNewTaskDueDate(undefined);
+        setnewTaskDueDate(undefined);
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: "Failed to add task." });
     }
@@ -431,7 +430,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
-    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIconLucide className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
     const callBtn = <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
     const processBtn = <Button onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
     const noteBtn = <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
@@ -445,7 +444,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
-  const fullAddressStr = lead.address ? formatAddress(lead.address) : 'No address available';
+  const fullAddressStr = lead.address ? formatAddressString(lead.address) : 'No address available';
 
   const entryDate = lead.dateLeadEntered ? parseISO(lead.dateLeadEntered) : null;
 
@@ -671,7 +670,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div className="flex gap-2">
                             <Popover>
                                 <PopoverTrigger asChild><Button variant="outline" className="flex-1 text-left font-normal">{newTaskDueDate ? format(newTaskDueDate, "PPP") : "Pick date"}</Button></PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setNewTaskDueDate} initialFocus /></PopoverContent>
+                                <PopoverContent className="w-auto p-0"><CalendarPicker mode="single" selected={newTaskDueDate} onSelect={setnewTaskDueDate} initialFocus /></PopoverContent>
                             </Popover>
                             <Button type="submit" size="icon"><PlusCircle className="h-4 w-4" /></Button>
                         </div>
