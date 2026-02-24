@@ -40,7 +40,7 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, bulkUpdateLeadDialerRep, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Table,
@@ -74,6 +74,7 @@ import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { LogNoteDialog } from './log-note-dialog'
 import { Badge } from '@/components/ui/badge'
 import { AddContactForm } from './add-contact-form'
+import { EditContactForm } from './edit-contact-form'
 import {
   Dialog,
   DialogContent,
@@ -126,11 +127,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
-  const [isNearbyCustomersOpen, setIsNearbyCustomersOpen] = useState(false);
-  const [isFindingNearby, setIsFindingNearby] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
+  const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
@@ -445,11 +445,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                     </div>
                     <div className="space-y-8">
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || lead.id} copyable />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
-                        <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable />
-                        <DetailItem icon={Briefcase} label="Lead Source" value={lead.customerSource || lead.campaign} />
+                        <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
+                        <DetailItem icon={Briefcase} label="Lead Source" value={lead.campaign || lead.customerSource} />
                     </div>
                 </div>
              </CardContent>
@@ -510,7 +510,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {contacts.map(contact => (
-                            <Card key={contact.id} className="p-3 text-sm">
+                            <Card key={contact.id} className="p-3 text-sm relative group">
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                    onClick={() => setContactToEdit(contact)}
+                                >
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                                 <p className="font-semibold">{contact.name}</p>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
@@ -652,6 +660,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 setLead(prev => ({ ...prev, contacts: [...(prev.contacts || []), { ...newContact, id: 'temp-' + Date.now() }] }));
                 setIsAddingContact(false);
             }} />
+        </DialogContent>
+    </Dialog>
+    <Dialog open={!!contactToEdit} onOpenChange={(open) => !open && setContactToEdit(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Edit Contact</DialogTitle>
+            </DialogHeader>
+            {contactToEdit && (
+                <EditContactForm 
+                    leadId={lead.id} 
+                    contact={contactToEdit} 
+                    onContactUpdated={(updated) => {
+                        setLead(prev => ({ 
+                            ...prev, 
+                            contacts: prev.contacts?.map(c => c.id === updated.id ? updated : c) 
+                        }));
+                    }} 
+                    onClose={() => setContactToEdit(null)}
+                />
+            )}
         </DialogContent>
     </Dialog>
     </>
