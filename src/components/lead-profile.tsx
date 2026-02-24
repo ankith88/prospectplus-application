@@ -225,6 +225,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }
 
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
+    if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
     logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
   };
@@ -425,9 +426,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div className="space-y-1">
                         <p className="text-muted-foreground">NetSuite Internal ID</p>
                         <div className="flex items-center gap-2">
-                            <p className="font-medium">{lead.salesRecordInternalId || 'N/A'}</p>
-                            {lead.salesRecordInternalId && (
-                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.salesRecordInternalId, 'Internal ID')}>
+                            <p className="font-medium">{lead.salesRecordInternalId || (lead as any).internalid || 'N/A'}</p>
+                            {(lead.salesRecordInternalId || (lead as any).internalid) && (
+                                <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(lead.salesRecordInternalId || (lead as any).internalid, 'Internal ID')}>
                                     <Clipboard className="h-3 w-3" />
                                 </Button>
                             )}
@@ -449,9 +450,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <p className="text-muted-foreground">Source</p>
                         <p className="font-medium">{lead.customerSource || 'N/A'}</p>
                     </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Phone</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-medium">{lead.customerPhone || 'N/A'}</p>
+                            {lead.customerPhone && (
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, lead.customerPhone!)}>
+                                    <PhoneCall className="h-3 w-3" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Email</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-medium truncate max-w-[150px]">{lead.customerServiceEmail || 'N/A'}</p>
+                            {lead.customerServiceEmail && (
+                                <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
+                                    <a href={`mailto:${lead.customerServiceEmail}`}><Mail className="h-3 w-3" /></a>
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                     <div className="space-y-1"><p className="text-muted-foreground">Website</p>{lead.websiteUrl ? <a href={lead.websiteUrl} target="_blank" className="text-primary hover:underline flex items-center gap-1">{lead.websiteUrl}<LinkIcon className="w-3" /></a> : 'N/A'}</div>
-                    <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{lead.industryCategory || 'N/A'}</p></div>
-                    <div className="space-y-1"><p className="text-muted-foreground">Assigned Rep</p><p className="font-medium">{lead.salesRepAssigned || 'N/A'}</p></div>
                 </div>
              </CardContent>
            </Card>

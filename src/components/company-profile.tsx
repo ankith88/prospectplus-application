@@ -16,6 +16,7 @@ import {
   ClipboardEdit,
   TrendingUp,
   Info,
+  PhoneCall,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -43,6 +44,7 @@ import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid, parseISO } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
+import { logActivity } from '@/services/firebase'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
@@ -122,6 +124,12 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     router.push('/signed-customers');
   };
 
+  const handleInitiateCall = (phoneNumber: string) => {
+    if (!phoneNumber) return;
+    window.open(`aircall:${phoneNumber}`);
+    logActivity(company.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+  };
+
   const handleUpsell = async () => {
     if (!company.id) return;
     setIsUpselling(true);
@@ -192,9 +200,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                  <div className="space-y-1">
                     <p className="text-muted-foreground">NetSuite Internal ID</p>
                     <div className="flex items-center gap-2">
-                        <p className="font-medium">{company.salesRecordInternalId || 'N/A'}</p>
-                        {company.salesRecordInternalId && (
-                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.salesRecordInternalId, 'Internal ID')}>
+                        <p className="font-medium">{company.salesRecordInternalId || (company as any).internalid || 'N/A'}</p>
+                        {(company.salesRecordInternalId || (company as any).internalid) && (
+                            <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => handleCopy(company.salesRecordInternalId || (company as any).internalid, 'Internal ID')}>
                                 <Clipboard className="h-3 w-3" />
                             </Button>
                         )}
@@ -215,6 +223,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                  <div className="space-y-1">
                     <p className="text-muted-foreground">Source</p>
                     <p className="font-medium">{company.customerSource || 'N/A'}</p>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Phone</p>
+                    <div className="flex items-center gap-2">
+                        <p className="font-medium">{company.customerPhone || 'N/A'}</p>
+                        {company.customerPhone && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(company.customerPhone!)}>
+                                <PhoneCall className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Email</p>
+                    <div className="flex items-center gap-2">
+                        <p className="font-medium truncate max-w-[150px]">{company.customerServiceEmail || 'N/A'}</p>
+                        {company.customerServiceEmail && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
+                                <a href={`mailto:${company.customerServiceEmail}`}><Mail className="h-3 w-3" /></a>
+                            </Button>
+                        )}
+                    </div>
                  </div>
                  <div className="space-y-1"><p className="text-muted-foreground">Website</p>{company.websiteUrl ? <a href={company.websiteUrl} target="_blank" className="text-primary hover:underline">{company.websiteUrl}</a> : 'N/A'}</div>
                  <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{company.industryCategory ?? 'N/A'}</p></div>
@@ -278,7 +308,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                 <p className="text-xs text-muted-foreground">{contact.title}</p>
                                 <div className="mt-2 space-y-1">
                                     <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone}</div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="w-3" /></Button></div>
                                 </div>
                             </div>
                         ))}

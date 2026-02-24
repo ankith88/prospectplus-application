@@ -127,7 +127,7 @@ export default function FieldActivityReportPage() {
   }, [allVisitNotes, userProfile, leadsMap]);
 
   const filteredVisitNotes = useMemo(() => {
-    return visibleVisitNotes.filter(note => {
+    return visibleNotesToProcess.filter(note => {
       const capturedByUserMatch = filters.user.length === 0 || filters.user.includes(note.capturedBy);
       const outcomeMatch = filters.outcome.length === 0 || (note.outcome?.type && filters.outcome.includes(note.outcome.type));
       
@@ -145,6 +145,8 @@ export default function FieldActivityReportPage() {
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
   }, [visibleVisitNotes, filters, leadsMap]);
+
+  const visibleNotesToProcess = visibleVisitNotes;
 
   const stats = useMemo(() => {
     const totalVisitsCount = filteredVisitNotes.length;
@@ -212,15 +214,6 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
 
-    const visitsByFranchiseeData = filteredVisitNotes.reduce((acc, note) => {
-        const lead = note.leadId ? leadsMap.get(note.leadId) : null;
-        const franchisee = lead?.franchisee || 'No Franchisee';
-        const existing = acc.find(item => item.name === franchisee);
-        if (existing) existing.value++;
-        else acc.push({ name: franchisee, value: 1 });
-        return acc;
-    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value).slice(0, 10);
-
     const visitsByUserData = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const visits = filteredVisitNotes.filter(n => n.capturedBy === name).length;
@@ -228,17 +221,6 @@ export default function FieldActivityReportPage() {
     }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
     const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
-    const appointmentOutcomeData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
-        const leadAppts = allAppointments.filter(appt => appt.leadId === leadId);
-        leadAppts.forEach(appt => {
-            const status = appt.appointmentStatus || 'Pending';
-            const existing = acc.find(item => item.name === status);
-            if (existing) existing.value++;
-            else acc.push({ name: status, value: 1 });
-        });
-        return acc;
-    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
-
     const totalCompletedAppointments = Array.from(uniqueConvertedLeadIds).reduce((sum, leadId) => {
         return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
     }, 0);
@@ -292,9 +274,7 @@ export default function FieldActivityReportPage() {
       commissionLeaderboard,
       visitsByOutcomeData,
       statusOfConvertedLeadsData,
-      visitsByFranchiseeData,
       visitsByUserData,
-      appointmentOutcomeData,
       totalCompletedAppointments,
       repOutcomeEfficiency,
       conversionEfficiency
@@ -325,20 +305,20 @@ export default function FieldActivityReportPage() {
   );
 
   const userOptions: Option[] = useMemo(() => {
-    const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
+    const users = new Set(visibleNotesToProcess.map(n => n.capturedBy));
     return Array.from(users).map(u => ({ value: u, label: u }));
-  }, [visibleVisitNotes]);
+  }, [visibleNotesToProcess]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-    const outcomes = new Set(visibleVisitNotes.map(n => n.outcome?.type).filter(Boolean));
+    const outcomes = new Set(visibleNotesToProcess.map(n => n.outcome?.type).filter(Boolean));
     return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
-  }, [visibleVisitNotes]);
+  }, [visibleNotesToProcess]);
   
   const franchiseeOptions: Option[] = useMemo(() => {
-    const leadIds = visibleVisitNotes.map(n => n.leadId).filter(Boolean);
+    const leadIds = visibleNotesToProcess.map(n => n.leadId).filter(Boolean);
     const franchisees = new Set(allLeads.filter(l => leadIds.includes(l.id) && l.franchisee).map(l => l.franchisee));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
-  }, [visibleVisitNotes, allLeads]);
+  }, [visibleNotesToProcess, allLeads]);
 
 
   if (authLoading || loading || !hasAccess) {
@@ -474,22 +454,29 @@ export default function FieldActivityReportPage() {
                                                 <div className="space-y-3">
                                                     <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                                                         {rep.outcomes.map((o, idx) => (
-                                                            <div
-                                                                key={o.type}
-                                                                title={`${o.type}: ${o.count} / ${rep.totalVisits} (${o.percentage}%)`}
-                                                                style={{ 
-                                                                    width: `${o.percentage}%`,
-                                                                    backgroundColor: COLORS[idx % COLORS.length]
-                                                                }}
-                                                                className="h-full transition-all hover:brightness-110"
-                                                            />
+                                                            <Popover key={o.type}>
+                                                                <PopoverTrigger asChild>
+                                                                    <div
+                                                                        title={`${o.type}: ${o.count} / ${rep.totalVisits} (${o.percentage}%)`}
+                                                                        style={{ 
+                                                                            width: `${o.percentage}%`,
+                                                                            backgroundColor: COLORS[idx % COLORS.length]
+                                                                        }}
+                                                                        className="h-full transition-all hover:brightness-110 cursor-pointer"
+                                                                    />
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-auto p-2 text-xs">
+                                                                    <p className="font-bold">{o.type}</p>
+                                                                    <p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p>
+                                                                </PopoverContent>
+                                                            </Popover>
                                                         ))}
                                                     </div>
                                                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                                                         {rep.outcomes.map((o, idx) => (
                                                             <div key={o.type} className="flex items-center gap-1.5 group relative">
                                                                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                                                                <span className="text-[10px] font-medium whitespace-nowrap cursor-help">
+                                                                <span className="text-[10px] font-medium whitespace-nowrap">
                                                                     {o.type}: {o.percentage}% <span className="opacity-60">({o.count} / {rep.totalVisits})</span>
                                                                 </span>
                                                             </div>
@@ -612,38 +599,6 @@ export default function FieldActivityReportPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Appointment Outcomes (Sourced Leads)</CardTitle>
-                    <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {stats.appointmentOutcomeData.length > 0 ? (
-                        <ChartContainer config={{}} className="h-[300px] w-full">
-                            <PieChart>
-                                <Pie
-                                    data={stats.appointmentOutcomeData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={({ name, value }) => `${name}: ${value}`}
-                                >
-                                    {stats.appointmentOutcomeData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                    <LabelList dataKey="value" position="inside" fill="white" />
-                                </Pie>
-                                <Tooltip />
-                                <Legend />
-                            </PieChart>
-                        </ChartContainer>
-                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No appointment status data available</div>}
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
                     <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Status of Converted Leads</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -671,9 +626,6 @@ export default function FieldActivityReportPage() {
                     ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No converted lead status data available</div>}
                 </CardContent>
             </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Visits by Outcome</CardTitle>
@@ -703,6 +655,9 @@ export default function FieldActivityReportPage() {
                     ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No outcome data available</div>}
                 </CardContent>
             </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
                 <CardHeader><CardTitle>Total Visits by Rep</CardTitle></CardHeader>
                 <CardContent>
