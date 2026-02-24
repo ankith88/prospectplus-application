@@ -9,7 +9,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, LeadStat
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, User, Users, Percent, TrendingUp, Briefcase, FileCheck, FileX, MapIcon, Star, DollarSign, Trophy, ArrowRight, ExternalLink, Coins, PieChart as PieChartIcon, BarChart3, CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,14 @@ const STATUS_COLORS: Record<string, string> = {
   'Lost': '#EF4444',
   'In Progress': '#0088FE',
   'Trialing ShipMate': '#EC4899',
+};
+
+const APPOINTMENT_STATUS_COLORS: Record<string, string> = {
+    'Completed': '#22C55E',
+    'Cancelled': '#EF4444',
+    'No Show': '#F59E0B',
+    'Rescheduled': '#8B5CF6',
+    'Pending': '#6B7280',
 };
 
 export default function FieldActivityReportPage() {
@@ -232,6 +240,23 @@ export default function FieldActivityReportPage() {
         return { name, visits };
     }).filter(u => u.visits > 0).sort((a,b) => b.visits - a.visits);
 
+    // Appointment Status Distribution for sourced leads
+    const uniqueConvertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
+    const appointmentStatusData = Array.from(uniqueConvertedLeadIds).reduce((acc, leadId) => {
+        const leadAppts = allAppointments.filter(appt => appt.leadId === leadId);
+        leadAppts.forEach(appt => {
+            const status = appt.appointmentStatus || 'Pending';
+            const existing = acc.find(item => item.name === status);
+            if (existing) existing.value++;
+            else acc.push({ name: status, value: 1 });
+        });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a, b) => b.value - a.value);
+
+    const totalCompletedAppointments = Array.from(uniqueConvertedLeadIds).reduce((sum, leadId) => {
+        return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
+    }, 0);
+
     return {
       totalVisits,
       totalConverted: convertedNotes.length,
@@ -246,6 +271,8 @@ export default function FieldActivityReportPage() {
       statusOfConvertedLeadsData,
       visitsByFranchiseeData,
       visitsByUserData,
+      appointmentStatusData,
+      totalCompletedAppointments,
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
 
@@ -345,9 +372,10 @@ export default function FieldActivityReportPage() {
           </Card>
         </Collapsible>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
           <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} onClick={handleRedirectToConvertedLeads} description="Click to view sourced leads" />
+          <StatCard title="Completed Appts" value={stats.totalCompletedAppointments} icon={CheckCircle2} description="Linked to converted visits" />
           <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
           <StatCard title="Conversion Rate" value={`${stats.conversionRate}%`} icon={Percent} />
           <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
@@ -455,30 +483,31 @@ export default function FieldActivityReportPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Visits by Outcome</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                    <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {stats.visitsByOutcomeData.length > 0 ? (
+                    {stats.appointmentStatusData.length > 0 ? (
                         <ChartContainer config={{}} className="h-[300px] w-full">
                             <PieChart>
                                 <Pie
-                                    data={stats.visitsByOutcomeData}
+                                    data={stats.appointmentStatusData}
                                     cx="50%"
                                     cy="50%"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    innerRadius={60}
                                     outerRadius={80}
+                                    paddingAngle={5}
                                     dataKey="value"
                                 >
-                                    {stats.visitsByOutcomeData.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    {stats.appointmentStatusData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={APPOINTMENT_STATUS_COLORS[entry.name] || COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip content={<ChartTooltipContent />} />
+                                <Tooltip />
                                 <Legend />
                             </PieChart>
                         </ChartContainer>
-                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No outcome data available</div>}
+                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No appointment status data available</div>}
                 </CardContent>
             </Card>
 
@@ -512,7 +541,35 @@ export default function FieldActivityReportPage() {
             </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> Visits by Outcome</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {stats.visitsByOutcomeData.length > 0 ? (
+                        <ChartContainer config={{}} className="h-[300px] w-full">
+                            <PieChart>
+                                <Pie
+                                    data={stats.visitsByOutcomeData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    dataKey="value"
+                                >
+                                    {stats.visitsByOutcomeData.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                            </PieChart>
+                        </ChartContainer>
+                    ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No outcome data available</div>}
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader><CardTitle>Total Visits by Rep</CardTitle></CardHeader>
                 <CardContent>
@@ -531,7 +588,7 @@ export default function FieldActivityReportPage() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Converted Leads linked to Franchisee</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Converted Leads by Franchisee</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {stats.visitsByFranchiseeData.length > 0 ? (
