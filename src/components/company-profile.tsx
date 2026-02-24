@@ -154,9 +154,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold">{company.companyName}</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={company.status} />
-              <p className="text-muted-foreground">&bull; {company.contacts?.length || 0} Contacts</p>
+              <p className="text-muted-foreground text-sm">&bull; {company.contacts?.length || 0} Contacts</p>
             </div>
         </div>
          <div className="flex items-center gap-2">
@@ -174,7 +174,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Details</CardTitle></CardHeader>
+             <CardHeader><CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle></CardHeader>
              <CardContent className="space-y-4">
                 {company.companyDescription && <div className="text-sm border-l-4 border-primary pl-4 py-2 bg-secondary/50 rounded-r-md">{company.companyDescription}</div>}
                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">

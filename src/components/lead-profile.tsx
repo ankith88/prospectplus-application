@@ -28,6 +28,7 @@ import {
   Phone,
   Search,
   SkipForward,
+  MapPin,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -107,7 +108,7 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
-  const [isImprovingScript, setIsImprovingScript] = useState(false);
+  const [isImprovedScript, setIsImprovingScript] = useState(false);
   const [isProspecting, setIsProspecting] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
