@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -227,7 +226,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           {linkedVisitNote && (
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {linkedVisitNote.outcome && (

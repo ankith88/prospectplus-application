@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -8,37 +7,34 @@ import {
   Calendar as CalendarIcon,
   Clipboard,
   Edit,
-  Globe,
   Link as LinkIcon,
-  Mail,
-  Briefcase,
-  MapPin,
-  Info,
-  Search,
   PhoneCall,
   ListTodo,
   Route,
-  Clock,
-  SkipForward,
   History,
   XCircle,
   Move,
   Sparkles,
   Users,
-  Phone,
   PlusCircle,
   ClipboardEdit,
   Trash2,
   CheckSquare,
   Star,
+  Info,
+  TrendingUp,
+  Briefcase,
+  Mail,
+  Phone,
+  Search,
+  SkipForward,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { deleteContactFromLead, logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, updateLeadSalesRep, logCallActivity, getCompaniesFromFirebase, bulkUpdateLeadDialerRep, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import {
   Table,
@@ -106,7 +102,7 @@ interface LeadProfileProps {
 
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
-    return [address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
+    return [address.address1, address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
 }
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
@@ -218,11 +214,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!text) return;
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: `${fieldName} copied.` });
-  };
-
-  const fetchData = async () => {
-      const updatedLead = await getLeadFromFirebase(lead.id, true);
-      if (updatedLead) setLead(updatedLead);
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -615,6 +606,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
+    <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
+    <ScheduleAppointmentDialog lead={lead} isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} />
     </>
   )
 }
