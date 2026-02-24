@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
+import { Badge } from '@/components/ui/badge';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
@@ -250,7 +251,6 @@ export default function FieldActivityReportPage() {
         return sum + allAppointments.filter(appt => appt.leadId === leadId && appt.appointmentStatus === 'Completed').length;
     }, 0);
 
-    // --- Rep Level Outcome Efficiency ---
     const repOutcomeEfficiency = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
@@ -275,7 +275,6 @@ export default function FieldActivityReportPage() {
         };
     }).filter(Boolean);
 
-    // --- Converted Lead Conversion Ratios ---
     const totalConverted = convertedNotes.length;
     const conversionEfficiency = {
         won: totalConverted > 0 ? (convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length / totalConverted) * 100 : 0,
@@ -431,14 +430,14 @@ export default function FieldActivityReportPage() {
                         <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
                             <div>
                                 <p className="text-sm font-medium text-blue-800">Qualified Rate</p>
-                                <p className="text-xs text-blue-600">Converted Leads -> Qualified</p>
+                                <p className="text-xs text-green-600">Converted Leads -> Qualified</p>
                             </div>
                             <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.toFixed(1)}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
                             <div>
                                 <p className="text-sm font-medium text-amber-800">Quote Rate</p>
-                                <p className="text-xs text-amber-600">Converted Leads -> Prospect Opportunity</p>
+                                <p className="text-xs text-green-600">Converted Leads -> Prospect Opportunity</p>
                             </div>
                             <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.toFixed(1)}%</span>
                         </div>
@@ -451,7 +450,7 @@ export default function FieldActivityReportPage() {
                     <CardTitle className="flex items-center gap-2">
                         <Target className="h-5 w-5 text-primary" />
                         Rep Outcome Efficiency (%)
-                    </CardTitle>
+                    </Target>
                     <CardDescription>Outcome distribution per individual Field Sales Rep.</CardDescription>
                 </CardHeader>
                 <CardContent>
