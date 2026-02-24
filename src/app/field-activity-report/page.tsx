@@ -191,11 +191,57 @@ export default function FieldActivityReportPage() {
         };
     }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
+    const performanceStats = allFieldSalesUsers.map(user => {
+        const name = user.displayName!;
+        const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
+        const convertedNotes = userNotes.filter(n => n.status === 'Converted' && n.leadId);
+        
+        let apptSuccessCount = 0;
+        let outboundWinsCount = 0;
+
+        convertedNotes.forEach(note => {
+            const lead = leadsMap.get(note.leadId!);
+            if (!lead) return;
+
+            if (lead.status === 'Won') {
+                outboundWinsCount++;
+            }
+
+            const hasCompletedAppt = allAppointments.some(appt => 
+                appt.leadId === lead.id && appt.appointmentStatus === 'Completed'
+            );
+            if (hasCompletedAppt) {
+                apptSuccessCount++;
+            }
+        });
+
+        return {
+            name,
+            apptSuccess: apptSuccessCount,
+            outboundWins: outboundWinsCount,
+            commission: (apptSuccessCount + outboundWinsCount) * 50
+        };
+    }).filter(r => r.apptSuccess > 0 || r.outboundWins > 0);
+
+    const appointmentSuccessByRep = performanceStats
+        .map(r => ({ name: r.name, count: r.apptSuccess }))
+        .filter(r => r.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+    const outboundWinsByRep = performanceStats
+        .map(r => ({ name: r.name, count: r.outboundWins }))
+        .filter(r => r.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+    const commissionEarningsByRep = performanceStats
+        .map(r => ({ name: r.name, amount: r.commission }))
+        .filter(r => r.amount > 0)
+        .sort((a, b) => b.amount - a.amount);
+
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
     const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length;
 
-    // Status of Converted Leads (from screenshot)
     const convertedLeadStatusDist = convertedNotes.reduce((acc, note) => {
         const lead = leadsMap.get(note.leadId!);
         const status = lead?.status || 'Unknown';
@@ -205,7 +251,6 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
-    // Appointment Outcomes (Sourced Leads)
     const convertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
     const sourcedAppts = allAppointments.filter(a => convertedLeadIds.has(a.leadId));
     const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
@@ -228,6 +273,9 @@ export default function FieldActivityReportPage() {
       repOutcomeEfficiency,
       convertedLeadStatusDist,
       sourcedApptOutcomeDist,
+      appointmentSuccessByRep,
+      outboundWinsByRep,
+      commissionEarningsByRep,
       conversionEfficiency: {
           total: convertedNotes.length,
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio },
@@ -329,6 +377,65 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
               <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                      <Trophy className="h-5 w-5 text-amber-500" /> Appointment Success
+                  </CardTitle>
+                  <CardDescription>Visits leading to 'Completed' appointments.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.appointmentSuccessByRep.length > 0 ? stats.appointmentSuccessByRep.map(r => (
+                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
+                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                      <Star className="h-5 w-5 text-green-500" /> Outbound Wins
+                  </CardTitle>
+                  <CardDescription>Visits converted to Outbound 'Signed' customers.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.outboundWinsByRep.length > 0 ? stats.outboundWinsByRep.map(r => (
+                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
+                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                      <DollarSign className="h-5 w-5 text-orange-500" /> Commission Earnings
+                  </CardTitle>
+                  <CardDescription>Total commission value by user.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Earnings</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.commissionEarningsByRep.length > 0 ? stats.commissionEarningsByRep.map(r => (
+                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold text-orange-600">${r.amount}</TableCell></TableRow>
+                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </CardContent>
+          </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card>
+              <CardHeader>
                   <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" /> Sourced Lead Efficiency</CardTitle>
                   <CardDescription>Ratios of converted leads reaching key statuses.</CardDescription>
               </CardHeader>
@@ -378,7 +485,10 @@ export default function FieldActivityReportPage() {
                                                                   <TooltipTrigger asChild>
                                                                       <div style={{ width: `${o.percentage}%`, backgroundColor: COLORS[idx % COLORS.length] }} className="h-full transition-all hover:brightness-110 cursor-pointer" />
                                                                   </TooltipTrigger>
-                                                                  <TooltipContent className="text-xs"><p className="font-bold">{o.type}</p><p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p></TooltipContent>
+                                                                  <TooltipContent className="text-xs bg-popover text-popover-foreground border shadow-md">
+                                                                      <p className="font-bold">{o.type}</p>
+                                                                      <p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p>
+                                                                  </TooltipContent>
                                                               </UITooltip>
                                                           </TooltipProvider>
                                                       ))}
