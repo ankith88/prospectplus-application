@@ -1,3 +1,4 @@
+
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -83,7 +84,7 @@ import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
-import { format } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { AddressAutocomplete } from './address-autocomplete'
 import { cn } from '@/lib/utils'
@@ -430,7 +431,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
-    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const apptBtn = <Button variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIconLucide className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
     const callBtn = <Button variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
     const processBtn = <Button onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
     const noteBtn = <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
@@ -445,6 +446,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
   const fullAddressStr = lead.address ? formatAddress(lead.address) : 'No address available';
+
+  const entryDate = lead.dateLeadEntered ? parseISO(lead.dateLeadEntered) : null;
 
   return (
     <>
@@ -524,6 +527,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div className="space-y-1">
                         <p className="text-muted-foreground">Franchisee</p>
                         <p className="font-medium">{lead.franchisee || 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Date Entered</p>
+                        <p className="font-medium">{entryDate && isValid(entryDate) ? format(entryDate, 'PP') : 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Campaign</p>
+                        <p className="font-medium">{lead.campaign || 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground">Source</p>
+                        <p className="font-medium">{lead.customerSource || 'N/A'}</p>
                     </div>
                     <div className="space-y-1"><p className="text-muted-foreground">Website</p>{lead.websiteUrl ? <a href={lead.websiteUrl} target="_blank" className="text-primary hover:underline flex items-center gap-1">{lead.websiteUrl}<LinkIcon className="w-3" /></a> : 'N/A'}</div>
                     <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{lead.industryCategory || 'N/A'}</p></div>

@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -5,7 +6,7 @@ import {
   ArrowLeft,
   Building,
   Building2,
-  Calendar,
+  Calendar as CalendarIcon,
   Clipboard,
   Globe,
   Hash,
@@ -52,7 +53,7 @@ import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { format } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 
 interface CompanyProfileProps {
@@ -150,6 +151,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   if (!user) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
   const fullAddressStr = formatAddress(company.address);
+  const entryDate = company.dateLeadEntered ? parseISO(company.dateLeadEntered) : null;
 
   return (
     <>
@@ -214,6 +216,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <p className="text-muted-foreground">Franchisee</p>
                     <p className="font-medium">{company.franchisee || 'N/A'}</p>
                  </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Date Entered</p>
+                    <p className="font-medium">{entryDate && isValid(entryDate) ? format(entryDate, 'PP') : 'N/A'}</p>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Campaign</p>
+                    <p className="font-medium">{company.campaign || 'N/A'}</p>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-muted-foreground">Source</p>
+                    <p className="font-medium">{company.customerSource || 'N/A'}</p>
+                 </div>
                  <div className="space-y-1"><p className="text-muted-foreground">Website</p>{company.websiteUrl ? <a href={company.websiteUrl} target="_blank" className="text-primary hover:underline">{company.websiteUrl}</a> : 'N/A'}</div>
                  <div className="space-y-1"><p className="text-muted-foreground">Industry</p><p className="font-medium">{company.industryCategory ?? 'N/A'}</p></div>
                  <div className="space-y-1"><p className="text-muted-foreground">Sales Rep</p><p className="font-medium">{company.salesRepAssigned ?? 'N/A'}</p></div>
@@ -235,7 +249,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <Calendar className="h-4 w-4 text-primary" />
+                            <CalendarIcon className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
