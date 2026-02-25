@@ -61,12 +61,13 @@ export default function ProspectingAreasPage() {
   const [allMapItems, setAllMapItems] = useState<Lead[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [nearbyMapItems, setNearbyMapItems] = useState<(Lead & { distance: number })[]>([]);
+  const [nearbyVisitNotes, setNearbyVisitNotes] = useState<(VisitNote & { distance: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState<SavedRoute | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
-  const [selectedItem, setSelectedItem] = useState<Lead | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
 
@@ -158,6 +159,7 @@ export default function ProspectingAreasPage() {
   useEffect(() => {
     if (!selectedArea || !map || !window.google) {
         setNearbyMapItems([]);
+        setNearbyVisitNotes([]);
         return;
     }
     
@@ -243,11 +245,29 @@ export default function ProspectingAreasPage() {
         
         nearbyWithDistance.sort((a, b) => a.distance - b.distance);
         setNearbyMapItems(nearbyWithDistance);
+
+        const notesNearby = allVisitNotes
+            .map(note => {
+                const lat = note.address?.lat;
+                const lng = note.address?.lng;
+                if (!lat || !lng) return null;
+                const noteLatLng = new window.google.maps.LatLng(lat, lng);
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, noteLatLng);
+                if (distance <= 5000) {
+                    return { ...note, distance };
+                }
+                return null;
+            })
+            .filter((n): n is VisitNote & { distance: number } => n !== null);
+        
+        notesNearby.sort((a, b) => a.distance - b.distance);
+        setNearbyVisitNotes(notesNearby);
     } else {
         setNearbyMapItems([]);
+        setNearbyVisitNotes([]);
     }
 
-  }, [selectedArea, map, allMapItems]);
+  }, [selectedArea, map, allMapItems, allVisitNotes]);
 
   const filteredNearbyItems = useMemo(() => {
     let items = nearbyMapItems;
@@ -260,15 +280,24 @@ export default function ProspectingAreasPage() {
   }, [nearbyMapItems, searchNearbyQuery]);
 
   const visitedItemsInArea = useMemo(() => {
-    const visitNotesMap = new Map(allVisitNotes.map(note => [note.id, note]));
-    return filteredNearbyItems
-        .filter(item => !!item.visitNoteID && visitNotesMap.has(item.visitNoteID))
-        .map(item => ({
-            ...item,
-            visitNote: visitNotesMap.get(item.visitNoteID!)
-        }))
-        .sort((a, b) => new Date(b.visitNote!.createdAt).getTime() - new Date(a.visitNote!.createdAt).getTime());
-  }, [filteredNearbyItems, allVisitNotes]);
+    let items = nearbyVisitNotes;
+    if (searchNearbyQuery) {
+      items = items.filter(note =>
+        (note.companyName || '').toLowerCase().includes(searchNearbyQuery.toLowerCase())
+      );
+    }
+    
+    return items.map(note => {
+        const lead = note.leadId ? allMapItems.find(l => l.id === note.leadId) : null;
+        return {
+            ...note,
+            leadStatus: lead?.status || 'New',
+            latitude: note.address?.lat,
+            longitude: note.address?.lng,
+            companyName: note.companyName || 'Unknown Company',
+        };
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [nearbyVisitNotes, searchNearbyQuery, allMapItems]);
 
   const signedCustomersInArea = useMemo(() => {
     return filteredNearbyItems.filter(item => item.status === 'Won');
@@ -411,14 +440,23 @@ export default function ProspectingAreasPage() {
                                 position={{ lat, lng }}
                                 title={item.companyName}
                                 icon={{ url: iconUrl }}
-                                onClick={() => setSelectedItem(item)}
+                                onClick={() => setSelectedItem({
+                                    id: item.leadId || item.id,
+                                    companyName: item.companyName,
+                                    status: item.leadStatus as any,
+                                    address: item.address,
+                                    latitude: item.latitude,
+                                    longitude: item.longitude,
+                                    isCompany: item.leadStatus === 'Won',
+                                    visitNoteID: item.id
+                                })}
                             />
                         )
                     })}
 
                     {/* Show Signed Customers (Green) */}
                     {signedCustomersInArea.map(item => {
-                        if (visitedItemsInArea.some(v => v.id === item.id)) return null;
+                        if (visitedItemsInArea.some(v => v.leadId === item.id)) return null;
                         const lat = Number(item.latitude);
                         const lng = Number(item.longitude);
                         if (isNaN(lat) || isNaN(lng)) return null;
@@ -442,11 +480,15 @@ export default function ProspectingAreasPage() {
                             <div className="p-2 max-w-xs space-y-2">
                                 <h3 className="font-bold text-lg">{selectedItem.companyName}</h3>
                                 <div className="flex items-center gap-2">
-                                    <LeadStatusBadge status={selectedItem.status} />
-                                    {selectedItem.visitNoteID && <Badge variant="secondary" className="bg-orange-100 text-orange-800">Visited</Badge>}
+                                    <LeadStatusBadge status={selectedItem.status || selectedItem.leadStatus} />
+                                    {(selectedItem.visitNoteID || selectedItem.id?.startsWith('vn_')) && <Badge variant="secondary" className="bg-orange-100 text-orange-800">Visited</Badge>}
                                 </div>
                                 <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedItem.address as Address)}</p>
-                                <Button size="sm" onClick={() => window.open(selectedItem.status === 'Won' ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`, '_blank')}>
+                                <Button 
+                                    size="sm" 
+                                    onClick={() => window.open(selectedItem.status === 'Won' ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`, '_blank')}
+                                    disabled={!allMapItems.some(l => l.id === selectedItem.id)}
+                                >
                                     <ExternalLink className="mr-2 h-4 w-4" /> View Profile
                                 </Button>
                             </div>
@@ -519,14 +561,14 @@ export default function ProspectingAreasPage() {
                             <History className="h-5 w-5 text-orange-500" />
                             <CardTitle>Recent Visits in Area ({visitedItemsInArea.length})</CardTitle>
                         </div>
-                        <CardDescription>History of field sales activity within a 5km radius of the area center.</CardDescription>
+                        <CardDescription>History of all field sales activity within a 5km radius of the area center.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="max-h-96 overflow-y-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Lead Name</TableHead>
+                                        <TableHead>Company Name</TableHead>
                                         <TableHead>Visited When</TableHead>
                                         <TableHead>Visited By</TableHead>
                                         <TableHead>Lead Status</TableHead>
@@ -538,16 +580,20 @@ export default function ProspectingAreasPage() {
                                         visitedItemsInArea.map(item => (
                                             <TableRow key={`visited-${item.id}`}>
                                                 <TableCell className="font-medium">
-                                                    <Button asChild variant="link" className="p-0 h-auto">
-                                                        <Link href={item.status === 'Won' ? `/companies/${item.id}` : `/leads/${item.id}`} target="_blank">
-                                                            {item.companyName}
-                                                        </Link>
-                                                    </Button>
+                                                    {item.leadId ? (
+                                                        <Button asChild variant="link" className="p-0 h-auto">
+                                                            <Link href={item.leadStatus === 'Won' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
+                                                                {item.companyName}
+                                                            </Link>
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="font-medium">{item.companyName}</span>
+                                                    )}
                                                 </TableCell>
-                                                <TableCell>{format(new Date(item.visitNote!.createdAt), 'PPpp')}</TableCell>
-                                                <TableCell>{item.visitNote!.capturedBy}</TableCell>
-                                                <TableCell><LeadStatusBadge status={item.status} /></TableCell>
-                                                <TableCell>{item.visitNote!.outcome?.type || 'N/A'}</TableCell>
+                                                <TableCell>{format(new Date(item.createdAt), 'PPpp')}</TableCell>
+                                                <TableCell>{item.capturedBy}</TableCell>
+                                                <TableCell><LeadStatusBadge status={item.leadStatus as any} /></TableCell>
+                                                <TableCell>{item.outcome?.type || 'N/A'}</TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
