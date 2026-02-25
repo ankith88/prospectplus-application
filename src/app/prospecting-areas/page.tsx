@@ -108,8 +108,8 @@ export default function ProspectingAreasPage() {
           }
       });
 
-      setProspectingAreas(areas);
       setAllMapItems(Array.from(deduplicatedMap.values()));
+      setProspectingAreas(areas);
       setAllVisitNotes(visitNotes);
     } catch (error) {
       console.error("Failed to fetch prospecting areas:", error);
@@ -300,7 +300,7 @@ export default function ProspectingAreasPage() {
   }, [nearbyVisitNotes, searchNearbyQuery, allMapItems]);
 
   const signedCustomersInArea = useMemo(() => {
-    return filteredNearbyItems.filter(item => item.status === 'Won');
+    return filteredNearbyItems.filter(item => item.status === 'Won' || item.status === 'Lost Customer');
   }, [filteredNearbyItems]);
 
 
@@ -454,7 +454,7 @@ export default function ProspectingAreasPage() {
                         )
                     })}
 
-                    {/* Show Signed Customers (Green) */}
+                    {/* Show Signed Customers (Green/Red) */}
                     {signedCustomersInArea.map(item => {
                         if (visitedItemsInArea.some(v => v.leadId === item.id)) return null;
                         const lat = Number(item.latitude);
@@ -466,7 +466,7 @@ export default function ProspectingAreasPage() {
                                 key={`signed-customer-${item.id}`}
                                 position={{ lat, lng }}
                                 title={item.companyName}
-                                icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
+                                icon={{ url: item.status === 'Lost Customer' ? "http://maps.google.com/mapfiles/ms/icons/red-dot.png" : "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
                                 onClick={() => setSelectedItem(item)}
                             />
                         )
@@ -582,7 +582,7 @@ export default function ProspectingAreasPage() {
                                                 <TableCell className="font-medium">
                                                     {item.leadId ? (
                                                         <Button asChild variant="link" className="p-0 h-auto">
-                                                            <Link href={item.leadStatus === 'Won' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
+                                                            <Link href={item.leadStatus === 'Won' || item.leadStatus === 'Lost Customer' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
                                                                 {item.companyName}
                                                             </Link>
                                                         </Button>

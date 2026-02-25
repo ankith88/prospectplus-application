@@ -74,6 +74,7 @@ function getPinIcon(status: LeadStatus, isSelected: boolean, isHovered: boolean)
         case 'Won': return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png';
         case 'Lost':
         case 'Unqualified':
+        case 'Lost Customer':
             return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png';
         case 'In Progress':
         case 'Contacted':
@@ -683,7 +684,7 @@ export default function LeadsMapClient() {
 
     const uniqueStates: Option[] = useMemo(() => {
         const states = new Set(allMapData.map(lead => lead.address?.state).filter(Boolean));
-        return Array.from(states as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+        return Array.from(states as string[]).map(s => ({ value: s, label: s }));
     }, [allMapData]);
 
     const uniqueCampaigns: Option[] = useMemo(() => {
@@ -724,7 +725,7 @@ export default function LeadsMapClient() {
           </div>
           <div className="flex items-center gap-2">
             <img src="http://maps.google.com/mapfiles/ms/icons/red-dot.png" alt="Lead (Lost/Unqualified)" className="h-4 w-4" />
-            <span>Lead (Lost/Unqualified)</span>
+            <span>Lost / Unqualified / Lost Customer</span>
           </div>
           <div className="flex items-center gap-2">
             <img src="http://maps.google.com/mapfiles/ms/icons/purple-dot.png" alt="Selected for Route" className="h-4 w-4" />

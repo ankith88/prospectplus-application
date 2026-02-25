@@ -210,6 +210,7 @@ export default function SignedCustomersPage() {
   const filteredCompanies = useMemo(() => {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
+        if (item.status === 'Lost Customer') return false;
         
         const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
@@ -794,7 +795,8 @@ export default function SignedCustomersPage() {
               longitude: newLeadData.address.lng,
               dialerAssigned: undefined,
               customerPhone: newLeadData.contact.phone,
-              franchisee: newLeadData.franchisee
+              franchisee: newLeadData.franchisee,
+              isCompany: false,
             };
             setAllMapData(prev => [...prev, newMapLead]);
             setProspects(prev => prev.map(p => p.place.place_id === placeId
