@@ -119,6 +119,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
+  const [dialogProcessMode, setDialogProcessMode] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
   const [sessionLeads, setSessionLeads] = useState<string[]>([]);
@@ -385,8 +386,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenu>
     );
     const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><Calendar className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
-    const callBtn = <Button key="call" variant={isFieldSales ? "secondary" : "outline"} onClick={() => setShowPostCallDialog(true)}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</Button>;
-    const processBtn = <Button key="process" onClick={() => setShowPostCallDialog(true)}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</Button>;
+    
+    const callBtn = (
+        <Button 
+            key="call" 
+            variant={isFieldSales ? "secondary" : "outline"} 
+            onClick={() => {
+                setDialogProcessMode(false);
+                setShowPostCallDialog(true);
+            }}
+        >
+            <PhoneCall className="mr-2 h-4 w-4" />
+            {isFieldSales ? 'Log Outcome' : 'Log a Call'}
+        </Button>
+    );
+
+    const processBtn = (
+        <Button 
+            key="process" 
+            onClick={() => {
+                setDialogProcessMode(true);
+                setShowPostCallDialog(true);
+            }}
+        >
+            <Briefcase className="mr-2 h-4 w-4" />
+            Process Field Lead
+        </Button>
+    );
+
     const noteBtn = <Button key="note" variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
     const moveBtn = <Button key="move" variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
 
@@ -409,7 +436,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOutcomeLogged={handleCallLogged}
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
-        processMode={userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin'}
+        processMode={dialogProcessMode}
     />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
