@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -59,7 +58,7 @@ import { calculateScoreAndRouting } from '@/lib/discovery-scoring';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, startOfToday } from 'date-fns';
 
 
 const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/field-discovery-step'), {
@@ -237,7 +236,7 @@ const MandatoryFieldsForOutcome = () => {
                                     mode="single" 
                                     selected={field.value} 
                                     onSelect={field.onChange} 
-                                    disabled={(date) => date < new Date()} 
+                                    disabled={(date) => date < startOfToday()} 
                                     initialFocus 
                                 />
                             </PopoverContent>
