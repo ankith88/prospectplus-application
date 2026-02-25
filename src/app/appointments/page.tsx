@@ -14,15 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Appointment, Lead, LeadStatus, AppointmentStatus, DiscoveryData } from '@/lib/types'
+import type { Appointment, Lead, LeadStatus, AppointmentStatus, DiscoveryData, VisitNote } from '@/lib/types'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route } from 'lucide-react'
+import { Calendar, Clock, Filter, SlidersHorizontal, User, X, Briefcase, Download, ArrowUpDown, Route, ClipboardCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { getAllAppointments, getLeadsFromFirebase } from '@/services/firebase'
+import { getAllAppointments, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -36,10 +36,21 @@ import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 
-type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData; };
-type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime' | 'discoveryScore';
+type AppointmentWithLead = Appointment & { 
+  leadId: string; 
+  leadName: string; 
+  dialerAssigned?: string; 
+  leadStatus: LeadStatus; 
+  discoveryData?: DiscoveryData;
+  visitNoteID?: string;
+  visitNoteCapturedBy?: string;
+  visitNoteCreatedAt?: string;
+};
+
+type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime' | 'discoveryScore' | 'visitNoteCreatedAt';
 
 
 export default function AllAppointmentsPage() {
@@ -55,6 +66,9 @@ export default function AllAppointmentsPage() {
     leadName: '',
     status: [] as string[],
     appointmentStatus: [] as string[],
+    hasVisitNote: 'all' as 'all' | 'yes' | 'no',
+    visitNoteCapturedBy: [] as string[],
+    visitNoteDate: undefined as DateRange | undefined,
   });
 
   const router = useRouter();
@@ -73,11 +87,28 @@ export default function AllAppointmentsPage() {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const [fetchedAppointments, fetchedLeads] = await Promise.all([
+      const [fetchedAppointments, fetchedLeads, fetchedVisitNotes] = await Promise.all([
         getAllAppointments(),
-        getLeadsFromFirebase({ summary: true })
+        getLeadsFromFirebase({ summary: true }),
+        getVisitNotes()
       ]);
-      setAllAppointments(fetchedAppointments);
+
+      const visitNotesMap = new Map(fetchedVisitNotes.map(n => [n.id, n]));
+      const leadsMap = new Map(fetchedLeads.map(l => [l.id, l]));
+
+      const enrichedAppointments = fetchedAppointments.map(appt => {
+        const lead = leadsMap.get(appt.leadId);
+        const visitNote = lead?.visitNoteID ? visitNotesMap.get(lead.visitNoteID) : null;
+
+        return {
+          ...appt,
+          visitNoteID: lead?.visitNoteID,
+          visitNoteCapturedBy: visitNote?.capturedBy,
+          visitNoteCreatedAt: visitNote?.createdAt,
+        } as AppointmentWithLead;
+      });
+
+      setAllAppointments(enrichedAppointments);
       setAllLeads(fetchedLeads);
     } catch (error) {
       console.error("Failed to fetch appointments:", error);
@@ -103,7 +134,18 @@ export default function AllAppointmentsPage() {
   };
   
   const clearFilters = () => {
-    setFilters({ user: [], leadAssignedTo: [], date: undefined, createdDate: undefined, leadName: '', status: [], appointmentStatus: [] });
+    setFilters({ 
+      user: [], 
+      leadAssignedTo: [], 
+      date: undefined, 
+      createdDate: undefined, 
+      leadName: '', 
+      status: [], 
+      appointmentStatus: [],
+      hasVisitNote: 'all',
+      visitNoteCapturedBy: [],
+      visitNoteDate: undefined,
+    });
   };
   
   const parseDateString = (dateStr: string | undefined): Date | null => {
@@ -183,7 +225,24 @@ export default function AllAppointmentsPage() {
         
         const appointmentStatusMatch = filters.appointmentStatus.length === 0 || filters.appointmentStatus.includes(appointment.appointmentStatus || 'Pending');
 
-        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch && appointmentStatusMatch;
+        // Visit Note Filters
+        const hasNoteMatch = filters.hasVisitNote === 'all' || 
+                            (filters.hasVisitNote === 'yes' && !!appointment.visitNoteID) ||
+                            (filters.hasVisitNote === 'no' && !appointment.visitNoteID);
+        
+        const noteAuthorMatch = filters.visitNoteCapturedBy.length === 0 || (appointment.visitNoteCapturedBy && filters.visitNoteCapturedBy.includes(appointment.visitNoteCapturedBy));
+
+        let noteDateMatch = true;
+        if (filters.visitNoteDate?.from && appointment.visitNoteCreatedAt) {
+            const noteDate = new Date(appointment.visitNoteCreatedAt);
+            const fromDate = startOfDay(filters.visitNoteDate.from);
+            const toDate = filters.visitNoteDate.to ? endOfDay(filters.visitNoteDate.to) : endOfDay(filters.visitNoteDate.from);
+            noteDateMatch = noteDate >= fromDate && noteDate <= toDate;
+        } else if (filters.visitNoteDate?.from) {
+            noteDateMatch = false;
+        }
+
+        return finalAppointmentUserMatch && finalLeadUserMatch && dateMatch && createdDateMatch && leadNameMatch && statusMatch && appointmentStatusMatch && hasNoteMatch && noteAuthorMatch && noteDateMatch;
     });
   }, [allAppointments, filters, userProfile, allLeads]);
   
@@ -196,10 +255,9 @@ export default function AllAppointmentsPage() {
         if (sortConfig.key === 'appointmentDate') {
             aValue = parseDateString(a.appointmentDate)?.getTime() || 0;
             bValue = parseDateString(b.appointmentDate)?.getTime() || 0;
-        } else if (sortConfig.key === 'duedate' || sortConfig.key === 'starttime') {
-            // Ensure we compare numeric timestamps for dates
-            const dateA = a[sortConfig.key] ? new Date(a[sortConfig.key]) : null;
-            const dateB = b[sortConfig.key] ? new Date(b[sortConfig.key]) : null;
+        } else if (sortConfig.key === 'duedate' || sortConfig.key === 'starttime' || sortConfig.key === 'visitNoteCreatedAt') {
+            const dateA = a[sortConfig.key] ? new Date(a[sortConfig.key] as string) : null;
+            const dateB = b[sortConfig.key] ? new Date(b[sortConfig.key] as string) : null;
             aValue = dateA && !isNaN(dateA.getTime()) ? dateA.getTime() : 0;
             bValue = dateB && !isNaN(dateB.getTime()) ? dateB.getTime() : 0;
         } else if (sortConfig.key === 'appointmentStatus') {
@@ -250,6 +308,11 @@ export default function AllAppointmentsPage() {
       return Array.from(users as string[]).map(u => ({ value: u, label: u }));
   }, [allAppointments]);
 
+  const allNoteAuthors = useMemo(() => {
+      const authors = new Set(allAppointments.map(c => c.visitNoteCapturedBy).filter(Boolean));
+      return Array.from(authors as string[]).map(a => ({ value: a, label: a }));
+  }, [allAppointments]);
+
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
         return '';
@@ -262,7 +325,7 @@ export default function AllAppointmentsPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'Lead Status', 'Appointment Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time'];
+    const headers = ['Lead Name', 'Lead Status', 'Appointment Status', 'Date Created', 'Assigned To (Lead)', 'Assigned To (Appointment)', 'Date', 'Time', 'Sourced from Field', 'Captured By', 'Captured Date'];
     const rows = sortedAppointments.map(appt => {
         const createdDate = parseDateString(appt.appointmentDate);
         return [
@@ -274,6 +337,9 @@ export default function AllAppointmentsPage() {
             escapeCsvCell(appt.assignedTo || 'Unassigned'),
             escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
             escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
+            escapeCsvCell(!!appt.visitNoteID ? 'Yes' : 'No'),
+            escapeCsvCell(appt.visitNoteCapturedBy || 'N/A'),
+            escapeCsvCell(appt.visitNoteCreatedAt ? new Date(appt.visitNoteCreatedAt).toLocaleDateString() : 'N/A'),
         ]
     });
 
@@ -297,7 +363,7 @@ export default function AllAppointmentsPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== '') || (typeof val === 'object' && val !== undefined));
+  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val !== 'all' && val !== '') || (typeof val === 'object' && val !== undefined));
   
   const leadStatusOptions: Option[] = (['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Demo'] as LeadStatus[]).map(s => ({ value: s, label: s }));
   const appointmentStatusOptions: Option[] = (['Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'] as (AppointmentStatus | 'Pending')[]).map(s => ({ value: s, label: s }));
@@ -454,6 +520,69 @@ export default function AllAppointmentsPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
+
+                    {/* Visit Note Filtering UI */}
+                    <div className="space-y-2">
+                        <Label htmlFor="has-visit-note">Sourced from Field?</Label>
+                        <Select value={filters.hasVisitNote} onValueChange={(value) => handleFilterChange('hasVisitNote', value)}>
+                            <SelectTrigger id="has-visit-note">
+                                <SelectValue placeholder="All" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="yes">Yes (Linked Visit Note)</SelectItem>
+                                <SelectItem value="no">No (Outbound Only)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {(filters.hasVisitNote === 'all' || filters.hasVisitNote === 'yes') && (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="visitNoteCapturedBy">Captured By (Visit)</Label>
+                                <MultiSelectCombobox
+                                    options={allNoteAuthors}
+                                    selected={filters.visitNoteCapturedBy}
+                                    onSelectedChange={(selected) => handleFilterChange('visitNoteCapturedBy', selected)}
+                                    placeholder="Select field reps..."
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="visitNoteDate">Visit Capture Date</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                    <Button
+                                        id="visitNoteDate"
+                                        variant={"outline"}
+                                        className="w-full justify-start text-left font-normal"
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {filters.visitNoteDate?.from ? (
+                                        filters.visitNoteDate.to ? (
+                                            <>
+                                            {format(filters.visitNoteDate.from, "LLL dd, y")} -{" "}
+                                            {format(filters.visitNoteDate.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(filters.visitNoteDate.from, "LLL dd, y")
+                                        )
+                                        ) : (
+                                        <span>Pick a date range</span>
+                                        )}
+                                    </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <CalendarPicker
+                                            mode="range"
+                                            selected={filters.visitNoteDate}
+                                            onSelect={(date) => handleFilterChange('visitNoteDate', date)}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </>
+                    )}
+
                      {hasActiveFilters && (
                         <div className="space-y-2 col-start-1">
                             <Button variant="ghost" onClick={clearFilters}>
@@ -488,6 +617,7 @@ export default function AllAppointmentsPage() {
                   <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentStatus')} className="group -ml-4">Appointment Status{getSortIndicator('appointmentStatus')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('discoveryScore')} className="group -ml-4">Discovery Score{getSortIndicator('discoveryScore')}</Button></TableHead>
                   <TableHead>Routing Tag</TableHead>
+                  <TableHead>Sourced</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('appointmentDate')} className="group -ml-4">Date Created{getSortIndicator('appointmentDate')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Assigned To (Lead){getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('assignedTo')} className="group -ml-4">Assigned To (Appointment){getSortIndicator('assignedTo')}</Button></TableHead>
@@ -498,7 +628,7 @@ export default function AllAppointmentsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={11} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : sortedAppointments.length > 0 ? (
                   sortedAppointments.map((appointment) => {
@@ -529,6 +659,16 @@ export default function AllAppointmentsPage() {
                             {appointment.discoveryData.routingTag}
                           </Badge>
                         ) : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {appointment.visitNoteID ? (
+                            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                                <ClipboardCheck className="h-3 w-3 mr-1" />
+                                Field
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="text-muted-foreground">Outbound</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {createdDate ? (
@@ -568,7 +708,7 @@ export default function AllAppointmentsPage() {
                   )})
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                           No appointments found.
                       </TableCell>
                   </TableRow>
