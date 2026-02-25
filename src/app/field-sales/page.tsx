@@ -11,14 +11,15 @@ import {
 import { 
     getLeadsFromFirebase, 
     getAllActivities, 
-    getVisitNotes
+    getVisitNotes,
+    getAllAppointments
 } from '@/services/firebase'
-import type { Lead, Activity, VisitNote } from '@/lib/types'
+import type { Lead, Activity, VisitNote, Appointment } from '@/lib/types'
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock, AlertCircle, RefreshCw } from 'lucide-react'
+import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock, AlertCircle, RefreshCw, CalendarCheck } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
@@ -53,6 +54,7 @@ export default function DoorToDoorDashboard() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Location state
@@ -84,16 +86,18 @@ export default function DoorToDoorDashboard() {
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-        const [leads, activities, visitNotes] = await Promise.all([
+        const [leads, activities, visitNotes, appointments] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllActivities(),
-            getVisitNotes()
+            getVisitNotes(),
+            getAllAppointments()
         ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
         setAllVisitNotes(visitNotes);
+        setAllAppointments(appointments);
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
@@ -147,31 +151,35 @@ export default function DoorToDoorDashboard() {
     if (!userProfile || !userProfile.displayName) return null;
     
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const userActivitiesThisWeek = allActivities.filter(a => 
-        a.author === userProfile.displayName && new Date(a.date) >= weekStart
+    
+    // 1. Total Visits this week by this user
+    const visitsThisWeek = allVisitNotes.filter(n => 
+        n.capturedByUid === userProfile.uid && 
+        new Date(n.createdAt) >= weekStart
     );
+    const totalVisits = visitsThisWeek.length;
 
-    const checkInActivities = userActivitiesThisWeek.filter(a => a.notes?.includes('Checked in at location via map.'));
-    const totalCheckIns = new Set(checkInActivities.map(a => a.leadId)).size;
+    // 2. Converted Leads from those visits
+    const convertedThisWeek = visitsThisWeek.filter(n => n.status === 'Converted' && n.leadId);
+    const totalConverted = convertedThisWeek.length;
     
-    const checkInLeadIds = new Set(checkInActivities.map(a => a.leadId));
-    const leadsThisWeek = allLeads.filter(l => checkInLeadIds.has(l.id));
+    const convertedLeadIds = new Set(convertedThisWeek.map(n => n.leadId!));
+
+    // 3. Appointments completed for those converted leads
+    const totalCompletedAppts = allAppointments.filter(appt => 
+        convertedLeadIds.has(appt.leadId) && 
+        appt.appointmentStatus === 'Completed'
+    ).length;
     
-    const signedUpLeads = leadsThisWeek.filter(l => l.status === 'Won');
-    const trialingLeads = leadsThisWeek.filter(l => l.status === 'Trialing ShipMate');
-    
-    const totalSignups = signedUpLeads.length;
-    const totalTrials = trialingLeads.length;
-    
-    const conversionRate = totalCheckIns > 0 ? ((totalSignups + totalTrials) / totalCheckIns) * 100 : 0;
+    const visitToLeadRate = totalVisits > 0 ? (totalConverted / totalVisits) * 100 : 0;
 
     return {
-      totalCheckIns,
-      totalSignups,
-      totalTrials,
-      conversionRate: parseFloat(conversionRate.toFixed(2)),
+      totalVisits,
+      totalConverted,
+      totalCompletedAppts,
+      visitToLeadRate: parseFloat(visitToLeadRate.toFixed(2)),
     };
-  }, [allLeads, allActivities, userProfile]);
+  }, [allVisitNotes, allAppointments, userProfile]);
 
   const nearbyRecentVisits = useMemo(() => {
     if (!myLocation || allVisitNotes.length === 0) return [];
@@ -250,13 +258,13 @@ export default function DoorToDoorDashboard() {
         <Card>
             <CardHeader>
                 <CardTitle>This Week's Performance</CardTitle>
-                <CardDescription>Metrics from {startOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()} to {endOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()}.</CardDescription>
+                <CardDescription>Cohort analysis from Monday {startOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()} to Sunday {endOfWeek(new Date(), { weekStartsOn: 1 }).toLocaleDateString()}.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Check-ins" value={weeklyStats.totalCheckIns} icon={CheckSquare} />
-                <StatCard title="New Signups" value={weeklyStats.totalSignups} icon={UserPlus} />
-                <StatCard title="New Free Trials" value={weeklyStats.totalTrials} icon={TrendingUp} />
-                <StatCard title="Visit Conversion Rate" value={`${weeklyStats.conversionRate}%`} icon={Percent} />
+                <StatCard title="Visits" value={weeklyStats.totalVisits} icon={MapPin} />
+                <StatCard title="Converted Leads" value={weeklyStats.totalConverted} icon={UserPlus} />
+                <StatCard title="Completed Appts" value={weeklyStats.totalCompletedAppts} icon={CalendarCheck} />
+                <StatCard title="Conv. Rate (Visit to Lead)" value={`${weeklyStats.visitToLeadRate}%`} icon={Percent} />
             </CardContent>
         </Card>
       )}
