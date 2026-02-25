@@ -153,7 +153,7 @@ export default function FieldActivityReportPage() {
         return { ...lead, visitDate: note.createdAt, capturedBy: note.capturedBy };
     });
 
-    const visitsByOutcomeData = filteredVisitNotes.reduce((acc, note) => {
+    const callOutcomesData = filteredVisitNotes.reduce((acc, note) => {
         const type = note.outcome?.type || 'Other';
         const existing = acc.find(item => item.name === type);
         if (existing) existing.value++;
@@ -261,7 +261,6 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
-    // Converted Leads by Franchisee logic
     const convertedLeadsByFranchiseeData = Array.from(
         convertedNotes.reduce((acc, note) => {
             const lead = leadsMap.get(note.leadId!);
@@ -279,7 +278,7 @@ export default function FieldActivityReportPage() {
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: commissionEligibleLeads.length,
       commissionEligibleLeads,
-      visitsByOutcomeData,
+      callOutcomesData,
       visitsByUserData,
       repOutcomeEfficiency,
       convertedLeadStatusDist,
