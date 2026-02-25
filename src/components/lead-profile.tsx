@@ -1,4 +1,3 @@
-
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
@@ -140,7 +139,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, savedRoutes, setSavedRoutes } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
@@ -153,10 +152,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [toast]);
 
   const handleNextLead = useCallback(() => {
+    // Close dialog if it was open
+    setShowPostCallDialog(false);
+
+    // 1. Find next lead relative to current
     const currentIndex = sessionLeads.indexOf(lead.id);
+    let nextLeadId: string | null = null;
+
     if (currentIndex !== -1 && currentIndex < sessionLeads.length - 1) {
+      nextLeadId = sessionLeads[currentIndex + 1];
+    }
+
+    // 2. Filter out current lead from the list for the next session load
+    const updatedSessionLeads = sessionLeads.filter(id => id !== lead.id);
+    localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
+    setSessionLeads(updatedSessionLeads);
+
+    // 3. Navigate or end
+    if (nextLeadId) {
       setLoadingNextLead(true);
-      router.push(`/leads/${sessionLeads[currentIndex + 1]}`);
+      router.push(`/leads/${nextLeadId}`);
+    } else if (updatedSessionLeads.length > 0) {
+      // If we finished the sequence but there are still leads left (skipping etc)
+      setLoadingNextLead(true);
+      router.push(`/leads/${updatedSessionLeads[0]}`);
     } else {
       toast({ title: 'Session Complete', description: 'You have reached the end of your dialing list.' });
       handleEndSession();
@@ -190,11 +209,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
-    if (isSessionActive) {
-        const updatedSessionLeads = sessionLeads.filter(id => id !== lead?.id);
-        localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-        setSessionLeads(updatedSessionLeads);
-    }
+    // Note: We don't remove from sessionLeads here anymore because it causes state issues in handleNextLead.
+    // Cleanup happens in handleNextLead or handleEndSession.
   };
 
   const handleAiProspect = async () => {
@@ -381,7 +397,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const noteBtn = <Button key="note" variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
     const moveBtn = <Button key="move" variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
 
-    if (isAdmin) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{processBtn}{apptBtn}{signupBtn}{trialBtn}{noteBtn}{moveBtn}</div>;
+    if (isAdmin) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{processBtn}{apptBtn}{signupBtn}{trialBtn}{callBtn}{noteBtn}{moveBtn}</div>;
     if (isLeadGenAdmin) return <div className="flex flex-wrap items-center gap-2">{processBtn}{apptBtn}{noteBtn}{moveBtn}</div>;
     if (isFieldSales) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{signupBtn}{trialBtn}{callBtn}{noteBtn}{moveBtn}</div>;
     if (isDialer) return <div className="flex flex-wrap items-center gap-2">{apptBtn}{callBtn}{noteBtn}{moveBtn}</div>;
@@ -418,44 +434,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-            <h1 className="text-3xl font-bold">{lead.companyName}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <LeadStatusBadge status={lead.status} />
-              <p className="text-muted-foreground text-sm">&bull; {contacts?.length || 0} Contacts &bull; Contacted {callHistory.length} times</p>
+            <h1 className="text-3xl font-bold">{company.companyName}</h1>
+            <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
+              <LeadStatusBadge status={company.status} />
+              <p className="text-muted-foreground text-sm">&bull; {company.contacts?.length || 0} Contacts &bull; Contacted {callHistory.length} times</p>
             </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">{renderActionButtons()}</div>
+         <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleUpsell} disabled={isUpselling}>
+                {isUpselling ? <Loader /> : <TrendingUp className="mr-2 h-4 w-4" />}
+                Upsell
+            </Button>
+            <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+                <ClipboardEdit className="mr-2 h-4 w-4" />
+                Log Note
+            </Button>
+        </div>
       </header>
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader className="flex flex-row items-center justify-between pb-4 border-b">
-               <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
-               <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleAiProspect} disabled={isProspecting}><Sparkles className="mr-2 h-4 w-4" /> AI Prospect</Button>
-                    <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
-                      <DialogTrigger asChild><Button variant="outline" size="sm"><Edit className="mr-2 h-4 w-4" /> Edit</Button></DialogTrigger>
-                      <DialogContent><DialogHeader><DialogTitle>Edit Details</DialogTitle></DialogHeader><EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} /></DialogContent>
-                    </Dialog>
-               </div>
+             <CardHeader className="pb-4 border-b">
+                <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
              </CardHeader>
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
-                        <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.internalid || lead.salesRecordInternalId} copyable />
-                        <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
-                        <DetailItem icon={Calendar} label="Date Entered" value={formatDate(lead.dateLeadEntered)} />
-                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
-                        <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
+                        <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.internalid || company.salesRecordInternalId} copyable />
+                        <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
+                        <DetailItem icon={Calendar} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
+                        <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
+                        <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
                     </div>
                     <div className="space-y-8">
-                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
-                        <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
-                        <DetailItem icon={Briefcase} label="Lead Source" value={lead.campaign || lead.customerSource} />
-                        <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
+                        <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
+                        <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable leadId={company.id} />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={Briefcase} label="Lead Source" value={company.campaign || company.customerSource} />
+                        <DetailItem icon={Tag} label="Sub-Industry" value={company.industrySubCategory || '- None -'} />
                     </div>
                 </div>
              </CardContent>
@@ -481,8 +499,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Alert>
                     )}
                     <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-2xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
-                        <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
+                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
+                        <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
                     </div>
                     {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
                     
