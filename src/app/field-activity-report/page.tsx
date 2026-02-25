@@ -261,6 +261,17 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
+    // Converted Leads by Franchisee logic
+    const convertedLeadsByFranchiseeData = Array.from(
+        convertedNotes.reduce((acc, note) => {
+            const lead = leadsMap.get(note.leadId!);
+            const franchisee = lead?.franchisee || 'No Franchisee';
+            acc.set(franchisee, (acc.get(franchisee) || 0) + 1);
+            return acc;
+        }, new Map<string, number>())
+    ).map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
     return {
       totalVisits: totalVisitsCount,
       totalConverted: convertedNotes.length,
@@ -276,6 +287,7 @@ export default function FieldActivityReportPage() {
       appointmentSuccessByRep,
       outboundWinsByRep,
       commissionEarningsByRep,
+      convertedLeadsByFranchiseeData,
       conversionEfficiency: {
           total: convertedNotes.length,
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio },
@@ -528,11 +540,11 @@ export default function FieldActivityReportPage() {
                                 outerRadius={80} 
                                 paddingAngle={5} 
                                 dataKey="value"
-                                label={({ name, value }) => `${name}: ${value}`}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                               >
                                   {stats.sourcedApptOutcomeDist.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                               </Pie>
-                              <Tooltip />
+                              <Tooltip formatter={(value, name, props) => [`${value} (${(props.percent * 100).toFixed(1)}%)`, name]} />
                               <Legend />
                           </PieChart>
                       </ChartContainer>
@@ -556,7 +568,7 @@ export default function FieldActivityReportPage() {
                                 labelLine={false} 
                                 outerRadius={80} 
                                 dataKey="value"
-                                label={({ name, value }) => `${name}: ${value}`}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                               >
                                   {stats.convertedLeadStatusDist.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                               </Pie>
@@ -582,11 +594,33 @@ export default function FieldActivityReportPage() {
               <CardHeader><CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> All Visit Outcomes</CardTitle></CardHeader>
               <CardContent>
                   <ChartContainer config={{}} className="h-[300px] w-full">
-                      <PieChart><Pie data={stats.visitsByOutcomeData} cx="50%" cy="50%" labelLine={false} label={({ name, value }) => `${name}: ${value}`} outerRadius={80} dataKey="value">{stats.visitsByOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}<LabelList dataKey="value" position="inside" fill="white" /></Pie><Tooltip content={<ChartTooltipContent />} /><Legend /></PieChart>
+                      <PieChart><Pie data={stats.callOutcomesData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">{stats.callOutcomesData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip content={<ChartTooltipContent />} /><Legend /></PieChart>
                   </ChartContainer>
               </CardContent>
           </Card>
       </div>
+
+      <Card>
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" /> Converted Leads by Franchisee
+              </CardTitle>
+              <CardDescription>Volume of field visits converted to records per franchise.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <ChartContainer config={{}} className="h-[400px] w-full">
+                  <BarChart data={stats.convertedLeadsByFranchiseeData} layout="vertical" margin={{ left: 20, right: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={120} fontSize={12} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#82ca9d" name="Converted Leads">
+                          <LabelList dataKey="count" position="right" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+                      </Bar>
+                  </BarChart>
+              </ChartContainer>
+          </CardContent>
+      </Card>
 
       <Dialog open={isCommissionListOpen} onOpenChange={setIsCommissionListOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
