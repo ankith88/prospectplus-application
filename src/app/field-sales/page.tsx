@@ -8,14 +8,6 @@ import {
   CardTitle,
   CardDescription
 } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { 
     getLeadsFromFirebase, 
     getAllActivities, 
@@ -26,7 +18,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock } from 'lucide-react'
+import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock, AlertCircle, RefreshCw } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +30,7 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import type { DateRange } from 'react-day-picker'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
@@ -65,6 +58,7 @@ export default function DoorToDoorDashboard() {
   // Location state
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Proximity Filters State
   const [showProximityFilters, setShowProximityFilters] = useState(false);
@@ -108,27 +102,46 @@ export default function DoorToDoorDashboard() {
     }
   }, [toast]);
 
+  const requestLocation = useCallback(() => {
+    setIsLocating(true);
+    setLocationError(null);
+    
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser.");
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setMyLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setIsLocating(false);
+      },
+      (error) => {
+        let msg = "Could not determine your location.";
+        if (error.code === error.PERMISSION_DENIED) {
+          msg = "Location access denied. Please enable location permissions in your browser.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          msg = "Location information is unavailable.";
+        } else if (error.code === error.TIMEOUT) {
+          msg = "Location request timed out.";
+        }
+        setLocationError(msg);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  }, []);
+
   useEffect(() => {
     if (userProfile && hasAccess) {
       fetchData();
-      
-      // Get location
-      setIsLocating(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setMyLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-          setIsLocating(false);
-        },
-        (error) => {
-          console.error("Location error:", error);
-          setIsLocating(false);
-        }
-      );
+      requestLocation();
     }
-  }, [userProfile, hasAccess, fetchData]);
+  }, [userProfile, hasAccess, fetchData, requestLocation]);
   
   const weeklyStats = useMemo(() => {
     if (!userProfile || !userProfile.displayName) return null;
@@ -267,6 +280,19 @@ export default function DoorToDoorDashboard() {
             <CardDescription>Activity within a 1km radius of your current location.</CardDescription>
         </CardHeader>
         <CardContent className="pt-4 space-y-4">
+            {locationError && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Location Access Error</AlertTitle>
+                    <AlertDescription className="flex items-center justify-between gap-4">
+                        <span>{locationError}</span>
+                        <Button variant="outline" size="sm" onClick={requestLocation} className="bg-background text-foreground shrink-0">
+                            <RefreshCw className="mr-2 h-3 w-3" /> Retry
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {showProximityFilters && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/20 animate-in fade-in slide-in-from-top-2">
                     <div className="space-y-2">
