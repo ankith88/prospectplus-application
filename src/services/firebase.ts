@@ -11,6 +11,43 @@ import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 import { sendFieldSalesOutcomeToNetSuite } from './netsuite-field-sales-proxy';
 
+/**
+ * Sanitizes data retrieved from Firestore to ensure it can be passed from 
+ * Server Components/Actions to Client Components. Converts Timestamps and Dates to ISO strings.
+ */
+function sanitizeData(data: any): any {
+  if (data === null || data === undefined) return data;
+
+  // Handle Firestore Timestamp (check for structure as prototypes are often lost in server-client boundary)
+  if (typeof data === 'object' && 'seconds' in data && 'nanoseconds' in data) {
+    try {
+      const date = new Date(data.seconds * 1000 + data.nanoseconds / 1000000);
+      return date.toISOString();
+    } catch (e) {
+      return data;
+    }
+  }
+
+  // Handle JS Date
+  if (data instanceof Date) {
+    return data.toISOString();
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(sanitizeData);
+  }
+
+  if (typeof data === 'object') {
+    const sanitized: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      sanitized[key] = sanitizeData(value);
+    }
+    return sanitized;
+  }
+
+  return data;
+}
+
 async function logActivity(
   leadId: string,
   activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }
@@ -33,7 +70,7 @@ async function logActivity(
         return docRef.id;
     } catch (error) {
         console.error(`Failed to log activity for lead ${leadId}:`, error);
-        throw new Error(`Failed to log activity in Firebase: [${'error'}]`);
+        throw new Error(`Failed to log activity in Firebase`);
     }
 }
 
@@ -50,7 +87,7 @@ async function findActivityByCallId(leadId: string, callId: string): Promise<{ i
         const doc = querySnapshot.docs[0];
         return {
             id: doc.id,
-            data: doc.data() as Activity
+            data: sanitizeData(doc.data()) as Activity
         };
 
     } catch (error) {
@@ -146,7 +183,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             return null;
         }
 
-        const data = docSnapshot.data() || {};
+        const data = sanitizeData(docSnapshot.data() || {});
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -254,7 +291,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             return null;
         }
 
-        const data = docSnapshot.data() || {};
+        const data = sanitizeData(docSnapshot.data() || {});
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -370,7 +407,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
     }
 
     const leadsArray: Lead[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
+        const data = sanitizeData(doc.data() || {});
         const companyName = data.companyName || 'Unknown Company';
         
         let address: Address | undefined;
@@ -450,7 +487,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
         const companiesArray = snapshot.docs
             .map((doc): Lead | null => {
-                const data = doc.data();
+                const data = sanitizeData(doc.data() || {});
 
                 const lat = typeof data.latitude === 'string' && data.latitude.trim() !== '' ? parseFloat(data.latitude) : typeof data.latitude === 'number' ? data.latitude : NaN;
                 const lng = typeof data.longitude === 'string' && data.longitude.trim() !== '' ? parseFloat(data.longitude) : typeof data.longitude === 'number' ? data.longitude : NaN;
@@ -530,7 +567,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
 
         const leadsWithLastActivity = await Promise.all(
             snapshot.docs.map(async (doc) => {
-                const data = doc.data();
+                const data = sanitizeData(doc.data() || {});
                 const companyName = data.companyName || 'Unknown Company';
                 
                 const transformedLead: Lead = {
@@ -589,7 +626,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
         }
 
         const leads = leadsSnapshot.docs.map(doc => {
-            const data = doc.data();
+            const data = sanitizeData(doc.data() || {});
             return {
                 id: doc.id,
                 entityId: data.entityId || data.customerEntityId || '',
@@ -626,7 +663,7 @@ async function getSubCollection<T>(parentCollection: string, docId: string, subC
         const q = query(ref, orderBy(orderByField, orderDirection));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => {
-            const data = doc.data();
+            const data = sanitizeData(doc.data() || {});
             // Special handling for invoiceType
             if (subCollectionName === 'invoices' && (!data.invoiceType || data.invoiceType === '- None -')) {
                 data.invoiceType = 'Service';
@@ -659,7 +696,7 @@ async function getPagedLeadSubCollection<T>(
         }
         
         const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+        const items = snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as T);
         const newLastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
         
         return { items, lastDocId: newLastDocId };
@@ -689,7 +726,6 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         if (startDate) activityQuery = query(activityQuery, where('date', '>=', startDate));
         if (endDate) activityQuery = query(activityQuery, where('date', '<=', endDate));
         
-        // Use a conservative limit for Server Actions
         activityQuery = query(activityQuery, limit(3000));
         
         const activitySnapshot = await getDocs(activityQuery);
@@ -702,13 +738,11 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
         const leadsData: { [key: string]: Lead } = {};
         
-        // Fetch leads in batches of 30, but control parallel execution to avoid timeout
         const leadChunks: string[][] = [];
         for (let i = 0; i < leadIds.length; i += 30) {
             leadChunks.push(leadIds.slice(i, i + 30));
         }
 
-        // Process hydration in small parallel steps
         const hydrationBatchSize = 5; 
         for (let i = 0; i < leadChunks.length; i += hydrationBatchSize) {
             const batch = leadChunks.slice(i, i + hydrationBatchSize);
@@ -717,7 +751,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
                     const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
                     const leadsSnapshot = await getDocs(leadsQuery);
                     leadsSnapshot.forEach(doc => {
-                        leadsData[doc.id] = doc.data() as Lead;
+                        leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
                     });
                 } catch (e) {
                     console.error(`[getAllCallActivities] Failed to hydrate lead chunk:`, e);
@@ -726,7 +760,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         }
         
         const allCalls = callActivityDocs.map(activityDoc => {
-            const activityData = activityDoc.data() as Activity;
+            const activityData = sanitizeData(activityDoc.data()) as Activity;
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             
@@ -758,7 +792,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
         return Array.from(uniqueCallsMap.values());
     } catch (error) {
         console.error('An unexpected error occurred in getAllCallActivities:', error);
-        throw new Error('[getAllCallActivities] The database request timed out or failed. Try applying tighter filters.');
+        throw new Error('[getAllCallActivities] The database request timed out or failed.');
     }
 }
 
@@ -775,7 +809,7 @@ async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
     try {
         const notesSnapshot = await getDocs(collectionGroup(firestore, 'notes'));
         const allNotes = notesSnapshot.docs.map(doc => {
-            const noteData = doc.data() as Note;
+            const noteData = sanitizeData(doc.data()) as Note;
             const leadId = doc.ref.parent.parent!.id;
             return {
                 ...noteData,
@@ -797,7 +831,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
         
         const activitiesSnapshot = await getDocs(activitiesQuery);
         let allActivities = activitiesSnapshot.docs.map(doc => {
-            const activityData = doc.data() as Activity;
+            const activityData = sanitizeData(doc.data()) as Activity;
             const leadId = doc.ref.parent.parent!.id;
             return {
                 ...activityData,
@@ -827,7 +861,7 @@ async function getUserActivitiesForPeriod(displayName: string, startDate: string
         );
         const activitiesSnapshot = await getDocs(q);
         const userActivities = activitiesSnapshot.docs.map(doc => {
-            const activityData = doc.data() as Activity;
+            const activityData = sanitizeData(doc.data()) as Activity;
             const leadId = doc.ref.parent.parent!.id;
             return {
                 ...activityData,
@@ -860,14 +894,14 @@ async function getAllTranscripts(): Promise<Transcript[]> {
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
-                leadsData[doc.id] = doc.data() as Lead;
+                leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
             });
         });
 
         await Promise.all(chunkPromises);
 
         const allTranscripts = transcriptsSnapshot.docs.map(doc => {
-            const transcriptData = doc.data();
+            const transcriptData = sanitizeData(doc.data());
             const leadId = doc.ref.parent.parent?.id;
             if (!leadId) return null;
             const leadData = leadsData[leadId];
@@ -909,7 +943,6 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             leadChunks.push(leadIds.slice(i, i + 30));
         }
         
-        // Controlled hydration parallelism
         const hydrationBatchSize = 5;
         for (let i = 0; i < leadChunks.length; i += hydrationBatchSize) {
             const batch = leadChunks.slice(i, i + hydrationBatchSize);
@@ -918,7 +951,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
                     const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
                     const leadsSnapshot = await getDocs(leadsQuery);
                     leadsSnapshot.forEach(doc => {
-                        leadsData[doc.id] = doc.data() as Lead;
+                        leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
                     });
                 } catch (e) {
                     console.error(`[getAllAppointments] Failed to hydrate lead chunk:`, e);
@@ -927,7 +960,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
         }
 
         const allAppointments = appointmentsSnapshot.docs.map(appointmentDoc => {
-            const appointmentData = appointmentDoc.data() as Appointment;
+            const appointmentData = sanitizeData(appointmentDoc.data()) as Appointment;
             const leadId = appointmentDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const leadData = leadsData[leadId];
@@ -950,7 +983,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
         return allAppointments;
     } catch (error) {
         console.error('Failed to fetch all appointments:', error);
-        throw new Error('The database request timed out. Try applying tighter filters.');
+        throw new Error('The database request timed out or failed.');
     }
 }
 
@@ -969,13 +1002,11 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
     const docRef = await addDoc(contactsRef, newContactData);
     await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
     
-    // Update contact count
     const leadRef = doc(firestore, 'leads', leadId);
     const leadDoc = await getDoc(leadRef);
     const currentCount = leadDoc.data()?.contactCount || 0;
     await updateDoc(leadRef, { contactCount: currentCount + 1 });
     
-    console.log(`Contact added with ID: ${docRef.id} to lead ${leadId}`);
     return docRef.id;
   } catch (error) {
     console.error(`Failed to add contact to lead ${leadId}:`, error);
@@ -992,7 +1023,6 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null, calen
     });
     const notes = salesRep ? `Lead assigned to sales rep ${salesRep}` : `Lead unassigned from sales rep`;
     await logActivity(leadId, { type: 'Update', notes });
-    console.log(`Lead ${leadId} assigned to ${salesRep}`);
   } catch (error) {
     console.error(`Failed to assign lead ${leadId}:`, error);
     throw new Error('Failed to update lead in Firebase');
@@ -1007,7 +1037,6 @@ async function updateLeadDialerRep(leadId: string, dialerRep: string | null): Pr
     });
     const notes = dialerRep ? `Lead assigned to dialer ${dialerRep}` : `Lead unassigned from dialer`;
     await logActivity(leadId, { type: 'Update', notes });
-    console.log(`Lead ${leadId} assigned to dialer ${dialerRep}`);
   } catch (error) {
     console.error(`Failed to assign lead dialer ${leadId}:`, error);
     throw new Error('Failed to update lead dialer in Firebase');
@@ -1022,7 +1051,6 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
       avatarUrl: avatarUrl,
     });
     await logActivity(leadId, { type: 'Update', notes: `Lead avatar updated.` });
-    console.log(`Lead ${leadId} avatar updated.`);
   } catch (error) {
     console.error(`Failed to update avatar for lead ${leadId}:`, error);
     throw new Error('Failed to update lead avatar in Firebase');
@@ -1038,14 +1066,13 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
         if (reason) {
             updateData.statusReason = reason;
         } else {
-            updateData.statusReason = ''; // Explicitly clear reason if not provided
+            updateData.statusReason = ''; 
         }
 
         await updateDoc(leadRef, updateData);
 
         const note = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
         await logActivity(leadId, { type: 'Update', notes: note });
-        console.log(`Lead ${leadId} status updated to ${status}`);
     } catch (error) {
         console.error(`Failed to update lead status for ${leadId}:`, error);
         throw new Error('Failed to update lead status in Firebase');
@@ -1059,7 +1086,6 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
             aiScore: score,
             aiReason: reason,
         });
-        console.log(`AI score for lead ${leadId} updated to ${score}`);
     } catch (error) {
         console.error(`Failed to update AI score for lead ${leadId}:`, error);
         throw new Error('Failed to update AI score in Firebase');
@@ -1107,9 +1133,9 @@ async function logCallActivity(
         const userQuerySnapshot = await getDocs(q);
 
         if (!userQuerySnapshot.empty) {
-            const userProfile = userQuerySnapshot.docs[0].data() as UserProfile;
-            if (userProfile.role === 'Field Sales' && userProfile.linkedSalesRep) {
-                linkedSalesRep = userProfile.linkedSalesRep;
+            const userProfileData = userQuerySnapshot.docs[0].data() as UserProfile;
+            if (userProfileData.role === 'Field Sales' && userProfileData.linkedSalesRep) {
+                linkedSalesRep = userProfileData.linkedSalesRep;
             }
         }
 
@@ -1131,9 +1157,7 @@ async function logCallActivity(
             }
         }
         
-        if (!linkedSalesRep) {
-             console.warn(`[logCallActivity] Could find linkedSalesRep for lead ${leadId}. NetSuite API call will be skipped.`);
-        } else {
+        if (linkedSalesRep) {
             await sendFieldSalesOutcomeToNetSuite({
                 leadId,
                 outcome: callData.outcome as "Send Quote/Free Trial" | "Sign Up",
@@ -1186,7 +1210,7 @@ async function logCallActivity(
              notesToLog = `Outcome: No Access/Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
              updateData.customerStatus = 'New';
              returnStatus = 'New';
-        } else { // Move to Outbound
+        } else { 
             updateData.customerStatus = 'Priority Field Lead';
             notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
             returnStatus = 'Priority Field Lead';
@@ -1216,7 +1240,7 @@ async function logNoteActivity(
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = { ...noteData, syncedWithNetSuite: false };
 
-    const docRef = await addDoc(notesRef, newNoteData);
+    await addDoc(notesRef, newNoteData);
     
     await logActivity(leadId, {
         type: 'Update',
@@ -1229,14 +1253,12 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
     try {
         const transcriptsRef = collection(firestore, 'leads', leadId, 'transcripts');
         
-        // Check if a transcript with this callId already exists
         const q = query(transcriptsRef, where('callId', '==', transcriptData.callId), limit(1));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
             const existingDoc = querySnapshot.docs[0];
-            console.log(`Transcript for call ID ${transcriptData.callId} already exists. Skipping creation.`);
-            return { id: existingDoc.id, ...existingDoc.data() } as Transcript;
+            return sanitizeData({ id: existingDoc.id, ...existingDoc.data() }) as Transcript;
         }
 
         const newTranscript = {
@@ -1250,7 +1272,6 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
             notes: `Transcript added for call ID ${transcriptData.callId}`,
         });
 
-        console.log(`Transcript logged with ID: ${docRef.id} for lead ${leadId}`);
         return { ...newTranscript, id: docRef.id };
     } catch (error) {
         console.error(`Failed to log transcript for lead ${leadId}:`, error);
@@ -1264,11 +1285,10 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     const updatePayload = {
       ...contactData,
-      syncedWithNetSuite: false, // Always set to false on edit
+      syncedWithNetSuite: false, 
     };
     await updateDoc(contactRef, updatePayload);
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name || 'details'} updated.` });
-    console.log(`Contact ${contactId} updated for lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
     throw new Error('Failed to update contact in Firebase');
@@ -1279,7 +1299,6 @@ async function updateContactSendEmail(leadId: string, contactId: string): Promis
   try {
     const contactRef = doc(firestore, 'leads', leadId, 'contacts', contactId);
     await updateDoc(contactRef, { sendEmail: 'yes' });
-    console.log(`Contact ${contactId} for lead ${leadId} marked for email.`);
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for email on lead ${leadId}:`, error);
     throw new Error('Failed to update contact for email in Firebase');
@@ -1292,13 +1311,10 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
     await deleteDoc(contactRef);
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
 
-    // Update contact count
     const leadRef = doc(firestore, 'leads', leadId);
     const leadDoc = await getDoc(leadRef);
     const currentCount = leadDoc.data()?.contactCount || 0;
-    await updateDoc(leadRef, { contactCount: currentCount + 1 });
-    
-    console.log(`Contact ${contactId} deleted from lead ${leadId}`);
+    await updateDoc(leadRef, { contactCount: Math.max(0, currentCount - 1) });
   } catch (error) {
     console.error(`Failed to delete contact ${contactId} from lead ${leadId}:`, error);
     throw new Error('Failed to delete contact from Firebase');
@@ -1325,9 +1341,6 @@ async function updateLeadDetails(
         if (newLeadData.address) {
             changes.push('Address updated.');
         }
-        if (newLeadData.checkinScore !== undefined) {
-            changes.push(`Check-in score updated to ${newLeadData.checkinScore}.`);
-        }
 
         for (const collectionName of collectionsToUpdate) {
             const leadRef = doc(firestore, collectionName, leadId);
@@ -1347,17 +1360,11 @@ async function updateLeadDetails(
                     };
                 }
                 
-                if (newLeadData.lastProspected) {
-                    updatePayload.lastProspected = newLeadData.lastProspected;
-                }
-
+                if (newLeadData.lastProspected) updatePayload.lastProspected = newLeadData.lastProspected;
                 if (newLeadData.checkinScore !== undefined) updatePayload.checkinScore = newLeadData.checkinScore;
                 if (newLeadData.checkinScoringReason !== undefined) updatePayload.checkinScoringReason = newLeadData.checkinScoringReason;
                 if (newLeadData.checkinRoutingTag !== undefined) updatePayload.checkinRoutingTag = newLeadData.checkinRoutingTag;
-                
-                 if (newLeadData.companyDescription !== undefined) {
-                    updatePayload.companyDescription = newLeadData.companyDescription;
-                }
+                if (newLeadData.companyDescription !== undefined) updatePayload.companyDescription = newLeadData.companyDescription;
 
                 if (Object.keys(updatePayload).length > 0) {
                     batch.update(leadRef, updatePayload);
@@ -1370,8 +1377,6 @@ async function updateLeadDetails(
         }
 
         await batch.commit();
-        
-        console.log(`Lead ${leadId} details updated across relevant collections.`);
     } catch (error) {
         console.error(`Failed to update lead details for ${leadId}:`, error);
         throw new Error('Failed to update lead details in Firebase');
@@ -1382,7 +1387,6 @@ async function updateTranscriptAnalysis(leadId: string, transcriptId: string, an
   try {
     const transcriptRef = doc(firestore, 'leads', leadId, 'transcripts', transcriptId);
     await updateDoc(transcriptRef, { analysis });
-    console.log(`Transcript ${transcriptId} analysis updated for lead ${leadId}`);
   } catch (error) {
     console.error(`Failed to update transcript analysis for lead ${leadId}:`, error);
     throw new Error('Failed to update transcript analysis in Firebase');
@@ -1393,8 +1397,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   if (!phoneNumber) return null;
 
   const leadsRef = collection(firestore, 'leads');
-  
-  // Normalize phone number for broader matching
   const variations = new Set<string>();
   const digits = phoneNumber.replace(/\D/g, '');
 
@@ -1423,7 +1425,6 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   return null;
 }
 
-// Task Management Functions
 async function getLeadTasks(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Task[], lastDocId: string | null }> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'tasks');
@@ -1437,11 +1438,7 @@ async function getLeadTasks(leadId: string, limitNum: number = 10, lastDocId: st
         }
 
         const snapshot = await getDocs(q);
-        const items = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Task));
-        
+        const items = snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as Task);
         const newLastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
         
         return { items, lastDocId: newLastDocId };
@@ -1456,15 +1453,13 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
         const tasksQuery = query(collectionGroup(firestore, 'tasks'), where('dialerAssigned', '==', displayName));
         const tasksSnapshot = await getDocs(tasksQuery);
         
-        const userTasks = tasksSnapshot.docs.map(doc => ({ 
+        const userTasks = tasksSnapshot.docs.map(doc => sanitizeData({ 
             id: doc.id, 
             ...doc.data(), 
             leadId: doc.ref.parent.parent!.id 
         })) as Array<Task & { leadId: string }>;
 
-        if (userTasks.length === 0) {
-            return [];
-        }
+        if (userTasks.length === 0) return [];
 
         const leadIds = [...new Set(userTasks.map(task => task.leadId))];
         const leadsData: Record<string, Lead> = {};
@@ -1474,31 +1469,24 @@ async function getAllUserTasks(displayName: string): Promise<Array<Task & { lead
             leadChunks.push(leadIds.slice(i, i + 30));
         }
 
-        // Fetch lead data chunks in parallel
         const chunkPromises = leadChunks.map(async (chunk) => {
             if (chunk.length === 0) return;
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
             const leadsSnapshot = await getDocs(leadsQuery);
             leadsSnapshot.forEach(doc => {
-                leadsData[doc.id] = doc.data() as Lead;
+                leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
             });
         });
 
         await Promise.all(chunkPromises);
-        
-        const hydratedTasks = userTasks.map(task => {
-            const lead = leadsData[task.leadId];
-            return {
-                ...task,
-                leadName: lead ? lead.companyName : "Unknown Lead",
-            };
-        });
-
-        return hydratedTasks;
+        return userTasks.map(task => ({
+            ...task,
+            leadName: leadsData[task.leadId]?.companyName || "Unknown Lead",
+        }));
 
     } catch (error) {
         console.error(`Failed to fetch all tasks for user ${displayName}:`, error);
-        throw new Error(`Failed to get user tasks: ${error}`);
+        throw new Error(`Failed to get user tasks`);
     }
 }
 
@@ -1506,13 +1494,9 @@ async function getAllTasks(): Promise<Array<Task & { leadId: string }>> {
     try {
         const tasksSnapshot = await getDocs(collectionGroup(firestore, 'tasks'));
         const allTasks = tasksSnapshot.docs.map(doc => {
-            const taskData = doc.data() as Task;
+            const taskData = sanitizeData(doc.data()) as Task;
             const leadId = doc.ref.parent.parent!.id;
-            return {
-                ...taskData,
-                id: doc.id,
-                leadId: leadId,
-            };
+            return { ...taskData, id: doc.id, leadId };
         });
         allTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
         return allTasks;
@@ -1538,8 +1522,7 @@ async function addTaskToLead(leadId: string, taskData: { title: string; dueDate:
         };
         const docRef = await addDoc(tasksRef, newTask);
         await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"` });
-        console.log(`Task added with ID: ${docRef.id} to lead ${leadId}`);
-        return { ...newTask, id: docRef.id };
+        return { ...newTask, id: docRef.id } as Task;
     } catch (error) {
         console.error(`Failed to add task to lead ${leadId}:`, error);
         throw new Error('Failed to add task in Firebase');
@@ -1557,7 +1540,6 @@ async function updateTaskCompletion(leadId: string, taskId: string, isCompleted:
         const taskDoc = await getDoc(taskRef);
         const taskTitle = taskDoc.data()?.title || 'a task';
         await logActivity(leadId, { type: 'Update', notes: `Task "${taskTitle}" marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
-        console.log(`Task ${taskId} for lead ${leadId} completion status updated to ${isCompleted}`);
     } catch (error) {
         console.error(`Failed to update task ${taskId} for lead ${leadId}:`, error);
         throw new Error('Failed to update task in Firebase');
@@ -1571,7 +1553,6 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
         const taskTitle = taskDoc.data()?.title || 'a task';
         await deleteDoc(taskRef);
         await logActivity(leadId, { type: 'Update', notes: `Task deleted: "${taskTitle}"` });
-        console.log(`Task ${taskId} deleted from lead ${leadId}`);
     } catch (error) {
         console.error(`Failed to delete task ${taskId} from lead ${leadId}:`, error);
         throw new Error('Failed to delete task from Firebase');
@@ -1579,30 +1560,16 @@ async function deleteTaskFromLead(leadId: string, taskId: string): Promise<void>
 }
 
 async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Promise<void> {
-  // This function is now a wrapper. The logic is moved to the server action.
   const { sendDiscoveryDataToNetSuite } = await import('@/services/netsuite');
   
   try {
-    // 1. Save to Firebase
     const leadRef = doc(firestore, 'leads', leadId);
     await updateDoc(leadRef, { discoveryData: data });
-    console.log(`[Firebase] Discovery data for lead ${leadId} updated.`);
     
-    // 2. Send to NetSuite
-    console.log(`[NetSuite] Triggering NetSuite sync for lead ${leadId}...`);
-    const nsResult = await sendDiscoveryDataToNetSuite({ leadId, discoveryData: data });
-
-    if (nsResult.success) {
-      console.log(`[NetSuite] Successfully synced discovery data for lead ${leadId}.`);
-    } else {
-      console.error(`[NetSuite] Failed to sync discovery data for lead ${leadId}: ${nsResult.message}`);
-      // We throw an error here so the client knows the NetSuite part failed.
-      throw new Error(`NetSuite sync failed: ${nsResult.message}`);
-    }
-
+    await sendDiscoveryDataToNetSuite({ leadId, discoveryData: data });
   } catch (error) {
     console.error(`Failed to update discovery data for lead ${leadId}:`, error);
-    throw new Error(`Failed to update discovery data: ${error}`);
+    throw new Error(`Failed to update discovery data`);
   }
 }
 
@@ -1610,9 +1577,8 @@ async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQues
     const leadRef = doc(firestore, 'leads', leadId);
     
     const leadSnap = await getDoc(leadRef);
-    if (!leadSnap.exists()) {
-        throw new Error(`Lead with ID ${leadId} not found.`);
-    }
+    if (!leadSnap.exists()) throw new Error(`Lead with ID ${leadId} not found.`);
+    
     const existingData = leadSnap.data();
     const existingQuestions: CheckinQuestion[] = existingData?.checkinQuestions || [];
 
@@ -1621,7 +1587,6 @@ async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQues
     questions.forEach(q => questionMap.set(q.question, q.answer));
 
     const mergedQuestions: CheckinQuestion[] = Array.from(questionMap, ([question, answer]) => ({ question, answer }));
-    
     const { score, routingTag, scoringReason } = calculateCheckinScore(mergedQuestions);
 
     const scoreData = {
@@ -1636,8 +1601,6 @@ async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQues
     });
 
     await logActivity(leadId, { type: 'Update', notes: 'Check-in questions were updated.' });
-    console.log(`Check-in data for lead ${leadId} updated.`);
-
     return { updatedQuestions: mergedQuestions, scoreData };
 }
 
@@ -1650,8 +1613,7 @@ async function addScorecard(leadId: string, data: any): Promise<any> {
             createdAt: new Date().toISOString(),
         });
         const savedData = await getDoc(docRef);
-        console.log(`Scorecard added with ID: ${docRef.id} to lead ${leadId}`);
-        return { id: docRef.id, ...savedData.data() };
+        return sanitizeData({ id: docRef.id, ...savedData.data() });
     } catch (error) {
         console.error(`Failed to add scorecard to lead ${leadId}:`, error);
         throw new Error('Failed to add scorecard in Firebase');
@@ -1662,7 +1624,6 @@ async function updateScorecardAnalysis(leadId: string, scorecardId: string, anal
     try {
         const scorecardRef = doc(firestore, 'leads', leadId, 'scorecards', scorecardId);
         await updateDoc(scorecardRef, { analysis });
-        console.log(`Scorecard ${scorecardId} analysis updated for lead ${leadId}`);
     } catch (error) {
         console.error(`Failed to update scorecard analysis for lead ${leadId}:`, error);
         throw new Error('Failed to update scorecard analysis in Firebase');
@@ -1673,16 +1634,15 @@ async function getAllUsers(): Promise<UserProfile[]> {
     try {
         const usersRef = collection(firestore, 'users');
         const snapshot = await getDocs(usersRef);
-        if (snapshot.empty) {
-            return [];
-        }
+        if (snapshot.empty) return [];
+        
         return snapshot.docs.map(doc => {
-            const data = doc.data();
+            const data = sanitizeData(doc.data() || {});
             const displayName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
             return {
                 uid: doc.id,
                 ...data,
-                displayName: displayName || data.email, // Fallback to email if name is empty
+                displayName: displayName || data.email, 
             } as UserProfile;
         });
     } catch (error) {
@@ -1695,7 +1655,6 @@ async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void
     try {
         const userRef = doc(firestore, 'users', uid);
         await updateDoc(userRef, data);
-        console.log(`User ${uid} updated.`);
     } catch (error) {
         console.error(`Failed to update user ${uid}:`, error);
         throw new Error('Failed to update user in Firebase');
@@ -1704,12 +1663,10 @@ async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void
 
 
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
-    if (newDialerReps.length === 0) {
-        throw new Error("No users selected for reassignment.");
-    }
+    if (newDialerReps.length === 0) throw new Error("No users selected for reassignment.");
+    
     try {
         const batch = writeBatch(firestore);
-        
         leadIds.forEach((leadId, index) => {
             const leadRef = doc(firestore, 'leads', leadId);
             const userToAssign = newDialerReps[index % newDialerReps.length];
@@ -1724,9 +1681,7 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
                 notes: notes,
             });
         });
-        
         await batch.commit();
-        console.log(`Successfully reassigned ${leadIds.length} leads.`);
     } catch (error) {
         console.error('Failed to bulk update lead dialer reps:', error);
         throw new Error('Failed to bulk update leads in Firebase');
@@ -1744,7 +1699,6 @@ async function addCallReview(leadId: string, activityId: string, reviewData: { r
                 date: new Date().toISOString(),
             }
         });
-        console.log(`Review added to activity ${activityId} for lead ${leadId}`);
     } catch (error) {
         console.error(`Failed to add review for activity ${activityId}:`, error);
         throw new Error('Failed to add review in Firebase');
@@ -1756,14 +1710,12 @@ async function getLastNote(leadId: string): Promise<Note | null> {
         const ref = collection(firestore, 'leads', leadId, 'notes');
         const q = query(ref, orderBy('date', 'desc'), limit(1));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            return null;
-        }
-        const doc = snapshot.docs[0];
-        return { id: doc.id, ...doc.data() } as Note;
+        if (snapshot.empty) return null;
+        
+        return sanitizeData({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() }) as Note;
     } catch (error) {
         console.error(`Failed to fetch last note for lead ${leadId}:`, error);
-        throw new Error('Service Unavailable');
+        return null;
     }
 }
 
@@ -1772,14 +1724,12 @@ async function getLastActivity(leadId: string): Promise<Activity | null> {
         const ref = collection(firestore, 'leads', leadId, 'activity');
         const q = query(ref, orderBy('date', 'desc'), limit(1));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            return null;
-        }
-        const doc = snapshot.docs[0];
-        return { id: doc.id, ...doc.data() } as Activity;
+        if (snapshot.empty) return null;
+        
+        return sanitizeData({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() }) as Activity;
     } catch (error) {
         console.error(`Failed to fetch last activity for lead ${leadId}:`, error);
-        throw new Error('Service Unavailable');
+        return null;
     }
 }
 
@@ -1816,23 +1766,7 @@ async function createNewLead(data: NewLeadData): Promise<{ success: boolean; lea
 }
 
 async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
-    // This is a placeholder that simulates calling the full prospectWebsiteTool 
-    // from netsuite.ts and only returning the part we need for this operation.
-    console.log(`[Firebase Service] Prospecting website for lead ${input.leadId}`);
-    return { searchKeywords: [], contacts: [] };
-}
-
-function getDomain(urlOrEmail: string): string | null {
-    if (!urlOrEmail) return null;
-    try {
-        if (urlOrEmail.includes('@')) {
-            return urlOrEmail.split('@')[1];
-        }
-        const hostname = new URL(urlOrEmail).hostname;
-        return hostname.replace(/^www\./, '');
-    } catch (e) {
-        return null;
-    }
+    return await aiProspectWebsiteTool(input);
 }
 
 async function checkForDuplicateLead(
@@ -1842,34 +1776,16 @@ async function checkForDuplicateLead(
     address?: Address
 ): Promise<string | null> {
     const collectionsToSearch = ['leads', 'companies'];
-    const websiteDomain = getDomain(website || '');
     
     for (const collectionName of collectionsToSearch) {
         const collectionRef = collection(firestore, collectionName);
 
-        // Check by company name (case-insensitive can be tricky)
         if (companyName) {
             const nameQuery = query(collectionRef, where('companyName', '==', companyName), limit(1));
             const nameSnapshot = await getDocs(nameQuery);
-            if (!nameSnapshot.empty) {
-                console.warn(`Duplicate found in '${collectionName}' by name: ${companyName}`);
-                return nameSnapshot.docs[0].id;
-            }
-        }
-
-        // Check by website domain
-        if (websiteDomain) {
-            const allDocs = await getDocs(collectionRef);
-            for (const doc of allDocs.docs) {
-                const data = doc.data();
-                if (data.websiteUrl && getDomain(data.websiteUrl) === websiteDomain) {
-                    console.warn(`Duplicate found in '${collectionName}' by website domain: ${websiteDomain}`);
-                    return doc.id;
-                }
-            }
+            if (!nameSnapshot.empty) return nameSnapshot.docs[0].id;
         }
         
-        // Check by address
         if (address && address.street && address.city && address.state && address.zip) {
              const addressQuery = query(collectionRef, 
                 where('address.street', '==', address.street),
@@ -1878,31 +1794,9 @@ async function checkForDuplicateLead(
                 where('address.zip', '==', address.zip),
                 limit(1));
             const addressSnapshot = await getDocs(addressQuery);
-            if (!addressSnapshot.empty) {
-                console.warn(`Duplicate found in '${collectionName}' by address: ${address.street}`);
-                return addressSnapshot.docs[0].id;
-            }
+            if (!addressSnapshot.empty) return addressSnapshot.docs[0].id;
         }
-        
-        // Looser address check if exact match fails
-        if (address && address.street && address.city && address.state) {
-            const looserAddressQuery = query(collectionRef, 
-                where('address.city', '==', address.city),
-                where('address.state', '==', address.state),
-                limit(20) // Limit to avoid fetching too many docs
-            );
-            const snapshot = await getDocs(looserAddressQuery);
-            for (const doc of snapshot.docs) {
-                const data = doc.data();
-                if (data.address && data.address.street && data.address.street.toLowerCase() === address.street.toLowerCase()) {
-                     console.warn(`Duplicate found in '${collectionName}' by looser address match: ${address.street}`);
-                     return doc.id;
-                }
-            }
-        }
-
     }
-    
     return null;
 }
 
@@ -1918,15 +1812,10 @@ async function deleteLeadsByCampaign(campaign: string): Promise<void> {
     try {
         const q = query(collection(firestore, 'leads'), where('customerCampaign', '==', campaign));
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-            console.log(`No leads found for campaign "${campaign}" to delete.`);
-            return;
-        }
+        if (snapshot.empty) return;
 
         const leadIds = snapshot.docs.map(doc => doc.id);
         await deleteCollectionItem('leads', leadIds);
-        
-        console.log(`Successfully deleted ${leadIds.length} leads from campaign "${campaign}".`);
     } catch (error) {
         console.error(`Failed to delete leads by campaign "${campaign}":`, error);
         throw new Error(`Failed to delete leads by campaign in Firebase`);
@@ -1935,9 +1824,7 @@ async function deleteLeadsByCampaign(campaign: string): Promise<void> {
 
 async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemIds: string | string[]): Promise<void> {
     const idsToDelete = Array.isArray(itemIds) ? itemIds : [itemIds];
-    if (idsToDelete.length === 0) {
-        return;
-    }
+    if (idsToDelete.length === 0) return;
 
     try {
         const batch = writeBatch(firestore);
@@ -1947,22 +1834,15 @@ async function deleteCollectionItem(collectionName: 'leads' | 'companies', itemI
             const itemRef = doc(firestore, collectionName, itemId);
 
             await Promise.all(subcollections.map(async (subcollection) => {
-                const subcollectionRef = collection(itemRef, subcollection);
-                const snapshot = await getDocs(subcollectionRef);
-                snapshot.docs.forEach(subDoc => {
-                    batch.delete(subDoc.ref);
-                });
+                const snapshot = await getDocs(collection(itemRef, subcollection));
+                snapshot.docs.forEach(subDoc => batch.delete(subDoc.ref));
             }));
-            
             batch.delete(itemRef);
         }
-
         await batch.commit();
-        console.log(`Successfully deleted ${idsToDelete.length} item(s) from ${collectionName} and their subcollections.`);
-
     } catch (error) {
         console.error(`Failed to delete items from ${collectionName}:`, error);
-        throw new Error(`Failed to delete item(s) from ${collectionName} in Firebase`);
+        throw new Error(`Failed to delete item(s) from Firebase`);
     }
 }
 
@@ -1975,10 +1855,9 @@ async function bulkDeleteSubCollectionItems(leadId: string, subCollectionName: '
             batch.delete(itemRef);
         });
         await batch.commit();
-        console.log(`Successfully bulk deleted ${itemIds.length} items from ${subCollectionName} in lead ${leadId}.`);
     } catch (error) {
         console.error(`Failed to bulk delete items from lead ${leadId}:`, error);
-        throw new Error(`Failed to bulk delete items from subCollectionName in Firebase`);
+        throw new Error(`Failed to bulk delete items`);
     }
 }
 
@@ -2011,7 +1890,7 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
         const snapshot = await getDocs(q);
 
         return snapshot.docs.map(doc => {
-            const data = doc.data() as StorableRoute;
+            const data = sanitizeData(doc.data()) as StorableRoute;
             return {
                 ...data,
                 id: doc.id,
@@ -2026,16 +1905,13 @@ async function getUserRoutes(userId: string): Promise<SavedRoute[]> {
 
 async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string; userId: string }>> {
     try {
-        // Use collectionGroup to fetch all routes across all users
         const routesQuery = collectionGroup(firestore, 'routes');
         const snapshot = await getDocs(routesQuery);
 
-        if (snapshot.empty) {
-            return [];
-        }
+        if (snapshot.empty) return [];
 
         const allRoutes = snapshot.docs.map(docSnapshot => {
-            const data = docSnapshot.data() as StorableRoute;
+            const data = sanitizeData(docSnapshot.data()) as StorableRoute;
             return {
                 ...data,
                 id: docSnapshot.id,
@@ -2045,13 +1921,10 @@ async function getAllUserRoutes(): Promise<Array<SavedRoute & { userName: string
             } as SavedRoute & { userId: string };
         });
         
-        // Sort client-side by createdAt to avoid needing a composite index
         allRoutes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
         return allRoutes;
     } catch (error) {
-        console.error('Failed to fetch all routes via collectionGroup:', error);
-        // Fallback to the safer (but potentially incomplete if rules are strict) sequential fetch if needed
+        console.error('Failed to fetch all routes:', error);
         return [];
     }
 }
@@ -2061,8 +1934,8 @@ async function deleteUserRoute(userId: string, routeId: string): Promise<void> {
         const routeRef = doc(firestore, 'users', userId, 'routes', routeId);
         await deleteDoc(routeRef);
     } catch (error) {
-        console.error(`Failed to delete route ${routeId} for user ${userId}:`, error);
-        throw new Error('Failed to delete route from Firebase');
+        console.error(`Failed to delete route ${routeId}:`, error);
+        throw new Error('Failed to delete route');
     }
 }
 
@@ -2071,24 +1944,13 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
         const sourceRouteRef = doc(firestore, 'users', sourceUserId, 'routes', routeId);
         const routeDoc = await getDoc(sourceRouteRef);
 
-        if (!routeDoc.exists()) {
-            throw new Error(`Route with ID ${routeId} does not exist for user ${sourceUserId}.`);
-        }
+        if (!routeDoc.exists()) throw new Error(`Route not found.`);
 
         const routeData = routeDoc.data();
-        const targetRoutesRef = collection(firestore, 'users', targetUserId, 'routes');
-
         const batch = writeBatch(firestore);
-        
-        // Add the route to the new user's collection
-        const newRouteRef = doc(targetRoutesRef, routeId); // Use same ID for consistency
-        batch.set(newRouteRef, routeData);
-
-        // Delete the route from the old user's collection
+        batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
         batch.delete(sourceRouteRef);
-
         await batch.commit();
-        console.log(`Successfully moved route ${routeId} from user ${sourceUserId} to ${targetUserId}.`);
     } catch (error) {
         console.error(`Failed to move route ${routeId}:`, error);
         throw new Error('Failed to move route in Firebase');
@@ -2103,7 +1965,6 @@ async function updateLeadServices(leadId: string, services: ServiceSelection[]):
             type: 'Update',
             notes: `Services configured: ${services.map(s => s.name).join(', ')}`,
         });
-        console.log(`Services for lead ${leadId} updated.`);
     } catch (error) {
         console.error(`Failed to update services for lead ${leadId}:`, error);
         throw new Error('Failed to update services in Firebase');
@@ -2124,7 +1985,6 @@ async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; 
             type: 'Update',
             notes: `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`,
         });
-        console.log(`Lead ${leadId} moved and reassigned successfully.`);
     } catch (error) {
         console.error(`Failed to move lead ${leadId}:`, error);
         throw new Error('Failed to move lead in Firebase');
@@ -2133,9 +1993,7 @@ async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; 
 
 async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: boolean; assigneeDisplayName: string; activityNote?: string; author?: string; }): Promise<void> {
     const { leadIds, fieldSales, assigneeDisplayName, activityNote, author } = payload;
-    if (leadIds.length === 0) {
-        throw new Error("No leads selected to move.");
-    }
+    if (leadIds.length === 0) throw new Error("No leads selected.");
     try {
         const batch = writeBatch(firestore);
         const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
@@ -2147,8 +2005,7 @@ async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: b
                 dialerAssigned: assigneeDisplayName
             });
 
-            const activityRef = collection(leadRef, 'activity');
-            const newActivityRef = doc(activityRef);
+            const newActivityRef = doc(collection(leadRef, 'activity'));
             const note = activityNote || `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`;
             batch.set(newActivityRef, {
                 type: 'Update',
@@ -2159,7 +2016,6 @@ async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: b
         });
 
         await batch.commit();
-        console.log(`Successfully moved ${leadIds.length} leads to ${bucketName} bucket.`);
     } catch (error) {
         console.error(`Failed to bulk move leads:`, error);
         throw new Error('Failed to bulk move leads in Firebase');
@@ -2189,11 +2045,8 @@ async function getVisitNotes(userId?: string): Promise<VisitNote[]> {
         }
         
         const snapshot = await getDocs(q);
-        const notes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
-
-        // Manually sort by date client-side to avoid composite index requirement
+        const notes = snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as VisitNote);
         notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
         return notes;
     } catch (error) {
         console.error('Failed to fetch visit notes:', error);
