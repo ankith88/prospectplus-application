@@ -47,8 +47,11 @@ import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
+import { useJsApiLoader } from '@react-google-maps/api';
 
 const abnRegex = /^\d{11}$/;
+
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
 const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
@@ -95,8 +98,14 @@ export function NewLeadForm() {
   const [isLinking, setIsLinking] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
 
+  const companySearchRef = useRef<HTMLInputElement | null>(null);
+  const companyAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  const autocompleteInputRef = useRef<HTMLInputElement>(null);
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries,
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -183,25 +192,20 @@ export function NewLeadForm() {
         }
   }, [form]);
 
-  const setupAutocomplete = useCallback((inputElement: HTMLInputElement | null) => {
-    if (!window.google || !inputElement) {
-        return;
-    }
-    if ((inputElement as any).autocomplete) {
-        return;
-    }
-    const autocomplete = new window.google.maps.places.Autocomplete(inputElement, {
-        types: ['establishment'],
+  useEffect(() => {
+    if (isLoaded && companySearchRef.current && !companyAutocompleteRef.current) {
+      companyAutocompleteRef.current = new window.google.maps.places.Autocomplete(companySearchRef.current, {
+        types: ['establishment', 'geocode'],
         componentRestrictions: { country: 'au' },
-    });
-    (inputElement as any).autocomplete = autocomplete;
-    autocomplete.addListener('place_changed', async () => {
-        const place = autocomplete.getPlace();
-        if (place.address_components) {
-            fillFormWithPlace(place);
+      });
+      companyAutocompleteRef.current.addListener('place_changed', () => {
+        const place = companyAutocompleteRef.current?.getPlace();
+        if (place?.address_components) {
+          fillFormWithPlace(place);
         }
-    });
-  }, [fillFormWithPlace]);
+      });
+    }
+  }, [isLoaded, fillFormWithPlace]);
 
   useEffect(() => {
     const visitNoteId = searchParams.get('fromVisitNote');
@@ -235,14 +239,12 @@ export function NewLeadForm() {
           let contactEmail = '';
           let contactPhone = '';
 
-          // Prioritize Decision Maker from discovery data
           if (discovery?.decisionMakerName) {
               contactName = discovery.decisionMakerName;
               contactTitle = discovery.decisionMakerTitle || 'Decision Maker';
               contactEmail = discovery.decisionMakerEmail || '';
               contactPhone = discovery.decisionMakerPhone || '';
           } 
-          // Then fall back to Person Spoken With
           else if (discovery?.personSpokenWithName) {
               contactName = discovery.personSpokenWithName;
               contactTitle = discovery.personSpokenWithTitle || 'Contact';
@@ -322,10 +324,6 @@ export function NewLeadForm() {
       const tempLeadId = 'new-lead-prospecting';
       const result = await prospectWebsiteTool({ leadId: tempLeadId, websiteUrl: url });
       
-      if (result.companyDescription) {
-        console.log('AI Company Description:', result.companyDescription);
-      }
-
       if (result.contacts && result.contacts.length > 0) {
         const primaryContact = result.contacts[0];
         const nameParts = (primaryContact.name || '').split(' ') ;
@@ -561,7 +559,7 @@ export function NewLeadForm() {
                         {...field}
                         ref={(node) => {
                           field.ref(node);
-                          setupAutocomplete(node);
+                          companySearchRef.current = node;
                         }}
                         placeholder="Start typing to search Google Maps..."
                       />

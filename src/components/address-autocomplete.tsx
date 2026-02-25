@@ -1,50 +1,53 @@
-
 'use client'
 
 import React, { useRef, useEffect } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Input } from './ui/input';
-import type { Address } from '@/lib/types';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
+import { useJsApiLoader } from '@react-google-maps/api';
 
-interface AddressAutocompleteProps {
-    // No props needed as it will now get everything from the parent form context
-}
+const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
-export function AddressAutocomplete({}: AddressAutocompleteProps) {
+export function AddressAutocomplete() {
     const autocompleteInputRef = useRef<HTMLInputElement>(null);
-    const { control, setValue, trigger } = useFormContext(); // Use the parent form's context
+    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+    const { control, setValue, trigger } = useFormContext();
+
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+        libraries,
+    });
 
     useEffect(() => {
-        if (!window.google || !autocompleteInputRef.current) return;
+        if (isLoaded && autocompleteInputRef.current && !autocompleteRef.current) {
+            autocompleteRef.current = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
+                types: ['address'],
+                componentRestrictions: { country: 'au' },
+            });
 
-        const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-            types: ['address'],
-            componentRestrictions: { country: 'au' },
-        });
+            autocompleteRef.current.addListener('place_changed', async () => {
+                const place = autocompleteRef.current?.getPlace();
+                if (!place?.address_components) return;
 
-        autocomplete.addListener('place_changed', async () => {
-            const place = autocomplete.getPlace();
-            if (!place.address_components) return;
+                const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
+                const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
+                
+                setValue('address.street', `${street_number} ${route}`.trim());
+                setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '');
+                setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '');
+                setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '');
+                setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU');
 
-            const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
-            const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
-            
-            setValue('address.street', `${street_number} ${route}`.trim());
-            setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '');
-            setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '');
-            setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '');
-            setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU');
+                if (place.geometry?.location) {
+                  setValue('address.lat', place.geometry.location.lat());
+                  setValue('address.lng', place.geometry.location.lng());
+                }
 
-            if (place.geometry?.location) {
-              setValue('address.lat', place.geometry.location.lat());
-              setValue('address.lng', place.geometry.location.lng());
-            }
-
-            // Trigger validation for the address fields
-            await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
-        });
-    }, [setValue, trigger]);
+                await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
+            });
+        }
+    }, [isLoaded, setValue, trigger]);
 
     return (
         <div className="space-y-4">
@@ -69,7 +72,15 @@ export function AddressAutocomplete({}: AddressAutocompleteProps) {
                     <FormItem>
                         <FormLabel>Street No. & Name*</FormLabel>
                         <FormControl>
-                            <Input {...field} ref={autocompleteInputRef} placeholder="Start typing a street address..." />
+                            <Input 
+                                {...field} 
+                                ref={(node) => {
+                                    field.ref(node);
+                                    // @ts-ignore
+                                    autocompleteInputRef.current = node;
+                                }} 
+                                placeholder="Start typing a street address..." 
+                            />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
