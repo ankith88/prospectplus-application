@@ -139,7 +139,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-  const { user, userProfile, savedRoutes, setSavedRoutes } = useAuth();
+  const { user, userProfile } = useAuth();
   
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
@@ -152,10 +152,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [toast]);
 
   const handleNextLead = useCallback(() => {
-    // Close dialog if it was open
     setShowPostCallDialog(false);
 
-    // 1. Find next lead relative to current
     const currentIndex = sessionLeads.indexOf(lead.id);
     let nextLeadId: string | null = null;
 
@@ -163,17 +161,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       nextLeadId = sessionLeads[currentIndex + 1];
     }
 
-    // 2. Filter out current lead from the list for the next session load
     const updatedSessionLeads = sessionLeads.filter(id => id !== lead.id);
     localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
     setSessionLeads(updatedSessionLeads);
 
-    // 3. Navigate or end
     if (nextLeadId) {
       setLoadingNextLead(true);
       router.push(`/leads/${nextLeadId}`);
     } else if (updatedSessionLeads.length > 0) {
-      // If we finished the sequence but there are still leads left (skipping etc)
       setLoadingNextLead(true);
       router.push(`/leads/${updatedSessionLeads[0]}`);
     } else {
@@ -209,8 +204,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
-    // Note: We don't remove from sessionLeads here anymore because it causes state issues in handleNextLead.
-    // Cleanup happens in handleNextLead or handleEndSession.
   };
 
   const handleAiProspect = async () => {
@@ -433,22 +426,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       </div>
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-            <h1 className="text-3xl font-bold">{company.companyName}</h1>
-            <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
-              <LeadStatusBadge status={company.status} />
-              <p className="text-muted-foreground text-sm">&bull; {company.contacts?.length || 0} Contacts &bull; Contacted {callHistory.length} times</p>
+        <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                {lead.avatarUrl ? (
+                    <img src={lead.avatarUrl} alt={lead.companyName} className="h-full w-full rounded-lg object-cover" />
+                ) : (
+                    <Building className="h-8 w-8" />
+                )}
+            </div>
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
+                <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
+                    <LeadStatusBadge status={lead.status} />
+                    <span className="text-xs text-muted-foreground">&bull;</span>
+                    <p className="text-muted-foreground text-sm">{lead.industryCategory || 'No Industry'}</p>
+                </div>
             </div>
         </div>
-         <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleUpsell} disabled={isUpselling}>
-                {isUpselling ? <Loader /> : <TrendingUp className="mr-2 h-4 w-4" />}
-                Upsell
-            </Button>
-            <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
-                <ClipboardEdit className="mr-2 h-4 w-4" />
-                Log Note
-            </Button>
+        <div className="flex flex-col items-end gap-2">
+            {renderActionButtons()}
         </div>
       </header>
 
@@ -461,19 +457,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
-                        <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.internalid || company.salesRecordInternalId} copyable />
-                        <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
-                        <DetailItem icon={Calendar} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
-                        <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
-                        <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
+                        <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
+                        <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                        <DetailItem icon={Calendar} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
+                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
+                        <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                     </div>
                     <div className="space-y-8">
-                        <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
-                        <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable leadId={company.id} />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
-                        <DetailItem icon={Briefcase} label="Lead Source" value={company.campaign || company.customerSource} />
-                        <DetailItem icon={Tag} label="Sub-Industry" value={company.industrySubCategory || '- None -'} />
+                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
+                        <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
+                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
+                        <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
+                        <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
                     </div>
                 </div>
              </CardContent>
@@ -493,7 +490,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <Calendar className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
