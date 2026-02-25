@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -1324,7 +1323,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 async function updateLeadDetails(
   leadId: string,
   oldLead: Lead,
-  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason' | 'checkinRoutingTag' | 'companyDescription'>>
+  newLeadData: Partial<Pick<Lead, 'companyName' | 'customerServiceEmail' | 'customerPhone' | 'websiteUrl' | 'industryCategory' | 'address' | 'lastProspected' | 'checkinScore' | 'checkinScoringReason' | 'checkinRoutingTag' | 'companyDescription'>>
 ): Promise<void> {
     try {
         const collectionsToUpdate: ('leads' | 'companies')[] = oldLead.status === 'Won' ? ['companies'] : ['leads'];
@@ -1338,6 +1337,15 @@ async function updateLeadDetails(
         if (newLeadData.customerServiceEmail !== undefined && newLeadData.customerServiceEmail !== oldLead.customerServiceEmail) {
             changes.push(`Email changed to "${newLeadData.customerServiceEmail}".`);
         }
+        if (newLeadData.customerPhone !== undefined && newLeadData.customerPhone !== oldLead.customerPhone) {
+            changes.push(`Phone changed to "${newLeadData.customerPhone}".`);
+        }
+        if (newLeadData.websiteUrl !== undefined && newLeadData.websiteUrl !== oldLead.websiteUrl) {
+            changes.push(`Website changed to "${newLeadData.websiteUrl}".`);
+        }
+        if (newLeadData.industryCategory !== undefined && newLeadData.industryCategory !== oldLead.industryCategory) {
+            changes.push(`Industry changed to "${newLeadData.industryCategory}".`);
+        }
         if (newLeadData.address) {
             changes.push('Address updated.');
         }
@@ -1349,6 +1357,9 @@ async function updateLeadDetails(
                 const updatePayload: { [key: string]: any } = {};
                 if (newLeadData.companyName !== undefined) updatePayload.companyName = newLeadData.companyName;
                 if (newLeadData.customerServiceEmail !== undefined) updatePayload.customerServiceEmail = newLeadData.customerServiceEmail;
+                if (newLeadData.customerPhone !== undefined) updatePayload.customerPhone = newLeadData.customerPhone;
+                if (newLeadData.websiteUrl !== undefined) updatePayload.websiteUrl = newLeadData.websiteUrl;
+                if (newLeadData.industryCategory !== undefined) updatePayload.industryCategory = newLeadData.industryCategory;
                 if (newLeadData.address) {
                     updatePayload.address = {
                         address1: newLeadData.address.address1 || '',

@@ -478,8 +478,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card>
-             <CardHeader className="pb-4 border-b">
+             <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
+                {!isCompanyProfile && (
+                    <Button variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Details
+                    </Button>
+                )}
              </CardHeader>
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
@@ -517,7 +523,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {linkedVisitNote.scheduledDate && (
                         <Alert className="bg-primary/5 border-primary/20">
-                            <Calendar className="h-4 w-4 text-primary" />
+                            <CalendarIcon className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
                             <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
@@ -613,10 +619,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
                         )}
                         
-                        <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsEditLeadDialogOpen(true)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Address
-                        </Button>
+                        {!isCompanyProfile && (
+                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsEditLeadDialogOpen(true)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Address
+                            </Button>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -728,6 +736,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     onClose={() => setContactToEdit(null)}
                 />
             )}
+        </DialogContent>
+    </Dialog>
+    <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
+        <DialogContent className="max-w-md">
+            <DialogHeader>
+                <DialogTitle>Edit Lead Details</DialogTitle>
+            </DialogHeader>
+            <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
         </DialogContent>
     </Dialog>
     </>

@@ -1,5 +1,3 @@
-
-
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion } from "@/lib/types";
@@ -492,6 +490,9 @@ interface NetSuiteLeadUpdatePayload {
     leadId: string;
     companyName?: string;
     email?: string;
+    phone?: string;
+    website?: string;
+    industry?: string;
     address?: Partial<Address>;
 }
 
@@ -501,7 +502,7 @@ interface NetSuiteLeadUpdatePayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayload): Promise<{ success: boolean, message: string }> {
-    const { leadId, companyName, email, address } = payload;
+    const { leadId, companyName, email, phone, website, industry, address } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -521,6 +522,10 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 
     if (companyName) params.append('companyname', companyName);
     if (email) params.append('email', email);
+    if (phone) params.append('phone', phone);
+    if (website) params.append('website', website);
+    if (industry) params.append('category', industry);
+    
     if (address) {
         if (address.address1) params.append('address1', address.address1);
         if (address.street) params.append('addr1', address.street);
