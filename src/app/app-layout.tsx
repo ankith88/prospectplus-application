@@ -172,7 +172,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin'].includes(userProfile.role)) && (
+            {(userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role)) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
