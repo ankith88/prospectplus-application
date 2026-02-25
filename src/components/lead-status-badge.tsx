@@ -1,3 +1,4 @@
+
 import { Badge } from "@/components/ui/badge"
 import type { LeadStatus } from "@/lib/types"
 
@@ -14,6 +15,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     Unqualified: "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800",
     Won: "bg-primary text-primary-foreground",
     Lost: "bg-destructive text-destructive-foreground",
+    'Lost Customer': "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800",
     'LPO Review': 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800',
     'In Progress': 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-900/50 dark:text-cyan-300 dark:border-cyan-800',
     'Connected': 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-800',

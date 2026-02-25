@@ -26,6 +26,7 @@ import {
   Briefcase,
   Search,
   Edit,
+  FileX,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -205,6 +206,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   if (!user) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
 
   const fullAddressStr = formatAddressString(company.address);
+  const hasCancellationDetails = company.status === 'Lost Customer' || company.cancellationTheme || company.cancellationCategory || company.cancellationReason || company.cancellationdate;
 
   return (
     <>
@@ -238,6 +240,25 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
+          {hasCancellationDetails && (
+            <Card className="border-red-200 bg-red-50/30">
+                <CardHeader className="pb-4 border-b border-red-100">
+                    <CardTitle className="flex items-center gap-2 text-red-800">
+                        <FileX className="w-5 h-5" />
+                        Cancellation Details
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                        <DetailItem icon={Tag} label="Cancellation Theme" value={company.cancellationTheme} />
+                        <DetailItem icon={Briefcase} label="Cancellation Category" value={company.cancellationCategory} />
+                        <DetailItem icon={CalendarIcon} label="Cancellation Date" value={company.cancellationdate} />
+                        <DetailItem icon={Clipboard} label="Cancellation Reason" value={company.cancellationReason} />
+                    </div>
+                </CardContent>
+            </Card>
+          )}
+
           <Card>
              <CardHeader className="pb-4 border-b">
                 <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>

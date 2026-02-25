@@ -1,4 +1,5 @@
-'use server';
+
+'use client';
 
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
@@ -107,7 +108,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -237,6 +238,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           checkinScoringReason: data.checkinScoringReason,
           checkinRoutingTag: data.checkinRoutingTag,
           visitNoteID: data.visitNoteID,
+          cancellationTheme: data.cancellationTheme,
+          cancellationCategory: data.cancellationCategory,
+          cancellationReason: data.cancellationReason,
+          cancellationdate: data.cancellationdate,
         };
 
         if (includeSubCollections) {
@@ -340,6 +345,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource || data.source,
           visitNoteID: data.visitNoteID,
+          cancellationTheme: data.cancellationTheme,
+          cancellationCategory: data.cancellationCategory,
+          cancellationReason: data.cancellationReason,
+          cancellationdate: data.cancellationdate,
         };
         
         if (includeSubCollections) {
@@ -550,7 +559,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) {

@@ -12,6 +12,7 @@ export type LeadStatus =
   | 'Pre Qualified'
   | 'Won'
   | 'Lost'
+  | 'Lost Customer'
   | 'LPO Review'
   | 'Unqualified'
   | 'LocalMile Pending'
@@ -238,7 +239,7 @@ export interface Lead {
   address?: Address
   latitude?: number;
   longitude?: number;
-  franchisee?: string
+  franchisee?: string;
   websiteUrl?: string
   industryCategory?: string
   industrySubCategory?: string
@@ -261,6 +262,10 @@ export interface Lead {
   dateLeadEntered?: string;
   customerSource?: string;
   visitNoteID?: string;
+  cancellationTheme?: string;
+  cancellationCategory?: string;
+  cancellationReason?: string;
+  cancellationdate?: string;
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee'> & { isCompany: boolean; isProspect?: boolean };
