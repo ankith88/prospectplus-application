@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import {
@@ -17,14 +16,28 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, deleteUserRoute, getAllUserRoutes, getAllUsers, moveUserRoute, getAllActivities, bulkMoveLeadsToBucket, bulkUpdateLeadDialerRep, deleteLead, getAllAppointments, updateUserRoute, getUserActivitiesForPeriod } from '@/services/firebase'
+import { 
+    getLeadsFromFirebase, 
+    deleteUserRoute, 
+    getAllUserRoutes, 
+    getAllUsers, 
+    moveUserRoute, 
+    getAllActivities, 
+    bulkMoveLeadsToBucket, 
+    bulkUpdateLeadDialerRep, 
+    deleteLead, 
+    getAllAppointments, 
+    updateUserRoute, 
+    getUserActivitiesForPeriod,
+    getVisitNotes
+} from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
-import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead } from '@/lib/types'
+import type { Lead, LeadStatus, Note, Activity, UserProfile, SavedRoute, Appointment, MapLead, VisitNote } from '@/lib/types'
 import React, { useEffect, useState, useMemo, Fragment, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar, PenSquare } from 'lucide-react'
+import { MoreHorizontal, UserX, Trash2, Route, User, Move, CheckSquare, UserPlus, Percent, TrendingUp, Search, Filter, SlidersHorizontal, X, UserCog, Download, PlusCircle, Calendar as CalendarIcon, MapPin, Clock, Navigation } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -58,7 +71,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast, subDays } from 'date-fns'
+import { startOfWeek, endOfWeek, format, isToday, isThisWeek, isPast, subDays, formatDistanceToNow } from 'date-fns'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -170,12 +183,30 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180);
+}
+
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+}
+
 export default function DoorToDoorDashboard() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allRoutes, setAllRoutes] = useState<RouteWithUser[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
+  const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [routeToMove, setRouteToMove] = useState<RouteWithUser | null>(null);
   const [targetUserId, setTargetUserId] = useState<string>('');
@@ -188,7 +219,10 @@ export default function DoorToDoorDashboard() {
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingRoute, setIsUpdatingRoute] = useState<string | null>(null);
-
+  
+  // Location state
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   
   const [filters, setFilters] = useState({
@@ -219,18 +253,20 @@ export default function DoorToDoorDashboard() {
           ? getLeadsFromFirebase({ summary: true, dialerAssigned: userProfile.displayName })
           : getLeadsFromFirebase({ summary: true });
 
-        const [leads, users, routes, appointments, activities] = await Promise.all([
+        const [leads, users, routes, appointments, activities, visitNotes] = await Promise.all([
             leadsPromise,
             getAllUsers(),
             (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
             getAllAppointments(),
             getAllActivities(),
+            getVisitNotes()
         ]);
 
         const fieldSalesLeads = leads.filter(lead => lead.fieldSales === true);
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
         setAllAppointments(appointments);
+        setAllVisitNotes(visitNotes);
         if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
             setAllRoutes(routes);
         }
@@ -246,6 +282,22 @@ export default function DoorToDoorDashboard() {
   useEffect(() => {
     if (userProfile) {
       fetchData();
+      
+      // Get location
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setMyLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          setIsLocating(false);
+        },
+        (error) => {
+          console.error("Location error:", error);
+          setIsLocating(false);
+        }
+      );
     }
   }, [userProfile, fetchData]);
   
@@ -290,6 +342,29 @@ export default function DoorToDoorDashboard() {
       conversionRate: parseFloat(conversionRate.toFixed(2)),
     };
   }, [allLeads, allActivities, userProfile]);
+
+  const nearbyRecentVisits = useMemo(() => {
+    if (!myLocation || allVisitNotes.length === 0) return [];
+
+    const nearby = allVisitNotes
+      .map(note => {
+        if (!note.address?.lat || !note.address?.lng) return null;
+        const distance = getDistance(
+          myLocation.lat,
+          myLocation.lng,
+          note.address.lat,
+          note.address.lng
+        );
+        return { ...note, distance };
+      })
+      .filter((note): note is VisitNote & { distance: number } => 
+        note !== null && note.distance <= 1.0 // Within 1km
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    return nearby;
+  }, [myLocation, allVisitNotes]);
 
   const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
     <Card>
@@ -724,6 +799,58 @@ export default function DoorToDoorDashboard() {
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
       </header>
 
+      {/* RECENT VISITS NEAR ME WIDGET */}
+      <Card className="border-sidebar-accent shadow-md">
+        <CardHeader className="bg-sidebar-accent/10 pb-3">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Navigation className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Recent Visits Near Me</CardTitle>
+                </div>
+                {isLocating && <Loader />}
+            </div>
+            <CardDescription>Activity within a 1km radius of your current location.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+            {myLocation ? (
+                nearbyRecentVisits.length > 0 ? (
+                    <div className="space-y-3">
+                        {nearbyRecentVisits.map(note => (
+                            <div key={note.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                                <div className="space-y-1">
+                                    <p className="font-bold text-sm">{note.companyName}</p>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <span className="flex items-center gap-1">
+                                            <MapPin className="h-3 w-3" />
+                                            {(note.distance * 1000).toFixed(0)}m away
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            {formatDistanceToNow(new Date(note.createdAt))} ago
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-medium">{note.capturedBy}</p>
+                                    <Badge variant="outline" className="text-[10px] mt-1">{note.outcome?.type}</Badge>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 space-y-2">
+                        <CheckSquare className="h-8 w-8 text-muted-foreground mx-auto opacity-20" />
+                        <p className="text-sm text-muted-foreground">No recent visits within 1km. Ready to prospect!</p>
+                    </div>
+                )
+            ) : (
+                <div className="text-center py-8 text-sm text-muted-foreground italic">
+                    {isLocating ? 'Determining your location...' : 'Location access required to show nearby visits.'}
+                </div>
+            )}
+        </CardContent>
+      </Card>
+
       {userProfile.role === 'Field Sales' && weeklyStats && (
         <Card>
             <CardHeader>
@@ -885,9 +1012,6 @@ export default function DoorToDoorDashboard() {
                         <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
                         {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
                             <>
-                                <Button size="sm" variant="outline" onClick={() => router.push(`/leads/map?routeId=${route.id}`)}>
-                                    <PenSquare className="h-4 w-4" />
-                                </Button>
                                 <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
                                     <Move className="h-4 w-4" />
                                 </Button>
@@ -1134,10 +1258,3 @@ export default function DoorToDoorDashboard() {
     </div>
   );
 }
-
-    
-
-    
-
-    
-
