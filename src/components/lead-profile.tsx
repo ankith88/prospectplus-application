@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building,
-  Calendar,
+  Calendar as CalendarIcon,
   Clipboard,
   Edit,
   Link as LinkIcon,
@@ -385,7 +385,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
-    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><Calendar className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
     
     const callBtn = (
         <Button 
@@ -493,7 +493,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
-                        <DetailItem icon={Calendar} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
+                        <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                     </div>
@@ -654,7 +654,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         <div className="flex flex-col gap-6">
           <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Calendar className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                     {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {format(new Date(a.duedate), 'PP')}</div>)}
                     {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
