@@ -38,6 +38,7 @@ interface AuthContextType {
     signOut: () => Promise<void>;
     sendPasswordReset: (email: string) => Promise<void>;
     signUpAndCreateProfile: (userData: any) => Promise<void>;
+    refreshToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -52,6 +53,7 @@ const AuthContext = createContext<AuthContextType>({
     signOut: async () => {},
     sendPasswordReset: async () => {},
     signUpAndCreateProfile: async () => {},
+    refreshToken: async () => null,
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -195,6 +197,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const refreshToken = async () => {
+        if (!auth?.currentUser) return null;
+        return await auth.currentUser.getIdToken(true);
+    };
+
 
     const value = {
         user,
@@ -208,6 +215,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signOut,
         sendPasswordReset,
         signUpAndCreateProfile,
+        refreshToken,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

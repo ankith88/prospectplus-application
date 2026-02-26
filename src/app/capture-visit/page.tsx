@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -19,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -257,6 +258,34 @@ const MandatoryFieldsForOutcome = () => {
     );
 };
 
+// --- Helper Functions for Image Compression and Drafts ---
+
+async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new window.Image();
+        img.src = dataUrl;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+    });
+}
+
+const DRAFT_KEY = 'visit_note_draft';
+
+// --------------------------------------------------------
 
 export default function CaptureVisitPage() {
     const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'summary' | 'camera'>('search');
@@ -281,9 +310,10 @@ export default function CaptureVisitPage() {
     const [editingNote, setEditingNote] = useState<VisitNote | null>(null);
     const [isLoadingNote, setIsLoadingNote] = useState(false);
     const [previousStep, setPreviousStep] = useState<'search' | 'capture'>('search');
+    const [hasDraft, setHasDraft] = useState(false);
   
     const { toast } = useToast();
-    const { userProfile } = useAuth();
+    const { userProfile, refreshToken } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const noteIdToEdit = searchParams.get('noteId');
@@ -357,6 +387,59 @@ export default function CaptureVisitPage() {
     useEffect(() => {
         window.scrollTo(0, 0);
     }, [currentStepNumber]);
+
+    // --- Draft Logic ---
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !noteIdToEdit) {
+            const draft = localStorage.getItem(DRAFT_KEY);
+            if (draft) {
+                setHasDraft(true);
+            }
+        }
+    }, [noteIdToEdit]);
+
+    const saveDraft = useCallback(() => {
+        if (noteIdToEdit) return;
+        const draftData = {
+            selectedPlace,
+            discoveryValues: discoveryForm.getValues(),
+            noteContent: captureForm.getValues('content'),
+            images,
+            step,
+            outcomeData,
+            searchQuery,
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+    }, [selectedPlace, discoveryForm, captureForm, images, step, outcomeData, searchQuery, noteIdToEdit]);
+
+    useEffect(() => {
+        const interval = setInterval(saveDraft, 5000);
+        return () => clearInterval(interval);
+    }, [saveDraft]);
+
+    const handleRestoreDraft = () => {
+        const draft = localStorage.getItem(DRAFT_KEY);
+        if (draft) {
+            const data = JSON.parse(draft);
+            setSelectedPlace(data.selectedPlace);
+            discoveryForm.reset(data.discoveryValues);
+            captureForm.setValue('content', data.noteContent);
+            setNoteContent(data.noteContent);
+            setImages(data.images);
+            setStep(data.step);
+            setOutcomeData(data.outcomeData);
+            setSearchQuery(data.searchQuery);
+            setHasDraft(false);
+            toast({ title: 'Draft Restored', description: 'Your previous session has been recovered.' });
+        }
+    };
+
+    const clearDraft = () => {
+        localStorage.removeItem(DRAFT_KEY);
+        setHasDraft(false);
+    };
+
+    // -------------------
 
     useEffect(() => {
         if (noteIdToEdit) {
@@ -437,6 +520,7 @@ export default function CaptureVisitPage() {
         if (videoRef.current?.srcObject) {
             (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
         }
+        localStorage.removeItem(DRAFT_KEY);
     }, [captureForm, discoveryForm, isListening]);
 
     useEffect(() => {
@@ -525,15 +609,16 @@ export default function CaptureVisitPage() {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
                  toast({
-                    title: 'Uploading images...',
-                    description: `Processing ${files.length} image(s).`,
+                    title: 'Processing images...',
+                    description: `Resizing and compressing ${files.length} image(s).`,
                 });
             }
             files.forEach(file => {
                 const reader = new FileReader();
-                reader.onloadend = () => {
+                reader.onloadend = async () => {
                     if (typeof reader.result === 'string') {
-                        setImages(prev => [...prev, reader.result as string]);
+                        const compressed = await compressImage(reader.result);
+                        setImages(prev => [...prev, compressed]);
                     }
                 };
                 reader.onerror = () => {
@@ -548,7 +633,7 @@ export default function CaptureVisitPage() {
         }
     };
 
-    const handleCaptureImage = () => {
+    const handleCaptureImage = async () => {
         if (!videoRef.current || !canvasRef.current) return;
         const canvas = canvasRef.current;
         canvas.width = videoRef.current.videoWidth;
@@ -556,7 +641,9 @@ export default function CaptureVisitPage() {
         const context = canvas.getContext('2d');
         context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
-        setImages(prev => [...prev, dataUrl]);
+        
+        const compressed = await compressImage(dataUrl);
+        setImages(prev => [...prev, compressed]);
         setStep(previousStep);
     };
 
@@ -610,6 +697,13 @@ export default function CaptureVisitPage() {
         }
 
         setIsSubmitting(true);
+        
+        // Forced Token Refresh before write
+        try {
+            await refreshToken();
+        } catch (e) {
+            console.warn("Session refresh failed, attempting write anyway...");
+        }
             
         const rawNote = captureForm.getValues('content');
     
@@ -702,7 +796,7 @@ export default function CaptureVisitPage() {
             resetState();
         } catch (error) {
           console.error('Failed to submit visit note:', error);
-          toast({ variant: 'destructive', title: 'Submission Failed', description: 'Could not save your visit note.' });
+          toast({ variant: 'destructive', title: 'Submission Failed', description: 'Could not save your visit note. This may be due to network issues or file size.' });
         } finally {
           setIsSubmitting(false);
         }
@@ -770,6 +864,20 @@ export default function CaptureVisitPage() {
                         <p className="text-muted-foreground">Log your field sales visits and interactions.</p>
                     </header>
                     
+                    {hasDraft && (
+                        <Alert className="bg-primary/10 border-primary/20">
+                            <RotateCcw className="h-4 w-4" />
+                            <AlertTitle>Draft Detected</AlertTitle>
+                            <AlertDescription className="flex items-center justify-between">
+                                You have an unsaved visit note. Would you like to restore it?
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" onClick={clearDraft}>Discard</Button>
+                                    <Button size="sm" onClick={handleRestoreDraft}>Restore</Button>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     <div className="my-4">
                         <ResponsiveProgress currentStep={currentStepNumber} totalSteps={TOTAL_STEPS} labels={stepLabels} onStepClick={handleStepClick} />
                     </div>
