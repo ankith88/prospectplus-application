@@ -48,6 +48,30 @@ function sanitizeData(data: any): any {
   return data;
 }
 
+/**
+ * Removes undefined values from an object recursively to prevent Firestore errors.
+ * Firestore does not accept undefined, so we either omit the key or convert to null.
+ */
+function prepareForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(prepareForFirestore);
+  }
+
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      const cleanedValue = prepareForFirestore(value);
+      if (cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue;
+      }
+    }
+  }
+  return cleaned;
+}
+
 async function logActivity(
   leadId: string,
   activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }
@@ -65,7 +89,7 @@ async function logActivity(
             activityLog.author = activity.author;
         }
 
-        const docRef = await addDoc(activityRef, activityLog);
+        const docRef = await addDoc(activityRef, prepareForFirestore(activityLog));
         console.log(`Activity logged with ID: ${docRef.id} for lead ${leadId}`);
         return docRef.id;
     } catch (error) {
@@ -99,7 +123,7 @@ async function findActivityByCallId(leadId: string, callId: string): Promise<{ i
 async function updateActivity(leadId: string, activityId: string, activityUpdate: Partial<Activity>): Promise<void> {
     try {
         const activityDocRef = doc(firestore, 'leads', leadId, 'activity', activityId);
-        await updateDoc(activityDocRef, activityUpdate);
+        await updateDoc(activityDocRef, prepareForFirestore(activityUpdate));
         console.log(`Activity ${activityId} updated for lead ${leadId}`);
     } catch (error) {
         console.error(`Failed to update activity ${activityId} for lead ${leadId}:`, error);
@@ -1007,7 +1031,7 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
       ...contact,
       syncedWithNetSuite: false,
     };
-    const docRef = await addDoc(contactsRef, newContactData);
+    const docRef = await addDoc(contactsRef, prepareForFirestore(newContactData));
     await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
     
     const leadRef = doc(firestore, 'leads', leadId);
@@ -1248,7 +1272,7 @@ async function logNoteActivity(
     const notesRef = collection(firestore, 'leads', leadId, 'notes');
     const newNoteData = { ...noteData, syncedWithNetSuite: false };
 
-    await addDoc(notesRef, newNoteData);
+    await addDoc(notesRef, prepareForFirestore(newNoteData));
     
     await logActivity(leadId, {
         type: 'Update',
@@ -1273,7 +1297,7 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
             ...transcriptData,
             date: new Date().toISOString()
         };
-        const docRef = await addDoc(transcriptsRef, newTranscript);
+        const docRef = await addDoc(transcriptsRef, prepareForFirestore(newTranscript));
         
         await logActivity(leadId, { 
             type: 'Update', 
@@ -1295,7 +1319,7 @@ async function updateContactInLead(leadId: string, contactId: string, contactDat
       ...contactData,
       syncedWithNetSuite: false, 
     };
-    await updateDoc(contactRef, updatePayload);
+    await updateDoc(contactRef, prepareForFirestore(updatePayload));
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactData.name || 'details'} updated.` });
   } catch (error) {
     console.error(`Failed to update contact ${contactId} for lead ${leadId}:`, error);
@@ -1387,7 +1411,7 @@ async function updateLeadDetails(
                 if (newLeadData.companyDescription !== undefined) updatePayload.companyDescription = newLeadData.companyDescription;
 
                 if (Object.keys(updatePayload).length > 0) {
-                    batch.update(leadRef, updatePayload);
+                    batch.update(leadRef, prepareForFirestore(updatePayload));
                 }
             }
         }
@@ -1540,7 +1564,7 @@ async function addTaskToLead(leadId: string, taskData: { title: string; dueDate:
             isCompleted: false,
             createdAt: new Date().toISOString(),
         };
-        const docRef = await addDoc(tasksRef, newTask);
+        const docRef = await addDoc(tasksRef, prepareForFirestore(newTask));
         await logActivity(leadId, { type: 'Update', notes: `Task added: "${taskData.title}"` });
         return { ...newTask, id: docRef.id } as Task;
     } catch (error) {
@@ -1556,7 +1580,7 @@ async function updateTaskCompletion(leadId: string, taskId: string, isCompleted:
         if (isCompleted) {
             updateData.completedAt = new Date().toISOString();
         }
-        await updateDoc(taskRef, updateData as any);
+        await updateDoc(taskRef, prepareForFirestore(updateData));
         const taskDoc = await getDoc(taskRef);
         const taskTitle = taskDoc.data()?.title || 'a task';
         await logActivity(leadId, { type: 'Update', notes: `Task "${taskTitle}" marked as ${isCompleted ? 'complete' : 'incomplete'}.` });
@@ -1584,7 +1608,7 @@ async function updateLeadDiscoveryData(leadId: string, data: DiscoveryData): Pro
   
   try {
     const leadRef = doc(firestore, 'leads', leadId);
-    await updateDoc(leadRef, { discoveryData: data });
+    await updateDoc(leadRef, prepareForFirestore({ discoveryData: data }));
     
     await sendDiscoveryDataToNetSuite({ leadId, discoveryData: data });
   } catch (error) {
@@ -1615,10 +1639,10 @@ async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQues
         checkinRoutingTag: routingTag,
     };
 
-    await updateDoc(leadRef, { 
+    await updateDoc(leadRef, prepareForFirestore({ 
         checkinQuestions: mergedQuestions,
         ...scoreData
-    });
+    }));
 
     await logActivity(leadId, { type: 'Update', notes: 'Check-in questions were updated.' });
     return { updatedQuestions: mergedQuestions, scoreData };
@@ -1628,10 +1652,10 @@ async function updateLeadCheckinQuestions(leadId: string, questions: CheckinQues
 async function addScorecard(leadId: string, data: any): Promise<any> {
     try {
         const scorecardsRef = collection(firestore, 'leads', leadId, 'scorecards');
-        const docRef = await addDoc(scorecardsRef, {
+        const docRef = await addDoc(scorecardsRef, prepareForFirestore({
             ...data,
             createdAt: new Date().toISOString(),
-        });
+        }));
         const savedData = await getDoc(docRef);
         return sanitizeData({ id: docRef.id, ...savedData.data() });
     } catch (error) {
@@ -1674,7 +1698,7 @@ async function getAllUsers(): Promise<UserProfile[]> {
 async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void> {
     try {
         const userRef = doc(firestore, 'users', uid);
-        await updateDoc(userRef, data);
+        await updateDoc(userRef, prepareForFirestore(data));
     } catch (error) {
         console.error(`Failed to update user ${uid}:`, error);
         throw new Error('Failed to update user in Firebase');
@@ -1885,7 +1909,7 @@ async function bulkDeleteSubCollectionItems(leadId: string, subCollectionName: '
 async function saveUserRoute(userId: string, routeData: Omit<StorableRoute, 'id'>): Promise<string> {
     try {
         const routesRef = collection(firestore, 'users', userId, 'routes');
-        const docRef = await addDoc(routesRef, routeData);
+        const docRef = await addDoc(routesRef, prepareForFirestore(routeData));
         return docRef.id;
     } catch (error) {
         console.error(`Failed to save route for user ${userId}:`, error);
@@ -1896,7 +1920,7 @@ async function saveUserRoute(userId: string, routeData: Omit<StorableRoute, 'id'
 async function updateUserRoute(userId: string, routeId: string, routeUpdate: Partial<StorableRoute>): Promise<void> {
     try {
         const routeRef = doc(firestore, 'users', userId, 'routes', routeId);
-        await updateDoc(routeRef, routeUpdate);
+        await updateDoc(routeRef, prepareForFirestore(routeUpdate));
     } catch (error) {
         console.error(`Failed to update route ${routeId} for user ${userId}:`, error);
         throw new Error('Failed to update route in Firebase');
@@ -2045,8 +2069,9 @@ async function bulkMoveLeadsToBucket(payload: { leadIds: string[]; fieldSales: b
 
 async function addVisitNote(note: Omit<VisitNote, 'id' | 'createdAt' | 'status'>): Promise<string> {
     try {
+        const cleanedData = prepareForFirestore(note);
         const docRef = await addDoc(collection(firestore, 'visitnotes'), {
-            ...note,
+            ...cleanedData,
             createdAt: new Date().toISOString(),
             status: 'New',
         });
@@ -2078,7 +2103,7 @@ async function getVisitNotes(userId?: string): Promise<VisitNote[]> {
 async function updateVisitNote(noteId: string, data: Partial<VisitNote>): Promise<void> {
     try {
         const noteRef = doc(firestore, 'visitnotes', noteId);
-        await updateDoc(noteRef, data);
+        await updateDoc(noteRef, prepareForFirestore(data));
     } catch (error) {
         console.error(`Failed to update visit note ${noteId}:`, error);
         throw new Error('Failed to update visit note in Firebase');

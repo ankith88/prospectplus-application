@@ -749,7 +749,7 @@ export default function CaptureVisitPage() {
                 content: rawNote,
                 capturedBy: captureUser.displayName || 'Unknown User',
                 capturedByUid: captureUser.uid,
-                franchisee: captureUser.franchisee || undefined,
+                franchisee: captureUser.franchisee || null,
                 imageUrls: images,
                 googlePlaceId: selectedPlace?.place_id,
                 companyName: selectedPlace?.name,
