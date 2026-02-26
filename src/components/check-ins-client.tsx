@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, UserProfile } from '@/lib/types';
+import type { Lead, VisitNote, UserProfile, Address } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,7 +24,7 @@ import Link from 'next/link';
 import { Badge } from './ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 
-type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'outcome';
+type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'outcome' | 'address';
 type LeadWithVisitNote = Lead & { visitNote: VisitNote };
 
 export default function CheckinsClientPage() {
@@ -182,6 +183,10 @@ export default function CheckinsClientPage() {
                 aValue = a.visitNote?.outcome?.type || '';
                 bValue = b.visitNote?.outcome?.type || '';
                 break;
+            case 'address':
+                aValue = a.address ? `${a.address.street} ${a.address.city}` : '';
+                bValue = b.address ? `${b.address.street} ${b.address.city}` : '';
+                break;
             default:
                 aValue = (a as any)[sortConfig.key] ?? '';
                 bValue = (b as any)[sortConfig.key] ?? '';
@@ -244,16 +249,17 @@ export default function CheckinsClientPage() {
   
   const handleExport = () => {
     if (sortedLeads.length === 0) {
-        toast({ title: 'No Data', description: 'There is no data to export.'});
+        toast({ title: 'No Data', description: 'There is no data to export with the current filters.'});
         return;
     }
 
-    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Status', 'Franchisee', 'Field Sales Rep', 'Visit Outcome'];
+    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Address', 'Status', 'Franchisee', 'Field Sales Rep', 'Visit Outcome'];
     const rows = sortedLeads.map(lead => [
         escapeCsvCell(lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'),
         escapeCsvCell(lead.id),
         escapeCsvCell(lead.entityId || 'N/A'),
         escapeCsvCell(lead.companyName),
+        escapeCsvCell(lead.address ? `${lead.address.street}, ${lead.address.city}, ${lead.address.state} ${lead.address.zip}` : 'N/A'),
         escapeCsvCell(lead.status),
         escapeCsvCell(lead.franchisee || 'N/A'),
         escapeCsvCell(lead.visitNote?.capturedBy || 'N/A'),
@@ -356,6 +362,7 @@ export default function CheckinsClientPage() {
                             <TableHead><Button variant="ghost" onClick={() => requestSort('leadId')} className="group -ml-4">Lead ID{getSortIndicator('leadId')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('entityId')} className="group -ml-4">Company ID{getSortIndicator('entityId')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                            <TableHead><Button variant="ghost" onClick={() => requestSort('address')} className="group -ml-4">Address{getSortIndicator('address')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('status')} className="group -ml-4">Status{getSortIndicator('status')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                             <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">Field Sales Rep{getSortIndicator('dialerAssigned')}</Button></TableHead>
@@ -375,9 +382,11 @@ export default function CheckinsClientPage() {
                                         <Button variant="link" asChild className="p-0 h-auto">
                                             <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">{lead.companyName}</Link>
                                         </Button>
+                                    </TableCell>
+                                    <TableCell>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                                             <MapPin className="h-3 w-3"/>
-                                            {lead.address?.city || 'N/A'}
+                                            {lead.address ? `${lead.address.street}, ${lead.address.city}` : 'N/A'}
                                         </p>
                                     </TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
@@ -388,7 +397,7 @@ export default function CheckinsClientPage() {
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-24 text-center">
+                                <TableCell colSpan={9} className="h-24 text-center">
                                     No leads found for the selected filters.
                                 </TableCell>
                             </TableRow>

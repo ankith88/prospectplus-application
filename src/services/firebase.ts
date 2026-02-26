@@ -659,6 +659,21 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
 
         const leads = leadsSnapshot.docs.map(doc => {
             const data = sanitizeData(doc.data() || {});
+            
+            let address: Address | undefined;
+            if (data.address && typeof data.address === 'object') {
+                address = data.address;
+            } else if (data.street || data.city || data.state || data.zip || data.country) {
+              address = {
+                address1: data.address1 || '',
+                street: data.street || '',
+                city: data.city || '',
+                state: data.state || '',
+                zip: data.zip || '',
+                country: data.country || ''
+              };
+            }
+
             return {
                 id: doc.id,
                 entityId: data.entityId || data.customerEntityId || '',
@@ -671,12 +686,15 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
                 franchisee: data.franchisee,
-                fieldSales: data.fieldSales,
+                fieldSales: data.fieldSales === true,
                 activity: [],
                 lastProspected: data.lastProspected,
                 dateLeadEntered: data.dateLeadEntered,
                 customerSource: data.customerSource || data.source,
                 visitNoteID: data.visitNoteID,
+                address: address,
+                latitude: data.latitude,
+                longitude: data.longitude,
             } as Lead;
         });
 
