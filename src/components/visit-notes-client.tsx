@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
@@ -13,7 +12,7 @@ import { format, startOfDay, endOfDay } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -266,6 +265,46 @@ export default function VisitNotesClient() {
   const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee';
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleExport = () => {
+    if (filteredNotes.length === 0) {
+        toast({ title: 'No Data', description: 'There is no data to export with the current filters.'});
+        return;
+    }
+
+    const headers = ['Date', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Status', 'Note Content'];
+    const rows = filteredNotes.map(note => [
+        escapeCsvCell(format(new Date(note.createdAt), 'PPpp')),
+        escapeCsvCell(note.capturedBy),
+        escapeCsvCell(note.companyName || 'N/A'),
+        escapeCsvCell(formatAddressString(note.address) || 'N/A'),
+        escapeCsvCell(note.outcome?.type || 'N/A'),
+        escapeCsvCell(note.status),
+        escapeCsvCell(note.content),
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `visit_notes_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: 'Export Successful', description: `${filteredNotes.length} notes exported to CSV.` });
+  };
+
   return (
     <>
       <div className="flex flex-col gap-6">
@@ -283,7 +322,7 @@ export default function VisitNotesClient() {
               </CardTitle>
               <div className="flex items-center gap-2">
                 <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
                     {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
                 <CollapsibleTrigger asChild>
@@ -334,11 +373,17 @@ export default function VisitNotesClient() {
         </Collapsible>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Visit Notes</CardTitle>
-            <CardDescription>
-              Displaying {filteredNotes.length} of {visibleNotes.length} visible notes. Click column headers to sort.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Visit Notes</CardTitle>
+              <CardDescription>
+                Displaying {filteredNotes.length} of {visibleNotes.length} visible notes. Click column headers to sort.
+              </CardDescription>
+            </div>
+            <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredNotes.length === 0}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
