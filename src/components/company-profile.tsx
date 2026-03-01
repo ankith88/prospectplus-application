@@ -27,6 +27,7 @@ import {
   Search,
   Edit,
   FileX,
+  ExternalLink,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
@@ -394,13 +395,32 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 <CardContent>
                     {loadingInvoices ? <Loader /> : invoices.length > 0 ? (
                         <Table>
-                            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>ID</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>ID</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
                             <TableBody>
                                 {invoices.map(inv => (
                                     <TableRow key={inv.id}>
                                         <TableCell>{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'PP') : 'N/A'}</TableCell>
                                         <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
                                         <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">
+                                            {inv.invoiceURL ? (
+                                                <Button size="sm" variant="outline" asChild>
+                                                    <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4 mr-2" />
+                                                        View Invoice
+                                                    </a>
+                                                </Button>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">No link</span>
+                                            )}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
