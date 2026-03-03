@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -23,14 +22,27 @@ import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
+
+const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className="h-4 w-4 text-muted-foreground" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </CardContent>
+  </Card>
+);
 
 export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
@@ -108,7 +120,7 @@ export default function FieldActivityReportPage() {
         const isCapturedByMe = note.capturedByUid === userProfile.uid;
         let isLinkedToMyFranchise = false;
         if (note.leadId) {
-            const linkedRecord = recordsMap.get(note.leadId);
+            const linkedRecord = leadsMap.get(note.leadId);
             if (linkedRecord && linkedRecord.franchisee === userProfile.franchisee) {
                 isLinkedToMyFranchise = true;
             }
@@ -144,7 +156,6 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
-    // Metrics for "Appointment Qualified" or "Schedule Appointment"
     const appointmentOutcomes = ['Appointment Qualified', 'Schedule Appointment'];
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
@@ -267,7 +278,6 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
-    // Filter appointments for the leads generated from "Appointment Qualified" visits
     const convertedLeadIds = new Set(apptConvertedLeads.map(l => l.id));
     const sourcedAppts = allAppointments.filter(a => convertedLeadIds.has(a.leadId));
     const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
@@ -358,19 +368,6 @@ export default function FieldActivityReportPage() {
   if (loading || isRefreshing) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
-
-  const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
-    <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -501,7 +498,8 @@ export default function FieldActivityReportPage() {
                       </TableBody>
                   </Table>
               </CardContent>
-          </div>
+          </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
@@ -550,17 +548,15 @@ export default function FieldActivityReportPage() {
                                               <div className="space-y-3">
                                                   <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                                                       {rep.outcomes.map((o, idx) => (
-                                                          <TooltipProvider key={o.type}>
-                                                              <UITooltip>
-                                                                  <TooltipTrigger asChild>
-                                                                      <div style={{ width: `${o.percentage}%`, backgroundColor: COLORS[idx % COLORS.length] }} className="h-full transition-all hover:brightness-110 cursor-pointer" />
-                                                                  </TooltipTrigger>
-                                                                  <TooltipContent className="text-xs bg-popover text-popover-foreground border shadow-md">
-                                                                      <p className="font-bold">{o.type}</p>
-                                                                      <p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p>
-                                                                  </TooltipContent>
-                                                              </UITooltip>
-                                                          </TooltipProvider>
+                                                          <UITooltip key={o.type}>
+                                                              <TooltipTrigger asChild>
+                                                                  <div style={{ width: `${o.percentage}%`, backgroundColor: COLORS[idx % COLORS.length] }} className="h-full transition-all hover:brightness-110 cursor-pointer" />
+                                                              </TooltipTrigger>
+                                                              <TooltipContent className="text-xs bg-popover text-popover-foreground border shadow-md">
+                                                                  <p className="font-bold">{o.type}</p>
+                                                                  <p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p>
+                                                              </TooltipContent>
+                                                          </UITooltip>
                                                       ))}
                                                   </div>
                                                   <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -583,7 +579,7 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><CalendarIconLucide className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
                   <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -602,7 +598,7 @@ export default function FieldActivityReportPage() {
                               >
                                   {stats.sourcedApptOutcomeDist.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                               </Pie>
-                              <Tooltip formatter={(value, name, props) => [`${value} (${(props.percent * 100).toFixed(1)}%)`, name]} />
+                              <Tooltip />
                               <Legend />
                           </PieChart>
                       </ChartContainer>
@@ -686,7 +682,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Commission Eligible Leads</DialogTitle>
-                        <DialogDescription>Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</DialogDescription>
+                        <p className="text-sm text-muted-foreground">Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.commissionEligibleLeads,
@@ -717,7 +713,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Visits</DialogTitle>
-                        <DialogDescription>Visits with outcome "Appointment Qualified" or "Schedule Appointment".</DialogDescription>
+                        <p className="text-sm text-muted-foreground">Visits with outcome "Appointment Qualified" or "Schedule Appointment".</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.appointmentVisits,
@@ -756,7 +752,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Converted Leads</DialogTitle>
-                        <DialogDescription>CRM records sourced from high-intent appointment visits.</DialogDescription>
+                        <p className="text-sm text-muted-foreground">CRM records sourced from high-intent appointment visits.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.apptConvertedLeads,
