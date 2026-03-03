@@ -686,8 +686,8 @@ export default function FieldActivityReportPage() {
       </Card>
 
       <Dialog open={isCommissionListOpen} onOpenChange={setIsCommissionListOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Commission Eligible Leads</DialogTitle>
@@ -703,22 +703,24 @@ export default function FieldActivityReportPage() {
                     </Button>
                   </div>
               </DialogHeader>
-              <ScrollArea className="flex-1 mt-4">
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.commissionEligibleLeads.length > 0 ? stats.commissionEligibleLeads.map((lead) => (
-                              <TableRow key={lead.id}><TableCell className="font-medium">{lead.companyName}</TableCell><TableCell>{lead.capturedBy}</TableCell><TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell><TableCell><LeadStatusBadge status={lead.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
-                          )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </ScrollArea>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.commissionEligibleLeads.length > 0 ? stats.commissionEligibleLeads.map((lead) => (
+                                <TableRow key={lead.id}><TableCell className="font-medium">{lead.companyName}</TableCell><TableCell>{lead.capturedBy}</TableCell><TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell><TableCell><LeadStatusBadge status={lead.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
           </DialogContent>
       </Dialog>
 
       <Dialog open={isApptVisitsListOpen} onOpenChange={setIsApptVisitsListOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Visits</DialogTitle>
@@ -734,30 +736,32 @@ export default function FieldActivityReportPage() {
                     </Button>
                   </div>
               </DialogHeader>
-              <ScrollArea className="flex-1 mt-4">
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Outcome</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => (
-                              <TableRow key={note.id}>
-                                  <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
-                                  <TableCell>{note.capturedBy}</TableCell>
-                                  <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
-                                  <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
-                                  <TableCell>
-                                      <Badge variant={note.status === 'Converted' ? 'default' : 'secondary'}>{note.status}</Badge>
-                                  </TableCell>
-                              </TableRow>
-                          )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </ScrollArea>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Outcome</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => (
+                                <TableRow key={note.id}>
+                                    <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                    <TableCell>{note.capturedBy}</TableCell>
+                                    <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
+                                    <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
+                                    <TableCell>
+                                        <Badge variant={note.status === 'Converted' ? 'default' : 'secondary'}>{note.status}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
           </DialogContent>
       </Dialog>
 
       <Dialog open={isApptLeadsListOpen} onOpenChange={setIsApptLeadsListOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Converted Leads</DialogTitle>
@@ -773,32 +777,34 @@ export default function FieldActivityReportPage() {
                     </Button>
                   </div>
               </DialogHeader>
-              <ScrollArea className="flex-1 mt-4">
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.apptConvertedLeads.length > 0 ? stats.apptConvertedLeads.map((lead) => (
-                              <TableRow key={lead.id}>
-                                  <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                  <TableCell>{(lead as any).capturedBy}</TableCell>
-                                  <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
-                                  <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                  <TableCell className="text-right">
-                                      <Button variant="ghost" size="sm" asChild>
-                                          <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                      </Button>
-                                  </TableCell>
-                              </TableRow>
-                          )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No converted leads found.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </ScrollArea>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.apptConvertedLeads.length > 0 ? stats.apptConvertedLeads.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{(lead as any).capturedBy}</TableCell>
+                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No converted leads found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
           </DialogContent>
       </Dialog>
 
       <Dialog open={isApptOutcomeListOpen} onOpenChange={setIsApptOutcomeListOpen}>
-          <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
-              <DialogHeader>
+          <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div className="space-y-1">
                         <DialogTitle>Sourced Appointment Details</DialogTitle>
@@ -832,52 +838,54 @@ export default function FieldActivityReportPage() {
                     </div>
                   </div>
               </DialogHeader>
-              <ScrollArea className="flex-1 mt-4">
-                  <Table>
-                      <TableHeader>
-                          <TableRow>
-                              <TableHead>Company</TableHead>
-                              <TableHead>Lead Status</TableHead>
-                              <TableHead>Appt Status</TableHead>
-                              <TableHead>Field Rep (Source)</TableHead>
-                              <TableHead>Appt Date</TableHead>
-                              <TableHead className="text-right">Action</TableHead>
-                          </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {filteredSourcedAppts.length > 0 ? filteredSourcedAppts.map((appt) => (
-                              <TableRow key={appt.id}>
-                                  <TableCell className="font-medium">{appt.leadName}</TableCell>
-                                  <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
-                                  <TableCell>
-                                      <Badge variant="outline" className={cn(
-                                          appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                          appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                                          'bg-blue-50 text-blue-700 border-blue-200'
-                                      )}>
-                                          {appt.appointmentStatus || 'Pending'}
-                                      </Badge>
-                                  </TableCell>
-                                  <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                  <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
-                                  <TableCell className="text-right">
-                                      <Button variant="ghost" size="sm" asChild>
-                                          <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
-                                              View Record <ExternalLink className="ml-2 h-3 w-3" />
-                                          </Link>
-                                      </Button>
-                                  </TableCell>
-                              </TableRow>
-                          )) : (
-                              <TableRow>
-                                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                                      No appointments found for this status.
-                                  </TableCell>
-                              </TableRow>
-                          )}
-                      </TableBody>
-                  </Table>
-              </ScrollArea>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Lead Status</TableHead>
+                                <TableHead>Appt Status</TableHead>
+                                <TableHead>Field Rep (Source)</TableHead>
+                                <TableHead>Appt Date</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredSourcedAppts.length > 0 ? filteredSourcedAppts.map((appt) => (
+                                <TableRow key={appt.id}>
+                                    <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                    <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={cn(
+                                            appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                            appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            'bg-blue-50 text-blue-700 border-blue-200'
+                                        )}>
+                                            {appt.appointmentStatus || 'Pending'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
+                                                View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                        No appointments found for this status.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
           </DialogContent>
       </Dialog>
     </div>
