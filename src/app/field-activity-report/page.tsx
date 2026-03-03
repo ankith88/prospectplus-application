@@ -9,7 +9,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
@@ -108,7 +108,7 @@ export default function FieldActivityReportPage() {
         const isCapturedByMe = note.capturedByUid === userProfile.uid;
         let isLinkedToMyFranchise = false;
         if (note.leadId) {
-            const linkedRecord = leadsMap.get(note.leadId);
+            const linkedRecord = recordsMap.get(note.leadId);
             if (linkedRecord && linkedRecord.franchisee === userProfile.franchisee) {
                 isLinkedToMyFranchise = true;
             }
@@ -267,7 +267,8 @@ export default function FieldActivityReportPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
-    const convertedLeadIds = new Set(convertedNotes.map(n => n.leadId).filter(Boolean));
+    // Filter appointments for the leads generated from "Appointment Qualified" visits
+    const convertedLeadIds = new Set(apptConvertedLeads.map(l => l.id));
     const sourcedAppts = allAppointments.filter(a => convertedLeadIds.has(a.leadId));
     const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
         const status = appt.appointmentStatus || 'Pending';
@@ -329,6 +330,30 @@ export default function FieldActivityReportPage() {
     const franchisees = new Set(allLeads.filter(l => leadIds.includes(l.id) && l.franchisee).map(l => l.franchisee));
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
   }, [visibleVisitNotes, allLeads]);
+
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) return '';
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleExportList = (data: any[], headers: string[], filename: string, rowMapper: (item: any) => string[]) => {
+    if (data.length === 0) {
+        toast({ title: 'No Data', description: 'List is empty.' });
+        return;
+    }
+    const csvContent = [headers.join(','), ...data.map(item => rowMapper(item).map(escapeCsvCell).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (loading || isRefreshing) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
@@ -476,8 +501,7 @@ export default function FieldActivityReportPage() {
                       </TableBody>
                   </Table>
               </CardContent>
-          </Card>
-      </div>
+          </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
@@ -559,7 +583,7 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><CalendarIconLucide className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
                   <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -658,7 +682,22 @@ export default function FieldActivityReportPage() {
 
       <Dialog open={isCommissionListOpen} onOpenChange={setIsCommissionListOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader><DialogTitle>Commission Eligible Leads</DialogTitle><DialogDescription>Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</DialogDescription></DialogHeader>
+              <DialogHeader>
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Commission Eligible Leads</DialogTitle>
+                        <DialogDescription>Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.commissionEligibleLeads,
+                        ['Company', 'Rep', 'Visit Date', 'Status'],
+                        'commission_leads',
+                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
               <ScrollArea className="flex-1 mt-4">
                   <Table>
                       <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
@@ -674,7 +713,22 @@ export default function FieldActivityReportPage() {
 
       <Dialog open={isApptVisitsListOpen} onOpenChange={setIsApptVisitsListOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader><DialogTitle>Appointment Visits</DialogTitle><DialogDescription>Visits with outcome "Appointment Qualified" or "Schedule Appointment".</DialogDescription></DialogHeader>
+              <DialogHeader>
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Appointment Visits</DialogTitle>
+                        <DialogDescription>Visits with outcome "Appointment Qualified" or "Schedule Appointment".</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.appointmentVisits,
+                        ['Company', 'Rep', 'Date', 'Outcome', 'Status'],
+                        'appointment_visits',
+                        (n) => [n.companyName || 'N/A', n.capturedBy, format(new Date(n.createdAt), 'PP'), n.outcome?.type || 'N/A', n.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
               <ScrollArea className="flex-1 mt-4">
                   <Table>
                       <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Outcome</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
@@ -698,7 +752,22 @@ export default function FieldActivityReportPage() {
 
       <Dialog open={isApptLeadsListOpen} onOpenChange={setIsApptLeadsListOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-              <DialogHeader><DialogTitle>Appointment Converted Leads</DialogTitle><DialogDescription>CRM records sourced from high-intent appointment visits.</DialogDescription></DialogHeader>
+              <DialogHeader>
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Appointment Converted Leads</DialogTitle>
+                        <DialogDescription>CRM records sourced from high-intent appointment visits.</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.apptConvertedLeads,
+                        ['Company', 'Field Rep', 'Visit Date', 'Current Status'],
+                        'appt_converted_leads',
+                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
               <ScrollArea className="flex-1 mt-4">
                   <Table>
                       <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
