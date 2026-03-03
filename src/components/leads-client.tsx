@@ -290,7 +290,7 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
-      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(lead.status);
+      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true && lead.status !== 'Priority Field Lead';
 
       let campaignMatch = true;
@@ -643,7 +643,7 @@ export default function LeadsClientPage() {
   const handleAssign = async (leadId: string) => {
     if (!user?.displayName) return;
     try {
-        await updateLeadDialerRep(leadId, user.displayName);
+        await updateLeadDialerRep(leadId, user.displayName! );
         const updatedLeads = allLeads.map(lead =>
             lead.id === leadId ? { ...lead, dialerAssigned: user.displayName! } : lead
         );
@@ -755,7 +755,7 @@ export default function LeadsClientPage() {
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
-  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
+  const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a,b) => a.label.localeCompare(b.label));
   
   const uniqueFranchisees: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
@@ -780,7 +780,8 @@ export default function LeadsClientPage() {
   }, [allLeads]);
   
   const dialerOptions: Option[] = useMemo(() => {
-    return allDialers.map(d => ({ value: d.displayName!, label: d.displayName! })).sort((a,b) => a.label.localeCompare(b.label));
+    const uniqueNames = new Set(allDialers.map(d => d.displayName).filter(Boolean));
+    return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
   }, [allDialers]);
   
   const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';

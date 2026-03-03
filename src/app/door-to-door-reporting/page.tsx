@@ -19,7 +19,7 @@ import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { getAllLeadsForReport, getAllUsers, getAllActivities, getAllUserRoutes } from '@/services/firebase';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 
 export default function DoorToDoorReportingPage() {
@@ -222,7 +222,10 @@ export default function DoorToDoorReportingPage() {
   );
 
   const hasActiveFilters = filters.user.length > 0 || !!filters.date;
-  const userOptions: Option[] = allFieldSalesUsers.map(u => ({ value: u.displayName!, label: u.displayName! }));
+  const userOptions: Option[] = useMemo(() => {
+    const uniqueNames = new Set(allFieldSalesUsers.map(u => u.displayName).filter(Boolean));
+    return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
+  }, [allFieldSalesUsers]);
 
   if (authLoading || loading) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
@@ -241,22 +244,24 @@ export default function DoorToDoorReportingPage() {
 
       <Collapsible>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                <CardTitle>Filters</CardTitle>
-            </div>
-            <div className="flex items-center gap-2">
-                <Button onClick={fetchData} variant="outline" disabled={isRefreshing || loading}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
-                    {isRefreshing || loading ? 'Refreshing...' : 'Refresh Data'}
-                </Button>
-                <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                        <SlidersHorizontal className="h-4 w-4" />
-                        <span className="ml-2">Toggle Filters</span>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    <CardTitle>Filters</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={fetchData} variant="outline" disabled={isRefreshing || loading}>
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
+                        {isRefreshing || loading ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
-                </CollapsibleTrigger>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                            <SlidersHorizontal className="h-4 w-4" />
+                            <span className="ml-2">Toggle Filters</span>
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
             </div>
           </CardHeader>
           <CollapsibleContent>

@@ -277,6 +277,7 @@ export default function FieldActivityReportPage() {
         });
 
         return {
+            id: user.uid,
             name,
             apptSuccess: apptSuccessCount,
             outboundWins: outboundWinsCount,
@@ -285,17 +286,17 @@ export default function FieldActivityReportPage() {
     }).filter(r => r.apptSuccess > 0 || r.outboundWins > 0);
 
     const appointmentSuccessByRep = performanceStats
-        .map(r => ({ name: r.name, count: r.apptSuccess }))
+        .map(r => ({ id: r.id, name: r.name, count: r.apptSuccess }))
         .filter(r => r.count > 0)
         .sort((a, b) => b.count - a.count);
 
     const outboundWinsByRep = performanceStats
-        .map(r => ({ name: r.name, count: r.outboundWins }))
+        .map(r => ({ id: r.id, name: r.name, count: r.outboundWins }))
         .filter(r => r.count > 0)
         .sort((a, b) => b.count - a.count);
 
     const commissionEarningsByRep = performanceStats
-        .map(r => ({ name: r.name, amount: r.commission }))
+        .map(r => ({ id: r.id, name: r.name, amount: r.commission }))
         .filter(r => r.amount > 0)
         .sort((a, b) => b.amount - a.amount);
 
@@ -421,11 +422,13 @@ export default function FieldActivityReportPage() {
 
       <Collapsible>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing}><RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh</Button>
-              <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /><span className="ml-2">Toggle</span></Button></CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><Filter className="h-5 w-5" /> <CardTitle>Filters</CardTitle></div>
+              <div className="flex items-center gap-2">
+                <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing}><RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh</Button>
+                <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /><span className="ml-2">Toggle</span></Button></CollapsibleTrigger>
+              </div>
             </div>
           </CardHeader>
           <CollapsibleContent>
@@ -512,7 +515,7 @@ export default function FieldActivityReportPage() {
                       <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.appointmentSuccessByRep.length > 0 ? stats.appointmentSuccessByRep.map(r => (
-                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
+                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
                           )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
                       </TableBody>
                   </Table>
@@ -531,7 +534,7 @@ export default function FieldActivityReportPage() {
                       <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.outboundWinsByRep.length > 0 ? stats.outboundWinsByRep.map(r => (
-                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
+                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
                           )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
                       </TableBody>
                   </Table>
@@ -550,7 +553,7 @@ export default function FieldActivityReportPage() {
                       <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Earnings</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.commissionEarningsByRep.length > 0 ? stats.commissionEarningsByRep.map(r => (
-                              <TableRow key={r.name}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold text-orange-600">${r.amount}</TableCell></TableRow>
+                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold text-orange-600">${r.amount}</TableCell></TableRow>
                           )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
                       </TableBody>
                   </Table>

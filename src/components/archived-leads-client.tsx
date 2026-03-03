@@ -98,7 +98,8 @@ export default function ArchivedLeadsClientPage() {
   }, [allLeads, loading]);
 
   const dialerOptions: Option[] = useMemo(() => {
-    const dialers = allDialers.map(d => ({ value: d.displayName!, label: d.displayName! }));
+    const uniqueNames = new Set(allDialers.map(d => d.displayName).filter(Boolean));
+    const dialers = Array.from(uniqueNames).map(name => ({ value: name!, label: name! }));
     return [
         { value: 'unassigned', label: 'Unassigned' },
         ...dialers.sort((a,b) => a.label.localeCompare(b.label))
