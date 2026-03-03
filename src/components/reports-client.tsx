@@ -837,7 +837,7 @@ export default function ReportsClientPage() {
                         filteredAppointments,
                         ['Lead Name', 'Dialer', 'Account Manager', 'Date', 'Status'],
                         'outbound_appointments',
-                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo, format(new Date(a.duedate), 'PP'), a.appointmentStatus || 'Pending']
+                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', format(new Date(a.duedate), 'PP'), a.appointmentStatus || 'Pending']
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -861,7 +861,7 @@ export default function ReportsClientPage() {
                                 <TableRow key={appt.id}>
                                     <TableCell className="font-medium">{appt.leadName}</TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{appt.assignedTo}</TableCell>
+                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
