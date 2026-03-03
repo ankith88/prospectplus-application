@@ -522,7 +522,7 @@ export default function FieldActivityReportPage() {
                       <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
-                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-blue-600">Converted {"->"} Qualified</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
+                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-green-600">Converted {"->"} Qualified</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
@@ -719,7 +719,7 @@ export default function FieldActivityReportPage() {
       </Dialog>
 
       <Dialog open={isApptVisitsListOpen} onOpenChange={setIsApptVisitsListOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
@@ -728,9 +728,16 @@ export default function FieldActivityReportPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.appointmentVisits,
-                        ['Company', 'Rep', 'Date', 'Outcome', 'Status'],
+                        ['Company', 'Rep', 'Date', 'Outcome', 'Status', 'Linked Record'],
                         'appointment_visits',
-                        (n) => [n.companyName || 'N/A', n.capturedBy, format(new Date(n.createdAt), 'PP'), n.outcome?.type || 'N/A', n.status]
+                        (n) => [
+                            n.companyName || 'N/A', 
+                            n.capturedBy, 
+                            format(new Date(n.createdAt), 'PP'), 
+                            n.outcome?.type || 'N/A', 
+                            n.status,
+                            n.leadId && leadsMap.has(n.leadId) ? leadsMap.get(n.leadId)?.companyName || '' : 'Not Linked'
+                        ]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -739,9 +746,20 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Outcome</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Outcome</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Linked Record</TableHead>
+                            </TableRow>
+                        </TableHeader>
                         <TableBody>
-                            {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => (
+                            {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => {
+                                const linkedRecord = note.leadId ? leadsMap.get(note.leadId) : null;
+                                return (
                                 <TableRow key={note.id}>
                                     <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
                                     <TableCell>{note.capturedBy}</TableCell>
@@ -750,8 +768,19 @@ export default function FieldActivityReportPage() {
                                     <TableCell>
                                         <Badge variant={note.status === 'Converted' ? 'default' : 'secondary'}>{note.status}</Badge>
                                     </TableCell>
+                                    <TableCell>
+                                        {note.leadId && linkedRecord ? (
+                                            <Button asChild variant="link" className="p-0 h-auto">
+                                                <Link href={linkedRecord.status === 'Won' ? `/companies/${note.leadId}` : `/leads/${note.leadId}`} target="_blank">
+                                                    {linkedRecord.companyName} <ExternalLink className="ml-1 h-3 w-3" />
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <span className="text-muted-foreground text-xs italic">Not Linked</span>
+                                        )}
+                                    </TableCell>
                                 </TableRow>
-                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                            )}) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
