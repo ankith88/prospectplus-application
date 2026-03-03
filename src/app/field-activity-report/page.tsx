@@ -56,6 +56,8 @@ export default function FieldActivityReportPage() {
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
   const [isApptVisitsListOpen, setIsApptVisitsListOpen] = useState(false);
   const [isApptLeadsListOpen, setIsApptLeadsListOpen] = useState(false);
+  const [isWithApptListOpen, setIsWithApptListOpen] = useState(false);
+  const [isWithoutApptListOpen, setIsWithoutApptListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
@@ -172,6 +174,28 @@ export default function FieldActivityReportPage() {
             capturedBy: n.capturedBy,
             visitOutcome: n.outcome?.type
         }));
+
+    const leadsWithAnyApptIds = new Set(allAppointments.map(a => a.leadId));
+
+    const leadsConvertedWithAppt = convertedNotes
+        .filter(n => leadsWithAnyApptIds.has(n.leadId!))
+        .map(n => ({
+            ...leadsMap.get(n.leadId!)!,
+            visitDate: n.createdAt,
+            capturedBy: n.capturedBy,
+            visitOutcome: n.outcome?.type
+        }))
+        .filter(l => !!l.id);
+
+    const leadsConvertedWithoutAppt = convertedNotes
+        .filter(n => !leadsWithAnyApptIds.has(n.leadId!))
+        .map(n => ({
+            ...leadsMap.get(n.leadId!)!,
+            visitDate: n.createdAt,
+            capturedBy: n.capturedBy,
+            visitOutcome: n.outcome?.type
+        }))
+        .filter(l => !!l.id);
 
     const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
@@ -311,6 +335,8 @@ export default function FieldActivityReportPage() {
       commissionEligibleLeads,
       appointmentVisits,
       apptConvertedLeads,
+      leadsConvertedWithAppt,
+      leadsConvertedWithoutAppt,
       callOutcomesData,
       visitsByUserData,
       repOutcomeEfficiency,
@@ -378,6 +404,8 @@ export default function FieldActivityReportPage() {
     selectedOutcomeFilter === 'all' || (appt.appointmentStatus || 'Pending') === selectedOutcomeFilter
   );
 
+  const companyIds = new Set(allLeads.filter(l => l.status === 'Won').map(l => l.id));
+
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -441,6 +469,20 @@ export default function FieldActivityReportPage() {
             icon={CalendarCheck} 
             description="Qualified Appts from field" 
             onClick={() => setIsApptVisitsListOpen(true)}
+          />
+          <StatCard 
+            title="Converted (With Appts)" 
+            value={stats.leadsConvertedWithAppt.length} 
+            icon={CalendarIcon} 
+            description="Converted leads with appointments" 
+            onClick={() => setIsWithApptListOpen(true)}
+          />
+          <StatCard 
+            title="Converted (No Appts)" 
+            value={stats.leadsConvertedWithoutAppt.length} 
+            icon={FileX} 
+            description="Converted leads without appointments" 
+            onClick={() => setIsWithoutApptListOpen(true)}
           />
           <StatCard 
             title="Appt. Converted Leads" 
@@ -824,6 +866,92 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No converted leads found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isWithApptListOpen} onOpenChange={setIsWithApptListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Converted (With Appointments)</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Leads/Customers from visits that have an appointment scheduled.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.leadsConvertedWithAppt,
+                        ['Company', 'Field Rep', 'Visit Date', 'Status'],
+                        'converted_with_appts',
+                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.leadsConvertedWithAppt.length > 0 ? stats.leadsConvertedWithAppt.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{(lead as any).capturedBy}</TableCell>
+                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={companyIds.has(lead.id) ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isWithoutApptListOpen} onOpenChange={setIsWithoutApptListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Converted (No Appointments)</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Leads/Customers from visits that do NOT have any appointments yet.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.leadsConvertedWithoutAppt,
+                        ['Company', 'Field Rep', 'Visit Date', 'Status'],
+                        'converted_no_appts',
+                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.leadsConvertedWithoutAppt.length > 0 ? stats.leadsConvertedWithoutAppt.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{(lead as any).capturedBy}</TableCell>
+                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={companyIds.has(lead.id) ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
