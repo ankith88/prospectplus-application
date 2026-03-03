@@ -770,16 +770,26 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 
 async function getAllCallActivities(startDate?: string, endDate?: string): Promise<CallActivity[]> {
     try {
-        console.log(`[getAllCallActivities] Fetching calls within range: ${startDate} to ${endDate}`);
-        let activityQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
-        
-        if (startDate) activityQuery = query(activityQuery, where('date', '>=', startDate));
-        if (endDate) activityQuery = query(activityQuery, where('date', '<=', endDate));
-        
-        activityQuery = query(activityQuery, limit(3000));
+        console.log(`[getAllCallActivities] Fetching all activities from collection group...`);
+        // We use a simple collection group query to avoid index requirements for combined filters.
+        // We limit to a large number but handle filtering in memory for compatibility.
+        const activityQuery = query(collectionGroup(firestore, 'activity'), limit(5000));
         
         const activitySnapshot = await getDocs(activityQuery);
-        const callActivityDocs = activitySnapshot.docs;
+        const allActivityDocs = activitySnapshot.docs;
+
+        if (allActivityDocs.length === 0) {
+            return [];
+        }
+
+        // Filter for calls and date range in memory
+        const callActivityDocs = allActivityDocs.filter(doc => {
+            const data = doc.data() as Activity;
+            if (data.type !== 'Call') return false;
+            if (startDate && data.date < startDate) return false;
+            if (endDate && data.date > endDate) return false;
+            return true;
+        });
 
         if (callActivityDocs.length === 0) {
             return [];
@@ -894,7 +904,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
             allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
         }
         
-        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(a.date).getTime());
+        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -906,19 +916,20 @@ async function getUserActivitiesForPeriod(displayName: string, startDate: string
     try {
         const q = query(
             collectionGroup(firestore, 'activity'),
-            where('author', '==', displayName),
-            where('date', '>=', startDate)
+            where('author', '==', displayName)
         );
         const activitiesSnapshot = await getDocs(q);
-        const userActivities = activitiesSnapshot.docs.map(doc => {
-            const activityData = sanitizeData(doc.data()) as Activity;
-            const leadId = doc.ref.parent.parent!.id;
-            return {
-                ...activityData,
-                id: doc.id,
-                leadId: leadId,
-            };
-        });
+        const userActivities = activitiesSnapshot.docs
+            .map(doc => {
+                const activityData = sanitizeData(doc.data()) as Activity;
+                const leadId = doc.ref.parent.parent!.id;
+                return {
+                    ...activityData,
+                    id: doc.id,
+                    leadId: leadId,
+                };
+            })
+            .filter(a => a.date >= startDate);
         return userActivities;
     } catch (error) {
         console.error(`Failed to fetch activities for user ${displayName}:`, error);
@@ -974,17 +985,21 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
 async function getAllAppointments(startDate?: string, endDate?: string): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string }>> {
     try {
-        console.log(`[getAllAppointments] Fetching appointments within range: ${startDate} to ${endDate}`);
-        let appointmentsQuery = query(collectionGroup(firestore, 'appointments'));
-        
-        if (startDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '>=', startDate));
-        if (endDate) appointmentsQuery = query(appointmentsQuery, where('starttime', '<=', endDate));
-        
-        appointmentsQuery = query(appointmentsQuery, limit(3000));
+        console.log(`[getAllAppointments] Fetching all appointments from collection group...`);
+        // Simple query without filters to avoid index requirements
+        const appointmentsQuery = query(collectionGroup(firestore, 'appointments'), limit(3000));
         
         const appointmentsSnapshot = await getDocs(appointmentsQuery);
         
-        const leadIds = [...new Set(appointmentsSnapshot.docs.map(doc => doc.ref.parent.parent!.id))];
+        // Filter in memory for compatibility
+        const filteredDocs = appointmentsSnapshot.docs.filter(doc => {
+            const data = doc.data() as Appointment;
+            if (startDate && data.starttime < startDate) return false;
+            if (endDate && data.starttime > endDate) return false;
+            return true;
+        });
+
+        const leadIds = [...new Set(filteredDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) return [];
 
         const leadsData: { [key: string]: Lead } = {};
@@ -1009,7 +1024,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             }));
         }
 
-        const allAppointments = appointmentsSnapshot.docs.map(appointmentDoc => {
+        const allAppointments = filteredDocs.map(appointmentDoc => {
             const appointmentData = sanitizeData(appointmentDoc.data()) as Appointment;
             const leadId = appointmentDoc.ref.parent.parent?.id;
             if (!leadId) return null;
@@ -2011,7 +2026,7 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
         const routeData = routeDoc.data();
         const batch = writeBatch(firestore);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
-        batch.delete(sourceRouteRef);
+        batch.delete(sourceRouteRouteRef);
         await batch.commit();
     } catch (error) {
         console.error(`Failed to move route ${routeId}:`, error);

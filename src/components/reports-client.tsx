@@ -43,7 +43,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
-import { collection, query, getDocs, collectionGroup, orderBy, documentId, where } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup, orderBy, documentId, where, limit } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -178,15 +178,15 @@ export default function ReportsClientPage() {
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
-        // Fetch activities within filtered period
-        let activitiesQuery = query(collectionGroup(firestore, 'activity'), orderBy('date', 'desc'));
-        if (startDate) activitiesQuery = query(activitiesQuery, where('date', '>=', startDate));
-        if (endDate) activitiesQuery = query(activitiesQuery, where('date', '<=', endDate));
-        
-        const activitiesSnap = await getDocs(activitiesQuery);
+        // We use simple collection group queries without ordering or complex where clauses
+        // to avoid triggering index requirements. Sorting and filtering is done in JS.
+        const activitiesSnap = await getDocs(query(collectionGroup(firestore, 'activity'), limit(5000)));
         const calls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
             if (data.type !== 'Call') return null;
+
+            if (startDate && data.date < startDate) return null;
+            if (endDate && data.date > endDate) return null;
 
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
@@ -207,16 +207,18 @@ export default function ReportsClientPage() {
                 dialerAssigned: lead.dialerAssigned || 'Unassigned',
             };
         }).filter(Boolean) as CallActivity[];
+        
+        calls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllCalls(calls);
 
-        // Fetch appointments within filtered period
-        let apptsQuery = query(collectionGroup(firestore, 'appointments'), orderBy('starttime', 'desc'));
-        if (startDate) apptsQuery = query(apptsQuery, where('starttime', '>=', startDate));
-        if (endDate) apptsQuery = query(apptsQuery, where('starttime', '<=', endDate));
-        
-        const apptsSnap = await getDocs(apptsQuery);
+        const apptsSnap = await getDocs(query(collectionGroup(firestore, 'appointments'), limit(3000)));
         const appts = apptsSnap.docs.map(apptDoc => {
             const data = apptDoc.data() as Appointment;
+            
+            const apptCreatedDate = parseDateString(data.appointmentDate);
+            if (startDate && apptCreatedDate && apptCreatedDate.toISOString() < startDate) return null;
+            if (endDate && apptCreatedDate && apptCreatedDate.toISOString() > endDate) return null;
+
             const leadId = apptDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
@@ -238,6 +240,8 @@ export default function ReportsClientPage() {
                 entityId: lead.entityId || (lead as any).customerEntityId || (lead as any).internalid,
             };
         }).filter(Boolean) as AppointmentWithLead[];
+        
+        appts.sort((a, b) => new Date(b.starttime).getTime() - new Date(a.starttime).getTime());
         setAllAppointments(appts);
 
     } catch (error: any) {
