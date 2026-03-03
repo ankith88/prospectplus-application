@@ -51,6 +51,7 @@ export default function FieldActivityReportPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
+  const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
@@ -91,6 +92,7 @@ export default function FieldActivityReportPage() {
       ]);
       setAllVisitNotes(notes);
       setAllLeads([...leads, ...companies]);
+      setOriginalCompanyIds(new Set(companies.map(c => c.id)));
       setAllAppointments(appointments);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
     } catch (error) {
@@ -167,9 +169,7 @@ export default function FieldActivityReportPage() {
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
     
-    // Converted leads that were sourced from an Appointment Visit
     const apptConvertedVisits = appointmentVisits.filter(n => n.status === 'Converted' && n.leadId);
-    
     const apptConvertedLeads = apptConvertedVisits
         .filter(n => leadsMap.has(n.leadId!))
         .map(n => ({
@@ -180,8 +180,6 @@ export default function FieldActivityReportPage() {
         }));
 
     const leadsWithAnyApptIds = new Set(allAppointments.map(a => a.leadId));
-
-    // Refined: Converted (With Appts) must be from an Appointment-related visit
     const leadsConvertedWithAppt = apptConvertedVisits
         .filter(n => leadsWithAnyApptIds.has(n.leadId!))
         .map(n => ({
@@ -192,7 +190,6 @@ export default function FieldActivityReportPage() {
         }))
         .filter(l => !!l.id);
 
-    // Refined: Converted (No Appts) must be from an Appointment-related visit
     const leadsConvertedWithoutAppt = apptConvertedVisits
         .filter(n => !leadsWithAnyApptIds.has(n.leadId!))
         .map(n => ({
@@ -202,17 +199,6 @@ export default function FieldActivityReportPage() {
             visitOutcome: n.outcome?.type
         }))
         .filter(l => !!l.id);
-
-    const commissionEligibleLeads = convertedNotes.filter(note => {
-        const lead = leadsMap.get(note.leadId!);
-        if (!lead) return false;
-        const hasCompletedAppointment = allAppointments.some(appt => appt.leadId === lead.id && appt.appointmentStatus === 'Completed');
-        const isSignedViaOutbound = lead.fieldSales === false && lead.status === 'Won';
-        return hasCompletedAppointment || isSignedViaOutbound;
-    }).map(note => {
-        const lead = leadsMap.get(note.leadId!)!;
-        return { ...lead, visitDate: note.createdAt, capturedBy: note.capturedBy };
-    });
 
     const callOutcomesData = filteredVisitNotes.reduce((acc, note) => {
         const type = note.outcome?.type || 'Other';
@@ -252,27 +238,43 @@ export default function FieldActivityReportPage() {
         };
     }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.totalVisits - a.totalVisits);
 
+    const commissionEligibleEvents: any[] = [];
     const performanceStats = allFieldSalesUsers.map(user => {
         const name = user.displayName!;
         const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
-        const convertedNotes = userNotes.filter(n => n.status === 'Converted' && n.leadId);
+        const userConvertedNotes = userNotes.filter(n => n.status === 'Converted' && n.leadId);
         
         let apptSuccessCount = 0;
         let outboundWinsCount = 0;
 
-        convertedNotes.forEach(note => {
+        userConvertedNotes.forEach(note => {
             const lead = leadsMap.get(note.leadId!);
             if (!lead) return;
 
-            if (lead.status === 'Won') {
-                outboundWinsCount++;
-            }
-
+            // Milestone 1: Appointment Success
             const hasCompletedAppt = allAppointments.some(appt => 
                 appt.leadId === lead.id && appt.appointmentStatus === 'Completed'
             );
             if (hasCompletedAppt) {
                 apptSuccessCount++;
+                commissionEligibleEvents.push({
+                    ...lead,
+                    visitDate: note.createdAt,
+                    capturedBy: note.capturedBy,
+                    milestone: 'Appointment Completed'
+                });
+            }
+
+            // Milestone 2: Outbound Win
+            const isOutboundWin = lead.status === 'Won' && lead.fieldSales === false && !originalCompanyIds.has(lead.id);
+            if (isOutboundWin) {
+                outboundWinsCount++;
+                commissionEligibleEvents.push({
+                    ...lead,
+                    visitDate: note.createdAt,
+                    capturedBy: note.capturedBy,
+                    milestone: 'Outbound Win'
+                });
             }
         });
 
@@ -299,6 +301,8 @@ export default function FieldActivityReportPage() {
         .map(r => ({ id: r.id, name: r.name, amount: r.commission }))
         .filter(r => r.amount > 0)
         .sort((a, b) => b.amount - a.amount);
+
+    const totalCommissionEligible = performanceStats.reduce((sum, r) => sum + r.apptSuccess + r.outboundWins, 0);
 
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
@@ -338,8 +342,8 @@ export default function FieldActivityReportPage() {
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
-      commissionEligibleCount: commissionEligibleLeads.length,
-      commissionEligibleLeads,
+      commissionEligibleCount: totalCommissionEligible,
+      commissionEligibleEvents,
       appointmentVisits,
       apptConvertedLeads,
       leadsConvertedWithAppt,
@@ -361,7 +365,7 @@ export default function FieldActivityReportPage() {
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio },
       }
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
@@ -467,8 +471,8 @@ export default function FieldActivityReportPage() {
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
-        <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
-        <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Total pending/paid" onClick={() => setIsCommissionListOpen(true)} />
+        <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
+        <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
@@ -741,14 +745,14 @@ export default function FieldActivityReportPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
-                        <DialogTitle>Commission Eligible Leads</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Total: {stats.commissionEligibleCount} leads (${stats.commissionEligibleCount * 50}).</p>
+                        <DialogTitle>Commission Eligible Milestones</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Total Milestones: {stats.commissionEligibleCount} (${stats.commissionEligibleCount * 50}).</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
-                        stats.commissionEligibleLeads,
-                        ['Company', 'Rep', 'Visit Date', 'Status'],
-                        'commission_leads',
-                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                        stats.commissionEligibleEvents,
+                        ['Company', 'Rep', 'Visit Date', 'Milestone', 'Current Status'],
+                        'commission_milestones',
+                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.milestone, l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -757,11 +761,11 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Milestone</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {stats.commissionEligibleLeads.length > 0 ? stats.commissionEligibleLeads.map((lead) => (
-                                <TableRow key={lead.id}><TableCell className="font-medium">{lead.companyName}</TableCell><TableCell>{lead.capturedBy}</TableCell><TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell><TableCell><LeadStatusBadge status={lead.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
-                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
+                            {stats.commissionEligibleEvents.length > 0 ? stats.commissionEligibleEvents.map((event, idx) => (
+                                <TableRow key={`${event.id}-${idx}`}><TableCell className="font-medium">{event.companyName}</TableCell><TableCell>{event.capturedBy}</TableCell><TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell><TableCell><Badge variant="secondary">{event.milestone}</Badge></TableCell><TableCell><LeadStatusBadge status={event.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
