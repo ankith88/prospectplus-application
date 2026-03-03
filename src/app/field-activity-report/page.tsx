@@ -166,8 +166,12 @@ export default function FieldActivityReportPage() {
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
-    const apptConvertedLeads = appointmentVisits
-        .filter(n => n.status === 'Converted' && n.leadId && leadsMap.has(n.leadId))
+    
+    // Converted leads that were sourced from an Appointment Visit
+    const apptConvertedVisits = appointmentVisits.filter(n => n.status === 'Converted' && n.leadId);
+    
+    const apptConvertedLeads = apptConvertedVisits
+        .filter(n => leadsMap.has(n.leadId!))
         .map(n => ({
             ...leadsMap.get(n.leadId!)!,
             visitDate: n.createdAt,
@@ -177,7 +181,8 @@ export default function FieldActivityReportPage() {
 
     const leadsWithAnyApptIds = new Set(allAppointments.map(a => a.leadId));
 
-    const leadsConvertedWithAppt = convertedNotes
+    // Refined: Converted (With Appts) must be from an Appointment-related visit
+    const leadsConvertedWithAppt = apptConvertedVisits
         .filter(n => leadsWithAnyApptIds.has(n.leadId!))
         .map(n => ({
             ...leadsMap.get(n.leadId!)!,
@@ -187,7 +192,8 @@ export default function FieldActivityReportPage() {
         }))
         .filter(l => !!l.id);
 
-    const leadsConvertedWithoutAppt = convertedNotes
+    // Refined: Converted (No Appts) must be from an Appointment-related visit
+    const leadsConvertedWithoutAppt = apptConvertedVisits
         .filter(n => !leadsWithAnyApptIds.has(n.leadId!))
         .map(n => ({
             ...leadsMap.get(n.leadId!)!,
@@ -474,14 +480,14 @@ export default function FieldActivityReportPage() {
             title="Converted (With Appts)" 
             value={stats.leadsConvertedWithAppt.length} 
             icon={CalendarIcon} 
-            description="Converted leads with appointments" 
+            description="Appt visits with appt set" 
             onClick={() => setIsWithApptListOpen(true)}
           />
           <StatCard 
             title="Converted (No Appts)" 
             value={stats.leadsConvertedWithoutAppt.length} 
             icon={FileX} 
-            description="Converted leads without appointments" 
+            description="Appt visits with no appt set" 
             onClick={() => setIsWithoutApptListOpen(true)}
           />
           <StatCard 
@@ -568,7 +574,7 @@ export default function FieldActivityReportPage() {
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
-                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Opportunity</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
+                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Opportunity</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.percentage.toFixed(1)}%</span>
                   </div>
               </CardContent>
@@ -879,7 +885,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Converted (With Appointments)</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Leads/Customers from visits that have an appointment scheduled.</p>
+                        <p className="text-sm text-muted-foreground">Appt-related visits that have a scheduled appointment.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsConvertedWithAppt,
@@ -922,7 +928,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Converted (No Appointments)</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Leads/Customers from visits that do NOT have any appointments yet.</p>
+                        <p className="text-sm text-muted-foreground">Appt-related visits missing a scheduled appointment.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsConvertedWithoutAppt,
