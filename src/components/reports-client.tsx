@@ -26,6 +26,7 @@ import {
   Layers,
   Send,
   User,
+  Download,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -448,6 +449,61 @@ export default function ReportsClientPage() {
     };
   }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile]);
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleExportChartData = (data: any[], filename: string) => {
+    if (data.length === 0) {
+        toast({ title: 'No Data', description: 'The chart is empty.' });
+        return;
+    }
+    const headers = Object.keys(data[0]);
+    const rows = data.map(item => headers.map(h => escapeCsvCell(item[h])).join(','));
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: 'Export Successful', description: `${filename} data exported to CSV.` });
+  };
+
+  const handleExportAll = async () => {
+    toast({ title: 'Starting Export', description: 'Fetching all lead data. This may take a moment...' });
+    try {
+        const headers = ['Company Name', 'Entity ID', 'Status', 'Dialer', 'Franchisee'];
+        const rows = allLeads.map(l => [
+            escapeCsvCell(l.companyName),
+            escapeCsvCell(l.entityId),
+            escapeCsvCell(l.status),
+            escapeCsvCell(l.dialerAssigned),
+            escapeCsvCell(l.franchisee)
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `outbound_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({ title: 'Export Complete' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Export Failed' });
+    }
+  };
+
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
@@ -501,14 +557,14 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Call/Creation Date</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.callDate?.from ? (filters.callDate.to ? <>{format(filters.callDate.from, "LLL dd, y")} - {format(filters.callDate.to, "LLL dd, y")}</> : format(filters.callDate.from, "LLL dd, y")) : <span>Pick a date</span>}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.callDate?.from ? (filters.callDate.to ? <>{format(filters.callDate.from, "LLL dd, y")} - {format(filters.callDate.to, "LLL dd, y")}</> : format(filters.callDate.from, "LLL dd, y")) : (<span>Pick a date</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.callDate} onSelect={(date) => handleFilterChange('callDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
                     <div className="space-y-2">
                         <Label>Appointment Date</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : <span>Pick a date</span>}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -588,7 +644,12 @@ export default function ReportsClientPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5" /> Call Conversion Efficiency</CardTitle><CardDescription>Ratios based on unique leads called in the period.</CardDescription></CardHeader>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Call Conversion Efficiency</CardTitle></div>
+                        </div>
+                        <CardDescription>Ratios based on unique leads called in the period.</CardDescription>
+                    </CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
@@ -603,7 +664,7 @@ export default function ReportsClientPage() {
                 </Card>
 
                 <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Goal className="h-5 w-5" /> Appt Closing Efficiency</CardTitle><CardDescription>Ratios based on unique leads appointed in the period.</CardDescription></CardHeader>
+                    <CardHeader><div className="flex items-center gap-2"><Goal className="h-5 w-5 text-green-500" /><CardTitle>Appt Closing Efficiency</CardTitle></div><CardDescription>Ratios based on unique leads appointed in the period.</CardDescription></CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
@@ -617,45 +678,79 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
-            <Card>
-                <CardHeader><CardTitle>Account Manager Performance</CardTitle><CardDescription>Breakdown of appointment outcomes by AM.</CardDescription></CardHeader>
-                <CardContent>
-                    <ScrollArea className="h-[400px]">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Account Manager</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead className="text-right">Completed</TableHead>
-                                    <TableHead className="text-right">No Show</TableHead>
-                                    <TableHead className="text-right">Cancelled</TableHead>
-                                    <TableHead className="text-right">Pending</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {stats.amPerformanceData.length > 0 ? (
-                                    stats.amPerformanceData.map(am => (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>Team Performance</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.teamPerformanceData, 'team_performance')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                        <CardDescription>Calls vs Appointments by Dialer.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}} className="h-[300px] w-full">
+                            <BarChart data={stats.teamPerformanceData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="Total Calls" fill="#8884d8" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="Appointments" fill="#82ca9d" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>Account Manager Performance</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.amPerformanceData, 'am_performance')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                        <CardDescription>Outcome distribution by Account Manager.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[300px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Account Manager</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Completed</TableHead>
+                                        <TableHead className="text-right">Pending</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.amPerformanceData.map(am => (
                                         <TableRow key={am.name}>
                                             <TableCell className="font-medium">{am.name}</TableCell>
                                             <TableCell className="text-right">{am.Total}</TableCell>
                                             <TableCell className="text-right text-green-600 font-bold">{am.Completed}</TableCell>
-                                            <TableCell className="text-right text-orange-600">{am['No Show']}</TableCell>
-                                            <TableCell className="text-right text-red-600">{am.Cancelled}</TableCell>
                                             <TableCell className="text-right text-muted-foreground">{am.Pending}</TableCell>
                                         </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground italic">No AM performance data available for selected filters.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader><CardTitle>Appointment Outcomes</CardTitle></CardHeader>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>Appointment Outcomes</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.appointmentOutcomeData, 'appointment_outcomes')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         {stats.appointmentOutcomeData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[300px] w-full">
@@ -671,7 +766,14 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader><CardTitle>Call Outcome Distribution</CardTitle></CardHeader>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>Call Outcome Distribution</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.callOutcomesData, 'call_outcomes')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
                     <CardContent>
                         {stats.callOutcomesData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[400px] w-full">
