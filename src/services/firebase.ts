@@ -5,7 +5,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -343,7 +343,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
-          profile: `A company profile for ${companyName || 'Unknown Company'}.`,
+          profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
           address: address,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -2138,6 +2138,34 @@ async function deleteVisitNote(noteId: string): Promise<void> {
     }
 }
 
+async function logUpsell(upsellData: Omit<Upsell, 'id'>): Promise<string> {
+    try {
+        const docRef = await addDoc(collection(firestore, 'upsells'), prepareForFirestore(upsellData));
+        await logActivity(upsellData.companyId, { 
+            type: 'Update', 
+            notes: `Customer upsold. Recorded by ${upsellData.repName}. Notes: ${upsellData.notes || 'N/A'}` 
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Failed to log upsell:', error);
+        throw new Error('Failed to log upsell in Firebase');
+    }
+}
+
+async function getUpsells(repUid?: string): Promise<Upsell[]> {
+    try {
+        let q: Query = collection(firestore, 'upsells');
+        if (repUid) {
+            q = query(q, where('repUid', '==', repUid));
+        }
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as Upsell);
+    } catch (error) {
+        console.error('Failed to fetch upsells:', error);
+        return [];
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -2214,4 +2242,6 @@ export {
     getVisitNotes,
     updateVisitNote,
     deleteVisitNote,
+    logUpsell,
+    getUpsells,
 };

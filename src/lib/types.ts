@@ -217,6 +217,16 @@ export interface UserProfile {
   franchisee?: string
 }
 
+export interface Upsell {
+  id: string;
+  companyId: string;
+  companyName: string;
+  repName: string;
+  repUid: string;
+  date: string;
+  notes?: string;
+}
+
 export interface Lead {
   id: string
   entityId?: string
@@ -240,7 +250,7 @@ export interface Lead {
   latitude?: number;
   longitude?: number;
   franchisee?: string;
-  websiteUrl?: string
+  websiteUrl?: string;
   industryCategory?: string
   industrySubCategory?: string
   salesRepAssigned?: string

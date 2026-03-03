@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@/lib/types';
+import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
@@ -18,7 +18,7 @@ import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase } from '@/services/firebase';
+import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase, getUpsells } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -50,6 +50,7 @@ export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [allUpsells, setAllUpsells] = useState<Upsell[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -83,18 +84,20 @@ export default function FieldActivityReportPage() {
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
       const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
-      const [notes, leads, companies, appointments, users] = await Promise.all([
+      const [notes, leads, companies, appointments, users, upsells] = await Promise.all([
         notesPromise,
         getAllLeadsForReport(),
         getCompaniesFromFirebase({ skipCoordinateCheck: true }),
         getAllAppointments(),
         getAllUsers(),
+        getUpsells(),
       ]);
       setAllVisitNotes(notes);
       setAllLeads([...leads, ...companies]);
       setOriginalCompanyIds(new Set(companies.map(c => c.id)));
       setAllAppointments(appointments);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
+      setAllUpsells(upsells);
     } catch (error) {
       console.error("Failed to fetch report data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch the latest report data.' });
@@ -156,6 +159,20 @@ export default function FieldActivityReportPage() {
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
     });
   }, [visibleVisitNotes, filters, leadsMap]);
+
+  const filteredUpsells = useMemo(() => {
+      return allUpsells.filter(upsell => {
+          const userMatch = filters.user.length === 0 || filters.user.includes(upsell.repName);
+          let dateMatch = true;
+          if (filters.date?.from) {
+              const upsellDate = parseISO(upsell.date);
+              const fromDate = startOfDay(filters.date.from);
+              const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+              dateMatch = upsellDate >= fromDate && upsellDate <= toDate;
+          }
+          return userMatch && dateMatch;
+      });
+  }, [allUpsells, filters]);
 
   const stats = useMemo(() => {
     const totalVisitsCount = filteredVisitNotes.length;
@@ -243,9 +260,11 @@ export default function FieldActivityReportPage() {
         const name = user.displayName!;
         const userNotes = filteredVisitNotes.filter(n => n.capturedBy === name);
         const userConvertedNotes = userNotes.filter(n => n.status === 'Converted' && n.leadId);
+        const userUpsells = filteredUpsells.filter(u => u.repUid === user.uid);
         
         let apptSuccessCount = 0;
         let outboundWinsCount = 0;
+        let upsellCount = userUpsells.length;
 
         userConvertedNotes.forEach(note => {
             const lead = leadsMap.get(note.leadId!);
@@ -265,7 +284,7 @@ export default function FieldActivityReportPage() {
                 });
             }
 
-            // Milestone 2: Outbound Win
+            // Milestone 2: Outbound Win (Exclude if was already a company)
             const isOutboundWin = lead.status === 'Won' && lead.fieldSales === false && !originalCompanyIds.has(lead.id);
             if (isOutboundWin) {
                 outboundWinsCount++;
@@ -278,14 +297,27 @@ export default function FieldActivityReportPage() {
             }
         });
 
+        // Milestone 3: Upsell
+        userUpsells.forEach(upsell => {
+            commissionEligibleEvents.push({
+                id: upsell.companyId,
+                companyName: upsell.companyName,
+                visitDate: upsell.date,
+                capturedBy: upsell.repName,
+                milestone: 'Upsell',
+                status: 'Won'
+            });
+        });
+
         return {
             id: user.uid,
             name,
             apptSuccess: apptSuccessCount,
             outboundWins: outboundWinsCount,
-            commission: (apptSuccessCount + outboundWinsCount) * 50
+            upsells: upsellCount,
+            commission: (apptSuccessCount + outboundWinsCount + upsellCount) * 50
         };
-    }).filter(r => r.apptSuccess > 0 || r.outboundWins > 0);
+    }).filter(r => r.apptSuccess > 0 || r.outboundWins > 0 || r.upsells > 0);
 
     const appointmentSuccessByRep = performanceStats
         .map(r => ({ id: r.id, name: r.name, count: r.apptSuccess }))
@@ -297,12 +329,17 @@ export default function FieldActivityReportPage() {
         .filter(r => r.count > 0)
         .sort((a, b) => b.count - a.count);
 
+    const upsellsByRep = performanceStats
+        .map(r => ({ id: r.id, name: r.name, count: r.upsells }))
+        .filter(r => r.count > 0)
+        .sort((a, b) => b.count - a.count);
+
     const commissionEarningsByRep = performanceStats
         .map(r => ({ id: r.id, name: r.name, amount: r.commission }))
         .filter(r => r.amount > 0)
         .sort((a, b) => b.amount - a.amount);
 
-    const totalCommissionEligible = performanceStats.reduce((sum, r) => sum + r.apptSuccess + r.outboundWins, 0);
+    const totalCommissionEligible = performanceStats.reduce((sum, r) => sum + r.apptSuccess + r.outboundWins + r.upsells, 0);
 
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
@@ -341,6 +378,7 @@ export default function FieldActivityReportPage() {
       totalVisits: totalVisitsCount,
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
+      totalUpsells: filteredUpsells.length,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: totalCommissionEligible,
       commissionEligibleEvents,
@@ -356,6 +394,7 @@ export default function FieldActivityReportPage() {
       sourcedApptOutcomeDist,
       appointmentSuccessByRep,
       outboundWinsByRep,
+      upsellsByRep,
       commissionEarningsByRep,
       convertedLeadsByFranchiseeData,
       conversionEfficiency: {
@@ -365,7 +404,7 @@ export default function FieldActivityReportPage() {
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio },
       }
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
@@ -466,9 +505,10 @@ export default function FieldActivityReportPage() {
         </Card>
       </Collapsible>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
+        <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
         <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
@@ -506,7 +546,7 @@ export default function FieldActivityReportPage() {
           />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <Card>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
@@ -516,7 +556,7 @@ export default function FieldActivityReportPage() {
               </CardHeader>
               <CardContent>
                   <Table>
-                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.appointmentSuccessByRep.length > 0 ? stats.appointmentSuccessByRep.map(r => (
                               <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
@@ -535,9 +575,28 @@ export default function FieldActivityReportPage() {
               </CardHeader>
               <CardContent>
                   <Table>
-                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.outboundWinsByRep.length > 0 ? stats.outboundWinsByRep.map(r => (
+                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
+                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                      <TrendingUp className="h-5 w-5 text-blue-500" /> Upsell Success
+                  </CardTitle>
+                  <CardDescription>Upsells performed by representatives.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.upsellsByRep.length > 0 ? stats.upsellsByRep.map(r => (
                               <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
                           )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
                       </TableBody>
@@ -554,7 +613,7 @@ export default function FieldActivityReportPage() {
               </CardHeader>
               <CardContent>
                   <Table>
-                      <TableHeader><TableRow><TableHead>Field Sales Rep</TableHead><TableHead className="text-right">Earnings</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Earnings</TableHead></TableRow></TableHeader>
                       <TableBody>
                           {stats.commissionEarningsByRep.length > 0 ? stats.commissionEarningsByRep.map(r => (
                               <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold text-orange-600">${r.amount}</TableCell></TableRow>
@@ -577,7 +636,7 @@ export default function FieldActivityReportPage() {
                       <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
-                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-green-600">Converted {"->"} Qualified</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
+                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-green-600">Converted {"->"} Qualified</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
@@ -750,7 +809,7 @@ export default function FieldActivityReportPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.commissionEligibleEvents,
-                        ['Company', 'Rep', 'Visit Date', 'Milestone', 'Current Status'],
+                        ['Company', 'Rep', 'Date', 'Milestone', 'Current Status'],
                         'commission_milestones',
                         (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.milestone, l.status]
                     )}>
@@ -761,7 +820,7 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Milestone</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Milestone</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {stats.commissionEligibleEvents.length > 0 ? stats.commissionEligibleEvents.map((event, idx) => (
                                 <TableRow key={`${event.id}-${idx}`}><TableCell className="font-medium">{event.companyName}</TableCell><TableCell>{event.capturedBy}</TableCell><TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell><TableCell><Badge variant="secondary">{event.milestone}</Badge></TableCell><TableCell><LeadStatusBadge status={event.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>

@@ -30,7 +30,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData } from '@/lib/types'
+import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -55,7 +55,11 @@ import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
-import { logActivity } from '@/services/firebase'
+import { logActivity, logUpsell, getAllUsers } from '@/services/firebase'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
+import { Label } from './ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
+import { Textarea } from './ui/textarea'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
@@ -76,11 +80,17 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+  
+  // Upsell state
+  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
   const [isUpselling, setIsUpselling] = useState(false);
+  const [upsellRepUid, setUpsellRepUid] = useState('');
+  const [upsellNotes, setUpsellNotes] = useState('');
+  const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
 
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   
   useEffect(() => {
     setCompany(initialCompany);
@@ -119,6 +129,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     fetchInvoices();
   }, [company.id]);
 
+  useEffect(() => {
+      if (isUpsellDialogOpen) {
+          getAllUsers().then(users => {
+              const reps = users.filter(u => (u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin') && !u.disabled);
+              setFieldReps(reps);
+              if (userProfile && (userProfile.role === 'Field Sales' || userProfile.role === 'admin')) {
+                  setUpsellRepUid(userProfile.uid);
+              }
+          });
+      }
+  }, [isUpsellDialogOpen, userProfile]);
+
   const handleNoteLoggedAndClose = (newNote: Note) => {
     onNoteLogged(newNote);
     setIsLogNoteOpen(false);
@@ -141,13 +163,32 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     logActivity(company.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
   };
 
-  const handleUpsell = async () => {
-    if (!company.id) return;
+  const handleConfirmUpsell = async () => {
+    if (!company.id || !upsellRepUid) return;
     setIsUpselling(true);
     try {
-      const result = await sendUpsellToNetSuite({ leadId: company.id });
-      if (result.success) toast({ title: 'Upsell Synced', description: 'NetSuite notified.' });
-      else toast({ variant: 'destructive', title: 'Sync Failed', description: result.message });
+      const rep = fieldReps.find(r => r.uid === upsellRepUid);
+      
+      // 1. Sync with NetSuite
+      const nsResult = await sendUpsellToNetSuite({ leadId: company.id });
+      
+      // 2. Log in Firebase for Activity and Commission reporting
+      await logUpsell({
+          companyId: company.id,
+          companyName: company.companyName,
+          repUid: upsellRepUid,
+          repName: rep?.displayName || 'Unknown Rep',
+          date: new Date().toISOString(),
+          notes: upsellNotes
+      });
+
+      if (nsResult.success) {
+          toast({ title: 'Upsell Recorded', description: 'Activity logged and NetSuite notified.' });
+      } else {
+          toast({ variant: 'destructive', title: 'Partial Success', description: `Logged in ProspectPlus, but NetSuite sync failed: ${nsResult.message}` });
+      }
+      setIsUpsellDialogOpen(false);
+      setUpsellNotes('');
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
@@ -228,9 +269,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             </div>
         </div>
          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleUpsell} disabled={isUpselling}>
-                {isUpselling ? <Loader /> : <TrendingUp className="mr-2 h-4 w-4" />}
-                Upsell
+            <Button variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Record Upsell
             </Button>
             <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                 <ClipboardEdit className="mr-2 h-4 w-4" />
@@ -448,6 +489,45 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         </div>
       </main>
     </div>
+    
+    <Dialog open={isUpsellDialogOpen} onOpenChange={setIsUpsellDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Record Upsell</DialogTitle>
+                <DialogDescription>Mark this customer as having been successfully upsold by a representative.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                    <Label>Field Representative*</Label>
+                    <Select value={upsellRepUid} onValueChange={setUpsellRepUid}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select representative..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {fieldReps.map(rep => (
+                                <SelectItem key={rep.uid} value={rep.uid}>{rep.displayName}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Upsell Details / Notes</Label>
+                    <Textarea 
+                        placeholder="What was upsold? e.g., Added parcel delivery service." 
+                        value={upsellNotes} 
+                        onChange={(e) => setUpsellNotes(e.target.value)} 
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsUpsellDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleConfirmUpsell} disabled={isUpselling || !upsellRepUid}>
+                    {isUpselling ? <Loader /> : 'Confirm Upsell ($50 Commission)'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
     </>
