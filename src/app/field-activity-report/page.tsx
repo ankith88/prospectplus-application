@@ -9,7 +9,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ export default function FieldActivityReportPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
+  const [isApptVisitsListOpen, setIsApptVisitsListOpen] = useState(false);
+  const [isApptLeadsListOpen, setIsApptLeadsListOpen] = useState(false);
   
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -141,6 +143,20 @@ export default function FieldActivityReportPage() {
     const rejectedNotes = filteredVisitNotes.filter(n => n.status === 'Rejected');
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
+
+    // Metrics for "Appointment Qualified" or "Schedule Appointment"
+    const appointmentOutcomes = ['Appointment Qualified', 'Schedule Appointment'];
+    const appointmentVisits = filteredVisitNotes.filter(n => 
+        n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
+    );
+    const apptConvertedLeads = appointmentVisits
+        .filter(n => n.status === 'Converted' && n.leadId && leadsMap.has(n.leadId))
+        .map(n => ({
+            ...leadsMap.get(n.leadId!)!,
+            visitDate: n.createdAt,
+            capturedBy: n.capturedBy,
+            visitOutcome: n.outcome?.type
+        }));
 
     const commissionEligibleLeads = convertedNotes.filter(note => {
         const lead = leadsMap.get(note.leadId!);
@@ -278,6 +294,8 @@ export default function FieldActivityReportPage() {
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: commissionEligibleLeads.length,
       commissionEligibleLeads,
+      appointmentVisits,
+      apptConvertedLeads,
       callOutcomesData,
       visitsByUserData,
       repOutcomeEfficiency,
@@ -385,6 +403,23 @@ export default function FieldActivityReportPage() {
         <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Total pending/paid" onClick={() => setIsCommissionListOpen(true)} />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+          <StatCard 
+            title="Appointment Visits" 
+            value={stats.appointmentVisits.length} 
+            icon={CalendarCheck} 
+            description="Qualified Appts from field" 
+            onClick={() => setIsApptVisitsListOpen(true)}
+          />
+          <StatCard 
+            title="Appt. Converted Leads" 
+            value={stats.apptConvertedLeads.length} 
+            icon={FileCheck} 
+            description="CRM leads from appt visits" 
+            onClick={() => setIsApptLeadsListOpen(true)}
+          />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
               <CardHeader>
@@ -460,7 +495,7 @@ export default function FieldActivityReportPage() {
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
-                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Opportunity</p><p className="text-[10px] text-amber-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
+                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Opportunity</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.percentage.toFixed(1)}%</span>
                   </div>
               </CardContent>
@@ -631,6 +666,56 @@ export default function FieldActivityReportPage() {
                           {stats.commissionEligibleLeads.length > 0 ? stats.commissionEligibleLeads.map((lead) => (
                               <TableRow key={lead.id}><TableCell className="font-medium">{lead.companyName}</TableCell><TableCell>{lead.capturedBy}</TableCell><TableCell>{format(new Date(lead.visitDate!), 'PP')}</TableCell><TableCell><LeadStatusBadge status={lead.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
                           )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isApptVisitsListOpen} onOpenChange={setIsApptVisitsListOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+              <DialogHeader><DialogTitle>Appointment Visits</DialogTitle><DialogDescription>Visits with outcome "Appointment Qualified" or "Schedule Appointment".</DialogDescription></DialogHeader>
+              <ScrollArea className="flex-1 mt-4">
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Outcome</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => (
+                              <TableRow key={note.id}>
+                                  <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                  <TableCell>{note.capturedBy}</TableCell>
+                                  <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
+                                  <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
+                                  <TableCell>
+                                      <Badge variant={note.status === 'Converted' ? 'default' : 'secondary'}>{note.status}</Badge>
+                                  </TableCell>
+                              </TableRow>
+                          )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isApptLeadsListOpen} onOpenChange={setIsApptLeadsListOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+              <DialogHeader><DialogTitle>Appointment Converted Leads</DialogTitle><DialogDescription>CRM records sourced from high-intent appointment visits.</DialogDescription></DialogHeader>
+              <ScrollArea className="flex-1 mt-4">
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {stats.apptConvertedLeads.length > 0 ? stats.apptConvertedLeads.map((lead) => (
+                              <TableRow key={lead.id}>
+                                  <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                  <TableCell>{(lead as any).capturedBy}</TableCell>
+                                  <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                  <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                  <TableCell className="text-right">
+                                      <Button variant="ghost" size="sm" asChild>
+                                          <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                      </Button>
+                                  </TableCell>
+                              </TableRow>
+                          )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No converted leads found.</TableCell></TableRow>}
                       </TableBody>
                   </Table>
               </ScrollArea>
