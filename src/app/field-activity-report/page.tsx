@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -54,6 +56,8 @@ export default function FieldActivityReportPage() {
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
   const [isApptVisitsListOpen, setIsApptVisitsListOpen] = useState(false);
   const [isApptLeadsListOpen, setIsApptLeadsListOpen] = useState(false);
+  const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
+  const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
   const { userProfile } = useAuth();
   const { toast } = useToast();
@@ -311,6 +315,7 @@ export default function FieldActivityReportPage() {
       visitsByUserData,
       repOutcomeEfficiency,
       convertedLeadStatusDist,
+      sourcedAppts,
       sourcedApptOutcomeDist,
       appointmentSuccessByRep,
       outboundWinsByRep,
@@ -368,6 +373,10 @@ export default function FieldActivityReportPage() {
   if (loading || isRefreshing) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
+
+  const filteredSourcedAppts = stats.sourcedAppts.filter(appt => 
+    selectedOutcomeFilter === 'all' || (appt.appointmentStatus || 'Pending') === selectedOutcomeFilter
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -577,10 +586,10 @@ export default function FieldActivityReportPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
-                  <CardDescription>Distribution of statuses for appointments linked to converted visits.</CardDescription>
+                  <CardDescription>Distribution of statuses for appointments linked to converted visits. Click to view list.</CardDescription>
               </CardHeader>
               <CardContent>
                   {stats.sourcedApptOutcomeDist.length > 0 ? (
@@ -781,6 +790,91 @@ export default function FieldActivityReportPage() {
                                   </TableCell>
                               </TableRow>
                           )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No converted leads found.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isApptOutcomeListOpen} onOpenChange={setIsApptOutcomeListOpen}>
+          <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
+              <DialogHeader>
+                  <div className="flex justify-between items-center pr-8">
+                    <div className="space-y-1">
+                        <DialogTitle>Sourced Appointment Details</DialogTitle>
+                        <DialogDescription>Lifecycle of appointments generated from field visits.</DialogDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
+                            <Label htmlFor="status-filter" className="text-xs font-semibold whitespace-nowrap">Status:</Label>
+                            <Select value={selectedOutcomeFilter} onValueChange={setSelectedOutcomeFilter}>
+                                <SelectTrigger id="status-filter" className="h-8 w-[140px] border-none shadow-none focus:ring-0">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Outcomes</SelectItem>
+                                    <SelectItem value="Completed">Completed</SelectItem>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="No Show">No Show</SelectItem>
+                                    <SelectItem value="Rescheduled">Rescheduled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportList(
+                            filteredSourcedAppts,
+                            ['Company', 'Lead Status', 'Appt Status', 'Field Rep', 'Appt Date'],
+                            'sourced_appointment_outcomes',
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', format(new Date(a.duedate), 'PP')]
+                        )}>
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
+                    </div>
+                  </div>
+              </DialogHeader>
+              <ScrollArea className="flex-1 mt-4">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Company</TableHead>
+                              <TableHead>Lead Status</TableHead>
+                              <TableHead>Appt Status</TableHead>
+                              <TableHead>Field Rep (Source)</TableHead>
+                              <TableHead>Appt Date</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {filteredSourcedAppts.length > 0 ? filteredSourcedAppts.map((appt) => (
+                              <TableRow key={appt.id}>
+                                  <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                  <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                  <TableCell>
+                                      <Badge variant="outline" className={cn(
+                                          appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                          appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                          'bg-blue-50 text-blue-700 border-blue-200'
+                                      )}>
+                                          {appt.appointmentStatus || 'Pending'}
+                                      </Badge>
+                                  </TableCell>
+                                  <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                  <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
+                                  <TableCell className="text-right">
+                                      <Button variant="ghost" size="sm" asChild>
+                                          <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
+                                              View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                          </Link>
+                                      </Button>
+                                  </TableCell>
+                              </TableRow>
+                          )) : (
+                              <TableRow>
+                                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                      No appointments found for this status.
+                                  </TableCell>
+                              </TableRow>
+                          )}
                       </TableBody>
                   </Table>
               </ScrollArea>
