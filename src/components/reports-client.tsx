@@ -46,6 +46,9 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, collectionGroup, orderBy, documentId, where } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -86,6 +89,19 @@ const parseDateString = (dateStr: string | undefined): Date | null => {
     return isNaN(date.getTime()) ? null : date;
 };
 
+const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className="h-4 w-4 text-muted-foreground" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </CardContent>
+  </Card>
+);
+
 export default function ReportsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -94,7 +110,8 @@ export default function ReportsClientPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [indexUrl, setIndexUrl] = useState<string | null>(null);
+  const [isApptListOpen, setIsApptListOpen] = useState(false);
+  const [isWonListOpen, setIsWonListOpen] = useState(false);
   
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -114,7 +131,6 @@ export default function ReportsClientPage() {
     if (!userProfile) return;
     setLoading(true);
     setError(null);
-    setIndexUrl(null);
     try {
         const startDate = filters.callDate?.from?.toISOString();
         const endDate = filters.callDate?.to 
@@ -321,7 +337,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.callDate.from);
             const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
         }
 
         let appointmentDateMatch = true;
@@ -329,7 +345,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && appointmentDateMatch <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -344,10 +360,12 @@ export default function ReportsClientPage() {
     const uniqueLeadIdsCalled = new Set(filteredCalls.map(c => c.leadId));
     const uniqueLeadIdsAppointed = new Set(filteredAppointments.map(a => a.leadId));
 
-    const leadsWithCalls = allLeads.filter(l => uniqueLeadIdsCalled.has(l.id));
     const leadsWithAppts = allLeads.filter(l => uniqueLeadIdsAppointed.has(l.id));
+    const leadsWithCalls = allLeads.filter(l => uniqueLeadIdsCalled.has(l.id));
     
     const wonCount = leadsWithAppts.filter(l => l.status === 'Won').length;
+    const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
+    
     const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity').length;
     const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
     const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
@@ -419,6 +437,7 @@ export default function ReportsClientPage() {
     return {
       totalCalls,
       wonCount,
+      wonLeadsList,
       quoteCount,
       trialCount,
       lostCount,
@@ -478,6 +497,22 @@ export default function ReportsClientPage() {
     toast({ title: 'Export Successful', description: `${filename} data exported to CSV.` });
   };
 
+  const handleExportList = (data: any[], headers: string[], filename: string, rowMapper: (item: any) => string[]) => {
+    if (data.length === 0) {
+        toast({ title: 'No Data', description: 'List is empty.' });
+        return;
+    }
+    const csvContent = [headers.join(','), ...data.map(item => rowMapper(item).map(escapeCsvCell).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: 'Export Successful', description: `${filename} list exported to CSV.` });
+  };
+
   const handleExportAll = async () => {
     toast({ title: 'Starting Export', description: 'Fetching all lead data. This may take a moment...' });
     try {
@@ -515,20 +550,7 @@ export default function ReportsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
   }, [allLeads]);
 
-  if (loading || authLoading || !userProfile) return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
-
-  const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
-      </CardContent>
-    </Card>
-  );
+  if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   return (
     <div className="flex flex-col gap-6">
@@ -588,8 +610,18 @@ export default function ReportsClientPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
-                <StatCard title="Appointments" value={stats.totalAppointments} icon={CalendarIconLucide} />
-                <StatCard title="Won Customers" value={stats.wonCount} icon={Star} />
+                <StatCard 
+                    title="Appointments" 
+                    value={stats.totalAppointments} 
+                    icon={CalendarIconLucide} 
+                    onClick={() => setIsApptListOpen(true)}
+                />
+                <StatCard 
+                    title="Won Customers" 
+                    value={stats.wonCount} 
+                    icon={Star} 
+                    onClick={() => setIsWonListOpen(true)}
+                />
                 <StatCard title="Quotes Sent" value={stats.quoteCount} icon={Send} />
                 <StatCard title="ShipMate Trials" value={stats.trialCount} icon={Flame} />
             </div>
@@ -791,6 +823,113 @@ export default function ReportsClientPage() {
             </div>
           </div>
       )}
+
+      {/* Drill-down Dialogs */}
+      <Dialog open={isApptListOpen} onOpenChange={setIsApptListOpen}>
+          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Filtered Appointments</DialogTitle>
+                        <DialogDescription>Total scheduled in period: {filteredAppointments.length}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        filteredAppointments,
+                        ['Lead Name', 'Dialer', 'Account Manager', 'Date', 'Status'],
+                        'outbound_appointments',
+                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo, format(new Date(a.duedate), 'PP'), a.appointmentStatus || 'Pending']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Lead Name</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Account Manager</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => (
+                                <TableRow key={appt.id}>
+                                    <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{appt.assignedTo}</TableCell>
+                                    <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${appt.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isWonListOpen} onOpenChange={setIsWonListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Won Customers (Filtered Cohort)</DialogTitle>
+                        <DialogDescription>Total signed in period: {stats.wonCount}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.wonLeadsList,
+                        ['Company Name', 'Entity ID', 'Dialer', 'Franchisee'],
+                        'won_customers_cohort',
+                        (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Entity ID</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.wonLeadsList.length > 0 ? stats.wonLeadsList.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/companies/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No won leads found in this cohort.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
