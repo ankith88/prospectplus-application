@@ -61,6 +61,9 @@ export default function FieldActivityReportPage() {
   const [isWithApptListOpen, setIsWithApptListOpen] = useState(false);
   const [isWithoutApptListOpen, setIsWithoutApptListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
+  const [isApptSuccessListOpen, setIsApptSuccessListOpen] = useState(false);
+  const [isOutboundWinsListOpen, setIsOutboundWinsListOpen] = useState(false);
+  const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
   const { userProfile } = useAuth();
@@ -508,7 +511,7 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
-        <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} />
+        <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
         <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
@@ -547,7 +550,7 @@ export default function FieldActivityReportPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <Card>
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptSuccessListOpen(true)}>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                       <Trophy className="h-5 w-5 text-amber-500" /> Appointment Success
@@ -566,7 +569,7 @@ export default function FieldActivityReportPage() {
               </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOutboundWinsListOpen(true)}>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                       <Star className="h-5 w-5 text-green-500" /> Outbound Wins
@@ -585,7 +588,7 @@ export default function FieldActivityReportPage() {
               </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsUpsellSuccessListOpen(true)}>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                       <TrendingUp className="h-5 w-5 text-blue-500" /> Upsell Success
@@ -1111,6 +1114,134 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isApptSuccessListOpen} onOpenChange={setIsApptSuccessListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Appointment Success Records</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Successful appointments sourced from field visits.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.commissionEligibleEvents.filter(e => e.milestone === 'Appointment Completed'),
+                        ['Company', 'Field Rep', 'Visit Date', 'Current Status'],
+                        'appointment_success_records',
+                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.commissionEligibleEvents.filter(e => e.milestone === 'Appointment Completed').map((event, idx) => (
+                                <TableRow key={`${event.id}-${idx}`}>
+                                    <TableCell className="font-medium">{event.companyName}</TableCell>
+                                    <TableCell>{event.capturedBy}</TableCell>
+                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell><LeadStatusBadge status={event.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isOutboundWinsListOpen} onOpenChange={setIsOutboundWinsListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Outbound Wins Records</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Leads from the field that were signed via Outbound sales.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win'),
+                        ['Company', 'Field Rep', 'Visit Date', 'Status'],
+                        'outbound_wins_records',
+                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win').map((event, idx) => (
+                                <TableRow key={`${event.id}-${idx}`}>
+                                    <TableCell className="font-medium">{event.companyName}</TableCell>
+                                    <TableCell>{event.capturedBy}</TableCell>
+                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell><LeadStatusBadge status={event.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/companies/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isUpsellSuccessListOpen} onOpenChange={setIsUpsellSuccessListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Upsell Success Records</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Recorded upsells for existing signed customers.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.commissionEligibleEvents.filter(e => e.milestone === 'Upsell'),
+                        ['Company', 'Rep', 'Date'],
+                        'upsell_success_records',
+                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP')]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Representative</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {stats.commissionEligibleEvents.filter(e => e.milestone === 'Upsell').map((event, idx) => (
+                                <TableRow key={`${event.id}-${idx}`}>
+                                    <TableCell className="font-medium">{event.companyName}</TableCell>
+                                    <TableCell>{event.capturedBy}</TableCell>
+                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/companies/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
                         </TableBody>
                     </Table>
                 </ScrollArea>
