@@ -38,7 +38,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
@@ -57,7 +57,7 @@ type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dia
 
 const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
-    'Lost', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
+    'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 
     'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'
 ];
@@ -119,7 +119,7 @@ export default function ReportsClientPage() {
   
   const [filters, setFilters] = useState({
     status: [] as string[],
-    callDate: undefined as DateRange | undefined,
+    activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -132,11 +132,11 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const startDate = filters.callDate?.from?.toISOString();
-        const endDate = filters.callDate?.to 
-            ? endOfDay(filters.callDate.to).toISOString() 
-            : filters.callDate?.from 
-                ? endOfDay(filters.callDate.from).toISOString() 
+        const startDate = filters.activityDate?.from?.toISOString();
+        const endDate = filters.activityDate?.to 
+            ? endOfDay(filters.activityDate.to).toISOString() 
+            : filters.activityDate?.from 
+                ? endOfDay(filters.activityDate.from).toISOString() 
                 : undefined;
 
         const usersSnap = await getDocs(collection(firestore, 'users'));
@@ -248,7 +248,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [filters.callDate, userProfile, toast]);
+  }, [filters.activityDate, userProfile, toast]);
 
   useEffect(() => {
     if (userProfile) {
@@ -263,7 +263,7 @@ export default function ReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       status: [],
-      callDate: undefined,
+      activityDate: undefined,
       appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: [],
@@ -285,12 +285,12 @@ export default function ReportsClientPage() {
         const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
 
-        let callDateMatch = true;
-        if (filters.callDate?.from) {
+        let activityDateMatch = true;
+        if (filters.activityDate?.from) {
           const callDate = new Date(call.date);
-          const fromDate = startOfDay(filters.callDate.from);
-          const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
-          callDateMatch = callDate >= fromDate && callDate <= toDate;
+          const fromDate = startOfDay(filters.activityDate.from);
+          const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+          activityDateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const d = call.duration || '';
@@ -312,7 +312,7 @@ export default function ReportsClientPage() {
 
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
-        return dialerMatch && franchiseeMatch && statusMatch && callDateMatch && durationMatch() && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
   }, [allCalls, allLeads, filters, allAppointments, userProfile]);
   
@@ -332,11 +332,11 @@ export default function ReportsClientPage() {
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
 
         let creationDateMatch = true;
-        if (filters.callDate?.from) {
+        if (filters.activityDate?.from) {
             const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
             if (!appointmentCreatedDate) return false;
-            const fromDate = startOfDay(filters.callDate.from);
-            const toDate = filters.callDate.to ? endOfDay(filters.callDate.to) : endOfDay(filters.callDate.from);
+            const fromDate = startOfDay(filters.activityDate.from);
+            const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
             creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
         }
 
@@ -577,16 +577,16 @@ export default function ReportsClientPage() {
                     )}
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
-                        <Label>Call/Creation Date</Label>
+                        <Label>Activity Date (Calls/Bookings)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.callDate?.from ? (filters.callDate.to ? <>{format(filters.callDate.from, "LLL dd, y")} - {format(filters.callDate.to, "LLL dd, y")}</> : format(filters.callDate.from, "LLL dd, y")) : (<span>Pick a date</span>)}</Button></PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.callDate} onSelect={(date) => handleFilterChange('callDate', date)} initialFocus /></PopoverContent>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
                     <div className="space-y-2">
-                        <Label>Appointment Date</Label>
+                        <Label>Appointment Date (Schedule)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
