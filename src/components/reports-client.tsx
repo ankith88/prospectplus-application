@@ -169,6 +169,7 @@ export default function ReportsClientPage() {
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
+                    isFromCompaniesCollection: isCompany, // Flag to identify records from companies collection
                 } as unknown as Lead;
             }).filter((l: Lead) => l.fieldSales === false);
         };
@@ -416,10 +417,10 @@ export default function ReportsClientPage() {
         return acc;
     }, {} as Record<string, number>);
 
-    // Field-Sourced Pipeline Logic
+    // Field-Sourced Pipeline Logic - Refined to exclude existing signed customers
     const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
     const fieldSourcedLeads = baseFilteredLeads
-        .filter(l => !!l.visitNoteID)
+        .filter(l => !!l.visitNoteID && !(l as any).isFromCompaniesCollection) // Only include prospects from the leads collection
         .map(l => ({
             ...l,
             visitNote: visitNotesMap.get(l.visitNoteID!)
@@ -721,7 +722,7 @@ export default function ReportsClientPage() {
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsFieldSourcedListOpen(true)}>
                     <CardHeader>
                         <CardTitle>Field-to-Outbound Summary</CardTitle>
-                        <CardDescription>Key metrics for high-intent leads from the field. Click to view list.</CardDescription>
+                        <CardDescription>Key metrics for high-intent prospects from the field. Click to view list.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
@@ -753,7 +754,7 @@ export default function ReportsClientPage() {
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Current status of field-sourced leads.</CardDescription>
+                        <CardDescription>Current status of field-sourced prospects.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.fieldSourcedStatusData.length > 0 ? (
@@ -1011,7 +1012,7 @@ export default function ReportsClientPage() {
                                     <TableCell>{lead.franchisee || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/companies/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
                                         </Button>
                                     </TableCell>
                                 </TableRow>
@@ -1029,7 +1030,7 @@ export default function ReportsClientPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div className="space-y-1">
                         <DialogTitle>Field-to-Outbound Pipeline</DialogTitle>
-                        <DialogDescription>Leads with visit notes currently in the outbound campaign ({stats.fieldSourcedCount} leads).</DialogDescription>
+                        <DialogDescription>Prospects with visit notes currently in the outbound campaign ({stats.fieldSourcedCount} leads).</DialogDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.fieldSourcedLeads,
