@@ -549,6 +549,17 @@ export default function ReportsClientPage() {
     return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
   }, [allLeads]);
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
   if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   return (
@@ -578,14 +589,14 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
                     <div className="space-y-2">
                         <Label>Appointment Date (Schedule)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.date.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -607,7 +618,7 @@ export default function ReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
                 <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" />
                 <StatCard 
                     title="Appointments" 
@@ -620,6 +631,18 @@ export default function ReportsClientPage() {
                     value={stats.wonCount} 
                     icon={Star} 
                     onClick={() => setIsWonListOpen(true)}
+                />
+                <StatCard 
+                    title="Engagement Conv. %" 
+                    value={`${stats.callRatios.appointment.toFixed(1)}%`} 
+                    icon={Percent} 
+                    description="Calls to Appts"
+                />
+                <StatCard 
+                    title="Booking Conv. %" 
+                    value={`${stats.apptRatios.won.toFixed(1)}%`} 
+                    icon={TrendingUp} 
+                    description="Appts to Wins"
                 />
                 <StatCard title="Quotes Sent" value={stats.quoteCount} icon={Send} />
                 <StatCard title="ShipMate Trials" value={stats.trialCount} icon={Flame} />
