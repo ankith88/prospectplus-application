@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -814,7 +814,7 @@ export default function FieldActivityReportPage() {
                         stats.commissionEligibleEvents,
                         ['Company', 'Rep', 'Date', 'Milestone', 'Current Status'],
                         'commission_milestones',
-                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.milestone, l.status]
+                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A', l.milestone, l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -826,7 +826,7 @@ export default function FieldActivityReportPage() {
                         <TableHeader><TableRow><TableHead>Company</TableHead> <TableHead>Rep</TableHead><TableHead>Date</TableHead><TableHead>Milestone</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {stats.commissionEligibleEvents.length > 0 ? stats.commissionEligibleEvents.map((event, idx) => (
-                                <TableRow key={`${event.id}-${idx}`}><TableCell className="font-medium">{event.companyName}</TableCell><TableCell>{event.capturedBy}</TableCell><TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell><TableCell><Badge variant="secondary">{event.milestone}</Badge></TableCell><TableCell><LeadStatusBadge status={event.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
+                                <TableRow key={`${event.id}-${idx}`}><TableCell className="font-medium">{event.companyName}</TableCell><TableCell>{event.capturedBy}</TableCell><TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell><TableCell><Badge variant="secondary">{event.milestone}</Badge></TableCell><TableCell><LeadStatusBadge status={event.status} /></TableCell><TableCell className="text-right"><Button variant="ghost" size="sm" asChild><Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link></Button></TableCell></TableRow>
                             )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No results.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
@@ -850,7 +850,7 @@ export default function FieldActivityReportPage() {
                         (n) => [
                             n.companyName || 'N/A', 
                             n.capturedBy, 
-                            format(new Date(n.createdAt), 'PP'), 
+                            isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', 
                             n.outcome?.type || 'N/A', 
                             n.status,
                             n.leadId && leadsMap.has(n.leadId) ? leadsMap.get(n.leadId)?.companyName || '' : 'Not Linked'
@@ -880,7 +880,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={note.id}>
                                     <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
                                     <TableCell>{note.capturedBy}</TableCell>
-                                    <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
+                                    <TableCell>{isValid(new Date(note.createdAt)) ? format(new Date(note.createdAt), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
                                     <TableCell>
                                         <Badge variant={note.status === 'Converted' ? 'default' : 'secondary'}>{note.status}</Badge>
@@ -917,7 +917,7 @@ export default function FieldActivityReportPage() {
                         stats.apptConvertedLeads,
                         ['Company', 'Field Rep', 'Visit Date', 'Current Status'],
                         'appt_converted_leads',
-                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                        (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -932,7 +932,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
                                     <TableCell>{(lead as any).capturedBy}</TableCell>
-                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell>{(lead as any).visitDate && isValid(new Date((lead as any).visitDate)) ? format(new Date((lead as any).visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -960,7 +960,7 @@ export default function FieldActivityReportPage() {
                         stats.leadsConvertedWithAppt,
                         ['Company', 'Field Rep', 'Visit Date', 'Status'],
                         'converted_with_appts',
-                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                        (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -975,7 +975,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
                                     <TableCell>{(lead as any).capturedBy}</TableCell>
-                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell>{(lead as any).visitDate && isValid(new Date((lead as any).visitDate)) ? format(new Date((lead as any).visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -1003,7 +1003,7 @@ export default function FieldActivityReportPage() {
                         stats.leadsConvertedWithoutAppt,
                         ['Company', 'Field Rep', 'Visit Date', 'Status'],
                         'converted_no_appts',
-                        (l) => [l.companyName, (l as any).capturedBy, format(new Date((l as any).visitDate), 'PP'), l.status]
+                        (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -1018,7 +1018,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
                                     <TableCell>{(lead as any).capturedBy}</TableCell>
-                                    <TableCell>{format(new Date((lead as any).visitDate), 'PP')}</TableCell>
+                                    <TableCell>{(lead as any).visitDate && isValid(new Date((lead as any).visitDate)) ? format(new Date((lead as any).visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -1063,7 +1063,7 @@ export default function FieldActivityReportPage() {
                             filteredSourcedAppts,
                             ['Company', 'Lead Status', 'Appt Status', 'Field Rep', 'Appt Date'],
                             'sourced_appointment_outcomes',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', format(new Date(a.duedate), 'PP')]
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
@@ -1098,7 +1098,7 @@ export default function FieldActivityReportPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
-                                    <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
+                                    <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
                                             <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
@@ -1133,7 +1133,7 @@ export default function FieldActivityReportPage() {
                         stats.commissionEligibleEvents.filter(e => e.milestone === 'Appointment Completed'),
                         ['Company', 'Field Rep', 'Visit Date', 'Current Status'],
                         'appointment_success_records',
-                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -1148,7 +1148,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={`${event.id}-${idx}`}>
                                     <TableCell className="font-medium">{event.companyName}</TableCell>
                                     <TableCell>{event.capturedBy}</TableCell>
-                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={event.status} /></TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -1176,7 +1176,7 @@ export default function FieldActivityReportPage() {
                         stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win'),
                         ['Company', 'Field Rep', 'Visit Date', 'Status'],
                         'outbound_wins_records',
-                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP'), l.status]
+                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -1191,7 +1191,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={`${event.id}-${idx}`}>
                                     <TableCell className="font-medium">{event.companyName}</TableCell>
                                     <TableCell>{event.capturedBy}</TableCell>
-                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={event.status} /></TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -1219,7 +1219,7 @@ export default function FieldActivityReportPage() {
                         stats.commissionEligibleEvents.filter(e => e.milestone === 'Upsell'),
                         ['Company', 'Rep', 'Date'],
                         'upsell_success_records',
-                        (l) => [l.companyName, l.capturedBy, format(new Date(l.visitDate!), 'PP')]
+                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A']
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -1234,7 +1234,7 @@ export default function FieldActivityReportPage() {
                                 <TableRow key={`${event.id}-${idx}`}>
                                     <TableCell className="font-medium">{event.companyName}</TableCell>
                                     <TableCell>{event.capturedBy}</TableCell>
-                                    <TableCell>{format(new Date(event.visitDate!), 'PP')}</TableCell>
+                                    <TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
                                             <Link href={`/companies/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>

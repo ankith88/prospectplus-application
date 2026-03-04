@@ -37,7 +37,7 @@ import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -178,8 +178,6 @@ export default function ReportsClientPage() {
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
-        // We use simple collection group queries without ordering or complex where clauses
-        // to avoid triggering index requirements. Sorting and filtering is done in JS.
         const activitiesSnap = await getDocs(query(collectionGroup(firestore, 'activity'), limit(5000)));
         const calls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
@@ -193,7 +191,6 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
             
-            // Franchisee security filter
             if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
                 if (lead.franchisee !== userProfile.franchisee) return null;
             }
@@ -224,7 +221,6 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
 
-            // Franchisee security filter
             if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
                 if (lead.franchisee !== userProfile.franchisee) return null;
             }
@@ -280,7 +276,6 @@ export default function ReportsClientPage() {
     return allCalls.filter(call => {
         const lead = allLeads.find(l => l.id === call.leadId);
         
-        // Franchisee security filter (redundant but safe)
         if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
             if (lead?.franchisee !== userProfile.franchisee) return false;
         }
@@ -325,7 +320,6 @@ export default function ReportsClientPage() {
         if (appointment.leadName === 'Unknown Lead') return false;
         const lead = allLeads.find(l => l.id === appointment.leadId);
 
-        // Franchisee security filter (redundant but safe)
         if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
             if (lead?.franchisee !== userProfile.franchisee) return false;
         }
@@ -360,7 +354,6 @@ export default function ReportsClientPage() {
     const totalCalls = filteredCalls.length;
     const totalAppointments = filteredAppointments.length;
     
-    // Unique sets of leads associated with the filtered period
     const uniqueLeadIdsCalled = new Set(filteredCalls.map(c => c.leadId));
     const uniqueLeadIdsAppointed = new Set(filteredAppointments.map(a => a.leadId));
 
@@ -374,13 +367,10 @@ export default function ReportsClientPage() {
     const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
     const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
 
-    // Standard denominators for ratios
     const leadsCalledCount = uniqueLeadIdsCalled.size;
     const leadsAppointedCount = uniqueLeadIdsAppointed.size;
 
-    // Pipeline Logic
     const baseFilteredLeads = allLeads.filter(l => {
-        // Franchisee security filter
         if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
             if (l.franchisee !== userProfile.franchisee) return false;
         }
@@ -841,7 +831,7 @@ export default function ReportsClientPage() {
                         filteredAppointments,
                         ['Lead Name', 'Dialer', 'Account Manager', 'Date', 'Status'],
                         'outbound_appointments',
-                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', format(new Date(a.duedate), 'PP'), a.appointmentStatus || 'Pending']
+                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A', a.appointmentStatus || 'Pending']
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -866,7 +856,7 @@ export default function ReportsClientPage() {
                                     <TableCell className="font-medium">{appt.leadName}</TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                    <TableCell>{format(new Date(appt.duedate), 'PP')}</TableCell>
+                                    <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
                                     </TableCell>
