@@ -365,15 +365,17 @@ export default function ProspectingAreasPage() {
   const { pendingAreas, approvedAreas } = useMemo(() => {
       const pending = prospectingAreas.filter(a => a.status === 'Pending Approval');
       const approved = prospectingAreas.filter(a => a.status !== 'Pending Approval');
-      return { pending, approved };
+      return { pendingAreas: pending, approvedAreas: approved };
   }, [prospectingAreas]);
 
   // For regular users, only show approved areas or their own pending areas
   const visibleApprovedAreas = useMemo(() => {
+      if (!approvedAreas) return [];
       return approvedAreas.filter(a => a.status === 'Approved' || a.status === 'Completed');
   }, [approvedAreas]);
 
   const myPendingAreas = useMemo(() => {
+      if (!pendingAreas) return [];
       if (isAdmin) return pendingAreas;
       return pendingAreas.filter(a => a.userId === userProfile?.uid);
   }, [pendingAreas, isAdmin, userProfile]);
