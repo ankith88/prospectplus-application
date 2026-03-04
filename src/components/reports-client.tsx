@@ -521,8 +521,8 @@ export default function ReportsClientPage() {
         return;
     }
     const headers = Object.keys(data[0]);
-    const rows = data.map(item => headers.map(h => escapeCsvCell(item[h])));
-    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const rows = data.map(item => headers.map(h => escapeCsvCell(item[h])).join(','));
+    const csvContent = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -703,7 +703,34 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Field-to-Outbound Summary</CardTitle>
+                        <CardDescription>Key metrics for the field-sourced cohort.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
+                            <span className="text-sm font-medium">Total Transitioned</span>
+                            <Badge variant="secondary" className="text-lg">{stats.fieldSourcedCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                            <span className="text-sm font-medium">Appointments Set</span>
+                            <Badge className="text-lg bg-blue-500">{stats.fieldSourcedAppointedCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                            <span className="text-sm font-medium">Closed Wins</span>
+                            <Badge className="text-lg bg-green-500">{stats.fieldSourcedWon}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg border">
+                            <span className="text-sm font-medium">Cohort Win Rate</span>
+                            <span className="text-lg font-bold">
+                                {stats.fieldSourcedCount > 0 ? ((stats.fieldSourcedWon / stats.fieldSourcedCount) * 100).toFixed(1) : 0}%
+                            </span>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -712,7 +739,7 @@ export default function ReportsClientPage() {
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Current status of leads originally sourced from the field.</CardDescription>
+                        <CardDescription>Current status of field-sourced leads.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.fieldSourcedStatusData.length > 0 ? (
