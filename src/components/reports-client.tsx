@@ -172,9 +172,10 @@ export default function ReportsClientPage() {
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
-        // Fetch larger cohorts since we lack server-side ordering/filtering without indexes
+        // Fetch larger cohorts since we lack server-side ordering/filtering without indexes.
+        // Cap limit at 10,000 per request to avoid structured query crash.
         const [activitiesSnap, apptsSnap] = await Promise.all([
-            getDocs(query(collectionGroup(firestore, 'activity'), limit(20000))),
+            getDocs(query(collectionGroup(firestore, 'activity'), limit(10000))),
             getDocs(query(collectionGroup(firestore, 'appointments'), limit(10000)))
         ]);
 
