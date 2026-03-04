@@ -1,4 +1,3 @@
-
 'use client';
 
 /**
@@ -819,7 +818,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             }));
         }
         
-        const allCalls = callActivityDocs.map(activityDoc => {
+        const rawCalls = callActivityDocs.map(activityDoc => {
             const activityData = sanitizeData(activityDoc.data()) as Activity;
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
@@ -837,19 +836,35 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             };
         }).filter((call): call is CallActivity => call !== null);
 
-        const uniqueCallsMap = new Map<string, CallActivity>();
-        allCalls.forEach(call => {
-            if (call.callId) {
-                const existing = uniqueCallsMap.get(call.callId);
-                if (!existing || new Date(call.date) > new Date(existing.date)) {
-                    uniqueCallsMap.set(call.callId, call);
-                }
-            } else {
-                 uniqueCallsMap.set(call.id, call);
-            }
+        // De-duplicate: If an "Initiated" log has a corresponding "Outcome" log for the same lead 
+        // within 5 minutes, we ignore the "Initiated" one to prevent double counting the same call.
+        const finalCalls: CallActivity[] = [];
+        const callsByLead: Record<string, CallActivity[]> = {};
+        
+        rawCalls.forEach(c => {
+            if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
+            callsByLead[c.leadId].push(c);
         });
 
-        return Array.from(uniqueCallsMap.values());
+        Object.values(callsByLead).forEach(leadCalls => {
+            const outcomes = leadCalls.filter(c => c.notes.includes('Outcome: ') || c.callId);
+            const attempts = leadCalls.filter(c => c.notes.includes('Initiated call to'));
+
+            finalCalls.push(...outcomes);
+
+            attempts.forEach(attempt => {
+                const attemptTime = new Date(attempt.date).getTime();
+                const matched = outcomes.some(outcome => {
+                    const outcomeTime = new Date(outcome.date).getTime();
+                    return Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
+                });
+                if (!matched) {
+                    finalCalls.push(attempt);
+                }
+            });
+        });
+
+        return finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } catch (error) {
         console.error('An unexpected error occurred in getAllCallActivities:', error);
         throw new Error('[getAllCallActivities] The database request timed out or failed.');
@@ -904,7 +919,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
             allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
         }
         
-        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(a.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -2026,7 +2041,7 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
         const routeData = routeDoc.data();
         const batch = writeBatch(firestore);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
-        batch.delete(sourceRouteRouteRef);
+        batch.delete(sourceRouteRef);
         await batch.commit();
     } catch (error) {
         console.error(`Failed to move route ${routeId}:`, error);
@@ -2225,6 +2240,7 @@ export {
     deleteTaskFromLead,
     updateLeadDiscoveryData,
     updateLeadDiscoveryData as updateLeadDiscoveryDataNS,
+    updateLeadDiscoveryData as sendDiscoveryDataToNetSuite,
     updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,

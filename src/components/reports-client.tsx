@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -27,6 +26,7 @@ import {
   Send,
   User,
   Download,
+  Hash,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -146,7 +146,6 @@ export default function ReportsClientPage() {
         }).filter(Boolean);
         setAllDialers(userList);
 
-        // Fetch leads AND companies to ensure "Won" accounts are included
         const [leadsSnap, companiesSnap] = await Promise.all([
             getDocs(collection(firestore, 'leads')),
             getDocs(collection(firestore, 'companies'))
@@ -179,7 +178,7 @@ export default function ReportsClientPage() {
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
         const activitiesSnap = await getDocs(query(collectionGroup(firestore, 'activity'), limit(5000)));
-        const calls = activitiesSnap.docs.map(activityDoc => {
+        const rawCalls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
             if (data.type !== 'Call') return null;
 
@@ -204,9 +203,36 @@ export default function ReportsClientPage() {
                 dialerAssigned: lead.dialerAssigned || 'Unassigned',
             };
         }).filter(Boolean) as CallActivity[];
+
+        // De-duplicate: If an "Initiated" log has a corresponding "Outcome" log for the same lead 
+        // within 5 minutes, we ignore the "Initiated" one to prevent double counting.
+        const finalCalls: CallActivity[] = [];
+        const callsByLead: Record<string, CallActivity[]> = {};
+        rawCalls.forEach(c => {
+            if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
+            callsByLead[c.leadId].push(c);
+        });
+
+        Object.values(callsByLead).forEach(leadCalls => {
+            const outcomes = leadCalls.filter(c => c.notes.includes('Outcome: ') || c.callId);
+            const attempts = leadCalls.filter(c => c.notes.includes('Initiated call to'));
+
+            finalCalls.push(...outcomes);
+
+            attempts.forEach(attempt => {
+                const attemptTime = new Date(attempt.date).getTime();
+                const matched = outcomes.some(outcome => {
+                    const outcomeTime = new Date(outcome.date).getTime();
+                    return Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
+                });
+                if (!matched) {
+                    finalCalls.push(attempt);
+                }
+            });
+        });
         
-        calls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setAllCalls(calls);
+        finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setAllCalls(finalCalls);
 
         const apptsSnap = await getDocs(query(collectionGroup(firestore, 'appointments'), limit(3000)));
         const appts = apptsSnap.docs.map(apptDoc => {
@@ -335,7 +361,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.activityDate.from);
             const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
 
         let appointmentDateMatch = true;
@@ -396,12 +422,18 @@ export default function ReportsClientPage() {
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
       const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
-      return { name: dialer, 'Total Calls': dialerCalls, 'Appointments': dialerAppointments };
-    }).filter(d => d['Total Calls'] > 0);
+      return { name: dialer, 'Total Engagement': dialerCalls, 'Appointments': dialerAppointments };
+    }).filter(d => d['Total Engagement'] > 0);
 
     const callOutcomesData = filteredCalls.reduce((acc, call) => {
+        let outcome = 'Other';
         const outcomeMatch = call.notes.match(/Outcome: ([^.]+)\./);
-        const outcome = outcomeMatch ? outcomeMatch[1] : 'Other';
+        if (outcomeMatch) {
+            outcome = outcomeMatch[1];
+        } else if (call.notes.includes('Initiated call to')) {
+            outcome = 'Initiated (No Outcome Sync)';
+        }
+        
         const existing = acc.find(item => item.name === outcome);
         if (existing) existing.value++;
         else acc.push({ name: outcome, value: 1 });
@@ -507,32 +539,6 @@ export default function ReportsClientPage() {
     toast({ title: 'Export Successful', description: `${filename} list exported to CSV.` });
   };
 
-  const handleExportAll = async () => {
-    toast({ title: 'Starting Export', description: 'Fetching all lead data. This may take a moment...' });
-    try {
-        const headers = ['Company Name', 'Entity ID', 'Status', 'Dialer', 'Franchisee'];
-        const rows = allLeads.map(l => [
-            escapeCsvCell(l.companyName),
-            escapeCsvCell(l.entityId),
-            escapeCsvCell(l.status),
-            escapeCsvCell(l.dialerAssigned),
-            escapeCsvCell(l.franchisee)
-        ]);
-
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', `outbound_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast({ title: 'Export Complete' });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Export Failed' });
-    }
-  };
-
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
@@ -548,7 +554,7 @@ export default function ReportsClientPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound calling.</p></header>
+      <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
       
       <Collapsible defaultOpen={true}>
           <Card>
@@ -571,7 +577,7 @@ export default function ReportsClientPage() {
                     )}
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
-                        <Label>Activity Date (Calls/Bookings)</Label>
+                        <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
                             <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
@@ -603,7 +609,7 @@ export default function ReportsClientPage() {
       {!error && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                <StatCard title="Total Calls" value={stats.totalCalls} icon={Phone} />
+                <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" />
                 <StatCard 
                     title="Appointments" 
                     value={stats.totalAppointments} 
@@ -672,9 +678,9 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Call Conversion Efficiency</CardTitle></div>
+                            <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Engagement Conversion Efficiency</CardTitle></div>
                         </div>
-                        <CardDescription>Ratios based on unique leads called in the period.</CardDescription>
+                        <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
@@ -713,7 +719,7 @@ export default function ReportsClientPage() {
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Calls vs Appointments by Dialer.</CardDescription>
+                        <CardDescription>Total Engagement vs Appointments by Dialer.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ChartContainer config={{}} className="h-[300px] w-full">
@@ -723,7 +729,7 @@ export default function ReportsClientPage() {
                                 <YAxis dataKey="name" type="category" width={100} fontSize={12} />
                                 <Tooltip content={<ChartTooltipContent />} />
                                 <Legend />
-                                <Bar dataKey="Total Calls" fill="#8884d8" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="Total Engagement" fill="#8884d8" radius={[0, 4, 4, 0]} />
                                 <Bar dataKey="Appointments" fill="#82ca9d" radius={[0, 4, 4, 0]} />
                             </BarChart>
                         </ChartContainer>
@@ -794,7 +800,7 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle>Call Outcome Distribution</CardTitle>
+                            <CardTitle>Engagement Outcome Distribution</CardTitle>
                             <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.callOutcomesData, 'call_outcomes')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
@@ -811,7 +817,7 @@ export default function ReportsClientPage() {
                                     <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
                                 </BarChart>
                             </ChartContainer>
-                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No call outcomes recorded.</div>}
+                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No interactions recorded.</div>}
                     </CardContent>
                 </Card>
             </div>

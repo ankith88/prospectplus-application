@@ -239,7 +239,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
-    logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    logActivity(leadId, { 
+        type: 'Call', 
+        notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+        author: user?.displayName || 'Unknown'
+    });
   };
 
   const handleCopy = (text: string | null | undefined, fieldName: string) => {

@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useRouter } from 'next/navigation'
@@ -160,7 +159,11 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const handleInitiateCall = (phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
-    logActivity(company.id, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    logActivity(company.id, { 
+        type: 'Call', 
+        notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+        author: user?.displayName || 'Unknown'
+    });
   };
 
   const handleConfirmUpsell = async () => {
