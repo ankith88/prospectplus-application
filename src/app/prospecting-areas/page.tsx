@@ -371,7 +371,13 @@ export default function ProspectingAreasPage() {
   // For regular users, only show approved areas or their own pending areas
   const visibleApprovedAreas = useMemo(() => {
       if (!approvedAreas) return [];
-      return approvedAreas.filter(a => a.status === 'Approved' || a.status === 'Completed');
+      // Show Approved, Completed, Active, or areas with no explicit status (which default to Active)
+      return approvedAreas.filter(a => 
+        a.status === 'Approved' || 
+        a.status === 'Completed' || 
+        a.status === 'Active' || 
+        !a.status
+      );
   }, [approvedAreas]);
 
   const myPendingAreas = useMemo(() => {
