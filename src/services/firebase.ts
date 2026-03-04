@@ -771,8 +771,8 @@ type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: L
 async function getAllCallActivities(startDate?: string, endDate?: string): Promise<CallActivity[]> {
     try {
         console.log(`[getAllCallActivities] Fetching all activities from collection group...`);
-        // Cap limit at 10,000 to avoid crash
-        const activityQuery = query(collectionGroup(firestore, 'activity'), limit(10000));
+        // Removed limit to allow fetching all activities for processing
+        const activityQuery = collectionGroup(firestore, 'activity');
         
         const activitySnapshot = await getDocs(activityQuery);
         const allActivityDocs = activitySnapshot.docs;
@@ -836,8 +836,6 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             };
         }).filter((call): call is CallActivity => call !== null);
 
-        // De-duplicate: If an "Initiated" log has a corresponding "Outcome" log for the same lead 
-        // within 5 minutes, we ignore the "Initiated" one to prevent double counting the same call.
         const finalCalls: CallActivity[] = [];
         const callsByLead: Record<string, CallActivity[]> = {};
         
@@ -902,7 +900,7 @@ async function getAllNotes(): Promise<Array<Note & { leadId: string }>> {
 
 async function getAllActivities(checkInOnly = false): Promise<Array<Activity & { leadId: string }>> {
     try {
-        let activitiesQuery = query(collectionGroup(firestore, 'activity'));
+        let activitiesQuery = collectionGroup(firestore, 'activity');
         
         const activitiesSnapshot = await getDocs(activitiesQuery);
         let allActivities = activitiesSnapshot.docs.map(doc => {
@@ -919,7 +917,7 @@ async function getAllActivities(checkInOnly = false): Promise<Array<Activity & {
             allActivities = allActivities.filter(activity => activity.notes === 'Checked in at location via map.');
         }
         
-        allActivities.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        allActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return allActivities;
     } catch (error) {
         console.error('Failed to fetch all activities:', error);
@@ -1001,12 +999,11 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 async function getAllAppointments(startDate?: string, endDate?: string): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string }>> {
     try {
         console.log(`[getAllAppointments] Fetching all appointments from collection group...`);
-        // Simple query without filters to avoid index requirements
-        const appointmentsQuery = query(collectionGroup(firestore, 'appointments'), limit(3000));
+        // Removed limit to ensure the full dataset is available for dashboard calculation
+        const appointmentsQuery = collectionGroup(firestore, 'appointments');
         
         const appointmentsSnapshot = await getDocs(appointmentsQuery);
         
-        // Filter in memory for compatibility
         const filteredDocs = appointmentsSnapshot.docs.filter(doc => {
             const data = doc.data() as Appointment;
             if (startDate && data.starttime < startDate) return false;

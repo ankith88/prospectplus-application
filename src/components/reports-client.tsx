@@ -133,7 +133,6 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        // Parallel fetch of reference data
         const [usersSnap, leadsSnap, companiesSnap] = await Promise.all([
             getDocs(collection(firestore, 'users')),
             getDocs(collection(firestore, 'leads')),
@@ -172,11 +171,10 @@ export default function ReportsClientPage() {
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
-        // Fetch larger cohorts since we lack server-side ordering/filtering without indexes.
-        // Cap limit at 10,000 per request to avoid structured query crash.
+        // Removed limits to fetch all available activities and appointments
         const [activitiesSnap, apptsSnap] = await Promise.all([
-            getDocs(query(collectionGroup(firestore, 'activity'), limit(10000))),
-            getDocs(query(collectionGroup(firestore, 'appointments'), limit(10000)))
+            getDocs(collectionGroup(firestore, 'activity')),
+            getDocs(collectionGroup(firestore, 'appointments'))
         ]);
 
         const rawCalls = activitiesSnap.docs.map(activityDoc => {
@@ -202,8 +200,6 @@ export default function ReportsClientPage() {
             };
         }).filter(Boolean) as CallActivity[];
 
-        // De-duplicate: If an "Initiated" log has a corresponding "Outcome" log for the same lead 
-        // within 5 minutes, we ignore the "Initiated" one to prevent double counting.
         const finalCalls: CallActivity[] = [];
         const callsByLead: Record<string, CallActivity[]> = {};
         rawCalls.forEach(c => {
@@ -290,7 +286,6 @@ export default function ReportsClientPage() {
     });
   };
 
-  // Memory filtering is much more robust for handling timezone shifts across UTC ISO strings
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
         const lead = allLeads.find(l => l.id === call.leadId);
@@ -362,7 +357,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
