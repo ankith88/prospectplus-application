@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -132,24 +133,18 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const startDate = filters.activityDate?.from?.toISOString();
-        const endDate = filters.activityDate?.to 
-            ? endOfDay(filters.activityDate.to).toISOString() 
-            : filters.activityDate?.from 
-                ? endOfDay(filters.activityDate.from).toISOString() 
-                : undefined;
+        // Parallel fetch of reference data
+        const [usersSnap, leadsSnap, companiesSnap] = await Promise.all([
+            getDocs(collection(firestore, 'users')),
+            getDocs(collection(firestore, 'leads')),
+            getDocs(collection(firestore, 'companies'))
+        ]);
 
-        const usersSnap = await getDocs(collection(firestore, 'users'));
         const userList = usersSnap.docs.map(doc => {
             const data = doc.data();
             return `${data.firstName || ''} ${data.lastName || ''}`.trim();
         }).filter(Boolean);
         setAllDialers(userList);
-
-        const [leadsSnap, companiesSnap] = await Promise.all([
-            getDocs(collection(firestore, 'leads')),
-            getDocs(collection(firestore, 'companies'))
-        ]);
 
         const processRecords = (snap: any, isCompany: boolean) => {
             return snap.docs.map((doc: any) => {
@@ -177,13 +172,15 @@ export default function ReportsClientPage() {
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
 
-        const activitiesSnap = await getDocs(query(collectionGroup(firestore, 'activity'), limit(5000)));
+        // Fetch larger cohorts since we lack server-side ordering/filtering without indexes
+        const [activitiesSnap, apptsSnap] = await Promise.all([
+            getDocs(query(collectionGroup(firestore, 'activity'), limit(20000))),
+            getDocs(query(collectionGroup(firestore, 'appointments'), limit(10000)))
+        ]);
+
         const rawCalls = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
             if (data.type !== 'Call') return null;
-
-            if (startDate && data.date < startDate) return null;
-            if (endDate && data.date > endDate) return null;
 
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
@@ -234,14 +231,8 @@ export default function ReportsClientPage() {
         finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllCalls(finalCalls);
 
-        const apptsSnap = await getDocs(query(collectionGroup(firestore, 'appointments'), limit(3000)));
         const appts = apptsSnap.docs.map(apptDoc => {
             const data = apptDoc.data() as Appointment;
-            
-            const apptCreatedDate = parseDateString(data.appointmentDate);
-            if (startDate && apptCreatedDate && apptCreatedDate.toISOString() < startDate) return null;
-            if (endDate && apptCreatedDate && apptCreatedDate.toISOString() > endDate) return null;
-
             const leadId = apptDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
@@ -274,7 +265,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [filters.activityDate, userProfile, toast]);
+  }, [userProfile, toast]);
 
   useEffect(() => {
     if (userProfile) {
@@ -298,6 +289,7 @@ export default function ReportsClientPage() {
     });
   };
 
+  // Memory filtering is much more robust for handling timezone shifts across UTC ISO strings
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
         const lead = allLeads.find(l => l.id === call.leadId);
@@ -369,7 +361,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDateMatch <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -512,7 +504,7 @@ export default function ReportsClientPage() {
     }
     const headers = Object.keys(data[0]);
     const rows = data.map(item => headers.map(h => escapeCsvCell(item[h])).join(','));
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
