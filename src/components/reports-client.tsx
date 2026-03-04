@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory } from '@/lib/types';
+import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -29,6 +29,8 @@ import {
   Download,
   Hash,
   ClipboardCheck,
+  CalendarCheck,
+  Clock,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -92,7 +94,7 @@ const parseDateString = (dateStr: string | undefined): Date | null => {
 };
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
-  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       <Icon className="h-4 w-4 text-muted-foreground" />
@@ -108,6 +110,7 @@ export default function ReportsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
+  const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -135,10 +138,11 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const [usersSnap, leadsSnap, companiesSnap] = await Promise.all([
+        const [usersSnap, leadsSnap, companiesSnap, visitNotesSnap] = await Promise.all([
             getDocs(collection(firestore, 'users')),
             getDocs(collection(firestore, 'leads')),
-            getDocs(collection(firestore, 'companies'))
+            getDocs(collection(firestore, 'companies')),
+            getDocs(collection(firestore, 'visitnotes'))
         ]);
 
         const userList = usersSnap.docs.map(doc => {
@@ -146,6 +150,9 @@ export default function ReportsClientPage() {
             return `${data.firstName || ''} ${data.lastName || ''}`.trim();
         }).filter(Boolean);
         setAllDialers(userList);
+
+        const notes = visitNotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
+        setAllVisitNotes(notes);
 
         const processRecords = (snap: any, isCompany: boolean) => {
             return snap.docs.map((doc: any) => {
@@ -410,7 +417,14 @@ export default function ReportsClientPage() {
     }, {} as Record<string, number>);
 
     // Field-Sourced Pipeline Logic
-    const fieldSourcedLeads = baseFilteredLeads.filter(l => !!l.visitNoteID);
+    const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
+    const fieldSourcedLeads = baseFilteredLeads
+        .filter(l => !!l.visitNoteID)
+        .map(l => ({
+            ...l,
+            visitNote: visitNotesMap.get(l.visitNoteID!)
+        }));
+
     const fieldSourcedCount = fieldSourcedLeads.length;
     const fieldSourcedWon = fieldSourcedLeads.filter(l => l.status === 'Won').length;
     const fieldSourcedAppointedIds = new Set(filteredAppointments.filter(a => fieldSourcedLeads.some(l => l.id === a.leadId)).map(a => a.leadId));
@@ -502,7 +516,7 @@ export default function ReportsClientPage() {
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes]);
 
   const escapeCsvCell = (cellData: any) => {
     if (cellData === null || cellData === undefined) {
@@ -704,10 +718,10 @@ export default function ReportsClientPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
+                <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsFieldSourcedListOpen(true)}>
                     <CardHeader>
                         <CardTitle>Field-to-Outbound Summary</CardTitle>
-                        <CardDescription>Key metrics for the field-sourced cohort.</CardDescription>
+                        <CardDescription>Key metrics for high-intent leads from the field. Click to view list.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
@@ -735,7 +749,7 @@ export default function ReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle>Field-to-Outbound Progress</CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.fieldSourcedStatusData, 'field_sourced_progress')}>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleExportChartData(stats.fieldSourcedStatusData, 'field_sourced_progress'); }}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
@@ -771,9 +785,7 @@ export default function ReportsClientPage() {
             <div className="grid grid-cols-1 gap-6">
                 <Card>
                     <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Engagement Conversion Efficiency</CardTitle></div>
-                        </div>
+                        <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Engagement Conversion Efficiency</CardTitle></div>
                         <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1012,18 +1024,24 @@ export default function ReportsClientPage() {
       </Dialog>
 
       <Dialog open={isFieldSourcedListOpen} onOpenChange={setIsFieldSourcedListOpen}>
-          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
+          <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
-                    <div>
-                        <DialogTitle>Field-Sourced Outbound Pipeline</DialogTitle>
+                    <div className="space-y-1">
+                        <DialogTitle>Field-to-Outbound Pipeline</DialogTitle>
                         <DialogDescription>Leads with visit notes currently in the outbound campaign ({stats.fieldSourcedCount} leads).</DialogDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.fieldSourcedLeads,
-                        ['Company', 'Outbound Dialer', 'Current Status', 'Discovery Score', 'Routing Tag'],
+                        ['Company', 'Captured Date', 'Captured By', 'Current Status', 'Outbound Dialer'],
                         'field_sourced_outbound_pipeline',
-                        (l) => [l.companyName, l.dialerAssigned || 'Unassigned', l.status, l.discoveryData?.score?.toString() || 'N/A', l.discoveryData?.routingTag || 'N/A']
+                        (l) => [
+                            l.companyName, 
+                            l.visitNote?.createdAt ? format(new Date(l.visitNote.createdAt), 'PP') : 'N/A',
+                            l.visitNote?.capturedBy || 'N/A',
+                            l.status,
+                            l.dialerAssigned || 'Unassigned'
+                        ]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -1035,10 +1053,10 @@ export default function ReportsClientPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Company</TableHead>
+                                <TableHead>Visit Captured</TableHead>
+                                <TableHead>By (Field Rep)</TableHead>
+                                <TableHead>Current Status</TableHead>
                                 <TableHead>Outbound Dialer</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Disc. Score</TableHead>
-                                <TableHead>Routing</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1046,19 +1064,38 @@ export default function ReportsClientPage() {
                             {stats.fieldSourcedLeads.length > 0 ? stats.fieldSourcedLeads.map((lead) => (
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>{lead.dialerAssigned || 'Unassigned'}</TableCell>
-                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
-                                    <TableCell>{lead.discoveryData?.score ?? 'N/A'}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline">{lead.discoveryData?.routingTag || 'N/A'}</Badge>
+                                        <div className="flex flex-col text-xs">
+                                            <span>{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PP') : 'N/A'}</span>
+                                            <span className="text-muted-foreground">{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'p') : ''}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <User className="h-3 w-3 text-muted-foreground" />
+                                            <span>{lead.visitNote?.capturedBy || 'N/A'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Phone className="h-3 w-3 text-muted-foreground" />
+                                            <span>{lead.dialerAssigned || 'Unassigned'}</span>
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No field-sourced leads found in outbound.</TableCell></TableRow>}
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                        No field-sourced leads found in the current outbound pipeline.
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </ScrollArea>
